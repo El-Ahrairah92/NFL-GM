@@ -181,8 +181,8 @@ const DEF_CHART_KEY = { LE: 'EDGE1', LOLB: 'EDGE1', RE: 'EDGE2', ROLB: 'EDGE2', 
   NT: 'NT', WLB: 'WLB', MLB: 'MLB', SAM: 'SAM', CB1: 'CB1', CB2: 'CB2', NCB: 'NCB', DIME: 'DIME', FS: 'FS', SS: 'SS' };
 const CHART_SPOT = { QB: 'QB', RB: 'RB', RB3D: 'RB', RBSY: 'RB', FB: 'FB', X: 'WRX', Z: 'WRZ', SLOT: 'SLOT', SLOT2: 'SLOT', Y: 'TEY', H: 'TEH', Y2: 'TEY', OL6: 'RT',
   LT: 'LT', LG: 'LG', C: 'C', RG: 'RG', RT: 'RT', EDGE1: 'EDGE', EDGE2: 'EDGE', IDL1: 'DT', IDL2: 'DT', NT: 'NT', RUSH: 'EDGE', MLB: 'MLB', WLB: 'WLB', SAM: 'WLB',
-  CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', K: 'K', P: 'P', KR: 'RB' };
-const CHART_UNIT = k => ['K', 'P', 'KR'].includes(k) ? 'st' : ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'RUSH', 'MLB', 'WLB', 'SAM', 'CB1', 'CB2', 'NCB', 'DIME', 'FS', 'SS'].includes(k) ? 'def' : 'off';
+  CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', K: 'K', P: 'P', KR: 'RB', RUSHE: 'EDGE', RUSHI: 'DT' };
+const CHART_UNIT = k => ['K', 'P', 'KR'].includes(k) ? 'st' : ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'RUSH', 'RUSHE', 'RUSHI', 'MLB', 'WLB', 'SAM', 'CB1', 'CB2', 'NCB', 'DIME', 'FS', 'SS'].includes(k) ? 'def' : 'off';
 // the QB the staff (or your chart) has under center
 function starterQB(g, s) { return chartFirst(g, s, 'QB') || (g.side[s].depth.QB[0] ? g.side[s].depth.QB[0].p : null); }
 function hasList(chart, k) { return chart.lists[k] && chart.lists[k].length; }
@@ -200,8 +200,12 @@ function defUnit(g, s, front, pkg, subRush) {
   const score = subRush ? (p, slot) => (DEF_SLOT[slot][1] === 'DL' && p.a ? (ea0(p, 'prsh') - 60) * 0.35 : 0) : null;
   const chart = userChart(g, s, 'def');
   if (!chart) return fillSlots(g, s, layout, DEF_SLOT, { score });
-  const rush = subRush && hasList(chart, 'RUSH');
-  return fillSlots(g, s, layout, DEF_SLOT, { score, chart, keyOf: (name, slot) => rush && DEF_SLOT[slot][1] === 'DL' ? 'RUSH' : DEF_CHART_KEY[name] || name });
+  // passing downs: your rush specialists take over the edge and interior spots
+  const EDGE_NAMES = new Set(['LE', 'RE', 'LOLB', 'ROLB']);
+  return fillSlots(g, s, layout, DEF_SLOT, { score, chart, keyOf: (name, slot) => {
+    if (subRush && DEF_SLOT[slot][1] === 'DL') { const k = EDGE_NAMES.has(name) ? 'RUSHE' : 'RUSHI'; if (hasList(chart, k)) return k; }
+    return DEF_CHART_KEY[name] || name;
+  } });
 }
 function kickUnitPlayer(g, s, spot) {
   const d = g.side[s].depth[spot], pick = chartFirst(g, s, spot);

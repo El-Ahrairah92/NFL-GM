@@ -68,7 +68,8 @@ function endSeason() {
     if (p.stats.gp) p.career.push(Object.assign({ season: state.season, tid: p.tid }, p.stats, p.advS ? { adv: careerAdv(p.advS, p.spot) } : {}));
     if (p.pstats && p.pstats.gp) { p.pcareer = p.pcareer || []; p.pcareer.push(Object.assign({ season: state.season, tid: p.tid }, p.pstats)); }
     p.advPrev = p.advS ? Object.assign({ season: state.season }, p.advS) : p.advPrev || null; // last season stays viewable through the offseason
-    p.stats = {}; p.pstats = null; p.advS = null;
+    p.glogPrev = p.glog && p.glog.length ? { season: state.season, log: p.glog } : p.glogPrev || null;
+    p.stats = {}; p.pstats = null; p.advS = null; p.glog = [];
   }
   state.phase = 'RECAP';
 }
@@ -168,6 +169,7 @@ function leaveResign() {
   state.phase = 'FA'; state.faWave = 0;
 }
 function toFreeAgency(p) {
+  if (p.tid >= 0) { p.lastTid = p.tid; if (p.contract && p.contract.amt) p.lastAmt = p.contract.amt; } // shown on the free-agent board
   setTid(p, -1); p.expiring = false;
   p.ask = round2(marketValue(p) * (1 + rand() * 0.15));
   p.contract = { amt: p.ask, yrs: 0 };

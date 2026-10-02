@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <meta http-equiv="Cache-Control" content="no-cache">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Gridiron GM</title>
-  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div id="app"></div>
@@ -12,24 +12,14 @@
   <div id="toast"></div>
   <div id="busy"></div>
   <input type="file" id="importFile" accept=".json,application/json" hidden>
-  <script src="js/util.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/attributes.js"></script>
-  <script src="js/derived.js"></script>
-  <script src="js/players.js"></script>
-  <script src="js/coaches.js"></script>
-  <script src="js/perception.js"></script>
-  <script src="js/contracts.js"></script>
-  <script src="js/depthchart.js"></script>
-  <script src="js/engine/depth.js"></script>
-  <script src="js/engine/calls.js"></script>
-  <script src="js/engine/trench.js"></script>
-  <script src="js/engine/plays.js"></script>
-  <script src="js/engine/metrics.js"></script>
-  <script src="js/engine/game.js"></script>
-  <script src="js/league.js"></script>
-  <script src="js/offseason.js"></script>
-  <script src="js/trade.js"></script>
-  <script src="js/ui.js"></script>
+  <div id="errbar" class="hidden"></div>
+  <!-- every load pulls fresh code (no stale cached scripts after an update) -->
+  <script>
+    (function () {
+      var v = Date.now();
+      document.write('<link rel="stylesheet" href="css/style.css?v=' + v + '">');
+      ['js/util.js', 'js/data.js', 'js/attributes.js', 'js/derived.js', 'js/players.js', 'js/coaches.js', 'js/perception.js', 'js/contracts.js', 'js/depthchart.js', 'js/engine/depth.js', 'js/engine/calls.js', 'js/engine/trench.js', 'js/engine/plays.js', 'js/engine/metrics.js', 'js/engine/game.js', 'js/league.js', 'js/offseason.js', 'js/trade.js', 'js/ui.js'].forEach(function (f) { document.write('<script src="' + f + '?v=' + v + '"><\/script>'); });
+    })();
+  </script>
 </body>
 </html>

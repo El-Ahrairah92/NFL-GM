@@ -13,13 +13,13 @@ const CHART_SECTIONS = [
   ] },
   { unit: 'def', title: 'Defense', rows: [
     ['EDGE1', 'Edge (left)'], ['EDGE2', 'Edge (right)'], ['IDL1', 'Interior DL'], ['IDL2', 'Interior DL'], ['NT', 'Nose / base interior'],
-    ['MLB', 'Middle LB'], ['WLB', 'Weak-side LB'], ['SAM', 'Strong-side LB (base)'], ['CB1', 'Corner'], ['CB2', 'Corner'], ['NCB', 'Nickel corner'], ['DIME', 'Dime back'], ['FS', 'Free safety'], ['SS', 'Strong safety'],
+    ['MLB', 'Middle LB'], ['WLB', 'Weak-side LB'], ['SAM', 'Strong-side LB (base)'], ['CB1', 'Corner'], ['CB2', 'Corner'], ['NCB', 'Slot corner (nickel)'], ['DIME', 'Second slot corner (dime)'], ['FS', 'Free safety'], ['SS', 'Strong safety'],
   ] },
   { unit: 'off', title: 'Offensive packages', pkg: true, rows: [['RB3D', 'Passing-down back (3rd & long, 2-minute)'], ['RBSY', 'Short-yardage / goal-line back']] },
-  { unit: 'def', title: 'Defensive packages', pkg: true, rows: [['RUSH', 'Pass-rush unit (passing downs: top 4 rush)']] },
+  { unit: 'def', title: 'Defensive packages', pkg: true, rows: [['RUSHE', 'Rush specialists · edge (passing downs)'], ['RUSHI', 'Rush specialists · interior (passing downs)']] },
   { unit: 'st', title: 'Special teams', rows: [['K', 'Kicker'], ['P', 'Punter'], ['KR', 'Returner']] },
 ];
-const CHART_DEPTH = { RUSH: 4, RB3D: 2, RBSY: 2, K: 1, P: 1, KR: 2 };
+const CHART_DEPTH = { RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, K: 1, P: 1, KR: 2 };
 const ROT_KEYS = new Set(['RB', 'X', 'Z', 'SLOT', 'Y', 'H', 'EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'MLB', 'WLB', 'CB1', 'CB2', 'NCB', 'FS', 'SS']);
 const ROT_OPTS = [[0, 'Starter plays'], [0.1, 'Spell (10%)'], [0.2, 'Light (20%)'], [0.35, 'Split (35%)'], [0.5, 'Even (50%)']];
 
@@ -40,9 +40,19 @@ function defaultChart(tid) {
   return lists;
 }
 function returnScore(p) { if (!['RB', 'WRX', 'WRZ', 'SLOT', 'CB', 'NCB', 'FS', 'SS'].includes(p.spot)) return -1e9; return p.a.spd * 0.3 + p.a.bur * 0.2 + (p.a.elu || 30) * 0.25 + (p.a.vis || 30) * 0.15 + (p.a.bsec || 50) * 0.1 - (p.ovr >= 80 ? 6 : 0); }
+// display names (chart keys stay stable for saves)
+const CHART_NAME = { NCB: 'SLOT CB', DIME: 'SLOT CB2', RUSHE: 'EDGE RUSH', RUSHI: 'INT RUSH', IDL1: 'DT', IDL2: 'DT', EDGE1: 'EDGE', EDGE2: 'EDGE', CB1: 'CB', CB2: 'CB', RB3D: '3RD-DOWN RB', RBSY: 'SHORT-YD RB', OL6: '6TH OL', SLOT2: 'WR4', Y2: 'TE3' };
+const chartName = k => CHART_NAME[k] || k;
 function ensureChart(tid) {
   const t = T(tid);
   if (!t.dch) t.dch = { auto: { off: true, def: true, st: true }, lists: defaultChart(tid), rot: { RB: 0.2 } };
+  // older saves had one 4-man rush list: split it into edge and interior specialists
+  if (t.dch.lists.RUSH) {
+    const old = t.dch.lists.RUSH.map(id => P(id)).filter(Boolean);
+    t.dch.lists.RUSHE = old.filter(p => p.spot === 'EDGE' || p.spot === 'DE').map(p => p.id).slice(0, 3);
+    t.dch.lists.RUSHI = old.filter(p => p.spot !== 'EDGE' && p.spot !== 'DE').map(p => p.id).slice(0, 3);
+    delete t.dch.lists.RUSH;
+  }
   return t.dch;
 }
 // units on auto are refreshed from the staff; manual units drop players who left

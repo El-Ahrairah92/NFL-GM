@@ -253,6 +253,19 @@ function resolvePass(g, off, def, oc, dc) {
   const tpl = oc.rpoThrow ? 'QUICK' : oc.type === 'GADGET' ? 'DEEP' : boot ? 'BOOT' : pa ? 'PA' : oc.type;
   let routes = ROUTES[tpl];
   if (Array.isArray(routes[0][0])) routes = weightedPick(routes, [0.36, 0.3, 0.1, 0.24]);
+  // heavier personnel: the extra TE (or a fullback, on short routes) runs the route of the receiver he replaced,
+  // so 12/13/21/22 sets still attack every level — a play-action seam to the third tight end is a real play
+  const onField = new Set(off.map(e => e.slot));
+  const vacated = ['SLOT', 'Z', 'SLOT2'].filter(s => !onField.has(s)).map(s => routes.find(r => r[0] === s)).filter(Boolean);
+  const heirs = new Set();
+  for (const h of ['H', 'Y2', 'FB']) {
+    if (!onField.has(h) || !vacated.length) continue;
+    const i = h === 'FB' ? vacated.findIndex(r => r[1] === 'S') : 0;
+    if (i < 0) continue;
+    const v = vacated.splice(i, 1)[0];
+    routes = routes.filter(r => r[0] !== h).concat([[h, ...v.slice(1)]]); heirs.add(h);
+  }
+  if (onField.has('Y2') && !routes.some(r => r[0] === 'Y2')) routes = routes.concat([['Y2', 'S', 'OUT', [2, 5], 1.6, 3]]);
   // who blocks, who runs routes
   const keep = [];
   const rb = off.find(e => e.slot === 'RB'), fb = off.find(e => e.slot === 'FB'), y = off.find(e => e.slot === 'Y');
@@ -284,7 +297,7 @@ function resolvePass(g, off, def, oc, dc) {
   const man = dc.cov === 'C1' || dc.cov === 'C0' || dc.cov === 'C2M';
   // the design: one receiver is the primary on this call (weighted toward the better/featured players, but it rotates)
   const featured = receivers.filter(e => e.slot !== 'FB');
-  const prim = featured.length ? weightedPick(featured, featured.map(e => ({ X: 1.0, Z: 0.95, SLOT: 0.85, SLOT2: 0.4, Y: 0.6, H: 0.35, Y2: 0.2, RB: 0.35 }[e.slot] || 0.3) * Math.pow(Math.max(40, slotRating(e.p, e.spot)) / 75, 2))) : null;
+  const prim = featured.length ? weightedPick(featured, featured.map(e => (heirs.has(e.slot) ? 0.6 : { X: 1.0, Z: 0.95, SLOT: 0.85, SLOT2: 0.4, Y: 0.6, H: 0.35, Y2: 0.2, RB: 0.35 }[e.slot] || 0.3) * Math.pow(Math.max(40, slotRating(e.p, e.spot)) / 75, 2))) : null;
   const rlist = routes.filter(rt => receivers.some(e => e.slot === rt[0])).map(rt => {
     const e = receivers.find(x => x.slot === rt[0]);
     const depth = randInt(rt[3][0], rt[3][1]);

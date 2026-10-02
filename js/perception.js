@@ -149,6 +149,9 @@ function recordForm(box) {
     const g = overallGrade(box.adv[pid], p.spot);
     if (g === null || g === undefined) continue;
     p.form = [...(p.form || []).slice(-5), g];
+    // season game log for the "grades by game" chart
+    const opp = box.tids[0] === l.tid ? box.tids[1] : box.tids[0];
+    (p.glog = p.glog || []).push({ w: box.playoff ? box.playoff : 'Wk ' + box.week, o: opp, h: box.tids[0] === l.tid, g, s: l.snp });
   }
 }
 // ---------- strengths & weaknesses (what scouts think they see; fogged by confidence) ----------

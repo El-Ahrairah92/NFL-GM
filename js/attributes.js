@@ -114,7 +114,7 @@ const ROSTER_BUILD = [['QB', 3, 1], ['RB', 3, 1], ['FB', 1, 0], ['WRX', 2, 1], [
 const DRAFT_SPOT_W = { QB: 3, RB: 3, FB: 0.6, WRX: 2.5, WRZ: 2.5, SLOT: 2, TEY: 1.6, TEH: 1.2, LT: 1.4, LG: 1.4, C: 1.2, RG: 1.4, RT: 1.4,
   NT: 1, DT: 2.6, DE: 1.8, EDGE: 3.4, MLB: 1.6, WLB: 2, CB: 3.6, NCB: 1.8, FS: 1.6, SS: 1.6, K: 0.5, P: 0.5 };
 // roster page sections
-const FAMILIES = [['QB', ['QB']], ['RB / FB', ['RB', 'FB']], ['WR', ['WRX', 'WRZ', 'SLOT']], ['TE', ['TEY', 'TEH']], ['OL', ['LT', 'LG', 'C', 'RG', 'RT']],
+const FAMILIES = [['QB', ['QB']], ['RB', ['RB']], ['FB', ['FB']], ['WR', ['WRX', 'WRZ', 'SLOT']], ['TE', ['TEY', 'TEH']], ['OL', ['LT', 'LG', 'C', 'RG', 'RT']],
   ['Interior DL', ['NT', 'DT', 'DE']], ['EDGE', ['EDGE']], ['LB', ['MLB', 'WLB']], ['CB', ['CB', 'NCB']], ['S', ['FS', 'SS']], ['K', ['K']], ['P', ['P']]];
 
 // ---------- size & fit ----------
@@ -337,7 +337,41 @@ function genMeasurables(a, ht, wt, arm) {
     cone: round2(clamp(8.2 - 0.016 * ag + gauss(0, 0.08), 6.4, 8.4)),
     shut: round2(clamp(4.95 - 0.009 * ag + gauss(0, 0.05), 3.9, 5.0)),
     bench: Math.max(0, Math.round((a.str - 20) * 0.45 + gauss(0, 2.5))),
+    vert: round1(clamp(14 + bu * 0.26 + gauss(0, 1.6), 22, 45)),
+    broad: Math.round(clamp(70 + bu * 0.55 + gauss(0, 3), 90, 145)),
   };
+}
+// older players were measured before jumps were recorded: fill them in from their explosiveness
+function ensureJumps(p) {
+  if (!p.m || p.m.vert !== undefined || !p.a) return;
+  const bu = p.a.bur - 2;
+  p.m.vert = Math.round(clamp(14 + bu * 0.26 + hashGauss(p.id, 91, 1) * 1.6, 22, 45) * 10) / 10;
+  p.m.broad = Math.round(clamp(70 + bu * 0.55 + hashGauss(p.id, 92, 1) * 3, 90, 145));
+}
+// Relative Athletic Score: each test as a 0–10 percentile against his position, averaged (size, speed, explosion, agility, strength)
+const RAS_CACHE = {};
+function rasOf(p, peers) {
+  if (!p.m) return null;
+  ensureJumps(p);
+  const tests = [['ht', 1], ['wt', 1], ['forty', -1], ['ten', -1], ['vert', 1], ['broad', 1], ['cone', -1], ['shut', -1], ['bench', 1]];
+  // sorted test results per position, cached briefly (a draft board asks for hundreds of these at once)
+  const now = Date.now();
+  if (!RAS_CACHE.t || now - RAS_CACHE.t > 3000 || RAS_CACHE.st !== state) { RAS_CACHE.t = now; RAS_CACHE.st = state; RAS_CACHE.by = {}; }
+  const key = p.pos;
+  if (!RAS_CACHE.by[key]) {
+    const pool = peers || Object.values(state.players).filter(q => q.m && q.pos === p.pos);
+    RAS_CACHE.by[key] = {};
+    for (const [k] of tests) RAS_CACHE.by[key][k] = pool.map(q => { ensureJumps(q); return q.m[k]; }).filter(v => v !== undefined).sort((x, y) => x - y);
+  }
+  let s = 0, n = 0;
+  for (const [k, dir] of tests) {
+    const vals = RAS_CACHE.by[key][k];
+    if (vals.length < 5) continue;
+    const below = vals.filter(v => v < p.m[k]).length, eq = vals.filter(v => v === p.m[k]).length;
+    const pct = (below + eq / 2) / vals.length;
+    s += (dir > 0 ? pct : 1 - pct) * 10; n++;
+  }
+  return n ? Math.round(s / n * 100) / 100 : null;
 }
 
 // Create a player at `spot` with peak talent q (0 = average starter, +1 ≈ +5 OVR) and current age.

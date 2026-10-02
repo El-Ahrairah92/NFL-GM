@@ -124,6 +124,18 @@ Post-Phase-6 modifications (round 1):
 - **Playbook (view only):** each team's identity and tendencies, a self-scout (usage, EPA and success by personnel, play type, situation, formation, tags, coverage, pressure, package), and who's on the field per personnel and package.
 - **Navigation** fires on press (pointerdown) so clicks can't get lost.
 
+Round 2:
+- **Route inheritance:** when heavier personnel (12/13/21/22) takes a receiver off the field, the extra TE runs his route; a fullback inherits only short ones. The third TE always has a route.
+  - TE2s went from checkdown-only to real targets (5–28 a season), and TE3s now get seams.
+  - TE share is about 18% of targets. Calibration is unchanged.
+- **Depth chart:**
+  - Formation-board layout with Offense / Defense / Packages & Special Teams sub-tabs, and a pinned order panel.
+  - SLOT CB / SLOT CB2 names.
+  - The passing-down rush unit is split into edge and interior rush specialists (`RUSHE`/`RUSHI`; old `RUSH` lists migrate).
+- **Free agency:** RB and FB are separate families. New columns: YOE, previous team, previous AAV, market value.
+- **Player card:** RAS (0–10, mean of positional percentiles on height, weight, 40, 10, vertical, broad, 3-cone, shuttle, bench; jumps were added to the combine and backfilled from explosiveness), plus a grades-by-game chart (season game log, last season kept through the offseason). RAS also shows on the draft board.
+- **Light theme** by default (Settings → Theme for dark). Scripts and the stylesheet load with a cache-busting query string, and render or runtime errors show in an on-screen banner.
+
 ## 1. Player evaluation (what the GM sees)
 - True ratings are hidden. The GM sees scout **perception** with confidence that grows with experience/snaps. AI teams see through the same fog (their own noise).
 - **Current tier** (percentile within position, league-wide):

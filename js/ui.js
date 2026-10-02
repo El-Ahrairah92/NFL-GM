@@ -143,12 +143,27 @@ function table(id, cols, rows, opts = {}) {
 }
 
 // ---------- top level ----------
+function applyTheme() { document.documentElement.classList.toggle('dark', !!(state && state.settings && state.settings.theme === 'dark')); }
 function render() {
   const app = $('#app');
+  applyTheme();
   if (!state) { app.innerHTML = setupHTML(); return; }
   document.documentElement.style.setProperty('--accent', T(state.userTid).color);
-  app.innerHTML = topbarHTML() + `<main>${pageHTML()}</main>`;
+  let page;
+  try { page = pageHTML(); } catch (e) { showError(e, `drawing the ${view} page`); page = `<div class="callout bad">This page hit an error (details at the bottom of the screen).</div>`; }
+  app.innerHTML = topbarHTML() + `<main>${page}</main>`;
 }
+// any error shows on screen instead of failing silently (so a "dead" click has an explanation)
+function showError(e, where) {
+  const bar = document.getElementById('errbar');
+  if (!bar) return;
+  const msg = (e && (e.stack || e.message)) || String(e);
+  bar.innerHTML = `<b>Something went wrong${where ? ' while ' + esc(where) : ''}.</b> <span class="small">${esc(String(msg).split(/\r?\n/).slice(0, 3).join(' · '))}</span> <button class="sm" onclick="this.parentNode.classList.add('hidden')">Dismiss</button>`;
+  bar.classList.remove('hidden');
+  console.error(e);
+}
+window.addEventListener('error', ev => showError(ev.error || ev.message));
+window.addEventListener('unhandledrejection', ev => showError(ev.reason));
 
 function setupHTML() {
   const has = hasSave;
@@ -333,7 +348,7 @@ function recapHTML() {
 const ROSTER_VIEWS = [['scout', 'Scouting'], ['contract', 'Contracts'], ['stats', 'Season Stats'], ['adv', 'Advanced'], ['comfort', 'Positional Comfort'], ['true', 'True Ratings (debug)']];
 function starHTML(n) {
   if (n === null || n === undefined) return '';
-  let h = ''; for (let i = 1; i <= 5; i++) h += n >= i ? '★' : n >= i - 0.5 ? '⯪' : '☆';
+  let h = ''; for (let i = 1; i <= 5; i++) h += `<i class="${n >= i ? 'f' : n >= i - 0.5 ? 'h' : 'e'}">★</i>`;
   return `<span class="stars" title="${n} stars: ability at his position, weighted toward recent form">${h}</span>`;
 }
 const STAT_NUM = (k) => ({ k, v: r => r.stats[k] || 0, num: 1 });
@@ -444,43 +459,59 @@ function rosterActions(p) {
 // how your staff sees him at a spot: perceived level, adjusted for how well he knows that spot
 function chartValue(p, spot) { return uOvr(p) + (slotRating(p, spot) - p.ovr); }
 const CF_CLS = { Natural: 'good', Comfortable: '', Decent: 'warn', Raw: 'bad', Unfamiliar: 'bad' };
+function dcPlayerMeta(p, key, spot) {
+  const cf = comfortLabel(comfortOf(p, spot));
+  return `<span class="dc-meta">${['K', 'P', 'KR'].includes(key) ? '' : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p, chartValue(p, spot))}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
+}
+// formation boards: [key, grid column, grid row]
+const DC_BOARD = {
+  off: [['X', 1, 1], ['LT', 3, 1], ['LG', 4, 1], ['C', 5, 1], ['RG', 6, 1], ['RT', 7, 1], ['Y', 8, 1], ['Z', 9, 1],
+    ['SLOT', 2, 2], ['QB', 5, 2], ['H', 8, 2], ['FB', 5, 3], ['RB', 5, 4], ['SLOT2', 1, 4], ['Y2', 8, 4], ['OL6', 9, 4]],
+  def: [['FS', 4, 1], ['SS', 6, 1], ['CB1', 1, 2], ['NCB', 3, 2], ['DIME', 7, 2], ['CB2', 9, 2], ['WLB', 3, 3], ['MLB', 5, 3], ['SAM', 7, 3],
+    ['EDGE1', 2, 4], ['IDL1', 4, 4], ['NT', 5, 4], ['IDL2', 6, 4], ['EDGE2', 8, 4]],
+  pkg: [['RB3D', 1, 1], ['RBSY', 3, 1], ['RUSHE', 5, 1], ['RUSHI', 7, 1], ['K', 1, 2], ['P', 3, 2], ['KR', 5, 2]],
+};
+function dcPlayerMeta(p, key, spot) {
+  const cf = comfortLabel(comfortOf(p, spot));
+  return `<span class="dc-meta">${['K', 'P', 'KR'].includes(key) ? '' : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p, chartValue(p, spot))}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
+}
+function dcBox(c, key, cur, u) {
+  const ids = (c.lists[key] || []).filter(id => P(id) && P(id).tid === u), spot = CHART_SPOT[key];
+  const row = (id, i) => { const p = P(id), cf = ['K', 'P', 'KR'].includes(key) ? null : comfortLabel(comfortOf(p, spot));
+    return `<div class="${i ? 'b2' : 'b1'}" title="${esc(pname(p))}">${esc(p.last)}${cf && cf !== 'Natural' && cf !== 'Comfortable' ? ` <span class="cfdot ${CF_CLS[cf]}" title="${cf} at ${SPOTS[spot].l}">●</span>` : ''}${p.injury ? ' <span class="cfdot bad" title="Injured">✚</span>' : ''}</div>`; };
+  return `<div class="dc-box ${key === cur ? 'on' : ''}" data-action="dchPick" data-key="${key}"><div class="hd">${chartName(key)}</div>${ids.slice(0, 3).map(row).join('') || '<div class="b2 muted">—</div>'}</div>`;
+}
 function depthChartHTML() {
   const u = state.userTid, c = ensureChart(u);
   refreshChart(u);
   const ro = rosterOf(u).filter(p => p.a);
-  const auto = state.settings.autoUser;
-  let html = `<div class="callout">Set who plays where. Listed players play in order; the No. 2's <b>rotation share</b> gives him discretionary snaps
-    (running backs rotate by series, linemen and DBs by play). Tired linemen still sub out. Backups listed away from their natural spot take
-    <b>practice reps</b> there every week and cross-train at it in camp — that's how players learn new positions.
-    ${auto ? '<br><b>Auto-manage is on</b> — the staff sets the depth chart until you turn it off in Settings.' : ''}</div>`;
-  for (const sec of CHART_SECTIONS) {
-    const isAuto = c.auto[sec.unit];
-    html += `<div class="card" style="margin-bottom:16px"><div class="row"><h3 style="margin:0">${sec.title}</h3><span class="spacer"></span>
-      ${sec.pkg ? '' : `<span class="small muted">${isAuto ? 'Staff is setting this unit.' : 'Manual.'}</span>
-      <button class="sm ${isAuto ? 'primary' : ''}" data-action="dchAuto" data-unit="${sec.unit}" data-on="${isAuto ? 0 : 1}">${isAuto ? 'Take control' : 'Let staff set it'}</button>`}</div>
-      <div class="tbl-wrap"><table class="dch"><thead><tr><th>Slot</th><th>Starter</th><th>2nd</th><th>3rd</th><th>Rotation</th></tr></thead><tbody>`;
-    for (const [key, label] of sec.rows) {
-      const spot = CHART_SPOT[key], list = c.lists[key] || [], n = CHART_DEPTH[key] || 3;
-      const pool = ro.filter(p => key === 'KR' ? returnScore(p) > -1e8 : SPOTS[p.spot].side === SPOTS[spot].side).sort((a, b) => (key === 'KR' ? returnScore(b) - returnScore(a) : chartValue(b, spot) - chartValue(a, spot)));
-      const cell = i => {
-        const cur = list[i];
-        const opts = [`<option value="">—</option>`, ...pool.map(p => {
-          const cf = comfortLabel(comfortOf(p, spot));
-          return `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${esc(pshort(p))} · ${p.spot}${key === 'KR' || key === 'K' || key === 'P' ? '' : ' · ' + cf} · ${tierOf(p, chartValue(p, spot), SPOTS[spot].g)}${p.injury ? ' · INJ' : ''}</option>`;
-        })].join('');
-        const p = cur && P(cur);
-        const warn = p && !['K', 'P', 'KR'].includes(key) ? comfortLabel(comfortOf(p, spot)) : null;
-        return `<td><select data-change="dch" data-key="${key}" data-i="${i}" ${i > list.length ? 'disabled' : ''}>${opts}</select>${warn && warn !== 'Natural' ? ` <span class="pill ${CF_CLS[warn]}" title="Positional comfort at ${SPOTS[spot].l}">${warn}</span>` : ''}${p && p.injury ? ' <span class="pill inj">INJ</span>' : ''}</td>`;
-      };
-      const rot = ROT_KEYS.has(key) ? `<select data-change="dchRot" data-key="${key}">${ROT_OPTS.map(([v, l]) => `<option value="${v}" ${(c.rot[key] || 0) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>` : '';
-      html += `<tr${isAuto && !sec.pkg ? ' class="muted"' : ''}><td><b>${key}</b> <span class="small muted">${label}</span></td>${[0, 1, 2].map(i => i < n ? cell(i) : '<td></td>').join('')}<td>${rot}</td></tr>`;
-      if (n > 3) html += `<tr><td></td><td colspan="4">${cell(3).replace(/^<td>|<\/td>$/g, '')} <span class="small muted">4th rusher</span></td></tr>`;
-    }
-    html += `</tbody></table></div></div>`;
-  }
-  return html;
+  const tab = ui.dchTab || 'off';
+  let key = ui.dchKey && DC_BOARD[tab].some(x => x[0] === ui.dchKey) ? ui.dchKey : DC_BOARD[tab][0][0];
+  const sec = CHART_SECTIONS.find(x => x.rows.some(r => r[0] === key));
+  const label = sec.rows.find(r => r[0] === key)[1], spot = CHART_SPOT[key], n = Math.max(CHART_DEPTH[key] || 3, 1);
+  const list = (c.lists[key] || []).filter(id => P(id) && P(id).tid === u);
+  const unitOf = { off: 'off', def: 'def' }[tab];
+  let html = `<div class="row" style="margin-bottom:10px"><div class="subtabs" style="margin:0">${[['off', 'Offense'], ['def', 'Defense'], ['pkg', 'Packages & Special Teams']].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="dchTab" data-tab="${k}">${l}</button>`).join('')}</div><span class="spacer"></span>
+    ${unitOf ? (c.auto[unitOf] ? `<span class="small muted">The staff is setting the ${tab === 'off' ? 'offense' : 'defense'}.</span> <button class="sm primary" data-action="dchAuto" data-unit="${unitOf}" data-on="0">Take control</button>` : `<span class="small muted">You're setting the ${tab === 'off' ? 'offense' : 'defense'}.</span> <button class="sm" data-action="dchAuto" data-unit="${unitOf}" data-on="1">Hand to staff</button>`) : `<span class="small muted">Special teams: ${c.auto.st ? 'staff' : 'you'}</span> <button class="sm" data-action="dchAuto" data-unit="st" data-on="${c.auto.st ? 0 : 1}">${c.auto.st ? 'Take control' : 'Hand to staff'}</button>`}</div>
+    ${state.settings.autoUser ? '<div class="callout"><b>Auto-manage is on</b>: the staff sets the depth chart until you turn it off in Settings.</div>' : ''}
+    <div class="dc-wrap"><div class="card"><div class="dc-board ${tab}">${DC_BOARD[tab].map(([k, col, row]) => `<div style="grid-column:${col};grid-row:${row}">${dcBox(c, k, key, u)}</div>`).join('')}</div>
+    <div class="small muted" style="margin-top:10px">Click a position to set its order. <span class="cfdot warn">●</span> Decent / <span class="cfdot bad">●</span> Raw or unfamiliar at the spot · <span class="cfdot bad">✚</span> injured.${tab === 'off' ? ' Bottom row: sub-package spots (4th WR, 3rd TE, 6th OL).' : ''}</div></div><div class="dc-side">`;
+  // ---- right: the selected slot ----
+  const lvl = p => { const cc = comfortOf(p, spot); return cc >= 85 ? 4 : cc >= 60 ? 3 : cc >= 30 ? 2 : cc > 0 ? 1 : 0; };
+  const fam = (FAMILIES.find(f => f[1].includes(spot)) || [null, []])[1];
+  const all = ro.filter(p => (key === 'KR' ? returnScore(p) > -1e8 : SPOTS[p.spot].side === SPOTS[spot].side) && !list.includes(p.id));
+  const related = all.filter(p => key === 'KR' || ['K', 'P'].includes(key) || lvl(p) > 0 || fam.includes(p.spot));
+  const cands = (ui.dchAll ? all : related).sort((x, y) => key === 'KR' ? returnScore(y) - returnScore(x) : lvl(y) - lvl(x) || chartValue(y, spot) - chartValue(x, spot));
+  const rot = ROT_KEYS.has(key) ? `<label class="small muted">No. 2 snaps</label> <select data-change="dchRot" data-key="${key}">${ROT_OPTS.map(([v, l]) => `<option value="${v}" ${(c.rot[key] || 0) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>` : '';
+  html += `<div class="card"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">${chartName(key)} · ${esc(label)}</h3><span class="spacer"></span>${rot}</div>
+    <div class="section-title" style="margin-top:6px">Depth order <span class="small muted">· drag to reorder</span></div><div class="dc-order">
+    ${list.map((id, i) => { const p = P(id); return `<div class="dc-row" draggable="true" data-dcpid="${id}" data-dcfrom="${i}" data-dcdrop="${i}"><span class="n">${i + 1}</span><span>${esc(p.lbl)} ${playerLink(p)}</span><span class="dc-meta">${dcPlayerMeta(p, key, spot)}<button class="sm" data-action="dchRemove" data-key="${key}" data-i="${i}" title="Remove">✕</button></span></div>`; }).join('')}
+    <div class="dc-drop" data-dcdrop="${list.length}">${list.length < n ? `Drop a player here for No. ${list.length + 1}` : `Drop here to make him No. ${n} (bumps the last man)`}</div></div>
+    <div class="row" style="margin:16px 0 8px"><span class="section-title" style="margin:0">Available · by comfort at ${SPOTS[spot].l}, then ability</span><span class="spacer"></span>
+      <label class="small muted"><input type="checkbox" data-change="dchAll" ${ui.dchAll ? 'checked' : ''}> Show everyone (+${all.length - related.length})</label></div>
+    <div class="dc-cands">${cands.map(p => `<div class="dc-row cand" draggable="true" data-dcpid="${p.id}"><span>${esc(p.lbl)} ${playerLink(p)} <span class="muted small">${p.age}y</span></span><span class="dc-meta">${dcPlayerMeta(p, key, spot)}<button class="sm primary" data-action="dchAdd" data-key="${key}" data-pid="${p.id}" title="Add to the depth order">+</button></span></div>`).join('') || '<div class="muted small" style="padding:10px">Nobody else available.</div>'}</div></div>`;
+  return html + '</div></div>';
 }
-
 // ---------- playbook (view only) ----------
 const PERS_LABEL = { '10': '10 (1 RB, 0 TE, 4 WR)', '11': '11 (1 RB, 1 TE, 3 WR)', '12': '12 (1 RB, 2 TE, 2 WR)', '13': '13 (1 RB, 3 TE, 1 WR)', '21': '21 (2 RB, 1 TE, 2 WR)', '22': '22 (2 RB, 2 TE, 1 WR)', JUMBO: 'Jumbo (6 OL)' };
 const TYPE_LABEL = { RUN: 'Designed runs', DRAW: 'Draws', OPTION: 'Option', SNEAK: 'QB sneak', JET: 'Jet sweep', QUICK: 'Quick game', DROP: 'Dropback', DEEP: 'Deep shots', RBSCR: 'RB screen', WRSCR: 'WR screen', GADGET: 'Gadget' };
@@ -519,6 +550,58 @@ function defLineup(tid, pkg) {
 function lineupHTML(units) {
   return units.map(e => `<span class="pill" title="${esc(SPOTS[e.spot] ? SPOTS[e.spot].l : e.spot)}"><b>${e.name}</b> ${e.p.a ? esc(pshort(e.p)) : 'Emergency'}${e.pen >= 3 ? ' <span class="warn">·' + comfortLabel(comfortOf(e.p, e.spot)) + '</span>' : ''}</span>`).join(' ');
 }
+// ---------- formation viewer: where everyone lines up ----------
+const FORM_NAMES = [['SG', 'Shotgun'], ['UC', 'Under center'], ['PI', 'Pistol'], ['EMP', 'Empty']];
+function alignOffense(units, form) {
+  return units.map(e => {
+    let x = e.x || 0, d = e.depth || 0;
+    if (OL_SLOTS.includes(e.slot)) d = 0;
+    else if (e.slot === 'QB') d = form === 'UC' ? 2 : form === 'PI' ? 4 : 5;
+    else if (e.slot === 'RB') { if (form === 'SG') { x = 1.1; d = 5; } else if (form === 'EMP') { x = -5.3; d = 1; } else d = 7; }
+    else if (e.slot === 'FB') d = 4;
+    else if (INLINE.has(e.slot)) d = 0.35;
+    else d = e.slot === 'X' ? 0.35 : 1.3; // X on the line, Z and slots off it
+    return { e, x, d };
+  });
+}
+function formationSVG(pts, side) {
+  const W = 760, H = 320, cx = W / 2, sx = 64;
+  const off = side === 'off', los = off ? 46 : 270, sy = off ? 32 : 16;
+  let g = `<svg viewBox="0 0 ${W} ${H}" class="field" role="img" aria-label="${off ? 'Offensive' : 'Defensive'} alignment">`;
+  // field: yard lines every 5 yards from the line of scrimmage, hashes, LOS
+  g += `<rect x="0" y="0" width="${W}" height="${H}" rx="10" class="fld"/>`;
+  for (let yd = 5; yd <= 15; yd += 5) { const y = off ? los + yd * sy : los - yd * sy; if (y > 4 && y < H - 4) g += `<line x1="10" x2="${W - 10}" y1="${y}" y2="${y}" class="yl"/><text x="16" y="${y - 4}" class="yt">${yd}</text>`; }
+  for (const hx of [cx - 70, cx + 70]) g += `<line x1="${hx}" x2="${hx}" y1="8" y2="${H - 8}" class="hash"/>`;
+  g += `<line x1="10" x2="${W - 10}" y1="${los}" y2="${los}" class="los"/><text x="${W - 16}" y="${los - 6}" class="yt" text-anchor="end">line of scrimmage</text>`;
+  if (!off) g += `<circle cx="${cx}" cy="${los + 14}" r="5" class="ball"/>`;
+  for (const { e, x, d } of pts) {
+    const px = clamp(cx + x * sx, 26, W - 26), py = off ? los + d * sy + 2 : los - Math.max(0.4, d) * sy - 2;
+    const warn = e.p.a && e.pen >= 3;
+    g += `<g ${e.p.a ? `data-action="player" data-pid="${e.p.id}"` : ''} class="dot ${off ? 'o' : 'd'} ${warn ? 'warn' : ''}"><title>${esc(e.p.a ? pname(e.p) + ' — ' + e.p.lbl + (warn ? ' (' + comfortLabel(comfortOf(e.p, e.spot)) + ' at ' + SPOTS[e.spot].l + ')' : '') : 'Emergency')}</title>
+      <circle cx="${px}" cy="${py}" r="19"/><text x="${px}" y="${py + 5}" class="sl">${e.name.replace(/[0-9]$/, '')}</text><text x="${px}" y="${py + (off ? 37 : -26)}" class="nm">${esc(e.p.a ? e.p.last : 'Sub')}</text></g>`;
+  }
+  return g + '</svg>';
+}
+function formationViewerHTML(tid) {
+  const ot = offTend(T(tid)), dt = defTend(T(tid));
+  const persUsed = Object.entries(ot.pers || {}).sort((x, y) => y[1] - x[1]).map(x => x[0]).filter(k => PERSONNEL[k]);
+  const allPers = [...persUsed, ...Object.keys(PERSONNEL).filter(k => !persUsed.includes(k))];
+  const pers = ui.pbPers && PERSONNEL[ui.pbPers] ? ui.pbPers : persUsed[0] || '11';
+  const form = ui.pbForm || 'SG', pkg = ui.pbPkg || 'NICKEL';
+  const btn = (act, v, cur, l, dim) => `<button class="sm ${v === cur ? 'primary' : ''}" data-action="${act}" data-v="${v}" ${dim ? 'style="opacity:.6"' : ''}>${l}</button>`;
+  const offPts = alignOffense(lineupFor(tid, pers), form);
+  const defPts = defLineup(tid, pkg).map(e => ({ e, x: e.x || 0, d: e.depth || 0 }));
+  return `<div class="grid fv-grid" style="margin-top:16px">
+    <div class="card"><h3>Offense · ${esc(PERS_LABEL[pers] || pers)} · ${FORM_NAMES.find(f => f[0] === form)[1]}</h3>
+      <div class="row" style="gap:4px;margin-bottom:6px">${allPers.map(k => btn('pbPers', k, pers, k, !persUsed.includes(k))).join('')}</div>
+      <div class="row" style="gap:4px;margin-bottom:8px">${FORM_NAMES.map(([k, l]) => btn('pbForm', k, form, l)).join('')}</div>
+      ${formationSVG(offPts, 'off')}
+      <div class="small muted">Dimmed groupings aren't part of this play caller's usual mix. Orange rings: lined up away from a spot he's comfortable at. Click a player for his card.</div></div>
+    <div class="card"><h3>Defense · ${PKG_LABEL[pkg]} · ${esc(dt.front || '')} front</h3>
+      <div class="row" style="gap:4px;margin-bottom:8px">${['BASE', 'NICKEL', 'DIME', 'GL'].map(k => btn('pbPkg', k, pkg, PKG_LABEL[k])).join('')}</div>
+      ${formationSVG(defPts, 'def')}
+      <div class="small muted">Shown from the defense's side: the ball is at the bottom. Edges, tackles and nose line up by the front; corners, nickel and safeties by the package.</div></div></div>`;
+}
 function playbookHTML() {
   const u = state.userTid, nx = userMatchup();
   const tid = ui.pbTid == null ? u : ui.pbTid, t = T(tid);
@@ -537,6 +620,7 @@ function playbookHTML() {
     <div class="section-title">Personnel mix</div><div class="row small">${Object.entries(ot.pers || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="pill">${k} · ${Math.round(100 * v / persTot)}%</span>`).join(' ')}</div></div>
     <div class="card"><h3>Defense · ${esc(DEF_ARCH[defArch(t)] ? DEF_ARCH[defArch(t)].l : '—')}</h3><div class="small muted" style="margin-bottom:8px">Play caller: ${coachNameLink(dc)} ${dc ? `(${ROLE_SHORT[dc.role]})` : ''} · ${esc(dt.front || '')} front</div>
     ${tendBar('Man coverage', dt.man)}${tendBar('Two-high shells', dt.high)}${tendBar('Blitz', dt.blitz)}${tendBar('Simulated pressure', dt.sim)}${tendBar('Stunts', dt.stunt)}${tendBar('Base personnel', dt.base, 'vs. nickel/dime')}</div></div>`;
+  html += formationViewerHTML(tid);
   // ---- self-scout ----
   if (src) {
     const a = src.a;
@@ -785,6 +869,10 @@ function faHTML() {
     { k: 'ovr', l: 'Tier', v: p => uOvr(p), f: p => tierPill(p) + trueNums(p) },
     { k: 'pot', l: 'Upside', v: p => uCeil(p), f: p => upsidePill(p) },
     { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
+    { k: 'yoe', l: 'YOE', v: p => p.exp, num: 1, title: 'Years of experience' },
+    { k: 'pt', l: 'Prev team', v: p => p.lastTid != null && p.lastTid >= 0 ? T(p.lastTid).abbr : '', f: p => p.lastTid != null && p.lastTid >= 0 ? teamLink(p.lastTid) : '<span class="muted">—</span>' },
+    { k: 'pa', l: 'Prev AAV', v: p => p.lastAmt || 0, f: p => p.lastAmt ? fmtMoney(p.lastAmt) : '<span class="muted">—</span>', num: 1 },
+    { k: 'mv', l: 'Market value', v: p => marketValue(p), f: p => fmtMoney(marketValue(p)), num: 1, title: 'What the league thinks he is worth per year (perception, not truth)' },
     { k: 'ask', l: 'Asking', v: p => p.ask, f: p => fmtMoney(p.ask), num: 1 },
     { k: 'y', l: 'Yrs', f: p => state.phase === 'REG' ? 1 : contractYears(p), num: 1 },
     { k: 'a', l: '', f: p => canSign ? `<button class="sm primary" data-action="sign" data-pid="${p.id}" ${p.ask > capRoom(u) ? 'disabled title="Not enough cap space"' : ''}>Sign</button>` : '' },
@@ -818,6 +906,7 @@ function draftHTML() {
     { k: 'age', l: 'Age', v: p => p.age, num: 1 },
     { k: 'hw', l: 'Ht/Wt', v: p => p.m.wt, f: p => `<span class="small muted">${htwt(p)}</span>` },
     { k: 'forty', l: '40', v: p => -p.m.forty, f: p => p.m.forty.toFixed(2), num: 1 },
+    { k: 'ras', l: 'RAS', v: p => rasOf(p) || 0, f: p => rasHTML(p), num: 1, title: 'Relative Athletic Score (0–10) vs. his position' },
     { k: 'ovr', l: 'Now', v: p => uOvr(p), f: p => tierPill(p) + trueNums(p), title: 'Ready to contribute as…' },
     { k: 'pot', l: 'Upside', v: p => uCeil(p), f: p => upsidePill(p) },
     { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
@@ -959,6 +1048,7 @@ function settingsHTML() {
   return `<div class="grid g2"><div class="card"><h3>Management</h3>
     <label class="row"><input type="checkbox" data-change="autoUser" ${state.settings.autoUser ? 'checked' : ''}> <b>Auto-manage my team</b></label>
     <p class="muted small">When on, your team is run by the same logic as the AI GMs: re-signings, free agency, the draft, coaching changes, roster cuts and injury replacements. You can still make any move yourself.</p>
+    <label class="row" style="margin-top:12px"><b>Theme</b> <select data-change="theme"><option value="light" ${state.settings.theme !== 'dark' ? 'selected' : ''}>Light</option><option value="dark" ${state.settings.theme === 'dark' ? 'selected' : ''}>Dark</option></select></label>
     <label class="row" style="margin-top:12px"><input type="checkbox" data-change="gamePopups" ${state.settings.gamePopups !== false ? 'checked' : ''}> <b>Game-day popups</b></label>
     <p class="muted small">A preview before each of your games and a wrap-up (box score, best and worst performers, breakouts, reaction) after.</p>
     <label class="row" style="margin-top:12px"><input type="checkbox" data-change="showTrue" ${state.settings.showTrue ? 'checked' : ''}> <b>Show true ratings (debug)</b></label>
@@ -986,10 +1076,11 @@ function careerCols(pos) { return pos === 'TE' ? CAREER_COLS.WR : DEF_POS.includ
 // red (bottom) → grey (middle) → green (top); dir -1 means lower is better, 0 means no judgment
 function pctStyle(pct, dir) {
   if (pct === null || pct === undefined || !dir) return '';
-  const q = dir > 0 ? pct : 1 - pct, hue = Math.round(q * 130), alpha = (0.12 + Math.abs(q - 0.5) * 0.9).toFixed(2);
-  return `background:hsla(${hue},65%,38%,${alpha});border-color:hsla(${hue},70%,45%,.6)`;
+  const q = dir > 0 ? pct : 1 - pct, hue = Math.round(q * 130), dark = state && state.settings.theme === 'dark';
+  const alpha = ((0.12 + Math.abs(q - 0.5) * 0.9) * (dark ? 1 : 0.55)).toFixed(2);
+  return dark ? `background:hsla(${hue},65%,38%,${alpha});border-color:hsla(${hue},70%,45%,.6)` : `background:hsla(${hue},70%,48%,${alpha});border-color:hsla(${hue},60%,42%,.55)`;
 }
-function gradeColor(v) { return v >= 85 ? 'var(--elite)' : v >= 72 ? 'var(--good)' : v >= 60 ? '#9fb3c8' : v >= 50 ? 'var(--warn)' : 'var(--bad)'; }
+function gradeColor(v) { return v >= 85 ? 'var(--elite)' : v >= 72 ? 'var(--good)' : v >= 60 ? 'var(--mid)' : v >= 50 ? 'var(--warn)' : 'var(--bad)'; }
 const GLANCE = {
   QB: [['q', 'Passing'], ['q_cln'], ['q_prs'], ['q_sh'], ['q_md'], ['q_dp'], ['q_pa'], ['q_blz']],
   RB: [['run', 'Rushing'], ['run_zn'], ['run_gp'], ['rec', 'Receiving'], ['pb', 'Pass protection']],
@@ -1040,11 +1131,25 @@ function advRankHTML(p, src) {
   }).join('');
   return `<div class="stat-tiles">${tiles}</div>`;
 }
-const COMBINE = [['ht', 'Height', m => fmtHeight(m.ht), 0], ['wt', 'Weight', m => m.wt, 0], ['arm', 'Arm', m => m.arm.toFixed(2) + '"', 1], ['forty', '40-yd', m => m.forty.toFixed(2), -1],
-  ['ten', '10-yd', m => m.ten.toFixed(2), -1], ['cone', '3-cone', m => m.cone.toFixed(2), -1], ['shut', 'Shuttle', m => m.shut.toFixed(2), -1], ['bench', 'Bench', m => m.bench, 1]];
+const COMBINE = [['ht', 'Height', m => fmtHeight(m.ht), 1], ['wt', 'Weight', m => m.wt, 1], ['arm', 'Arm', m => m.arm.toFixed(2) + '"', 1], ['forty', '40-yd', m => m.forty.toFixed(2), -1],
+  ['ten', '10-yd', m => m.ten.toFixed(2), -1], ['vert', 'Vertical', m => m.vert + '"', 1], ['broad', 'Broad', m => `${Math.floor(m.broad / 12)}'${m.broad % 12}"`, 1],
+  ['cone', '3-cone', m => m.cone.toFixed(2), -1], ['shut', 'Shuttle', m => m.shut.toFixed(2), -1], ['bench', 'Bench', m => m.bench, 1]];
+function rasColor(r) { return r >= 9 ? '#1f8a4c' : r >= 8 ? '#2fa35f' : r >= 6.5 ? '#7cae3a' : r >= 5 ? '#c9a227' : r >= 3 ? '#d9822b' : '#c94a3a'; }
+function rasHTML(p, peers) {
+  const r = rasOf(p, peers);
+  if (r === null) return '';
+  return `<span class="ras" style="background:${rasColor(r)}" title="Relative Athletic Score: combine results as 0–10 percentiles against every ${p.pos} in the league, averaged">RAS ${r.toFixed(2)}</span>`;
+}
+// grades by game (PFF-style bars)
+function gameLogHTML(p) {
+  const src = p.glog && p.glog.length ? { season: state.season, log: p.glog } : p.glogPrev;
+  if (!src || !src.log.length) return '';
+  return `<div class="section-title">Grades by Game · ${src.season}</div>` + src.log.slice(-17).map(x => `<div class="glance gl-game" title="${x.s} snaps"><span class="gl-l small">${esc(x.w)} ${x.h ? 'vs' : '@'} ${T(x.o).abbr}</span><span class="gl-bar"><i style="width:${x.g}%;background:${gradeColor(x.g)}"></i></span><span class="gl-v">${Math.round(x.g)}</span></div>`).join('');
+}
 // combine numbers shaded by percentile against everyone at his position group
 function combineHTML(p) {
   const peers = Object.values(state.players).filter(q => q.m && q.pos === p.pos);
+  ensureJumps(p); peers.forEach(ensureJumps);
   return `<div class="stat-tiles">${COMBINE.map(([k, l, f, dir]) => {
     let style = '', title = '';
     if (dir) { const vals = peers.map(q => q.m[k]).sort((x, y) => x - y), below = vals.filter(x => x < p.m[k]).length, pct = vals.length > 1 ? below / (vals.length - 1) : 0.5; style = pctStyle(pct, dir); title = `${Math.round(100 * (dir > 0 ? pct : 1 - pct))}th percentile among ${p.pos}s`; }
@@ -1068,7 +1173,7 @@ function playerModal(pid) {
   const team = p.tid >= 0 ? teamLink(p.tid, true) : p.tid === -3 ? `Practice squad · ${teamLink(p.psTid, true)}` : p.tid === -1 ? '<span class="muted">Free Agent</span>' : '<span class="muted">Draft Prospect</span>';
   const tierT = tierOf(p), upT = upsideOf(p), stars = starsOf(p);
   const sg = src ? overallGrade(src.a, p.spot) : null, form = (p.form || []).slice(-5);
-  let html = `<div class="row"><h2 style="margin:0">${esc(pname(p))}</h2><span class="pill">${esc(p.lbl)}</span> ${statusPills(p)} ${stars !== null && !prospect ? starHTML(stars) : ''}</div>
+  let html = `<div class="row"><h2 style="margin:0">${esc(pname(p))}</h2><span class="pill">${esc(p.lbl)}</span> ${statusPills(p)} ${stars !== null && !prospect ? starHTML(stars) : ''} ${rasHTML(p)}</div>
     <div class="muted" style="margin:4px 0 12px">${team} · Age ${p.age} · ${esc(p.college)} · ${p.draft ? `Drafted ${p.draft.year} Rd ${p.draft.round} (#${p.draft.pick}) by ${T(p.draft.tid).abbr}` : prospect ? `${p.draftYear} draft prospect` : 'Undrafted'} · ${p.exp} yr${p.exp === 1 ? '' : 's'} exp</div>
     <div class="stat-tiles" style="margin-bottom:12px">
       <div class="tile"><div class="v ${TIER_CLS[tierT]}" style="font-size:16px">${tierT}</div><div class="l">${prospect ? 'Ready now as' : 'Tier'}${trueOn() ? ` · true ${p.ovr}` : ''}</div></div>
@@ -1107,7 +1212,8 @@ function playerModal(pid) {
     const adv = advRankHTML(p, src);
     if (adv) right += `<div class="section-title">Tracking <span class="small muted">· rank among qualified ${p.pos}s</span></div>${adv}`;
   }
-  right += `<div class="section-title"${prospect ? ' style="margin-top:0"' : ''}>Combine <span class="small muted">· shaded by percentile at his position</span></div>${combineHTML(p)}`;
+  if (!prospect) right += gameLogHTML(p);
+  right += `<div class="section-title"${prospect ? ' style="margin-top:0"' : ''}>Combine ${rasHTML(p)} <span class="small muted">· shaded by percentile at his position</span></div>${combineHTML(p)}`;
   html += `<div class="grid card-cols"><div>${left}</div><div>${right}</div></div>`;
   html += advancedSeasonHTML(p);
   if (trueOn()) html += attributesHTML(p);
@@ -1517,6 +1623,13 @@ const actions = {
   psRelease: d => { releaseFromPS(+d.pid); toast('Released from the practice squad.'); closeModal(); save(); render(); },
   signPS: d => { const err = signToPS(+d.pid, state.userTid); toast(err || 'Signed to the practice squad.'); closeModal(); save(); render(); },
   pbTeamSet: d => { ui.pbTid = +d.tid; render(); },
+  pbPers: d => { ui.pbPers = d.v; ui.pbPkg = { '10': 'DIME', '11': 'NICKEL', '12': 'BASE', '13': 'BASE', '21': 'BASE', '22': 'BASE', JUMBO: 'GL' }[d.v] || ui.pbPkg; render(); },
+  pbForm: d => { ui.pbForm = d.v; render(); },
+  pbPkg: d => { ui.pbPkg = d.v; render(); },
+  dchPick: d => { ui.dchKey = d.key; render(); },
+  dchTab: d => { ui.dchTab = d.tab; ui.dchKey = null; render(); },
+  dchRemove: d => { setChart(state.userTid, d.key, +d.i, 0); save(); render(); },
+  dchAdd: d => { const l = ensureChart(state.userTid).lists[d.key] || []; setChart(state.userTid, d.key, l.length, +d.pid); save(); render(); },
   dchAuto: d => { setChartAuto(state.userTid, d.unit, d.on === '1'); save(); render(); },
   autoCut: () => { const c = autoCut(state.userTid, ROSTER_MAX, false); toast(`Released ${c.length} player(s).`); save(); render(); },
   sign: d => { const err = signFA(+d.pid, state.userTid); if (err) toast(err); else toast('Signed!'); closeModal(); save(); render(); },
@@ -1568,10 +1681,38 @@ const changes = {
   autoUser: (v, el) => { state.settings.autoUser = el.checked; save(); toast(el.checked ? 'Auto-manage on.' : 'Auto-manage off.'); },
   showTrue: (v, el) => { state.settings.showTrue = el.checked; save(); },
   gamePopups: (v, el) => { state.settings.gamePopups = el.checked; save(); },
+  theme: v => { state.settings.theme = v; save(); },
   dch: (v, el) => { setChart(state.userTid, el.dataset.key, +el.dataset.i, v ? +v : 0); save(); },
+  dchAll: (v, el) => { ui.dchAll = el.checked; },
   dchRot: (v, el) => { ensureChart(state.userTid).rot[el.dataset.key] = +v; ensureChart(state.userTid).auto[CHART_UNIT(el.dataset.key)] = false; save(); },
 };
 
+// depth chart drag & drop
+let dcDrag = null;
+document.addEventListener('dragstart', e => {
+  const el = e.target.closest && e.target.closest('[data-dcpid]');
+  if (!el) return;
+  dcDrag = { pid: +el.dataset.dcpid, from: el.dataset.dcfrom !== undefined ? +el.dataset.dcfrom : null };
+  el.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dcDrag.pid));
+});
+document.addEventListener('dragend', e => { const el = e.target.closest && e.target.closest('[data-dcpid]'); if (el) el.classList.remove('drag'); document.querySelectorAll('.dc-over').forEach(x => x.classList.remove('dc-over')); });
+document.addEventListener('dragover', e => {
+  const t = e.target.closest && e.target.closest('[data-dcdrop]');
+  if (!t || !dcDrag) return;
+  e.preventDefault();
+  document.querySelectorAll('.dc-over').forEach(x => x !== t && x.classList.remove('dc-over'));
+  t.classList.add('dc-over');
+});
+document.addEventListener('drop', e => {
+  const t = e.target.closest && e.target.closest('[data-dcdrop]');
+  if (!t || !dcDrag) return;
+  e.preventDefault();
+  const key = ui.dchKey || 'QB';
+  let at = +t.dataset.dcdrop;
+  if (dcDrag.from !== null && dcDrag.from < at) at -= 0; // dropping onto a later row puts him in that row's spot
+  setChart(state.userTid, key, at, dcDrag.pid);
+  dcDrag = null; save(); render();
+});
 // navigation fires on press, so a slight mouse movement or a redraw mid-click can't swallow it
 let navPressed = null;
 document.addEventListener('pointerdown', e => {
