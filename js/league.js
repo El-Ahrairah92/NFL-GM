@@ -77,6 +77,8 @@ function migrateState(st) {
     for (const t of st.teams) fillPS(t.id);
   }
   syncEconomy();
+  // positional comfort & adaptability for saves that predate them
+  if (st.version === SAVE_VERSION) for (const id in st.players) { const p = st.players[id]; if (!p.a) continue; if (p.h && p.h.adapt === undefined) p.h.adapt = Math.round(clamp(gauss(55, 18), 5, 99)); if (!p.cf) { genComfort(p); updateRatings(p); } }
   // Phase 5: perception (fog, hype, labels) for saves that predate it
   if (st.version === SAVE_VERSION) {
     st.settings.showTrue = !!st.settings.showTrue;
@@ -211,6 +213,7 @@ function confSeeds(conf) {
 // ---------- weekly sim ----------
 function simWeek() {
   if (state.phase !== 'REG') return;
+  refreshChart(state.userTid); // auto units follow the staff; departed players drop off
   const wk = state.schedule[state.week - 1];
   for (const m of wk) {
     const box = simGame(m.h, m.a, { week: state.week, pbp: m.h === state.userTid || m.a === state.userTid });
@@ -222,6 +225,7 @@ function simWeek() {
   injuryTick();
   irActivations();
   weeklyRecovery();
+  practiceReps(state.userTid);
   inSeasonMoves();
   state.week++;
   refreshPerception();
@@ -230,6 +234,8 @@ function simWeek() {
 
 function applyBox(box, playoff) {
   filmUpdate(box); // every snap on tape sharpens the league's read on who played
+  repsLearning(box); // game reps at a spot build positional comfort
+  recordForm(box); // rolling game grades feed the star rating
   // advanced charting: season totals for players and teams (regular season); full detail kept for your games and the playoffs
   if (box.adv) {
     if (!playoff) {
@@ -279,10 +285,8 @@ function seedOf(tid) {
   for (const c of ['AFC', 'NFC']) { const i = s[c].indexOf(tid); if (i >= 0) return i + 1; }
   return 99;
 }
-function simPlayoffRound() {
-  const po = state.playoffs;
-  const r = po.round;
-  const matchups = [];
+function playoffMatchups() {
+  const po = state.playoffs, r = po.round, matchups = [];
   if (r < 3) {
     for (const c of ['AFC', 'NFC']) {
       let alive = po.seeds[c].filter(t => po.elim[t] === undefined);
@@ -295,6 +299,12 @@ function simPlayoffRound() {
     const a = po.seeds.AFC.find(t => po.elim[t] === undefined), n = po.seeds.NFC.find(t => po.elim[t] === undefined);
     matchups.push(seedOf(a) <= seedOf(n) ? [a, n] : [n, a]);
   }
+  return matchups;
+}
+function simPlayoffRound() {
+  const po = state.playoffs;
+  const r = po.round;
+  const matchups = playoffMatchups();
   const results = [];
   for (const [h, a] of matchups) {
     const box = simGame(h, a, { playoff: ROUND_NAMES[r], neutral: r === 3, pbp: true });
@@ -314,5 +324,24 @@ function simPlayoffRound() {
     po.elim[po.champ] = 4;
     addNews(`🏆 The ${teamName(po.champ)} are ${state.season} champions!`, [po.champ]);
     endSeason();
+  }
+}
+
+// ---------- positional comfort from game reps ----------
+function repsLearning(box) {
+  for (const pid in box.stats) {
+    const l = box.stats[pid], p = P(pid);
+    if (!l.sp) continue;
+    if (p && p.a) {
+      let changed = false;
+      const L = learnRate(p);
+      p.spSeason = p.spSeason || {};
+      for (const s in l.sp) {
+        p.spSeason[s] = (p.spSeason[s] || 0) + l.sp[s];
+        if (comfortOf(p, s) < 100 && learnSpot(p, s, l.sp[s] * 0.015 * L)) changed = true;
+      }
+      if (changed) { updateRatings(p); if (p.tid === state.userTid) addNews(`${pname(p)} is now ${comfortLabel(comfortOf(p, Object.keys(l.sp).sort((a, b) => l.sp[b] - l.sp[a])[0])).toLowerCase()} at ${SPOTS[Object.keys(l.sp).sort((a, b) => l.sp[b] - l.sp[a])[0]].l}.`, [p.tid], 'prog'); }
+    }
+    delete l.sp;
   }
 }

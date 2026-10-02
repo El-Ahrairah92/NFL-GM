@@ -104,6 +104,26 @@ Phase 6 notes (`js/contracts.js`):
   - 25 years of cap growth stays sane.
   - Emergency fill-ins now get box-score lines.
 
+Post-Phase-6 modifications (round 1):
+- **Positional comfort** (`p.cf`, attributes.js) replaces size/athleticism-implied flexibility.
+  - Levels: Natural 85+, Comfortable 60+, Decent 30+, Raw, Unfamiliar.
+  - The penalty on technique and mental attributes at a spot is 16·(1−c/100)^1.6: Decent about −6 to −9, Raw about −12 to −16.
+  - Histories favor close pairs (DT/DE/NT, G/G, LT/RT, MLB/WLB, FS/SS, X/Z, Y/H, CB/NCB).
+  - Learning comes from game reps (0.015 per snap), weekly practice when listed on the depth chart (1.4/week), and training camp (+30). Each is scaled by the hidden Adaptability trait, football IQ, age and coaching, so a comfort level takes roughly a camp to a season. Unused spots fade 4/yr.
+  - AI teams weigh spot-level needs (front-aware) in free agency and the draft, and cross-train thin spots in camp. Only about 2–3% of starters are Raw or Unfamiliar.
+- **Depth chart** (`js/depthchart.js`): a base chart by slot plus package overrides (passing-down back, short-yardage back, 4-man rush unit) and K/P/returner. Per-slot rotation shares give the No. 2 discretionary snaps (RBs by series, others by play). Each unit can be set to auto (staff) or manual. Kneels, spikes and the play-caller's QB read all follow the chart.
+- **Player card:** a header with ★ stars, tier and upside, season grade and recent form.
+  - Left side: scouting read, Strengths/Weaknesses, positional comfort, scheme fit, contract.
+  - Right side: an At a Glance panel with facet grades and splits (QB clean/pressured/depth/PA/blitz; receivers vs man/zone/press/contested; zone/gap run game; pass pro vs 4-man/blitz; pass rush vs single/double; man/zone coverage).
+  - Tracking metrics with league ranks among qualified same-position players and percentile shading; combine results shaded by positional percentile.
+  - Last season's data stays viewable through the offseason.
+- **★ Stars:** position-relative ability (league-average starter ≈ 2.5–3★), weighted 45% toward a recency-weighted average of the last 6 game grades.
+- **Roster page views:** Scouting, Contracts, Season Stats, Advanced, Positional Comfort, True Ratings (debug). Position filter, sortable columns, a wider layout.
+- **Staff page and coach cards:** a roster-style list with a team selector. Cards split Game Day knobs from Development knobs and show a player-development track record (young players' average change per offseason).
+- **Game-day popups:** a preview (line, win chance, players to watch, injuries), then a wrap (headlines, line score, team stats, best/struggled/breakout performers, injuries, around the league). Toggle in Settings.
+- **Playbook (view only):** each team's identity and tendencies, a self-scout (usage, EPA and success by personnel, play type, situation, formation, tags, coverage, pressure, package), and who's on the field per personnel and package.
+- **Navigation** fires on press (pointerdown) so clicks can't get lost.
+
 ## 1. Player evaluation (what the GM sees)
 - True ratings are hidden. The GM sees scout **perception** with confidence that grows with experience/snaps. AI teams see through the same fog (their own noise).
 - **Current tier** (percentile within position, league-wide):

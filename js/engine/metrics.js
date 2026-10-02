@@ -23,12 +23,34 @@ function av(g, p) { if (!p || p.id < 0) return null; return g.adv[p.id] || (g.ad
 function avInc(g, p, k, v = 1) { const a = av(g, p); if (a) a[k] = (a[k] || 0) + v; }
 // grading: credits per facet; a facet's grade comes from the average credit per graded snap
 const FACETS = { q: 'Passing', rec: 'Receiving', run: 'Rushing', pb: 'Pass Block', rb: 'Run Block', pr: 'Pass Rush', rd: 'Run Defense', cov: 'Coverage', tk: 'Tackling' };
-function grade(g, p, f, credit) { const a = av(g, p); if (!a) return; a['g' + f] = (a['g' + f] || 0) + credit; a['n' + f] = (a['n' + f] || 0) + 1; }
+function grade(g, p, f, credit, extra) {
+  const a = av(g, p); if (!a) return;
+  const add = k => { a['g' + k] = (a['g' + k] || 0) + credit; a['n' + k] = (a['n' + k] || 0) + 1; };
+  add(f);
+  // situational splits ("grade vs man", "grade under pressure"...) share the facet's scale
+  for (const t of ctxTags(g, f)) if (t) add(f + '_' + t);
+  if (extra) for (const t of extra) if (t) add(f + '_' + t);
+}
+function ctxTags(g, f) {
+  const x = g.gx || {};
+  switch (f) {
+    case 'q': return [x.prs ? 'prs' : 'cln', x.air === undefined ? null : x.air >= 20 ? 'dp' : x.air >= 10 ? 'md' : 'sh', x.pa ? 'pa' : null, x.blz ? 'blz' : null];
+    case 'rec': case 'cov': return [x.man ? 'man' : 'zon'];
+    case 'run': case 'rb': return x.run ? [x.zone ? 'zn' : 'gp'] : [];
+    case 'pb': return [x.blz ? 'blz' : 'std'];
+    default: return [];
+  }
+}
+const SPLIT_LABELS = { q_cln: 'Clean pocket', q_prs: 'Under pressure', q_sh: 'Short (<10)', q_md: 'Intermediate', q_dp: 'Deep (20+)', q_pa: 'Play-action', q_blz: 'vs. Blitz',
+  rec_man: 'vs. Man', rec_zon: 'vs. Zone', rec_press: 'vs. Press', rec_ctd: 'Contested', run_zn: 'Zone runs', run_gp: 'Gap runs', rb_zn: 'Zone blocking', rb_gp: 'Gap blocking',
+  pb_std: 'vs. 4-man rush', pb_blz: 'vs. Blitz', pr_sgl: 'vs. Single block', pr_dbl: 'vs. Double team', cov_man: 'Man coverage', cov_zon: 'Zone coverage' };
 function tav(g, s, k, v = 1) { g.tadv[s][k] = (g.tadv[s][k] || 0) + v; }
 const LBS = new Set(['MLB', 'WLB', 'SAM']);
 
 function chartPlay(g, oc, dc, res, before, off, def) {
   const o = before.poss, d = 1 - o;
+  g.gx = { man: ['C0', 'C1', 'C2M'].includes(dc.cov), blz: dc.pres === 'BLITZ' || dc.pres === 'SIM', pa: oc.tags && oc.tags.has('PA'), zone: oc.scheme === 'ZONE', run: !!oc.isRun,
+    prs: !!res.pressure, air: res.kind === 'comp' || res.kind === 'inc' || res.kind === 'int' ? res.air : undefined };
   const epB = epState(before.down, before.togo, before.ydl);
   const sd = g.score[o] - before.score[o], od = g.score[d] - before.score[d];
   let epA;
@@ -45,6 +67,18 @@ function chartPlay(g, oc, dc, res, before, off, def) {
   // ---- team ----
   tav(g, o, 'plays'); tav(g, o, 'epa', epa); if (success) tav(g, o, 'succ');
   tav(g, d, 'dPlays'); tav(g, d, 'dEpa', epa); if (success) tav(g, d, 'dSucc');
+  // self-scout: usage and results by call (offense) and by the defense's call (EPA from the offense's side)
+  const ss = (s, k) => { tav(g, s, 'u_' + k); tav(g, s, 'e_' + k, epa); if (success) tav(g, s, 's_' + k); };
+  const sitK = before.down === 1 ? '1st' : before.down === 2 ? (before.togo >= 7 ? '2L' : '2S') : before.togo <= 2 ? '3S' : before.togo <= 6 ? '3M' : '3L';
+  if (oc.pers) ss(o, 'pers' + oc.pers);
+  if (oc.type) ss(o, 'type' + oc.type);
+  if (oc.form) ss(o, 'form' + oc.form);
+  if (oc.tags) for (const t of oc.tags) ss(o, 'tag' + t);
+  ss(o, 'sit' + sitK + (oc.isRun ? 'R' : 'P'));
+  if (dc.pkg) ss(d, 'pkg' + dc.pkg);
+  if (dc.cov && !oc.isRun) ss(d, 'cov' + dc.cov);
+  if (dc.pres && !oc.isRun) ss(d, 'pres' + dc.pres);
+  if (oc.isRun) ss(d, 'vsRun'); else ss(d, 'vsPass');
   if (before.down <= 2 && !isHurry(g)) { tav(g, o, 'early'); if (isPass) tav(g, o, 'earlyPass'); }
   if (isPass) {
     tav(g, o, 'db'); tav(g, d, 'dDb'); tav(g, o, 'passEpa', epa);
@@ -87,8 +121,8 @@ function chartPlay(g, oc, dc, res, before, off, def) {
         if (res.contested) { avInc(g, rp, 'cAtt'); avInc(g, rp, 'cWon', comp); }
         const ow = r.w + (r.shade || 0); // graded against his man, not the bracket
         const c = comp ? 0.45 + (res.yac || 0) / 12 + (res.contested ? 0.6 : 0) + Math.max(0, epa) * 0.15 + (r.shade || 0) * 0.5 : res.drop ? -1.3 : ow > 0.7 ? 0.08 : ow > 0.2 ? -0.03 : -0.3; // an off-target throw to an open man is on the QB
-        grade(g, rp, 'rec', c);
-      } else { const ow = r.w + (r.shade || 0); grade(g, rp, 'rec', clamp((ow - 0.45) * 0.3, -0.25, 0.25)); } // every route won or lost counts
+        grade(g, rp, 'rec', c, [r.pressAtt ? 'press' : null, res.contested ? 'ctd' : null]);
+      } else { const ow = r.w + (r.shade || 0); grade(g, rp, 'rec', clamp((ow - 0.45) * 0.3, -0.25, 0.25), [r.pressAtt ? 'press' : null]); } // every route won or lost counts
     }
     if (res.target && res.target.slot !== 'QB' && !(res.routes || []).some(r => r.e === res.target)) { // screens
       const rp = res.target.p; avInc(g, rp, 'routes'); avInc(g, rp, 'sep', 4); avInc(g, rp, 'sepN'); avInc(g, rp, 'adot', res.air || 0); avInc(g, rp, 'epaTgt', epa);
@@ -102,7 +136,7 @@ function chartPlay(g, oc, dc, res, before, off, def) {
         const rp = a.e.p, beat = a.free || a.t < WIN_T;
         avInc(g, rp, 'prSnaps'); if (beat) avInc(g, rp, 'prWins'); if (a.blockers.length > 1) avInc(g, rp, 'dbl');
         const sacked = res.kind === 'sack' && res.sacker === a.e;
-        grade(g, rp, 'pr', (beat ? 0.45 : -0.08) + (pressers.has(a.e) ? 0.25 : 0) + (sacked ? 1.0 : 0) - (a.blockers.length > 1 && !beat ? -0.05 : 0));
+        grade(g, rp, 'pr', (beat ? 0.45 : -0.08) + (pressers.has(a.e) ? 0.25 : 0) + (sacked ? 1.0 : 0) - (a.blockers.length > 1 && !beat ? -0.05 : 0), [a.blockers.length > 1 ? 'dbl' : 'sgl']);
         const b = a.blockers[0];
         if (b) {
           const bp = b.p;
@@ -170,11 +204,12 @@ function chartPlay(g, oc, dc, res, before, off, def) {
 // so an average starter grades ~62 and the season spread is ~10 points
 const GRADE_BASE = { q: 0.015, rec: -0.012, run: 0.165, pb: 0.022, rb: -0.074, pr: 0.03, rd: 0.153, cov: -0.03, tk: 0.022 };
 const GRADE_SCALE = { q: 0.2, rec: 0.17, run: 0.32, pb: 0.094, rb: 0.104, pr: 0.118, rd: 0.14, cov: 0.157, tk: 0.2 };
-function facetGrade(a, f) {
+function facetGrade(a, f, minN) {
   const n = a['n' + f] || 0;
-  if (!n) return null;
-  const avgC = ((a['g' + f] || 0) + GRADE_BASE[f] * 6) / (n + 6); // small samples regress to average
-  return clamp(Math.round(62 + 40 * Math.tanh((avgC - GRADE_BASE[f]) / (GRADE_SCALE[f] * 0.9))), 25, 99);
+  if (!n || n < (minN || 1)) return null;
+  const b = f.split('_')[0];
+  const avgC = ((a['g' + f] || 0) + GRADE_BASE[b] * 6) / (n + 6); // small samples regress to average
+  return clamp(Math.round(62 + 40 * Math.tanh((avgC - GRADE_BASE[b]) / (GRADE_SCALE[b] * 0.9))), 25, 99);
 }
 // which facets make up a player's overall grade
 function gradeFacets(spot) {

@@ -57,6 +57,7 @@ function endSeason() {
     const ta = t.advS || {};
     state.teamHist[t.id].push({ season: state.season, w: r.w, l: r.l, t: r.t, pf: r.pf, pa: r.pa, seed: e === undefined ? null : seedOf(t.id), result,
       offEpa: ta.plays ? round2(ta.epa / ta.plays) : null, defEpa: ta.dPlays ? round2(ta.dEpa / ta.dPlays) : null });
+    t.advPrev = Object.assign({ season: state.season }, t.advS || {}); // last season's self-scout stays viewable
     t.advS = {};
     const hc = C(t.hc);
     if (hc) { hc.rec.w += r.w; hc.rec.l += r.l; hc.rec.t += r.t; if (e === 4) hc.rec.titles++; }
@@ -66,6 +67,7 @@ function endSeason() {
     const p = state.players[id];
     if (p.stats.gp) p.career.push(Object.assign({ season: state.season, tid: p.tid }, p.stats, p.advS ? { adv: careerAdv(p.advS, p.spot) } : {}));
     if (p.pstats && p.pstats.gp) { p.pcareer = p.pcareer || []; p.pcareer.push(Object.assign({ season: state.season, tid: p.tid }, p.pstats)); }
+    p.advPrev = p.advS ? Object.assign({ season: state.season }, p.advS) : p.advPrev || null; // last season stays viewable through the offseason
     p.stats = {}; p.pstats = null; p.advS = null;
   }
   state.phase = 'RECAP';
@@ -92,10 +94,13 @@ function startOffseason() {
   state.draft = { year, order: draftOrder(year), idx: 0 };
   // progression, retirement, healing, contracts
   const retired = [];
+  const devBefore = {};
+  for (const id in state.players) { const p = state.players[id]; if (p.tid >= 0 && p.age <= 26) devBefore[id] = p.ovr; }
   for (const id in state.players) {
     const p = state.players[id];
     if (p.tid === -2) continue;
     offseasonExpectation(p);
+    comfortOffseason(p);
     progressPlayer(p, teamDev(p.tid >= 0 ? p.tid : p.psTid != null ? p.psTid : -1)); // the real change stays hidden; camp reports and film reveal it
     offseasonApply(p);
     p.wear = 0;
@@ -104,6 +109,7 @@ function startOffseason() {
     if (shouldRetire(p)) { retired.push(p); continue; }
     if (p.tid >= 0) rolloverContract(p);
   }
+  logDevelopment(devBefore);
   for (const p of retired) {
     if (perOvr(p) >= 80 || p.tid === state.userTid || (p.awards && p.awards.length))
       addNews(`${p.lbl} ${pname(p)}${p.tid >= 0 ? ' (' + T(p.tid).abbr + ')' : ''} retired after ${p.exp} seasons.`, p.tid >= 0 ? [p.tid] : [], 'retire');
@@ -200,6 +206,7 @@ function faGain(tid, p) {
   let g = Math.max(0, v + schemeFit(p, tid) * 0.8 - n.floor) * 1.2;
   if (n.count < ROSTER_TEMPLATE[p.pos]) g += 3 + Math.max(0, v - 55) * 0.15;
   if (n.count < ROSTER_MIN[p.pos]) g += 6;
+  g += spotNeedBonus(tid, p) * 3.5; // e.g. a team with six slot receivers needs an outside one
   if (n.count >= ROSTER_TEMPLATE[p.pos] + 1) g *= 0.3;
   if (p.age >= 32) g *= 0.75;
   return g * SPOTS[p.spot].val;
@@ -254,6 +261,7 @@ function aiDraftChoice(tid) {
     let s = v + 0.55 * viewGrowth(p, tid) + schemeFit(p, tid) * 0.5 + ({ QB: 3, K: -10, P: -12, RB: -2 }[p.pos] || 0);
     if (n.count < ROSTER_MIN[p.pos]) s += 4;
     if (v > n.floor) s += 2;
+    s += spotNeedBonus(tid, p) * 1.5;
     if (n.count >= ROSTER_TEMPLATE[p.pos] + 1) s -= 5;
     s += gauss(0, 1.5);
     if (s > bs) { bs = s; best = p; }
@@ -335,6 +343,7 @@ function fixCap(tid) {
 }
 
 function startNewSeason() {
+  trainingCamp();
   // anyone still hurt opens the season on IR (decided before cutdown so the 53 is real)
   for (const p of Object.values(state.players)) { if (p.tid >= 0 && p.injury && p.injury.weeks >= IR_WEEKS) p.ir = { wk: 1 }; else delete p.ir; }
   for (const t of state.teams) {
@@ -348,6 +357,7 @@ function startNewSeason() {
   // practice squads (yours too — edit it any time from the roster page)
   for (const t of shuffle(state.teams.slice())) fillPS(t.id);
   for (const t of state.teams) fixCap(t.id); // everyone opens the season cap-compliant
+  refreshChart(state.userTid);
   if (psOf(state.userTid).length) addNews(`${T(state.userTid).abbr} practice squad set (${psOf(state.userTid).length}/${PS_MAX}).`, [state.userTid]);
 
   // trim free agent pool
@@ -390,4 +400,76 @@ function inSeasonMoves() {
     }
   }
   if (state.week <= TRADE_DEADLINE && rand() < 0.35) aiTrade();
+}
+
+// ---------- positional comfort through the year ----------
+// spots he didn't play this season fade a little (never his primary)
+function comfortOffseason(p) {
+  if (!p.cf) return;
+  for (const s in p.cf) {
+    if (s === p.spot || (p.spSeason && p.spSeason[s] >= 40)) continue;
+    p.cf[s] = Math.max(0, Math.round((p.cf[s] - 4) * 10) / 10);
+    if (!p.cf[s]) delete p.cf[s];
+  }
+  p.spSeason = {};
+}
+// which spots a player cross-trains at in camp: your depth chart decides for your team; AI staffs pick a neighbor he could help at
+function campFocus(p) {
+  if (p.tid === state.userTid && typeof userDepthSpots === 'function') { const s = userDepthSpots(p); if (s.length) return s; }
+  if (p.age >= 31) return [];
+  const nb = (SPOT_NEIGHBORS[p.spot] || []).filter(s => comfortOf(p, s) < 85);
+  // staffs cross-train where the roster is thin first
+  const needy = nb.filter(s => p.tid >= 0 && spotDeficit(p.tid, s) > 0).sort((a, b) => spotRating(p, b) - spotRating(p, a));
+  if (needy.length && rand() < 0.6) return [needy[0]];
+  if (rand() > 0.3) return [];
+  nb.sort((a, b) => spotRating(p, b) - spotRating(p, a));
+  return nb.length ? [nb[0]] : [];
+}
+function trainingCamp() {
+  for (const p of Object.values(state.players)) {
+    if (!p.a || (p.tid < 0 && p.tid !== -3)) continue;
+    const L = learnRate(p);
+    let changed = false;
+    if (comfortOf(p, p.spot) < 100 && learnSpot(p, p.spot, 30 * L)) changed = true;
+    for (const s of campFocus(p)) if (s !== p.spot && learnSpot(p, s, 30 * L)) changed = true;
+    updateRatings(p);
+  }
+}
+
+// how much the young players (26 and under) on each side of the ball improved this offseason, credited to that staff
+function logDevelopment(before) {
+  const acc = {};
+  for (const id in before) {
+    const p = state.players[id];
+    if (!p || p.tid < 0) continue;
+    const side = SPOTS[p.spot].side === 'off' ? 'O' : SPOTS[p.spot].side === 'def' ? 'D' : 'S';
+    const k = p.tid + side, a = acc[k] || (acc[k] = { n: 0, sum: 0, jumps: 0 });
+    const d = p.ovr - before[id]; a.n++; a.sum += d; if (d >= 5) a.jumps++;
+  }
+  for (const t of state.teams) {
+    const log = (c, side) => { if (!c) return; const a = side === 'ALL' ? ['O', 'D', 'S'].reduce((x, s) => { const v = acc[t.id + s]; return v ? { n: x.n + v.n, sum: x.sum + v.sum, jumps: x.jumps + v.jumps } : x; }, { n: 0, sum: 0, jumps: 0 }) : acc[t.id + side]; if (!a || !a.n) return; c.dev = [...(c.dev || []).slice(-9), { s: state.season, tid: t.id, n: a.n, avg: Math.round(a.sum / a.n * 10) / 10, jumps: a.jumps }]; };
+    log(C(t.oc), 'O'); log(C(t.dc), 'D'); log(C(t.stc), 'S'); log(C(t.sc), 'ALL'); log(C(t.hc), 'ALL');
+  }
+}
+
+// ---------- spot-level needs (comfort makes specific spots matter, not just position groups) ----------
+const SPOT_NEED = { QB: 2, RB: 2, FB: 1, WRX: 2, WRZ: 2, SLOT: 2, TEY: 2, TEH: 1, LT: 2, LG: 1, C: 2, RG: 1, RT: 2, NT: 1, DT: 2, DE: 2, EDGE: 3, MLB: 2, WLB: 2, CB: 3, NCB: 2, FS: 1, SS: 1, K: 1, P: 1 };
+// the defensive front decides which line spots a team actually needs
+function spotNeedFor(tid, spot) {
+  const odd = ['3-4', 'Tite'].includes(defTend(T(tid)).front);
+  if (spot === 'DE') return odd ? 3 : 1;
+  if (spot === 'DT') return odd ? 1 : 3;
+  if (spot === 'NT') return odd ? 2 : 1;
+  return SPOT_NEED[spot] || 1;
+}
+function spotDeficit(tid, spot) {
+  let n = 0;
+  for (const p of rosterOf(tid)) if (p.a && !onIR(p) && comfortOf(p, spot) >= 60) n++;
+  return Math.max(0, spotNeedFor(tid, spot) - n);
+}
+// a player fills a need at his primary spot or any spot he's comfortable at
+function spotNeedBonus(tid, p) {
+  let best = 0;
+  for (const s in (p.cf || { [p.spot]: 100 })) if (comfortOf(p, s) >= 60) best = Math.max(best, spotDeficit(tid, s));
+  return best;
 }

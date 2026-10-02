@@ -69,7 +69,7 @@ function computeThresholds() {
   for (const g in by) {
     const v = by[g].sort((a, b) => b - a), n = v.length, N = Math.min(n, (STARTERS[g] || 1) * 32);
     const at = r => v[clamp(Math.round(r) - 1, 0, n - 1)];
-    PER_TH[g] = { elite: at(Math.max(1, n * 0.03)), allpro: at(Math.max(2, n * 0.1)), hi: at(N * 0.3), mid: at(N * 0.6), starter: at(N), rotation: at(N * 1.75), depth: at(N * 2.6) };
+    PER_TH[g] = { elite: at(Math.max(1, n * 0.03)), allpro: at(Math.max(2, n * 0.1)), hi: at(N * 0.3), mid: at(N * 0.6), starter: at(N), rotation: at(N * 1.75), depth: at(N * 2.6), vals: v.slice().reverse(), N };
   }
 }
 function th(p, g) { if (!PER_TH) computeThresholds(); return PER_TH[g || p.pos] || PER_TH.WR; }
@@ -119,8 +119,41 @@ const TRAIT_TXT = {
   kcon: ['Metronome accuracy', 'Inconsistent'], krng: ['Big leg', 'Limited range'], kfal: ['Holds accuracy from distance', 'Fades from distance'], ktrj: ['Clean trajectory', 'Low trajectory'],
   pdis: ['Booming leg', 'Short punter'], pplc: ['Pins it inside the 10', 'Erratic placement'], phng: ['Elite hang time', 'Low hang time'], pspn: ['Controls the bounce', 'Touchback-prone'],
 };
-function traitTags(p) {
-  if (!p.a) return [];
+// ---------- star rating: position-relative ability, weighted toward current form (½ to 5 stars) ----------
+function pctInGroup(p, v) {
+  const t = th(p), a = t.vals || [];
+  if (!a.length) return 0.5;
+  let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < v) lo = m + 1; else hi = m; }
+  return lo / a.length;
+}
+function starsOf(p) {
+  if (!p.a || !p.per) return null;
+  // judged against the starters at his position: a league-average starter is ~3 stars
+  const t = th(p), base = clamp(0.5 + (uOvr(p) - t.starter) / Math.max(4, t.elite - t.starter) * 0.5, 0, 1);
+  let score = base;
+  const f = (p.form || []).filter(x => x !== null);
+  if (f.length) {
+    let s = 0, w = 0; f.forEach((g, i) => { const k = 1 + i * 0.35; s += g * k; w += k; });
+    const formPct = clamp((s / w - 40) / 45, 0, 1); // 40 grade ≈ bottom, 85 ≈ top
+    const wt = 0.45 * Math.min(1, f.length / 4);
+    score = base * (1 - wt) + formPct * wt;
+  }
+  return Math.max(0.5, Math.round(score * 10) / 2);
+}
+// recent game grades (any game he played real snaps in)
+function recordForm(box) {
+  if (!box.adv) return;
+  for (const pid in box.adv) {
+    const p = P(pid), l = box.stats[pid];
+    if (!p || !l || (l.snp || 0) < 12) continue;
+    const g = overallGrade(box.adv[pid], p.spot);
+    if (g === null || g === undefined) continue;
+    p.form = [...(p.form || []).slice(-5), g];
+  }
+}
+// ---------- strengths & weaknesses (what scouts think they see; fogged by confidence) ----------
+function scoutTraits(p) {
+  if (!p.a) return { str: [], weak: [] };
   const w = SPOTS[p.spot].w, t = TEMPLATE_A[p.spot] || {}, fog = p.per ? 1 - p.per.conf : 0.3;
   const keys = Object.keys(w).filter(k => TRAIT_TXT[k] && t[k] !== undefined);
   const mw = keys.reduce((s, k) => s + w[k], 0) / Math.max(1, keys.length);
@@ -131,9 +164,13 @@ function traitTags(p) {
     const seen = (k === 'siz' ? p.a.siz : p.a[k]) + grow + hashGauss(p.id, k.charCodeAt(0) * 31 + k.charCodeAt(1), 3) * 7 * fog;
     return [k, (seen - t[k]) * Math.min(1.6, w[k] / mw)];
   });
-  const pos = sc.filter(x => x[1] >= 6).sort((a, b) => b[1] - a[1]).slice(0, 2).map(x => TRAIT_TXT[x[0]][0]);
-  const neg = sc.filter(x => x[1] <= -6 && TRAIT_TXT[x[0]][1]).sort((a, b) => a[1] - b[1]).slice(0, pos.length ? 1 : 2).map(x => TRAIT_TXT[x[0]][1]);
-  return [...pos, ...neg];
+  const str = sc.filter(x => x[1] >= 5).sort((a, b) => b[1] - a[1]).slice(0, 4).map(x => TRAIT_TXT[x[0]][0]);
+  const weak = sc.filter(x => x[1] <= -5 && TRAIT_TXT[x[0]][1]).sort((a, b) => a[1] - b[1]).slice(0, 3).map(x => TRAIT_TXT[x[0]][1]);
+  return { str, weak };
+}
+function traitTags(p) {
+  const { str, weak } = scoutTraits(p);
+  return [...str.slice(0, 2), ...weak.slice(0, str.length ? 1 : 2)];
 }
 
 // ---------- updates ----------

@@ -93,7 +93,7 @@ const FAT_SLOPE = { QB: 1, OL: 1, RB: 1.6, WR: 1.2, TE: 1.2, DL: 4.0, LB: 1, DB:
 function slotRating(p, spot) {
   if (!p.a) return p.ovr || 40;
   if (p.fit && p.fit[spot] !== undefined) return p.fit[spot];
-  return spotRating(p, spot) - moveCost(p.spot, spot);
+  return spotRating(p, spot) - comfortPen(p, spot);
 }
 // Build a side's per-game state: healthy roster and per-spot depth (players listed at every spot they could fill)
 function initSide(g, s) {
@@ -120,20 +120,31 @@ function fatPenalty(g, p, grp) {
 // Fill a list of slots with the best available players (rating at the slot's spot, minus fatigue, plus continuity)
 function fillSlots(g, s, slots, table, opts = {}) {
   const T_ = g.side[s], used = new Set(opts.exclude || []), out = [];
+  const chart = opts.chart;
   for (const [name, slot, x, depth] of slots) {
     const [spot, grp] = table[slot];
     let best = null, bs = -1e9;
-    const cands = T_.depth[spot].length ? T_.depth[spot] : T_.roster.map(p => ({ p, r: 30 }));
+    let cands = T_.depth[spot].length ? T_.depth[spot] : T_.roster.map(p => ({ p, r: 30 }));
+    // your depth chart: listed players come first (in order); fatigue can still force a sub, and #2 gets his rotation share
+    const key = chart ? opts.keyOf(name, slot) : null;
+    const list = key && chart.lists[key] && chart.lists[key].length ? chart.lists[key] : null;
+    let rotHit = false;
+    if (list) {
+      const listed = list.map(id => T_.roster.find(p => p.id === id)).filter(Boolean).filter(p => !cands.some(c => c.p === p)).map(p => ({ p, r: slotRating(p, spot) }));
+      if (listed.length) cands = [...listed, ...cands];
+      rotHit = opts.rot ? opts.rot(key) : rand() < (chart.rot[key] || 0);
+    }
     for (const c of cands) {
       if (used.has(c.p.id)) continue;
       let sc = c.r - fatPenalty(g, c.p, grp);
+      if (list) { const i = list.indexOf(c.p.id); if (i >= 0) sc = 300 - i * 14 - fatPenalty(g, c.p, grp) + (i === 1 && rotHit ? 30 : 0); }
       if (g.ps[c.p.id] && g.ps[c.p.id].last === name) sc += 1.5; // continuity: no needless shuffling
-      if (opts.score) sc += opts.score(c.p, slot);
+      if (opts.score && !list) sc += opts.score(c.p, slot);
       if (sc > bs) { bs = sc; best = c; }
     }
     if (!best) best = { p: T_.roster.find(p => !used.has(p.id)) || T_.roster[0], r: 30 };
     used.add(best.p.id);
-    const pen = best.p.a ? moveCost(best.p.spot, spot) : 0; // unfamiliar technique; his own attributes do the rest
+    const pen = best.p.a ? comfortPen(best.p, spot) : 0; // how well he knows this spot; his own attributes do the rest
     out.push({ p: best.p, slot, name, spot, grp, x, depth: depth || 0, pen, s });
   }
   return out;
@@ -156,22 +167,51 @@ function offUnit(g, s, pers, call) {
     const rb2 = backs[1];
     return rb2 && p.id === rb2.p.id && backs[0].r - rb2.r <= 25 ? backs[0].r - rb2.r + 2 : 0;
   };
-  return fillSlots(g, s, slots, OFF_SLOT, { score: rbScore });
+  const chart = userChart(g, s, 'off');
+  if (!chart) return fillSlots(g, s, slots, OFF_SLOT, { score: rbScore });
+  const shortYd = g.togo <= 2 && (g.down >= 3 || g.ydl >= 98);
+  const rbKey = call && call.passDown && hasList(chart, 'RB3D') ? 'RB3D' : shortYd && hasList(chart, 'RBSY') ? 'RBSY' : 'RB';
+  return fillSlots(g, s, slots, OFF_SLOT, {
+    score: rbScore, chart, keyOf: name => name === 'RB' ? rbKey : name,
+    rot: key => key === 'RB' ? !!T_.rb2Turn : rand() < (chart.rot[key] || 0),
+  });
+}
+// ---------- user depth charts (t.dch): lists by chart key, #2 rotation share, auto per unit ----------
+const DEF_CHART_KEY = { LE: 'EDGE1', LOLB: 'EDGE1', RE: 'EDGE2', ROLB: 'EDGE2', DT1: 'IDL1', LDE: 'IDL1', LT: 'IDL1', DT2: 'IDL2', RDE: 'IDL2', DT: 'IDL2', RT: 'IDL2',
+  NT: 'NT', WLB: 'WLB', MLB: 'MLB', SAM: 'SAM', CB1: 'CB1', CB2: 'CB2', NCB: 'NCB', DIME: 'DIME', FS: 'FS', SS: 'SS' };
+const CHART_SPOT = { QB: 'QB', RB: 'RB', RB3D: 'RB', RBSY: 'RB', FB: 'FB', X: 'WRX', Z: 'WRZ', SLOT: 'SLOT', SLOT2: 'SLOT', Y: 'TEY', H: 'TEH', Y2: 'TEY', OL6: 'RT',
+  LT: 'LT', LG: 'LG', C: 'C', RG: 'RG', RT: 'RT', EDGE1: 'EDGE', EDGE2: 'EDGE', IDL1: 'DT', IDL2: 'DT', NT: 'NT', RUSH: 'EDGE', MLB: 'MLB', WLB: 'WLB', SAM: 'WLB',
+  CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', K: 'K', P: 'P', KR: 'RB' };
+const CHART_UNIT = k => ['K', 'P', 'KR'].includes(k) ? 'st' : ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'RUSH', 'MLB', 'WLB', 'SAM', 'CB1', 'CB2', 'NCB', 'DIME', 'FS', 'SS'].includes(k) ? 'def' : 'off';
+// the QB the staff (or your chart) has under center
+function starterQB(g, s) { return chartFirst(g, s, 'QB') || (g.side[s].depth.QB[0] ? g.side[s].depth.QB[0].p : null); }
+function hasList(chart, k) { return chart.lists[k] && chart.lists[k].length; }
+function userChart(g, s, unit) { const t = T(g.tids[s]); if (state.settings.autoUser && t.id === state.userTid) return null; return t.dch && !t.dch.auto[unit] ? t.dch : null; }
+function chartFirst(g, s, key) {
+  const chart = userChart(g, s, CHART_UNIT(key));
+  if (!chart || !hasList(chart, key)) return null;
+  for (const id of chart.lists[key]) { const p = g.side[s].roster.find(x => x.id === id); if (p) return p; }
+  return null;
 }
 function ea0(p, k) { return p.a && p.a[k] !== undefined ? p.a[k] : 25; }
 // Defensive eleven for a package; sub-rush puts the best four pass rushers on the line
 function defUnit(g, s, front, pkg, subRush) {
   const layout = packageLayout(front, pkg);
   const score = subRush ? (p, slot) => (DEF_SLOT[slot][1] === 'DL' && p.a ? (ea0(p, 'prsh') - 60) * 0.35 : 0) : null;
-  return fillSlots(g, s, layout, DEF_SLOT, { score });
+  const chart = userChart(g, s, 'def');
+  if (!chart) return fillSlots(g, s, layout, DEF_SLOT, { score });
+  const rush = subRush && hasList(chart, 'RUSH');
+  return fillSlots(g, s, layout, DEF_SLOT, { score, chart, keyOf: (name, slot) => rush && DEF_SLOT[slot][1] === 'DL' ? 'RUSH' : DEF_CHART_KEY[name] || name });
 }
 function kickUnitPlayer(g, s, spot) {
-  const d = g.side[s].depth[spot];
-  return { p: d.length ? d[0].p : g.side[s].roster[0], slot: spot, name: spot, spot, grp: 'QB', x: 0, depth: 0, pen: 0, s };
+  const d = g.side[s].depth[spot], pick = chartFirst(g, s, spot);
+  return { p: pick || (d.length ? d[0].p : g.side[s].roster[0]), slot: spot, name: spot, spot, grp: 'QB', x: 0, depth: 0, pen: 0, s };
 }
 // Return man: best open-field runner who isn't a key starter
 function returner(g, s) {
   const T_ = g.side[s];
+  const chosen = chartFirst(g, s, 'KR');
+  if (chosen) return { p: chosen, slot: 'KR', name: 'KR', spot: 'RB', grp: 'RB', x: 0, depth: 0, pen: 0, s };
   let best = null, bs = -1e9;
   for (const p of T_.roster) {
     if (!p.a || !['RB', 'WRX', 'WRZ', 'SLOT', 'CB', 'NCB', 'FS', 'SS'].includes(p.spot)) continue;
@@ -221,6 +261,7 @@ function tickFatigue(g, units) {
     st.fat += load * (1.35 - stam / 100) * (1 + (e.p.wear || 0) * 0.02) * (e.extraLoad || 1);
     st.snp++;
     st.last = e.name;
+    if (e.spot) { const sp = st.sp || (st.sp = {}); sp[e.spot] = (sp[e.spot] || 0) + 1; }
   }
   for (const id in g.ps) if (!on.has(+id)) { const st = g.ps[id]; st.fat = Math.max(0, st.fat - 1.25); }
 }

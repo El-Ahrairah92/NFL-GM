@@ -31,7 +31,7 @@ nav.tabs { display: flex; gap: 2px; padding: 0 12px; overflow-x: auto; }
 nav.tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); padding: 8px 12px; white-space: nowrap; }
 nav.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
 nav.tabs button:hover { color: var(--text); }
-main { padding: 18px; max-width: 1400px; margin: 0 auto; }
+main { padding: 18px; max-width: 1800px; margin: 0 auto; }
 .grid { display: grid; gap: 16px; }
 .g2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
 .g3 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
@@ -43,6 +43,13 @@ main { padding: 18px; max-width: 1400px; margin: 0 auto; }
 .small { font-size: 12px; }
 .big { font-size: 28px; font-weight: 800; }
 .good { color: var(--good); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+.stars { color: #f2c94c; letter-spacing: 1px; white-space: nowrap; font-size: 13px; }
+table td, table th { white-space: nowrap; }
+.pill.good { color: var(--good); border-color: #23502c; }
+.pill.bad { color: var(--bad); border-color: #5c2b2b; }
+.pill.warn { color: var(--warn); border-color: #5a4a1a; }
+table.dch select { max-width: 260px; font-size: 12px; }
+table.dch td { white-space: nowrap; }
 .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; background: var(--panel2); border: 1px solid var(--line); }
 .pill.inj { color: var(--bad); border-color: #5c2b2b; }
 .pill.ir { background: #3a1d1d; color: #ff8a80; border-color: #5c2b2b; }
@@ -92,7 +99,7 @@ tbody tr:hover td { background: rgba(255, 255, 255, .025); }
 /* modal */
 .modal { position: fixed; inset: 0; background: rgba(0, 0, 0, .6); display: flex; align-items: flex-start; justify-content: center; z-index: 50; overflow-y: auto; padding: 30px 12px; }
 .modal.hidden { display: none; }
-.modal-card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; width: min(1000px, 100%); padding: 20px; position: relative; }
+.modal-card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; width: min(1180px, 100%); padding: 20px; position: relative; }
 .modal-x { position: absolute; right: 12px; top: 10px; background: none; border: none; font-size: 22px; color: var(--muted); }
 .section-title { margin: 18px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
 
@@ -132,7 +139,30 @@ tbody tr:hover td { background: rgba(255, 255, 255, .025); }
 .pill.pt-low, .v.pt-low { color: #c98a6b; border-color: #4d3328; }
 .pill.up { font-weight: 500; font-style: italic; }
 .warn { color: var(--warn); }
+.stars { color: #f2c94c; letter-spacing: 1px; white-space: nowrap; font-size: 13px; }
+table td, table th { white-space: nowrap; }
+.pill.good { color: var(--good); border-color: #23502c; }
+.pill.bad { color: var(--bad); border-color: #5c2b2b; }
+.pill.warn { color: var(--warn); border-color: #5a4a1a; }
+table.dch select { max-width: 260px; font-size: 12px; }
+table.dch td { white-space: nowrap; }
 .pill.tier-Elite { color: var(--elite); border-color: #4b3570; }
 .pill.tier-Strong { color: var(--good); border-color: #23502c; }
 .pill.tier-Average { color: var(--text); }
 .pill.tier-Weak { color: var(--bad); border-color: #5c2b2b; }
+
+/* player card */
+.card-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 22px; }
+@media (max-width: 900px) { .card-cols { grid-template-columns: 1fr; } }
+.glance { display: grid; grid-template-columns: 150px 1fr 34px; align-items: center; gap: 8px; margin: 3px 0; font-size: 13px; }
+.glance.sub { font-size: 12px; color: var(--muted); }
+.glance.sub .gl-l { padding-left: 14px; }
+.gl-bar { height: 8px; background: var(--panel2); border-radius: 4px; overflow: hidden; }
+.gl-bar i { display: block; height: 100%; border-radius: 4px; }
+.gl-v { text-align: right; font-weight: 700; }
+.tile .rk { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.sw-h { font-weight: 700; font-size: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
+.sw { font-size: 13px; margin: 2px 0; }
+.wrapcell { white-space: normal; display: inline-block; min-width: 170px; max-width: 280px; }
+
+.glance.knob { grid-template-columns: 170px 1fr 90px; }

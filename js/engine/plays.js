@@ -327,7 +327,7 @@ function resolvePass(g, off, def, oc, dc) {
       // press at the line
       if (defE && (e.slot === 'X' || e.slot === 'Z' || e.slot === 'SLOT') && rand() < pressRate) {
         const winRel = rand() < lgt((ea(g, e, 'rel') - ea(g, defE, 'prs')) * 0.06);
-        w += winRel ? 0.25 : -0.65; r.pressed = !winRel; if (!winRel) r.tb += 0.25;
+        w += winRel ? 0.25 : -0.65; r.pressed = !winRel; r.pressAtt = true; if (!winRel) r.tb += 0.25;
       }
     } else {
       const area = areaOf(r, r.endX), owners = (zown[area] || []).filter(([x]) => !bit.has(x));

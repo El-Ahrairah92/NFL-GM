@@ -176,6 +176,44 @@ const MOVE_COST = {};
   .forEach(([a, b, c]) => { MOVE_COST[a + '>' + b] = c; MOVE_COST[b + '>' + a] = c; });
 function moveCost(from, to) { return from === to ? 0 : (MOVE_COST[from + '>' + to] || 4); }
 
+// ---------- positional comfort: learned through reps, not implied by size or athleticism ----------
+// p.cf[spot] 0–100. Natural 85+ · Comfortable 60+ · Decent 30+ · Raw <30 · Unfamiliar 0.
+// Playing a spot you haven't learned costs technique & mental attributes (busted assignments, poor footwork).
+const SPOT_NEIGHBORS = {
+  QB: [], RB: ['FB'], FB: ['RB', 'TEH'], WRX: ['WRZ', 'SLOT'], WRZ: ['WRX', 'SLOT'], SLOT: ['WRZ', 'WRX'], TEY: ['TEH', 'FB'], TEH: ['TEY', 'FB'],
+  LT: ['RT', 'LG'], LG: ['RG', 'C', 'LT'], C: ['LG', 'RG'], RG: ['LG', 'C', 'RT'], RT: ['LT', 'RG'],
+  NT: ['DT'], DT: ['NT', 'DE'], DE: ['DT', 'EDGE'], EDGE: ['DE', 'WLB'], MLB: ['WLB'], WLB: ['MLB', 'EDGE', 'SS'],
+  CB: ['NCB', 'FS'], NCB: ['CB', 'SS', 'FS'], FS: ['SS', 'NCB'], SS: ['FS', 'WLB', 'NCB'], K: ['P'], P: ['K'],
+};
+function comfortOf(p, s) { return p.cf ? (p.cf[s] || 0) : (s === p.spot ? 100 : 0); }
+function comfortLabel(c) { return c >= 85 ? 'Natural' : c >= 60 ? 'Comfortable' : c >= 30 ? 'Decent' : c > 0 ? 'Raw' : 'Unfamiliar'; }
+function comfortPen(p, s) { return Math.round(16 * Math.pow(1 - comfortOf(p, s) / 100, 1.6) * 10) / 10; }
+// history at neighboring spots: most players have a little, veterans more; true utility men are rare
+// nearly the same job: most players at one have real reps at the other
+const CLOSE_PAIRS = new Set(['DT>DE', 'DE>DT', 'DT>NT', 'NT>DT', 'LG>RG', 'RG>LG', 'LT>RT', 'RT>LT', 'MLB>WLB', 'WLB>MLB', 'FS>SS', 'SS>FS', 'WRX>WRZ', 'WRZ>WRX', 'TEY>TEH', 'TEH>TEY', 'CB>NCB', 'NCB>CB']);
+function genComfort(p) {
+  const cf = { [p.spot]: 100 }, yrs = Math.max(0, p.age - 21);
+  for (const n of SPOT_NEIGHBORS[p.spot] || []) {
+    const close = CLOSE_PAIRS.has(p.spot + '>' + n);
+    if (rand() < (close ? 0.65 : 0.25) + yrs * 0.03) cf[n] = Math.round(clamp(gauss((close ? 55 : 28) + yrs * 3, 18), 5, 95));
+  }
+  if (rand() < 0.06) { const two = (SPOT_NEIGHBORS[pick(SPOT_NEIGHBORS[p.spot].length ? SPOT_NEIGHBORS[p.spot] : [p.spot])] || []).filter(s => s !== p.spot && !cf[s]); if (two.length) cf[pick(two)] = Math.round(clamp(gauss(40, 15), 10, 80)); }
+  p.cf = cf;
+}
+// how fast he picks up a new spot: hidden Adaptability, football IQ, youth, and his coaches
+function learnRate(p) {
+  const iq = Math.max(p.a.proc || 0, p.a.prec || 0, p.a.bawr || 0, 50);
+  const dev = p.tid >= 0 && typeof teamDev === 'function' ? teamDev(p.tid) : null;
+  return clamp((0.55 + ((p.h && p.h.adapt) || 55) / 100) * (1 + (iq - 60) * 0.006) * (p.age <= 24 ? 1.1 : p.age >= 31 ? 0.75 : 1) * (dev ? dev.grow('prec') : 1), 0.35, 1.9);
+}
+// add comfort points (slower as he nears Natural); returns true if his level changed
+function learnSpot(p, s, pts) {
+  if (!p.cf) genComfort(p);
+  const c = p.cf[s] || 0, before = comfortLabel(c);
+  p.cf[s] = Math.min(100, Math.round((c + pts * (c < 60 ? 1 : c < 85 ? 0.8 : 0.5)) * 10) / 10);
+  return comfortLabel(p.cf[s]) !== before;
+}
+
 // Expected best rating over the rest of his career (no random shocks): the hidden Ceiling
 function projectCeiling(p) {
   const q = { a: Object.assign({}, p.a), grow: Object.assign({}, p.grow), age: p.age, spot: p.spot, ag: p.ag, h: p.h, m: p.m };
@@ -198,11 +236,12 @@ function projectCeiling(p) {
 function updateRatings(p) {
   const side = SPOTS[p.spot].side;
   const vals = {};
-  for (const s of SPOTS_BY_SIDE[side]) vals[s] = spotRating(p, s) - moveCost(p.spot, s);
+  if (!p.cf) genComfort(p);
+  for (const s of SPOTS_BY_SIDE[side]) vals[s] = spotRating(p, s) - comfortPen(p, s);
   // primary spot sticks unless another spot is clearly better (position changes happen with age)
   let best = p.spot;
   for (const s in vals) if (vals[s] > vals[best] + 2) best = s;
-  if (best !== p.spot) { const old = p.spot; p.spot = best; for (const s in vals) vals[s] += moveCost(old, s) - moveCost(best, s); }
+  if (best !== p.spot) p.spot = best; // a learned position he's now better at becomes his primary
   const top = vals[best];
   const elig = Object.keys(vals).filter(s => vals[s] >= top - 2).sort((a, b) => (b === best) - (a === best) || vals[b] - vals[a]);
   p.fit = {};
@@ -274,6 +313,7 @@ function genHidden() {
     cons: Math.round(clamp(gauss(55, 18), 5, 99)),
     stam: Math.round(clamp(gauss(60, 15), 10, 99)),
     curve: weightedPick(['early', 'normal', 'late'], [2, 6, 2]),
+    adapt: Math.round(clamp(gauss(55, 18), 5, 99)), // learns new positions / schemes
   };
 }
 function genAging() {

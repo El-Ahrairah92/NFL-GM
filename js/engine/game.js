@@ -61,7 +61,7 @@ function simGame(hTid, aTid, opts = {}) {
     snap(g);
   }
   endDrive(g, 'End of Game');
-  for (const id in g.ps) if (+id >= 0 && g.ps[id].snp && g.stats[id]) g.stats[id].snp = g.ps[id].snp;
+  for (const id in g.ps) if (+id >= 0 && g.ps[id].snp && g.stats[id]) { g.stats[id].snp = g.ps[id].snp; if (g.ps[id].sp) g.stats[id].sp = g.ps[id].sp; }
   for (const p of g.dressed) delete p._gs;
   const box = {
     id: state.nextGid++, season: state.season, week: opts.week || 0, playoff: opts.playoff || null,
@@ -344,7 +344,7 @@ function resolveYards(g, yds, res, oc) {
 
 // ---------- special plays ----------
 function kneel(g) {
-  const o = g.poss, qb = g.side[o].depth.QB[0] ? g.side[o].depth.QB[0].p : null;
+  const o = g.poss, qb = starterQB(g, o);
   if (qb) { inc(g, qb, 'rushA'); inc(g, qb, 'rushY', -1); }
   g.ts[o].rushA++; g.ts[o].rushY--;
   runClock(g, 2);
@@ -356,7 +356,7 @@ function kneel(g) {
   else if (g.q >= 4) { const d = 1 - o; if (g.to[d] > 0 && g.score[d] < g.score[o] && g.score[o] - g.score[d] <= 8) callTimeout(g, d); }
 }
 function spike(g) {
-  const o = g.poss, qb = g.side[o].depth.QB[0] ? g.side[o].depth.QB[0].p : null;
+  const o = g.poss, qb = starterQB(g, o);
   if (qb) inc(g, qb, 'passA');
   g.ts[o].passA++;
   runClock(g, 1);
@@ -545,7 +545,8 @@ function startPossession(g, side, ydl) {
   g.drive = { side, q: g.q, clock: g.clock, start: ydl, plays: 0, yds: 0, time: 0 };
   // committee backs: some series go to the No. 2
   const rb1 = g.cx[side].ot.rb1;
-  g.side[side].rb2Turn = rand() < clamp((0.97 - clamp(rb1, 0.5, 0.8)) * 0.9, 0.12, 0.4);
+  const ch = userChart(g, side, 'off');
+  g.side[side].rb2Turn = ch && ch.rot.RB !== undefined ? rand() < ch.rot.RB : rand() < clamp((0.97 - clamp(rb1, 0.5, 0.8)) * 0.9, 0.12, 0.4);
 }
 function changePoss(g, newYdl, result) { endDrive(g, result); startPossession(g, 1 - g.poss, newYdl); }
 function endDrive(g, result) {

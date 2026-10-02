@@ -88,7 +88,7 @@ function offenseCall(g) {
   call.form = rand() < uc ? 'UC' : (ot.rpo + ot.qbRun > 0.25 && rand() < 0.35 ? 'PI' : 'SG');
   if (!isRun && call.form === 'SG' && ['10', '11'].includes(call.pers) && (sit.b === 'D3L' || sit.b === 'D3M') && rand() < 0.12) call.form = 'EMP';
   // --- play type
-  const qb = T_.depth.QB[0] ? T_.depth.QB[0].p : null;
+  const qb = starterQB(g, g.poss);
   const qbMob = qb && qb.a ? (qb.a.spd + qb.a.agi + qb.a.elu) / 3 : 40;
   const adv = g.advEst[o];
   const tilt = f => Math.exp(clamp(adv[f] || 0, -1, 1) * 0.25 * pcF) * Math.exp(clamp((sr(f) - 0.45) * 1.6, -0.4, 0.4) * pcF * 0.6);
