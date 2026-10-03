@@ -126,26 +126,26 @@ const TRAIT_TXT = {
   kcon: ['Metronome accuracy', 'Inconsistent'], krng: ['Big leg', 'Limited range'], kfal: ['Holds accuracy from distance', 'Fades from distance'], ktrj: ['Clean trajectory', 'Low trajectory'],
   pdis: ['Booming leg', 'Short punter'], pplc: ['Pins it inside the 10', 'Erratic placement'], phng: ['Elite hang time', 'Low hang time'], pspn: ['Controls the bounce', 'Touchback-prone'],
 };
-// ---------- star rating: position-relative ability, weighted toward current form (½ to 5 stars) ----------
-function pctInGroup(p, v) {
-  const t = th(p), a = t.vals || [];
-  if (!a.length) return 0.5;
-  let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < v) lo = m + 1; else hi = m; }
-  return lo / a.length;
+// ---------- reputation: professionalism, consistency and discipline, as the league has come to know them ----------
+// The truth is hidden; the league's read sharpens with every season he's around (interviews give a first look).
+function repTrue(p) { const h = p.h || {}; return 0.5 * (h.prof || 55) + 0.25 * (h.cons || 55) + 0.25 * (h.disc || 55); }
+function repRead(p) {
+  if (!p.h) return 50;
+  const known = clamp(0.4 + 0.15 * (p.exp || 0), 0.4, 0.9);
+  return 55 + known * (repTrue(p) - 55) + hashGauss(p.id, 7771, 0) * 7 * (1 - known);
 }
-function starsOf(p) {
-  if (!p.a || !p.per) return null;
-  // judged against the starters at his position: a league-average starter is ~3 stars
-  const t = th(p), base = clamp(0.5 + (uOvr(p) - t.starter) / Math.max(4, t.elite - t.starter) * 0.5, 0, 1);
-  let score = base;
-  const f = (p.form || []).filter(x => x !== null);
-  if (f.length) {
-    let s = 0, w = 0; f.forEach((g, i) => { const k = 1 + i * 0.35; s += g * k; w += k; });
-    const formPct = clamp((s / w - 40) / 45, 0, 1); // 40 grade ≈ bottom, 85 ≈ top
-    const wt = 0.45 * Math.min(1, f.length / 4);
-    score = base * (1 - wt) + formPct * wt;
+function reputationOf(p) {
+  if (!p.h) return null;
+  const r = repRead(p), exp = p.exp || 0;
+  if (exp <= 1 && Math.abs(r - 55) < 8) return { l: 'Unproven', c: '', d: 'Too early to know what kind of pro he is.' };
+  if (r >= 70) {
+    if (exp >= 6 && (p.h.prof || 0) >= 72) return { l: 'Locker-room Leader', c: 'elite', d: 'Sets the standard: the young guys follow his lead.' };
+    return exp >= 4 ? { l: "Pro's Pro", c: 'good', d: 'Prepares like a starter, never a distraction.' } : { l: 'High Character', c: 'good', d: 'Glowing reviews on his work habits.' };
   }
-  return Math.max(0.5, Math.round(score * 10) / 2);
+  if (r >= 60) return exp >= 6 ? { l: 'Respected Vet', c: 'good', d: 'Reliable, prepared, trusted by the staff.' } : { l: 'Solid Pro', c: '', d: 'Does things the right way.' };
+  if (r >= 46) return { l: 'Steady', c: '', d: 'No red flags, no rave reviews.' };
+  if (r >= 38) return { l: 'Question Marks', c: 'warn', d: 'Some questions about focus, preparation or penalties.' };
+  return { l: 'Character Concerns', c: 'bad', d: 'Undisciplined or unreliable: staffs worry about him.' };
 }
 // recent game grades (any game he played real snaps in)
 function recordForm(box) {

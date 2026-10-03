@@ -255,3 +255,5 @@ th.stk { z-index: 3; }
 .dpk-p { margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 tr.me td { background: var(--me); }
 @media (max-width: 700px) { .trunc { max-width: 140px; } .dpk { width: 120px; } }
+.pill.rep.elite { color: var(--elite); border-color: var(--elite-b); }
+.pill.rep { font-weight: 600; }

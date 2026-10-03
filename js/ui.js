@@ -348,11 +348,12 @@ function recapHTML() {
 
 // ---------- roster ----------
 const ROSTER_VIEWS = [['scout', 'Scouting'], ['contract', 'Contracts'], ['stats', 'Season Stats'], ['adv', 'Advanced'], ['comfort', 'Positional Comfort'], ['true', 'True Ratings (debug)']];
-function starHTML(n) {
-  if (n === null || n === undefined) return '';
-  let h = ''; for (let i = 1; i <= 5; i++) h += `<i class="${n >= i ? 'f' : n >= i - 0.5 ? 'h' : 'e'}">★</i>`;
-  return `<span class="stars" title="${n} stars: ability at his position, weighted toward recent form">${h}</span>`;
+function repPill(p) {
+  const r = reputationOf(p);
+  if (!r) return '';
+  return `<span class="pill rep ${r.c}" title="Reputation: ${esc(r.d)}${trueOn() && p.h ? ` · prof ${p.h.prof} / cons ${p.h.cons} / disc ${p.h.disc}` : ''}">${esc(r.l)}</span>`;
 }
+const REP_ORDER = { 'Character Concerns': 0, 'Question Marks': 1, Unproven: 2, Steady: 3, 'Solid Pro': 4, 'High Character': 5, 'Respected Vet': 6, "Pro's Pro": 7, 'Locker-room Leader': 8 };
 const STAT_NUM = (k) => ({ k, v: r => r.stats[k] || 0, num: 1 });
 function rosterHTML() {
   const tid = ui.rosterTid == null ? state.userTid : ui.rosterTid;
@@ -374,7 +375,7 @@ function rosterHTML() {
     { k: 'n', l: 'Name', v: p => p.last, f: p => playerLink(p) + ' ' + statusPills(p) },
     { k: 'age', l: 'Age', v: p => p.age, num: 1 },
   ];
-  const stars = { k: 'star', l: '★', v: p => starsOf(p) || 0, f: p => starHTML(starsOf(p)), title: 'Ability at his position, weighted toward current form' };
+  const stars = { k: 'rep', l: 'Reputation', v: p => { const r = reputationOf(p); return r ? REP_ORDER[r.l] : -1; }, f: p => repPill(p), title: 'Professionalism, consistency and discipline, as the league knows him (sharpens with experience)' };
   const tier = { k: 'tier', l: 'Tier', v: p => uOvr(p), f: p => tierPill(p) + trueNums(p) };
   const grade = { k: 'gr', l: 'Grade', v: p => p.advS ? overallGrade(p.advS, p.spot) || 0 : 0, f: p => gradeChip(p.advS ? overallGrade(p.advS, p.spot) : null), num: 1 };
   let cols;
@@ -463,7 +464,7 @@ function chartValue(p, spot) { return uOvr(p) + (slotRating(p, spot) - p.ovr); }
 const CF_CLS = { Natural: 'good', Comfortable: '', Decent: 'warn', Raw: 'bad', Unfamiliar: 'bad' };
 function dcPlayerMeta(p, key, spot) {
   const cf = comfortLabel(comfortOf(p, spot));
-  return `<span class="dc-meta">${['K', 'P', 'KR'].includes(key) ? '' : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p, chartValue(p, spot))}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
+  return `<span class="dc-meta">${['K', 'P', 'KR'].includes(key) ? '' : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p, chartValue(p, spot))}${repPill(p)}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
 }
 // formation boards: [key, grid column, grid row]
 const DC_BOARD = {
@@ -475,7 +476,7 @@ const DC_BOARD = {
 };
 function dcPlayerMeta(p, key, spot) {
   const cf = comfortLabel(comfortOf(p, spot));
-  return `<span class="dc-meta">${['K', 'P', 'KR'].includes(key) ? '' : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p, chartValue(p, spot))}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
+  return `<span class="dc-meta">${['K', 'P', 'KR'].includes(key) ? '' : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p, chartValue(p, spot))}${repPill(p)}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
 }
 function dcBox(c, key, cur, u) {
   const ids = (c.lists[key] || []).filter(id => P(id) && P(id).tid === u), spot = CHART_SPOT[key];
@@ -1239,9 +1240,9 @@ function playerModal(pid) {
   if (!p) return;
   const u = state.userTid, prospect = p.tid === -2, src = cardAdv(p);
   const team = p.tid >= 0 ? teamLink(p.tid, true) : p.tid === -3 ? `Practice squad · ${teamLink(p.psTid, true)}` : p.tid === -1 ? '<span class="muted">Free Agent</span>' : '<span class="muted">Draft Prospect</span>';
-  const tierT = tierOf(p), upT = upsideOf(p), stars = starsOf(p);
+  const tierT = tierOf(p), upT = upsideOf(p);
   const sg = src ? overallGrade(src.a, p.spot) : null, form = (p.form || []).slice(-5);
-  let html = `<div class="row"><h2 style="margin:0">${esc(pname(p))}</h2><span class="pill">${esc(p.lbl)}</span> ${statusPills(p)} ${stars !== null && !prospect ? starHTML(stars) : ''} ${rasHTML(p)}</div>
+  let html = `<div class="row"><h2 style="margin:0">${esc(pname(p))}</h2><span class="pill">${esc(p.lbl)}</span> ${statusPills(p)} ${prospect ? '' : repPill(p)} ${rasHTML(p)}</div>
     <div class="muted" style="margin:4px 0 12px">${team} · Age ${p.age} · ${esc(p.college)} · ${p.draft ? `Drafted ${p.draft.year} Rd ${p.draft.round} (#${p.draft.pick}) by ${T(p.draft.tid).abbr}` : prospect ? `${p.draftYear} draft prospect` : 'Undrafted'} · ${p.exp} yr${p.exp === 1 ? '' : 's'} exp</div>
     <div class="stat-tiles" style="margin-bottom:12px">
       <div class="tile"><div class="v ${TIER_CLS[tierT]}" style="font-size:16px">${tierT}</div><div class="l">${prospect ? 'Ready now as' : 'Tier'}${trueOn() ? ` · true ${p.ovr}` : ''}</div></div>
@@ -1494,7 +1495,7 @@ function gameLine(h, a, neutral) {
   const spread = (teamStrength(h) - teamStrength(a)) * 1.6 + (neutral ? 0 : 2);
   return { spread, pHome: 1 / (1 + Math.exp(-spread / 6.5)) };
 }
-function keyPlayers(tid, n) { return rosterOf(tid).filter(p => p.a && !p.injury && p.pos !== 'K' && p.pos !== 'P').sort((x, y) => (starsOf(y) || 0) - (starsOf(x) || 0) || uOvr(y) - uOvr(x)).slice(0, n); }
+function keyPlayers(tid, n) { return rosterOf(tid).filter(p => p.a && !p.injury && p.pos !== 'K' && p.pos !== 'P').sort((x, y) => uOvr(y) * SPOTS[y.spot].val - uOvr(x) * SPOTS[x.spot].val).slice(0, n); }
 function pregameModal() {
   const m = userMatchup(), u = state.userTid, recs = standings();
   const opp = m.h === u ? m.a : m.h, home = m.h === u;
@@ -1503,7 +1504,7 @@ function pregameModal() {
   const side = tid => {
     const out = rosterOf(tid).filter(p => p.injury && ['Elite', 'All-Pro', 'Starter'].includes(tierOf(p)));
     return `<div class="card"><h3>${teamLink(tid, true)} <span class="muted small">${recStr(recs[tid])}</span></h3>
-      <div class="section-title" style="margin-top:0">Players to watch</div>${keyPlayers(tid, 4).map(p => `<div class="small">${starHTML(starsOf(p))} ${esc(p.lbl)} ${playerLink(p)}</div>`).join('')}
+      <div class="section-title" style="margin-top:0">Players to watch</div>${keyPlayers(tid, 4).map(p => `<div class="small">${tierPill(p)} ${esc(p.lbl)} ${playerLink(p)}</div>`).join('')}
       <div class="section-title">Out</div>${out.length ? out.map(p => `<div class="small"><span class="bad">${esc(p.lbl)}</span> ${playerLink(p)} <span class="muted">— ${esc(p.injury.name)}</span></div>`).join('') : '<div class="small muted">Nobody significant.</div>'}</div>`;
   };
   openModal(`<div class="muted small">${m.po ? m.po : `Week ${state.week}`} · ${home ? 'Home' : 'Away'}</div>

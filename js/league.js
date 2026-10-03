@@ -74,7 +74,7 @@ function migrateState(st) {
   }
   syncEconomy();
   // positional comfort & adaptability for saves that predate them
-  if (st.version === SAVE_VERSION) for (const id in st.players) { const p = st.players[id]; if (!p.a) continue; if (p.h && p.h.adapt === undefined) p.h.adapt = Math.round(clamp(gauss(55, 18), 5, 99)); if (!p.cf) { genComfort(p); updateRatings(p); } }
+  if (st.version === SAVE_VERSION) for (const id in st.players) { const p = st.players[id]; if (!p.a) continue; ensureHidden(p); if (p.h && p.h.adapt === undefined) p.h.adapt = Math.round(clamp(gauss(55, 18), 5, 99)); if (!p.cf) { genComfort(p); updateRatings(p); } }
   // Phase 5: perception (fog, hype, labels) for saves that predate it
   if (st.version === SAVE_VERSION) {
     st.settings.showTrue = !!st.settings.showTrue;

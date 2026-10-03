@@ -314,8 +314,12 @@ function genHidden() {
     stam: Math.round(clamp(gauss(60, 15), 10, 99)),
     curve: weightedPick(['early', 'normal', 'late'], [2, 6, 2]),
     adapt: Math.round(clamp(gauss(55, 18), 5, 99)), // learns new positions / schemes
+    prof: Math.round(clamp(gauss(55, 18), 5, 99)),  // professionalism: preparation, work habits, how he carries himself
+    disc: Math.round(clamp(gauss(55, 18), 5, 99)),  // discipline: penalties (false starts, holds, late hits)
   };
 }
+// saves that predate professionalism & discipline
+function ensureHidden(p) { if (p.h && p.h.prof === undefined) { p.h.prof = Math.round(clamp(gauss(55, 18), 5, 99)); p.h.disc = Math.round(clamp(gauss(55, 18), 5, 99)); } }
 function genAging() {
   const ag = {};
   for (const g of AGE_GROUPS) {
