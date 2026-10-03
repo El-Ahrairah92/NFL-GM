@@ -118,7 +118,7 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
       if (a.blockers.length > 1) diff -= TUNE.doubleBonus + (ea(g, a.blockers[1], 'pbk') - 70) * 0.3;
       if (a.chip) diff -= TUNE.chipBonus;
       const med = TUNE.passProMedian * Math.exp(-soft(diff, 14) * TUNE.rushScale);
-      a.t = med * Math.exp(gauss(0, 0.38)) * (Math.abs(r.x) < 2 ? 1.07 : 1) + (a.chip ? 0.25 : 0) + (a.stuntDelay || 0); // the inside path to the QB is the crowded one
+      a.t = med * Math.exp(gauss(0, 0.38)) * (Math.abs(r.x) < 2 ? TUNE.insideRush : 1) + (a.chip ? 0.25 : 0) + (a.stuntDelay || 0); // the inside path to the QB is the crowded one
     }
     a.t = Math.max(0.75, a.t);
   }

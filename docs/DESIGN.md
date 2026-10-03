@@ -302,6 +302,32 @@ Game Management ≈ 0.5 wins/season elite vs. poor · Play Calling ≈ 1–1.5 �
 - Tackle credit: linemen who hold the point often spill the play to the second level; the free linebacker and box safety share credit with the pile; ~9% of tackles add an assist. Team totals ~1,040 a season, leaders ~170–190.
 - Sacks: finishing depends less steeply on rusher rating and credit goes to anyone arriving with the first man, so leaders top out near 20 and ~20–25 players reach double digits.
 
+## 11. Stat-range calibration (leaders and team spread)
+League averages were right but the spread between teams and players was too wide. Causes found and fixed:
+- **Play-action was worth +5 yards per attempt** (11.0 vs 6.0), so PA-heavy schemes won regardless of talent. Now ~8.7 vs 6.6 (shallower PA routes, fewer defenders bite, smaller separation bonus). Screens gain real yards (were ~1 yd).
+- **Talent leverage tempered:** `TUNE.spread` 0.55 → 0.5, `TUNE.spreadQB` 0.85 → 0.66. Ratings still order outcomes; the gaps are smaller.
+- **Run/pass identity tempered:** `TUNE.passLean` 0.55 scales how far a play-caller strays from the league mix; base pass rate clamped to 47–64%.
+- **Rushing:** QB scrambles gain yards (were tackled at the line), jet sweeps too; backs add less after contact (`runAfter`); carries tire a back more (`carryLoad`) and committees are more common, so the lead back averages ~46% of team carries.
+- Measured with `leaders.js` (season leaders, per-player rate distributions, team spreads) and `decomp.js` (which inputs drive team results).
+- Known gaps: completion % spread is still wide at the bottom; 20+ yard completions are low.
+
+## 12. The offensive line
+A controlled test (half the league given an elite line, half a bottom one) showed the line moved pressure and sacks but not passing efficiency: a QB with a clean pocket ran his reads on a fixed clock and threw, so time bought nothing.
+- **Clean pocket = routes come open.** While protection holds, the QB can hold on an intermediate or deep route (`TUNE.pocketOpen` separation per second held) and works back through his progression instead of dumping it off. Intermediate and deep routes start more covered (`midCov`, `deepCov`), so a poor line is pushed into the short game.
+- **Trench gaps count more:** `rushScale` 0.03 → 0.036 (pass rush vs protection), `runScale` 0.055 → 0.12 (run block vs front).
+- Result in ordinary leagues, per one standard deviation of line quality: 0.16 offensive TD a game (QB 0.25, receivers 0.12), 0.12 yards per carry (the back himself 0.17), 3.3 points of pressure rate. An elite line versus a bottom one is roughly 4–5 points a game.
+- Check with `olexp.js` (controlled split) and `decomp.js` (natural leagues).
+
+## 13. Margins of victory
+Games were decided by 16.9 on average (NFL 11.3) with 21% decided by 28+. Talent gaps explained a normal amount; the excess was a hidden team-wide form roll each game (`TUNE.teamForm`), which shifted every player at once. Cut from 1.6 to 0.4, home field from 0.6 to 0.3 (now ~1.5 points). Teams protecting a second-half lead run more and play soft shells (`call.soft`). Result: average margin ~11, 14% of games by 21+, 6% by 28+, heavy favourites win ~80%. Check with `blow.js`.
+
+## 14. Offensive usage
+- Receivers and tight ends rotate (rating gap discounted against fatigue): WR1 ~95% of snaps, WR4 ~23%, TE1 ~83%, TE2 ~30%. A fullback is not used as the tight end.
+- Backs are the outlet less often (17% of targets, was 25%); the QB looks for his best receiver; tight ends work the seams. Mobile QBs scramble and run by design more (top ~650-700 yards).
+- **Planned rest series** (`REST_P`): each drive a starting receiver (7.5%, slot 4%) or tight end (14%) may sit, never in the two-minute drill or late in games. Fatigue alone cannot rotate an offense because it rests whenever the defense plays. The third back takes about a quarter of the No. 2's series. Result: WR 91/82/67/23/10% of snaps, TE 76/33/13%, carries 47/28/8%.
+- **Sacks by alignment** match the NFL (edge ~50%, interior ~26%, blitzers ~23%): interior rushers get home slower (`TUNE.insideRush`) and finish less often, and credit is shared among everyone arriving with the first rusher. About 23 players reach 10 sacks; tackles average ~3.5. Check with `sackdist.js` and `sackslot.js`.
+- Injuries away from the ball, in the trenches and on sacks are more common: about 19 QBs start 16+ games and over a third of starting linemen miss time. Check with `offuse.js`.
+
 ## Deferred
 - Penalties / Discipline attribute
 - Leadership / intangibles

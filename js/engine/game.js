@@ -77,8 +77,9 @@ function basePassRate(g, s) {
   const cx = g.cx[s], ot = cx.ot, d = g.side[s].depth;
   const r = sp => d[sp][0] ? d[sp][0].r : 50;
   const olPB = avg(OL_SLOTS.map(sp => d[sp][0] && d[sp][0].p.a ? d[sp][0].p.a.pbk : 50)), olRB = avg(OL_SLOTS.map(sp => d[sp][0] && d[sp][0].p.a ? d[sp][0].p.a.rbk : 50));
-  const pref = 0.55 + (r('QB') - 75) * 0.006 - (r('RB') - 75) * 0.002 + (olPB - olRB) * 0.003;
-  return clamp(ot.pass - 0.01 + cx.adp / 99 * 0.8 * (pref - ot.pass), 0.4, 0.7);
+  const pref = 0.55 + (r('QB') - 75) * 0.004 - (r('RB') - 75) * 0.002 + (olPB - olRB) * 0.003;
+  const lean = ot.pass - 0.01 + cx.adp / 99 * 0.8 * (pref - ot.pass);
+  return clamp(0.532 + (lean - 0.565) * TUNE.passLean, 0.47, 0.64);
 }
 function ln(g, p) {
   if (!p) return {};
@@ -174,7 +175,7 @@ function fgProb(g, K, dist) {
 // Who gets the tackle on the stat sheet. Linemen who hold the point rarely finish the play themselves: the back
 // spills to a linebacker or a defensive back coming downhill. And most tackles draw a second man.
 const TKL_W = { MLB: 2.3, WLB: 2.3, SAM: 2.3, SS: 2, FS: 2, CB: 1.45, NCB: 1.7, DIME: 1.7, EDGE: 0.8, DE: 0.7, DT: 0.6, NT: 0.5 };
-const TKL_SPILL = 0.36, TKL_ASSIST = 0.09, TKL_SCRUM = 0.5;
+const TKL_SPILL = 0.36, TKL_ASSIST = 0.07, TKL_SCRUM = 0.6;
 function shareTackle(res, def) {
   if (!res.tackler || (res.kind !== 'run' && res.kind !== 'comp' && res.kind !== 'scramble')) return;
   const others = () => def.filter(e => e !== res.tackler && e !== res.assist && e.p && !e.blitz);
@@ -186,7 +187,7 @@ function shareTackle(res, def) {
   // the free-flowing linebacker and the box safety are in on everything, but the pile gets sorted out more evenly than that
   else if (res.tackler.depth > 0 && ['MLB', 'WLB', 'SAM', 'SS'].includes(res.tackler.slot) && rand() < TKL_SCRUM) {
     const lbs = res.tackler.slot === 'SS' ? [] : others().filter(e => e.depth > 0 && TKL_W[e.slot] === TKL_W.MLB);
-    const t = lbs.length && rand() < 0.5 ? pick(lbs) : pickW(others().filter(e => e.depth > 0));
+    const t = lbs.length && rand() < 0.35 ? pick(lbs) : rand() < 0.3 ? pickW(others().filter(e => e.depth === 0)) : pickW(others().filter(e => e.depth > 0 && !lbs.includes(e)));
     if (t) { if (!res.assist && rand() < 0.4) res.assist = res.tackler; res.tackler = t; }
   }
   if (!res.assist && rand() < TKL_ASSIST) res.assist = pickW(others());
@@ -211,14 +212,16 @@ function runPlay(g, oc, dc) {
   const res = oc.isRun ? resolveRun(g, off, def, oc, dc) : resolvePass(g, off, def, oc, dc);
   if (globalThis.__calib) globalThis.__calib(g, oc, dc, res, off, def);
   // fatigue: a carry costs a back extra
-  if (res.carrier && res.kind === 'run') res.carrier.extraLoad = 2.3;
+  if (res.carrier && res.kind === 'run') res.carrier.extraLoad = TUNE.carryLoad;
   tickFatigue(g, [...off, ...def]);
   shareTackle(res, def);
   applyResult(g, res, oc, dc, off, def, { downB, togoB, ydlB });
   chartPlay(g, oc, dc, res, before, off, def);
   // injuries: whoever was in the collision, plus the trenches
-  injuryCheck(g, (res.involved || []).filter(Boolean));
-  if (rand() < 0.0028) { const pool = [...off.filter(e => OL_SLOTS.includes(e.slot)), ...def.filter(e => e.depth === 0)]; const e = pick(pool); if (e && e.p.id >= 0 && !e.p.injury && rand() < durMult(e.p)) injure(g, e.p); }
+  injuryCheck(g, (res.involved || []).filter(Boolean), res.kind === 'sack' ? 0.011 : 0.0042); // quarterbacks get hurt taking sacks
+  // away from the ball: a hamstring on a route, a rolled ankle in coverage
+  if (rand() < 0.0011) { const e = pick([...off, ...def].filter(e => e.slot !== 'QB' && e.depth !== 0 && !OL_SLOTS.includes(e.slot))); if (e && e.p.id >= 0 && !e.p.injury && rand() < durMult(e.p)) injure(g, e.p); }
+  if (rand() < 0.008) { const pool = [...off.filter(e => OL_SLOTS.includes(e.slot)), ...def.filter(e => e.depth === 0)]; const e = pick(pool); if (e && e.p.id >= 0 && !e.p.injury && rand() < durMult(e.p)) injure(g, e.p); }
 }
 
 function playText(oc, dc, res) {
@@ -568,7 +571,15 @@ function startPossession(g, side, ydl) {
   // committee backs: some series go to the No. 2
   const rb1 = g.cx[side].ot.rb1;
   const ch = userChart(g, side, 'off');
-  g.side[side].rb2Turn = ch && ch.rot.RB !== undefined ? rand() < ch.rot.RB : rand() < clamp((0.97 - clamp(rb1, 0.5, 0.8)) * 0.9, 0.12, 0.4);
+  g.side[side].rb2Turn = ch && ch.rot.RB !== undefined ? rand() < ch.rot.RB : rand() < clamp((0.97 - clamp(rb1, 0.5, 0.8)) * 1.35, 0.26, 0.56);
+  g.side[side].rb3Turn = g.side[side].rb2Turn && rand() < 0.24;
+  // series off for receivers and tight ends (never in the two-minute drill or late in a game)
+  const T_ = g.side[side]; T_.rest = null;
+  if (!((g.q === 2 && g.clock <= 150) || (g.q >= 4 && g.clock <= 360))) {
+    const rest = new Set();
+    for (const e of offUnit(g, side, '11', null)) if (REST_P[e.slot] && e.p.id >= 0 && rand() < REST_P[e.slot]) rest.add(e.p.id);
+    T_.rest = rest;
+  }
 }
 function changePoss(g, newYdl, result) { endDrive(g, result); startPossession(g, 1 - g.poss, newYdl); }
 function endDrive(g, result) {

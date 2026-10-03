@@ -6,34 +6,44 @@
 
 // Engine calibration constants (Phase 4 tunes these against the target sheet)
 const TUNE = {
-  spread: 0.55,         // how much talent gaps matter: attributes are compressed toward the league mean on every snap
-  spreadQB: 0.85,      // quarterbacking stays more leveraged
-  hfa: 0.6,            // home-field bonus, attribute points on every snap
-  teamForm: 1.6,       // sd of team game-day form
+  spread: 0.5,         // how much talent gaps matter: attributes are compressed toward the league mean on every snap
+  spreadQB: 0.66,      // quarterbacking stays more leveraged
+  hfa: 0.3,            // home-field bonus, attribute points on every snap
+  teamForm: 0.4,       // sd of team game-day form
   fatFree: 3.0,        // fatigue tolerated before it costs anything
   // trenches
-  passProMedian: 5.45, // seconds for an average rusher to beat an average blocker 1v1
-  rushScale: 0.03,    // how strongly the rush/block gap moves win time
+  passProMedian: 5.62, // seconds for an average rusher to beat an average blocker 1v1
+  rushScale: 0.036,
+  insideRush: 1.18,    // interior rushers take longer to get home than edges (crowded path, more double teams)    // how strongly the rush/block gap moves win time
   doubleBonus: 17,     // pass-block points added by a second blocker
   chipBonus: 7,
   pickupMiss: 0.13,    // blitz/sim pickup failure for an average protection
   stuntMiss: 0.22,
-  runWin: -0.15,       // logit: front defender beats his run block (average vs average)
-  runScale: 0.055,
+  runWin: 0.06,       // logit: front defender beats his run block (average vs average)
+  runScale: 0.12,
   comboBonus: 16,
   // coverage / passing
-  openBase: -0.3,
+  openBase: -0.47,
   openScale: 0.034,
   covWeight: 1.7,      // a defender's coverage skill counts this much more than the receiver's route skill
   holeBonus: 0.9,
   readTime: 0.52,
-  catchBase: 1.95,
-  shade: 1, // how hard defenses roll coverage toward the best receiver
+  catchBase: 2.55,
+  shade: 0.35, // how hard defenses roll coverage toward the best receiver
   dropBase: 0.07,
-  intBase: 0.0095,
+  intBase: 0.0078,
   // tackling
-  tackleBase: 2.2,
+  tackleBase: 2.0,
   tackleScale: 0.03,
+  runAfter: 1.15,       // yards a back typically adds after first contact
+  carryLoad: 3.8,      // how much more a carry tires a back than an ordinary snap
+  pocketOpen: 1.2,
+  deepCov: -1.0,      // deep routes start covered: they need time (or a beaten defender) to come open
+  midCov: -0.68,     // separation a receiver gains per second the QB can hold the ball in a clean pocket
+  paBite: -0.8,        // logit: how readily second-level defenders bite on play-action
+  paOpen: 0.22,        // separation gained downfield when they do
+  screenLead: 4,       // yards the screen's convoy buys before the first tackler arrives
+  passLean: 0.55,         // how far play-callers stray from the league-average run/pass mix (1 = full scheme identity)
 };
 
 // ---------- offense ----------
@@ -85,11 +95,13 @@ function packageLayout(front, pkg) {
 }
 
 // fatigue: [per-snap load, threshold before rotation pressure]
-const FAT = { QB: [0.25, 99], OL: [0.45, 14], RB: [0.9, 5.5], WR: [0.62, 6.5], TE: [0.6, 7.5], DL: [1.3, 2.0], LB: [0.6, 16], DB: [0.5, 18] };
+const FAT = { QB: [0.25, 99], OL: [0.45, 14], RB: [0.9, 5.5], WR: [0.7, 4.3], TE: [0.7, 4.0], DL: [1.3, 2.0], LB: [0.6, 16], DB: [0.5, 18] };
 // how hard fatigue pushes a player to the sideline (DL rotate by design)
-const FAT_SLOPE = { QB: 1, OL: 1, RB: 1.6, WR: 1.2, TE: 1.2, DL: 4.0, LB: 1, DB: 1 };
+const FAT_SLOPE = { QB: 1, OL: 1, RB: 1.6, WR: 1.8, TE: 2.6, DL: 4.0, LB: 1, DB: 1 };
 // defensive lines play in waves: the gap between a starter and his backup counts for less than fresh legs
-const ROT_GAP = { DL: 0.5 };
+// planned rest: chance a starter at this spot sits out a given drive (coaches spell receivers and tight ends by series)
+const REST_P = { X: 0.075, Z: 0.075, SLOT: 0.04, Y: 0.14 };
+const ROT_GAP = { DL: 0.5, WR: 0.55, TE: 0.5 }; // receivers and tight ends get series off too
 
 // ---------- team game state ----------
 function slotRating(p, spot) {
@@ -140,6 +152,7 @@ function fillSlots(g, s, slots, table, opts = {}) {
       if (used.has(c.p.id)) continue;
       let sc = c.r * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp);
       if (list) { const i = list.indexOf(c.p.id); if (i >= 0) sc = 300 - i * 14 * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp) + (i === 1 && rotHit ? 30 : 0); }
+      if (T_.rest && T_.rest.has(c.p.id)) sc -= 40; // a planned series off
       if (g.ps[c.p.id] && g.ps[c.p.id].last === name) sc += 1.5; // continuity: no needless shuffling
       if (opts.score && !list) sc += opts.score(c.p, slot);
       if (sc > bs) { bs = sc; best = c; }
@@ -160,13 +173,14 @@ function offUnit(g, s, pers, call) {
   for (const k of order) slots.push([k, k, OFF_ALIGN[k], k === 'RB' ? 7 : k === 'FB' ? 4 : 1]);
   // running back usage: committee share, a third-down back on passing downs
   const rbScore = (p, slot) => {
+    if ((slot === 'Y' || slot === 'H' || slot === 'Y2') && p.spot === 'FB') return -13; // a fullback is not your tight end
     if (slot !== 'RB' || !p.a) return 0;
     if (p.spot !== 'RB') return p.spot === 'FB' ? -6 : -8; // a receiver in the backfield is a gadget, not a feature back
     if (call && call.passDown) return (ea0(p, 'hnd') + ea0(p, 'pbk') + ea0(p, 'rte') - 180) * 0.12;
     if (!T_.rb2Turn) return 0;
     // committee series: the No. 2 back gets his drive unless he's hopelessly outclassed
     const backs = T_.depth.RB.filter(x => x.p.spot === 'RB');
-    const rb2 = backs[1];
+    const rb2 = backs[T_.rb3Turn && backs[2] && backs[1].r - backs[2].r <= 14 ? 2 : 1]; // the third back gets the odd series
     return rb2 && p.id === rb2.p.id && backs[0].r - rb2.r <= 25 ? backs[0].r - rb2.r + 2 : 0;
   };
   const chart = userChart(g, s, 'off');

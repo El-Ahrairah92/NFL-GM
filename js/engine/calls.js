@@ -58,12 +58,13 @@ function offenseCall(g) {
   if (g.down === 1) pr -= 0.07;
   else if (g.down === 2) pr += g.togo >= 8 ? 0.1 : g.togo <= 3 ? -0.12 : 0;
   else pr = g.togo >= 7 ? 0.9 : g.togo >= 4 ? 0.74 : g.togo <= 1 ? 0.3 : 0.52;
-  if (sit.gl) pr -= 0.12;
+  if (sit.gl) pr -= 0.05;
   if (sit.milk) pr -= 0.1 + 0.25 * cx.clock;
   else if (g.q >= 3 && sit.diff <= -14) pr += 0.12;
+  else if (g.q >= 3 && sit.diff >= (g.q >= 4 ? 9 : 17)) pr -= 0.12; // sitting on a lead: shorten the game
   if (sit.hurry) pr = Math.max(pr, 0.84);
   // play caller's plan + in-game adjustment toward what works
-  pr += g.tilt[o] * pcF;
+  pr += g.tilt[o] * pcF * TUNE.passLean;
   const fr = g.famStats[o];
   const sr = f => fr[f] && fr[f][0] >= 4 ? fr[f][1] / fr[f][0] : 0.45;
   pr += clamp((sr('PASS') - sr('RUN')) * 0.35, -0.07, 0.07) * pcF;
@@ -94,7 +95,7 @@ function offenseCall(g) {
   const tilt = f => Math.exp(clamp(adv[f] || 0, -1, 1) * 0.25 * pcF) * Math.exp(clamp((sr(f) - 0.45) * 1.6, -0.4, 0.4) * pcF * 0.6);
   if (isRun) {
     const w = { RUN: 1 * tilt('RUN') };
-    if (call.form !== 'EMP') w.RUN_QB = ot.qbRun * 2.2 * clamp((qbMob - 55) / 25, 0.15, 1.6) * tilt('RUN');
+    if (call.form !== 'EMP') w.RUN_QB = ot.qbRun * 2.6 * clamp((qbMob - 55) / 18, 0.1, 2.4) * tilt('RUN');
     else { w.RUN = 0; w.RUN_QB = 1; }
     if (call.form !== 'UC' && qbMob >= 66) w.OPTION = (ot.rpo + ot.qbRun) * 0.55 * tilt('OPTION');
     if (call.form !== 'UC') w.DRAW = (sit.passDown || g.down === 2 ? 0.32 : 0.06) * tilt('DRAW');
@@ -165,6 +166,8 @@ function defenseCall(g, oc) {
   if (sit.b === 'D3L') { high += 0.2; man -= 0.08; }
   if (sit.gl || sit.red) { man += 0.18; high -= 0.2; blitz += 0.06; }
   if (sit.hurry && sit.diff < 0) { high += 0.15; blitz -= 0.08; } // offense trailing late: keep it in front
+  // protecting a big lead in the second half: soft shells, rush four, trade yards for clock (sit.diff is the offense's margin)
+  if (g.q >= 3 && sit.diff <= (g.q >= 4 ? -11 : -21)) { call.soft = true; high += 0.3; man -= 0.15; blitz -= 0.12; }
   // play caller: expecting run -> load the box (single-high) and run-blitz; expecting pass -> rush/cover
   high += (0.5 - runEst) * 0.25 * pcF;
   blitz += (runEst - 0.5) * 0.12 * pcF;
