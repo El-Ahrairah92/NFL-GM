@@ -34,7 +34,7 @@ function simGame(hTid, aTid, opts = {}) {
   const g = {
     tids: [hTid, aTid], score: [0, 0], qs: [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]], q: 1, clock: 900,
     poss: 0, ydl: 25, down: 1, togo: 10, stats: {}, ts: [newTS(), newTS()], scoring: [], drives: [], injuries: [],
-    playoff: !!opts.playoff, neutral: !!opts.neutral, over: false, ot: false, otStarted: [0, 0], drive: null,
+    playoff: !!opts.playoff, neutral: !!opts.neutral, pre: opts.pre || 0, over: false, ot: false, otStarted: [0, 0], drive: null,
     side: [null, null], ps: {}, to: [3, 3], running: false, warned: {}, key: 0, liveFilm: [{}, {}], famStats: [{}, {}],
     runY: [[0, 0], [0, 0]], runCred: [4.2, 4.2], pbp: opts.pbp ? [] : null, adv: {}, tadv: [{}, {}], first: [{}, {}], basePass: [0.57, 0.57], tilt: [0, 0], advEst: [{}, {}],
   };
@@ -563,6 +563,7 @@ function endPeriod(g) {
     endDrive(g, 'End of Half');
     g.q = 3; g.clock = 900; g.to = [3, 3];
     for (const id in g.ps) g.ps[id].fat = 0; // halftime
+    if (g.pre) for (let s = 0; s < 2; s++) { g.side[s].active = preseasonActives(g.tids[s], g); initSide(g, s); } // exhibition: the threes take over
     pbpLog(g, 'Halftime', false);
     kickoff(g, g.recvFirst);
     return;

@@ -136,6 +136,24 @@ Round 2:
 - **Player card:** RAS (0–10, mean of positional percentiles on height, weight, 40, 10, vertical, broad, 3-cone, shuttle, bench; jumps were added to the combine and backfilled from explosiveness), plus a grades-by-game chart (season game log, last season kept through the offseason). RAS also shows on the draft board.
 - **Light theme** by default (Settings → Theme for dark). Scripts and the stylesheet load with a cache-busting query string, and render or runtime errors show in an on-screen banner.
 
+Round 3:
+- **Scouting language (`js/scouttext.js`):**
+  - Every trait has three grades of good and three of bad, each with several wordings (stable per player).
+  - A one-line **player profile** combines level, calling-card role, a second asset and the biggest hole. All of it is relative to the rest of the player's own game, so depth players read as distinct types.
+  - Weaknesses are graded 45% against a starter and 55% against his own level. Bargain-bin players also get "best part of his game" lines.
+- **Popups stack:** cards open over the game recap, box score or another card with a Back button; × or the backdrop closes all.
+- **Trade page:** names open cards; "The deal" lists every asset on both sides.
+- **Career view on the card:** Stats or Ratings (grades by season, plus your tier and upside read at each season's end, recorded from now on).
+- **Player Search page:** name, where (FA, other teams, practice squads, prospects…), team, age range, minimum tier and upside, cap hit, comfortable-at spot, contract year, and position family. Sortable.
+- **Draft classes are generated at season start** and are visible and searchable all year. Prospect reports sharpen weekly (confidence caps at 0.4 before the draft).
+- **Preseason (`js/preseason.js`):**
+  - Every team signs camp bodies to a 70-man roster.
+  - Three exhibition games: starters sit, the twos play the first half and the threes the second.
+  - Snaps feed film (perception), positional comfort and a preseason grade. Injuries are real; nothing counts in standings or season stats.
+- **Cutdown Day (phase `CUTDOWN`):** a coaches'-meeting page with room counts vs. what the staff would carry, a position-coach summary, a per-player staff verdict (Keep / Bubble / Cut / Cut → PS) with reasoning, and your Keep/Cut call. The staff finishes anything left undecided.
+- **Fixes:** kneels with no real QB on the roster credit whoever takes the snap; negative money formats as −$X.
+
+
 ## 1. Player evaluation (what the GM sees)
 - True ratings are hidden. The GM sees scout **perception** with confidence that grows with experience/snaps. AI teams see through the same fog (their own noise).
 - **Current tier** (percentile within position, league-wide):

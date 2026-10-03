@@ -103,22 +103,6 @@ function buzzLabel(p) {
   return b >= 3 ? 'Media darling' : b >= 2 ? 'Getting buzz' : null;
 }
 
-// ---------- scouting phrases (2–3 per player, from what scouts think they see) ----------
-const TRAIT_TXT = {
-  spd: ['Rare long speed', 'Lacks top-end speed'], bur: ['Explosive first step', 'Slow to accelerate'], agi: ['Fluid change of direction', 'Stiff hips'],
-  str: ['Powerful at the point of attack', 'Gets pushed around'], siz: ['Prototype size', 'Undersized'],
-  sacc: ['Accurate underneath', 'Scattershot short accuracy'], dacc: ['Drops it in the bucket deep', 'Erratic deep ball'], arm: ['Cannon arm', 'Limited arm'],
-  proc: ['Quick processor', 'Slow through progressions'], dec: ['Smart with the football', 'Forces throws'], pkt: ['Calm in the pocket', 'Panics under pressure'],
-  tor: ['Dangerous on the move', 'Struggles outside the pocket'], vis: ['Patient, sees the cutback', 'Misses running lanes'], elu: ['Makes defenders miss', 'Goes down easy in space'],
-  bal: ['Runs through contact', 'Goes down on first contact'], bsec: ['Secure with the ball', 'Fumble issues'], rte: ['Polished route runner', 'Raw route runner'],
-  rel: ['Wins off the line', 'Struggles vs. press'], hnd: ['Reliable hands', 'Concentration drops'], cth: ['Wins 50-50 balls', 'Loses contested catches'],
-  pbk: ['Sturdy pass protector', 'Leaky in pass protection'], rbk: ['Road grader', 'Soft run blocker'], bawr: ['Picks up stunts and blitzes', 'Misses assignments'],
-  prsh: ['Refined pass-rush plan', 'Limited rush repertoire'], shed: ['Sheds blocks', 'Stays blocked'], tkl: ['Sure tackler', 'Misses tackles'],
-  strp: ['Punches the ball out', null], prec: ['Diagnoses quickly', 'Bites on play-action'], man: ['Sticky in man coverage', 'Exposed in man'],
-  zone: ['Instinctive in zone', 'Lost in zone'], prs: ['Physical at the line', 'Soft at the line'], bsk: ['Ball hawk', 'Rarely finds the ball'],
-  kcon: ['Metronome accuracy', 'Inconsistent'], krng: ['Big leg', 'Limited range'], kfal: ['Holds accuracy from distance', 'Fades from distance'], ktrj: ['Clean trajectory', 'Low trajectory'],
-  pdis: ['Booming leg', 'Short punter'], pplc: ['Pins it inside the 10', 'Erratic placement'], phng: ['Elite hang time', 'Low hang time'], pspn: ['Controls the bounce', 'Touchback-prone'],
-};
 // ---------- star rating: position-relative ability, weighted toward current form (½ to 5 stars) ----------
 function pctInGroup(p, v) {
   const t = th(p), a = t.vals || [];
@@ -154,28 +138,6 @@ function recordForm(box) {
     (p.glog = p.glog || []).push({ w: box.playoff ? box.playoff : 'Wk ' + box.week, o: opp, h: box.tids[0] === l.tid, g, s: l.snp });
   }
 }
-// ---------- strengths & weaknesses (what scouts think they see; fogged by confidence) ----------
-function scoutTraits(p) {
-  if (!p.a) return { str: [], weak: [] };
-  const w = SPOTS[p.spot].w, t = TEMPLATE_A[p.spot] || {}, fog = p.per ? 1 - p.per.conf : 0.3;
-  const keys = Object.keys(w).filter(k => TRAIT_TXT[k] && t[k] !== undefined);
-  const mw = keys.reduce((s, k) => s + w[k], 0) / Math.max(1, keys.length);
-  // scouts talk about what matters at the position: deviation scaled by how much the trait counts there
-  const sc = keys.map(k => {
-    // young players are described by their tools (where they're headed), not just today's polish
-    const grow = k !== 'siz' && p.age <= 25 && p.per ? p.per.g * 0.7 : 0;
-    const seen = (k === 'siz' ? p.a.siz : p.a[k]) + grow + hashGauss(p.id, k.charCodeAt(0) * 31 + k.charCodeAt(1), 3) * 7 * fog;
-    return [k, (seen - t[k]) * Math.min(1.6, w[k] / mw)];
-  });
-  const str = sc.filter(x => x[1] >= 5).sort((a, b) => b[1] - a[1]).slice(0, 4).map(x => TRAIT_TXT[x[0]][0]);
-  const weak = sc.filter(x => x[1] <= -5 && TRAIT_TXT[x[0]][1]).sort((a, b) => a[1] - b[1]).slice(0, 3).map(x => TRAIT_TXT[x[0]][1]);
-  return { str, weak };
-}
-function traitTags(p) {
-  const { str, weak } = scoutTraits(p);
-  return [...str.slice(0, 2), ...weak.slice(0, str.length ? 1 : 2)];
-}
-
 // ---------- updates ----------
 // production that drives hype, by group (season totals: volume, not efficiency)
 function hypeMetric(p, s) {
@@ -225,7 +187,17 @@ function filmUpdate(box) {
     p.per.conf = Math.min(0.95, p.per.conf + 0.012 * share);
   }
 }
-function refreshPerception() { seasonHype(); computeThresholds(); }
+// college tape piles up through the fall: prospect reports slowly sharpen until the draft
+function scoutProspects() {
+  for (const id in state.players) {
+    const p = state.players[id];
+    if (p.tid !== -2 || !p.per) continue;
+    p.per.b += 0.03 * (p.ovr - p.per.b);
+    p.per.g += 0.03 * (Math.max(0, p.pot - p.ovr) - p.per.g);
+    p.per.conf = Math.min(0.4, p.per.conf + 0.008);
+  }
+}
+function refreshPerception() { seasonHype(); scoutProspects(); computeThresholds(); }
 
 // end of season: film review, awards, hype carries over at half strength
 function seasonPerception(awards) {

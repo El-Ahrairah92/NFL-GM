@@ -65,7 +65,7 @@ function endSeason() {
   // archive season stats
   for (const id in state.players) {
     const p = state.players[id];
-    if (p.stats.gp) p.career.push(Object.assign({ season: state.season, tid: p.tid }, p.stats, p.advS ? { adv: careerAdv(p.advS, p.spot) } : {}));
+    if (p.stats.gp) p.career.push(Object.assign({ season: state.season, tid: p.tid }, p.stats, p.advS ? { adv: careerAdv(p.advS, p.spot) } : {}, p.per ? { ti: tierOf(p), up: upsideOf(p) } : {}));
     if (p.pstats && p.pstats.gp) { p.pcareer = p.pcareer || []; p.pcareer.push(Object.assign({ season: state.season, tid: p.tid }, p.pstats)); }
     p.advPrev = p.advS ? Object.assign({ season: state.season }, p.advS) : p.advPrev || null; // last season stays viewable through the offseason
     p.glogPrev = p.glog && p.glog.length ? { season: state.season, log: p.glog } : p.glogPrev || null;
@@ -117,7 +117,7 @@ function startOffseason() {
     delete state.players[p.id]; rostersDirty();
   }
   psOffseason();
-  for (let i = 0; i < 256; i++) genProspect(year);
+  ensureDraftClass(year);
   coachOffseason();
   state.phase = 'COACHES';
 }
@@ -292,6 +292,7 @@ function finishDraft() {
   });
   state.picks = state.picks.filter(pk => pk.season !== state.draft.year);
   state.phase = 'PRESEASON';
+  startPreseason();
   addNews(`The ${state.draft.year} draft is complete. Undrafted rookies are now free agents.`);
   campReports(state.draft.year);
 }
@@ -345,6 +346,7 @@ function fixCap(tid) {
 }
 
 function startNewSeason() {
+  state.pre = null; state.cut = null;
   trainingCamp();
   // anyone still hurt opens the season on IR (decided before cutdown so the 53 is real)
   for (const p of Object.values(state.players)) { if (p.tid >= 0 && p.injury && p.injury.weeks >= IR_WEEKS) p.ir = { wk: 1 }; else delete p.ir; }
@@ -372,6 +374,7 @@ function startNewSeason() {
   for (const p of Object.values(state.players)) { p.stats = {}; }
   ensurePicks();
   state.schedule = genSchedule();
+  ensureDraftClass(state.season + 1); // next spring's class is on the board all year
   refreshPerception();
   seasonStartSnapshot();
   addNews(`The ${state.season} regular season is underway.`);
@@ -474,4 +477,10 @@ function spotNeedBonus(tid, p) {
   let best = 0;
   for (const s in (p.cf || { [p.spot]: 100 })) if (comfortOf(p, s) >= 60) best = Math.max(best, spotDeficit(tid, s));
   return best;
+}
+
+// the draft class for a given spring (created once; visible and scouted all season)
+function ensureDraftClass(year) {
+  if (Object.values(state.players).some(p => p.tid === -2 && p.draftYear === year)) return;
+  for (let i = 0; i < 256; i++) genProspect(year);
 }

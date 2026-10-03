@@ -99,7 +99,7 @@ function slotRating(p, spot) {
 function initSide(g, s) {
   const tid = g.tids[s];
   const T_ = g.side[s] || (g.side[s] = { tid, onField: new Set() });
-  if (!T_.active) T_.active = gameDayActives(tid); // 48 dress; inactives sit
+  if (!T_.active) T_.active = g.pre ? preseasonActives(tid) : gameDayActives(tid); // 48 dress on game day; in preseason the starters sit
   T_.roster = rosterOf(tid).filter(p => !p.injury && T_.active.has(p.id));
   if (T_.roster.length < 22) { // emergency fillers so a decimated team can still line up
     let i = 0;
@@ -184,7 +184,12 @@ const CHART_SPOT = { QB: 'QB', RB: 'RB', RB3D: 'RB', RBSY: 'RB', FB: 'FB', X: 'W
   CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', K: 'K', P: 'P', KR: 'RB', RUSHE: 'EDGE', RUSHI: 'DT' };
 const CHART_UNIT = k => ['K', 'P', 'KR'].includes(k) ? 'st' : ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'RUSH', 'RUSHE', 'RUSHI', 'MLB', 'WLB', 'SAM', 'CB1', 'CB2', 'NCB', 'DIME', 'FS', 'SS'].includes(k) ? 'def' : 'off';
 // the QB the staff (or your chart) has under center
-function starterQB(g, s) { return chartFirst(g, s, 'QB') || (g.side[s].depth.QB[0] ? g.side[s].depth.QB[0].p : null); }
+function starterQB(g, s) {
+  const p = chartFirst(g, s, 'QB') || (g.side[s].depth.QB[0] ? g.side[s].depth.QB[0].p : null);
+  if (p) return p;
+  const e = offUnit(g, s, '11', null).find(x => x.slot === 'QB'); // nobody can play QB: whoever is taking the snaps
+  return e ? e.p : null;
+}
 function hasList(chart, k) { return chart.lists[k] && chart.lists[k].length; }
 function userChart(g, s, unit) { const t = T(g.tids[s]); if (state.settings.autoUser && t.id === state.userTid) return null; return t.dch && !t.dch.auto[unit] ? t.dch : null; }
 function chartFirst(g, s, key) {

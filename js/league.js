@@ -4,7 +4,7 @@
 // =====================================================================
 const PHASE_LABEL = {
   REG: 'Regular Season', PLAYOFFS: 'Playoffs', RECAP: 'Season Recap', COACHES: 'Coaching Carousel',
-  RESIGN: 'Re-sign Players', FA: 'Free Agency', DRAFT: 'Draft', PRESEASON: 'Preseason',
+  RESIGN: 'Re-sign Players', FA: 'Free Agency', DRAFT: 'Draft', PRESEASON: 'Preseason', CUTDOWN: 'Cutdown Day',
 };
 const ROUND_NAMES = ['Wild Card', 'Divisional', 'Conference Final', 'Championship'];
 
@@ -43,6 +43,7 @@ function newLeague(userTid) {
   ensurePicks();
   state.schedule = genSchedule();
   state.ratingsVer = typeof DERIVED !== 'undefined' ? DERIVED.version : 0;
+  ensureDraftClass(START_SEASON + 1);
   computeThresholds(); seasonStartSnapshot();
   addNews(`Welcome to the ${START_SEASON} season. You are the GM of the ${teamName(userTid)}.`, [userTid]);
   return state;
@@ -77,6 +78,7 @@ function migrateState(st) {
     for (const t of st.teams) fillPS(t.id);
   }
   syncEconomy();
+  if (st.version === SAVE_VERSION && (st.phase === 'REG' || st.phase === 'PLAYOFFS' || st.phase === 'RECAP')) ensureDraftClass(st.season + 1);
   // positional comfort & adaptability for saves that predate them
   if (st.version === SAVE_VERSION) for (const id in st.players) { const p = st.players[id]; if (!p.a) continue; if (p.h && p.h.adapt === undefined) p.h.adapt = Math.round(clamp(gauss(55, 18), 5, 99)); if (!p.cf) { genComfort(p); updateRatings(p); } }
   // Phase 5: perception (fog, hype, labels) for saves that predate it

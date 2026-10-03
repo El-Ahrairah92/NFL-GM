@@ -21,6 +21,8 @@ Coaching carousel → Re-sign players → Free agency (3 waves) → Draft (7 rou
 | `js/attributes.js` | Attributes, position spots, measurables, position fits & labels, aging groups & development |
 | `js/derived.js` | **Generated** by the Phase 4 calibration: attribute weights per spot, positional value, scheme multipliers, rating re-centering |
 | `js/players.js` | Player generation, contracts & market value, trade value, retirement |
+| `js/scouttext.js` | Scouting language: graded strengths/weaknesses and one-line player profiles |
+| `js/preseason.js` | Camp signings, exhibition games, Cutdown Day staff recommendations |
 | `js/perception.js` | The fog: scouting estimates, hype, tiers/upside labels, trait tags, training camp reports |
 | `js/contracts.js` | Cap growth & market, guarantees/dead money, rookie scale & 5th-year options, franchise tag, extensions, restructures, practice squad, IR, game-day actives |
 | `js/depthchart.js` | Your depth chart: slots, package overrides, rotation shares, practice reps that teach new positions |

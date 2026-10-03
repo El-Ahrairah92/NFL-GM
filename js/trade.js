@@ -4,7 +4,7 @@
 // =====================================================================
 function tradeWindowOpen() {
   if (state.phase === 'REG') return state.week <= TRADE_DEADLINE;
-  return ['RECAP', 'COACHES', 'RESIGN', 'FA', 'PRESEASON'].includes(state.phase);
+  return ['RECAP', 'COACHES', 'RESIGN', 'FA', 'PRESEASON', 'CUTDOWN'].includes(state.phase);
 }
 function tradablePicks(tid) {
   return state.picks.filter(pk => pk.owner === tid).sort((a, b) => a.season - b.season || a.round - b.round);

@@ -111,7 +111,7 @@ function extensionDue(p) {
   const c = p.contract;
   if (p.tid < 0 || c.yrs !== 1 || c.next || c.tagged || p.expiring) return false;
   if (c.rookie && c.opt5 === 'pending') return false; // option decision comes first
-  return ['RESIGN', 'FA', 'DRAFT', 'PRESEASON'].includes(state.phase) || (state.phase === 'REG' && state.week <= TRADE_DEADLINE);
+  return ['RESIGN', 'FA', 'DRAFT', 'PRESEASON', 'CUTDOWN'].includes(state.phase) || (state.phase === 'REG' && state.week <= TRADE_DEADLINE);
 }
 function extensionAsk(p) {
   const yrs = Math.max(2, contractYears({ age: p.age + 1 }));

@@ -37,7 +37,7 @@ function round1(x) { return Math.round(x * 10) / 10; }
 function round2(x) { return Math.round(x * 100) / 100; }
 
 // ---------- formatting ----------
-function fmtMoney(m) { return '$' + (m >= 10 ? m.toFixed(1) : m.toFixed(2)) + 'M'; }
+function fmtMoney(m) { const a = Math.abs(m); return (m < 0 ? '−' : '') + '$' + (a >= 10 ? a.toFixed(1) : a.toFixed(2)) + 'M'; }
 function fmtPct(x) { return (x * 100).toFixed(1) + '%'; }
 function fmtClock(sec) {
   sec = Math.max(0, Math.round(sec));
