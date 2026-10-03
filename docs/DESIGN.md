@@ -1,6 +1,6 @@
 # Gridiron GM — Design Decisions (v2 overhaul)
 
-**Build status:** Phase 1 players ✅ · Phase 2 coaches ✅ · Phase 3 engine ✅ · Phase 4 calibration & film ✅ · Phase 5 perception ✅ · Phase 6 contracts & roster ✅
+**Build status:** Phase 1 players ✅ · Phase 2 coaches ✅ · Phase 3 engine ✅ · Phase 4 calibration & film ✅ · Phase 5 perception ✅ · Phase 6 contracts & roster ✅ · Phase 7 draft, penalties, scouting ✅
 
 Phase 1 notes: `p.pos` (legacy group) is still used by AI roster logic (needs, cuts, FA) until Phase 6. Spot value weights in `SPOTS[*].w` are now calibrated in Phase 4 (`js/derived.js`). True ratings are hidden since Phase 5 (Settings → "Show true ratings (debug)").
 
@@ -282,3 +282,31 @@ Game Management ≈ 0.5 wins/season elite vs. poor · Play Calling ≈ 1–1.5 �
 
 ## Open
 - None for v2. Play/tag/defense details, compatibility matrices and the attribute index live in `PLAYBOOK_SPEC.md`.
+
+
+Phase 7 notes (draft overhaul, player pool, depth priority, reputation, penalties, scouting):
+- **Draft.** `state.draft.board` is the consensus board (`consensusGrade`: perception + 0.55 × growth estimate + position bump), snapshotted when the
+  class is revealed. `pk.proj` records each pick's board rank, so round boards show steals and reaches. `state.lastDraft` keeps the finished order
+  until the next class. Current-year picks are priced by slot (`slotValue`: #1 ≈ 26, #32 ≈ 10, #64 ≈ 5.5, #224 ≈ 1); future picks keep the
+  record-based estimate. Trade-down offers come from teams picking later, sized to 104–120% of chart value, cached per pick.
+- **Class size.** 450 prospects. The first 256 use the old quality distribution; the extra 194 are depth prospects (q ≈ −2.0 ± 0.9).
+  Drafting the top 224 of a uniformly larger class inflated league talent about +2 OVR in 4 seasons. Measured 4-season drift now matches the
+  pre-change code: K +3.6 and P +2.6–3.0 on both versions, every other group within ±1.4.
+- **Player pool.** Up to 260 UDFAs are kept. The free-agent pool is trimmed to 600 and topped up to 350 with street veterans (`topUpFreeAgents`).
+  Season sim ≈ 15–17 s headless (was 12–13 s); save ≈ 6 MB after 4 seasons (was ≈ 5 MB).
+- **College reps.** `collegeReps`: 32% of prospects get real reps at a neighboring spot, 5% a second, further spot on their side of the ball.
+  `seenComfort` fogs prospects' comfort by scouting confidence.
+- **Depth priority.** `t.dch.prio = {pid: key}`. `fillSlots` reserves a player who heads two keys in the same grouping for his priority key
+  (`chartReservations`; package keys win by default), fills priority keys first, and releases the reservation if he loses that slot on a snap.
+- **Reputation.** Hidden `h.prof` and `h.disc` (gauss 55 ± 18). True score 0.5·prof + 0.25·cons + 0.25·disc. Known share 0.4 + 0.15/yr of
+  experience (cap 0.9). Labels by read and experience; about 8% of the league reads Character Concerns or worse, 3% Locker-room Leader.
+- **Penalties.** Pre-snap: FS (OL/TE ×1, WR ×0.45; road 1.3, home 0.85, hurry 1.5), offside/NZI/encroachment (DL; 3rd/4th & short 1.7),
+  delay of game (QB; discipline counts only as √), illegal formation. Live: holding from beaten pass blockers (t < 2.5 s) and run blockers
+  (by defender win), DPI on downfield targets (incompletions and contested balls, beaten and deep receivers more), DH/IC on a random cover
+  man, OPI (contested, rub routes), roughing from the first rusher home, UR/face mask from the tackler, return holds/blocks in the back.
+  `foulP = base × PEN_SCALE × discMult × culture × 0.9^flags (≥0.4) × repeat (0.6 at 2, 0.25 at 3+)`, cap 16.
+  Enforcement and accept/decline compare `epState` values. Wiped-out plays don't count as plays or 3rd-down attempts.
+  Measured over 1,600 team-games: 6.1 per team-game (sd 2.0, max 13), 53 yds, 9.4% declined; HOLD 1.15, FS 1.1, DPI 0.5, ST 0.7.
+  Disc-5 roster 9.8 per game (max 16), disc-95 roster 3.0. Points per team 22.7 with penalties, 22.8 without; 3rd-down 38% vs 41%.
+- **Scouting.** `scoutNeed` compares your chart starter (your staff's view, `staffValueAt`) with the league median of each team's n-th best at
+  that spot, weighted by positional value. Targets rank by gain over your starter, scheme fit and cost (ask, `aiAssetValue`), with availability.

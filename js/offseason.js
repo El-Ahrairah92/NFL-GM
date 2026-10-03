@@ -117,7 +117,7 @@ function startOffseason() {
     delete state.players[p.id]; rostersDirty();
   }
   psOffseason();
-  for (let i = 0; i < DRAFT_CLASS_SIZE; i++) genProspect(year);
+  for (let i = 0; i < DRAFT_CLASS_SIZE; i++) genProspect(year, i >= 256);
   state.draft.board = consensusBoard();
   state.lastDraft = null;
   coachOffseason();

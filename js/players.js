@@ -107,10 +107,13 @@ function genVeteran(spotOrGroup, tier) {
 // Prospect quality by position: positions with many prospects per starting job (QB, RB) would otherwise
 // out-select the league's established talent level over a decade (measured in a 10-season drift test).
 const DRAFT_Q_ADJ = { QB: -1.3, RB: -0.5, FB: -0.3, WRX: -0.6, WRZ: -0.6, SLOT: -0.6, TEY: -0.95, TEH: -0.95, LT: 0.05, LG: 0.05, C: 0.05, RG: 0.05, RT: 0.05,
-  NT: -0.1, DT: -0.1, DE: -0.1, EDGE: -0.15, MLB: -0.55, WLB: -0.55, CB: -0.3, NCB: -0.3, FS: -0.3, SS: -0.3, K: -0.55, P: 0 }; // K: bigger classes mean more kickers to choose from
-function genProspect(draftYear) {
+  NT: -0.1, DT: -0.1, DE: -0.1, EDGE: -0.15, MLB: -0.55, WLB: -0.55, CB: -0.3, NCB: -0.3, FS: -0.3, SS: -0.3, K: 0, P: 0 };
+// depth: the deep part of a class (beyond the classic 256) is camp bodies and long shots, so a bigger
+// class adds undrafted depth without raising the talent the draft feeds into the league
+function genProspect(draftYear, depth) {
   const spot = weightedPick(Object.keys(DRAFT_SPOT_W), Object.values(DRAFT_SPOT_W));
-  const p = genPlayer(spot, gauss(-0.45 + (DRAFT_Q_ADJ[spot] || 0), 1.4), randInt(21, 23));
+  const q = depth ? gauss(-2.0 + (DRAFT_Q_ADJ[spot] || 0), 0.9) : gauss(-0.45 + (DRAFT_Q_ADJ[spot] || 0), 1.4);
+  const p = genPlayer(spot, q, randInt(21, 23));
   collegeReps(p);
   setTid(p, -2); // draft prospect
   p.exp = 0;

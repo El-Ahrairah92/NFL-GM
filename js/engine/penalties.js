@@ -59,7 +59,8 @@ function preSnapFoul(g, off, def, oc) {
   for (const e of def) if (e.depth === 0 && tryFoul(g, d, e.p, PEN_RATE.OFFS * hardCount)) cands.push({ k: pick(['OFFS', 'OFFS', 'NZI', 'ENC']), e, s: d });
   const qb = off.find(e => e.slot === 'QB');
   const clockPressure = g.clock <= 120 && (g.q === 2 || g.q === 4) ? 1.6 : 1;
-  if (qb && tryFoul(g, o, qb.p, PEN_RATE.DOG * clockPressure * (road > 1 ? 1.25 : 1))) cands.push({ k: 'DOG', e: qb, s: o });
+  // delay of game is as much the play clock and the sideline as the QB: discipline matters less here
+  if (qb && tryFoul(g, o, qb.p, PEN_RATE.DOG * clockPressure * (road > 1 ? 1.25 : 1) / Math.sqrt(discMult(qb.p)))) cands.push({ k: 'DOG', e: qb, s: o });
   const skill = off.filter(e => ['X', 'Z', 'SLOT', 'SLOT2', 'Y', 'H', 'Y2', 'FB'].includes(e.slot));
   if (skill.length) { const e = pick(skill); if (tryFoul(g, o, e.p, PEN_RATE.FORM * (oc.tags.has('MOTION') ? 1.5 : 1))) cands.push({ k: 'FORM', e, s: o }); }
   if (!cands.length) return null;
