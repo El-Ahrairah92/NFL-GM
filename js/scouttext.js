@@ -7,7 +7,7 @@
 const TRAITS = {
   spd: { p: [['Good long speed', 'Runs well for the position', 'Enough speed to threaten a defense'], ['Plus speed', 'Pulls away in the open field', 'Legit vertical speed'], ['Rare long speed', 'Track speed', 'One of the fastest players on the field', 'Blazing top gear']],
     n: [['A step slow', 'Average speed at best', 'Builds speed slowly', 'Not a burner'], ['Lacks top-end speed', 'Gets caught from behind', 'Plays at one speed', 'Speed is a real limitation'], ['Painfully slow', 'Runs like he is in sand', 'No long speed to speak of', 'Cannot threaten anyone vertically']] },
-  bur: { p: [['Gets off the ball well', 'Decent short-area burst', 'Good initial quickness'], ['Explosive first step', 'Sudden out of his stance', 'Hits top speed in a hurry'], ['Shot out of a cannon', 'Rare get-off', 'Explodes off the snap', 'Elite short-area burst']],
+  bur: { p: [['Gets going quickly', 'Decent short-area burst', 'Good initial quickness'], ['Explosive first step', 'Sudden mover', 'Hits top speed in a hurry'], ['Shot out of a cannon', 'Rare get-off', 'Explodes off the snap', 'Elite short-area burst']],
     n: [['A tick late off the ball', 'Ordinary burst', 'Needs a runway', 'Not sudden'], ['Slow to accelerate', 'Gears down and takes time to get going', 'Lacks a second gear', 'Labors to get started'], ['Heavy-footed', 'No burst whatsoever', 'Stuck in the mud off the snap', 'Glacial get-off']] },
   agi: { p: [['Moves well laterally', 'Loose hips', 'Changes direction without much wasted motion'], ['Fluid change of direction', 'Quick feet', 'Sinks his hips and redirects'], ['Rare short-area quickness', 'Stops on a dime', 'Joystick lateral agility']],
     n: [['A little tight in the hips', 'Rounds off his cuts', 'Straight-line athlete'], ['Stiff hips', 'Struggles to redirect', 'Labored change of direction', 'Plays tall and tight'], ['Robotic mover', 'Cannot change direction', 'Turns like a cruise ship']] },
@@ -157,6 +157,64 @@ const LEVEL_WORD = { Elite: ['Blue-chip', 'Franchise-caliber', 'Elite'], 'All-Pr
   Depth: ['Depth-level', 'Bottom-of-the-roster', 'Bargain-bin'], Project: ['Developmental', 'Raw developmental'], Fringe: ['Fringe', 'Camp-body'], Washed: ['Fading', 'Aging', 'End-of-the-line'] };
 
 // stable pick: the same player always gets the same wording
+// Athletic traits read differently by job: a fast receiver threatens a defense, a fast edge closes on the quarterback.
+// TRAITS_BY[class][attr] overrides the general bank above. Classes: BALL (QB/RB/FB/WR/TE), OL, DL (interior + edge), LB, DB.
+const TRAIT_CLASS = { QB: 'BALL', RB: 'BALL', FB: 'BALL', WR: 'BALL', TE: 'BALL', OL: 'OL', IDL: 'DL', EDGE: 'DL', LB: 'LB', CB: 'DB', S: 'DB' };
+const TRAITS_BY = {
+  BALL: {
+    bur: { p: [['Gets up to speed quickly', 'Decent short-area burst', 'Good initial quickness'], ['Explosive first step', 'Sudden with the ball in his hands', 'Hits top speed in a hurry'], ['Shot out of a cannon', 'Zero to full speed in two steps', 'Elite short-area burst']],
+      n: [['Ordinary burst', 'Needs a runway', 'Not sudden'], ['Slow to accelerate', 'Gears down and takes time to get going', 'Lacks a second gear', 'Labors to get started'], ['Heavy-footed', 'No burst whatsoever', 'Takes forever to get going']] },
+    str: { p: [['Functional strength', 'Plays stronger than he looks', 'Holds up through contact'], ['Strong through contact', 'Plays with real power', 'Hard to knock off his spot'], ['Rare play strength', 'Bully with the ball', 'Overpowers defenders', 'Weight-room freak']],
+      n: [['Could add strength', 'Average power', 'Needs a year in the weight room'], ['Gets knocked off his path', 'Lacks play strength', 'Loses physical matchups', 'Outmuscled too often'], ['Gets tossed aside', 'Badly underpowered', 'Folds on contact']] },
+  },
+  OL: {
+    spd: { p: [['Moves well for a big man', 'Runs well for the position', 'Can get out in front on screens'], ['Plus athlete for a lineman', 'Gets to the second level in a hurry', 'Covers ground as a puller'], ['Rare movement skills for his size', 'Runs like a tight end', 'Freakish range for a lineman']],
+      n: [['A step slow getting out in space', 'Average foot speed', 'Not a great athlete in space'], ['Lumbers in the open field', 'Late to the second level', 'Limited range as a puller', 'Foot speed is a real limitation'], ['Painfully slow', 'Runs like he is in sand', 'Cannot get out in front of anything']] },
+    bur: { p: [['Gets out of his stance well', 'Good initial quickness', 'On time off the snap'], ['Quick out of his stance', 'Beats defenders to the spot', 'Fires off the ball'], ['Rare quickness off the snap', 'First man moving on every play', 'Explodes out of his stance']],
+      n: [['A tick late off the ball', 'Ordinary quickness', 'Not sudden'], ['Slow out of his stance', 'Beaten off the snap too often', 'Late to his landmarks'], ['Heavy-footed', 'Stuck in the mud off the snap', 'Glacial out of his stance']] },
+    agi: { p: [['Moves well laterally', 'Light on his feet', 'Slides and mirrors adequately'], ['Quick feet', 'Mirrors rushers smoothly', 'Recovers when he is beaten'], ['Rare feet for his size', 'Dancing bear', 'Mirrors anything in front of him']],
+      n: [['A little tight in the hips', 'Feet can get stuck', 'Better in a phone booth'], ['Stiff hips', 'Struggles to redirect', 'Heavy feet in space', 'Plays tall and tight'], ['Robotic mover', 'Cannot recover once he is beaten', 'Turns like a cruise ship']] },
+    str: { p: [['Functional strength', 'Holds his ground', 'Plays stronger than he looks'], ['Powerful at the point of attack', 'Heavy hands', 'Moves people', 'Strong anchor'], ['Rare play strength', 'Bully', 'Overpowers grown men', 'Immovable anchor']],
+      n: [['Could add strength', 'Average power', 'Needs a year in the weight room'], ['Gets pushed around', 'Lacks anchor strength', 'Walked back by power', 'Overpowered too often'], ['Gets tossed aside', 'Badly underpowered', 'Folds against a bull rush']] },
+  },
+  DL: {
+    spd: { p: [['Runs well for the position', 'Enough speed to chase plays down', 'Good closing speed'], ['Plus speed off the edge of the pile', 'Closes on the quarterback in a hurry', 'Runs plays down from the backside'], ['Rare speed for a lineman', 'Chases down backs from behind', 'Freakish closing speed', 'Runs like a linebacker']],
+      n: [['A step slow in pursuit', 'Average speed at best', 'Not much range'], ['Lacks closing speed', 'Plays get away from him', 'No factor in pursuit', 'Speed is a real limitation'], ['Painfully slow', 'Runs like he is in sand', 'Never chases anything down']] },
+    bur: { p: [['Gets off the ball well', 'Good initial quickness', 'On time with the snap'], ['Explosive first step', 'Sudden out of his stance', 'Beats blockers to the spot'], ['Shot out of a cannon', 'Rare get-off', 'Explodes off the snap', 'In the backfield before the handoff']],
+      n: [['A tick late off the ball', 'Ordinary get-off', 'Not sudden'], ['Slow off the snap', 'Blockers are on him before he gets going', 'Lacks a first step'], ['Heavy-footed', 'Stuck in the mud off the snap', 'Glacial get-off']] },
+    agi: { p: [['Moves well laterally', 'Loose hips', 'Can bend a little'], ['Bends the corner', 'Quick feet', 'Works across a blocker\'s face'], ['Rare bend and flexibility', 'Turns the corner like a much smaller man', 'Slippery in tight quarters']],
+      n: [['A little tight in the hips', 'More straight-line than bendy', 'Limited bend'], ['Stiff hips', 'Cannot turn the corner', 'Labored change of direction', 'Plays tall and tight'], ['Robotic mover', 'No bend at all', 'Turns like a cruise ship']] },
+    str: { p: [['Functional strength', 'Holds his ground', 'Plays stronger than he looks'], ['Powerful at the point of attack', 'Heavy hands', 'Walks blockers back', 'Stout against double teams'], ['Rare play strength', 'Bully', 'Overpowers grown men', 'Collapses the pocket by himself']],
+      n: [['Could add strength', 'Average power', 'Needs a year in the weight room'], ['Gets pushed around', 'Moved off the ball too easily', 'Loses the leverage battle', 'Washed out by double teams'], ['Gets tossed aside', 'Badly underpowered', 'Driven off the ball']] },
+  },
+  LB: {
+    spd: { p: [['Runs well for the position', 'Enough range to get to the sideline', 'Good pursuit speed'], ['Plus speed', 'Sideline-to-sideline range', 'Runs with backs and tight ends'], ['Rare range', 'Erases angles with his speed', 'Runs like a safety', 'One of the fastest players on the field']],
+      n: [['A step slow to the sideline', 'Average range', 'Not a burner'], ['Limited range', 'Outrun to the edge', 'Cannot stay with backs in space', 'Speed is a real limitation'], ['Painfully slow', 'Runs like he is in sand', 'A liability in space']] },
+    bur: { p: [['Triggers downhill well', 'Decent short-area burst', 'Good initial quickness'], ['Explosive closing burst', 'Arrives in a hurry', 'Shoots gaps'], ['Shot out of a cannon', 'Closes like a missile', 'Elite short-area burst']],
+      n: [['A tick late to trigger', 'Ordinary burst', 'Not sudden'], ['Slow to close', 'Arrives a step late', 'Lacks a second gear'], ['Heavy-footed', 'No burst whatsoever', 'Always a step behind the play']] },
+    str: { p: [['Functional strength', 'Holds his ground', 'Plays stronger than he looks'], ['Stacks blockers at the point', 'Heavy hands', 'A thumper downhill'], ['Rare play strength', 'Bully', 'Blows up lead blockers', 'Overpowers grown men']],
+      n: [['Could add strength', 'Average power', 'Needs a year in the weight room'], ['Gets pushed around', 'Swallowed up by climbing linemen', 'Loses the leverage battle', 'Overpowered too often'], ['Gets tossed aside', 'Badly underpowered', 'Folds on contact']] },
+  },
+  DB: {
+    spd: { p: [['Good long speed', 'Runs well for the position', 'Enough speed to carry receivers downfield'], ['Plus speed', 'Runs with anyone', 'Real recovery speed'], ['Rare long speed', 'Track speed', 'Cannot be run past', 'One of the fastest players on the field']],
+      n: [['A step slow', 'Average speed at best', 'Needs a cushion', 'Not a burner'], ['Lacks top-end speed', 'Gets run past', 'No recovery speed', 'Speed is a real limitation'], ['Painfully slow', 'Runs like he is in sand', 'Any receiver can run by him']] },
+    bur: { p: [['Breaks on the ball well', 'Decent short-area burst', 'Good initial quickness'], ['Explosive out of his break', 'Closes in a hurry', 'Drives on the ball'], ['Shot out of a cannon', 'Closes throwing windows in a blink', 'Elite short-area burst']],
+      n: [['A tick late breaking on the ball', 'Ordinary burst', 'Not sudden'], ['Slow to close', 'Arrives after the catch', 'Lacks a second gear'], ['Heavy-footed', 'No burst whatsoever', 'Always arriving late']] },
+    agi: { p: [['Moves well laterally', 'Loose hips', 'Turns and runs without much wasted motion'], ['Fluid hips', 'Quick feet', 'Flips and runs smoothly'], ['Rare short-area quickness', 'Mirrors anything', 'Effortless in his transitions']],
+      n: [['A little tight in the hips', 'Some wasted steps in his transitions', 'Straight-line athlete'], ['Stiff hips', 'Struggles to turn and run', 'Labored change of direction', 'Plays tall and tight'], ['Robotic mover', 'Cannot change direction', 'Turns like a cruise ship']] },
+    str: { p: [['Functional strength', 'Plays stronger than he looks', 'Holds up against bigger receivers'], ['Physical at the catch point', 'Strong hands', 'Gets off receiver blocks'], ['Rare play strength', 'Bully', 'Manhandles receivers']],
+      n: [['Could add strength', 'Average power', 'Needs a year in the weight room'], ['Gets pushed around', 'Blocked out of plays by receivers', 'Outmuscled at the catch point', 'Overpowered too often'], ['Gets tossed aside', 'Badly underpowered', 'Folds on contact']] },
+  },
+};
+function traitClass(p) { return TRAIT_CLASS[PROFILE_GROUP[p.spot]] || null; }
+function traitBank(p, k) { const c = TRAITS_BY[traitClass(p)]; return (c && c[k]) || TRAITS[k]; }
+const CAVEATS_BY = {
+  OL: { spd: [['who is not much of an athlete in space'], ['who lumbers in the open field', 'with limited range'], ['with no foot speed to speak of']], bur: [['who is not sudden'], ['who is slow out of his stance'], ['who is heavy-footed']] },
+  DL: { spd: [['without much range', 'who is not a burner'], ['who lacks closing speed', 'who is no factor in pursuit'], ['with no speed to speak of']], bur: [['who is not sudden'], ['who is slow off the snap', 'without a first step'], ['who is heavy-footed']] },
+  LB: { spd: [['without great range', 'who is not a burner'], ['with limited range', 'who gets outrun to the edge'], ['with no speed to speak of']] },
+  DB: { spd: [['without real long speed', 'who is not a burner'], ['who lacks top-end speed', 'who can be run past'], ['with no speed to speak of']] },
+};
+function caveatBank(p, k) { const c = CAVEATS_BY[traitClass(p)]; return (c && c[k]) || CAVEATS[k]; }
 function pickStable(list, p, salt) { if (!list || !list.length) return null; const h = Math.abs(Math.floor(hashGauss(p.id, salt, 11) * 1000)) % list.length; return list[h]; }
 // what the scouts think each trait is (fogged), as a deviation from a starter at his spot, plus how it compares with the rest of HIS game
 function scoutRead(p) {
@@ -176,13 +234,13 @@ function scoutTraits(p) {
   if (!p.a) return { str: [], weak: [], best: [] };
   const { rows } = scoutRead(p);
   const tierP = d => d >= 15 ? 2 : d >= 9 ? 1 : d >= 4 ? 0 : -1, tierN = d => d <= -17 ? 2 : d <= -11 ? 1 : d <= -5.5 ? 0 : -1;
-  const phrase = (r, pos) => { const bank = TRAITS[r.k]; if (!bank) return null; const tier = pos ? tierP(r.d) : tierN(r.d); if (tier < 0) return null; return pickStable(bank[pos ? 'p' : 'n'][tier], p, r.k.charCodeAt(0) * 7 + r.k.charCodeAt(1)); };
+  const phrase = (r, pos) => { const bank = traitBank(p, r.k); if (!bank) return null; const tier = pos ? tierP(r.d) : tierN(r.d); if (tier < 0) return null; return pickStable(bank[pos ? 'p' : 'n'][tier], p, r.k.charCodeAt(0) * 7 + r.k.charCodeAt(1)); };
   const str = rows.filter(r => r.d >= 4).sort((a, b) => b.d - a.d).map(r => phrase(r, true)).filter(Boolean).slice(0, 4);
   // weaknesses are graded half against a starter and half against the rest of his own game,
   // so a depth player's report shows what's REALLY wrong with him instead of "bad at everything"
   const { mean } = scoutRead(p);
   const adj = r => r.d - Math.min(0, mean) * 0.55;
-  const weak = rows.filter(r => adj(r) <= -5.5).sort((a, b) => adj(a) - adj(b)).map(r => { const bank = TRAITS[r.k]; if (!bank) return null; const t = tierN(adj(r)); return t < 0 ? null : pickStable(bank.n[t], p, r.k.charCodeAt(0) * 7 + r.k.charCodeAt(1)); }).filter(Boolean).slice(0, 4);
+  const weak = rows.filter(r => adj(r) <= -5.5).sort((a, b) => adj(a) - adj(b)).map(r => { const bank = traitBank(p, r.k); if (!bank) return null; const t = tierN(adj(r)); return t < 0 ? null : pickStable(bank.n[t], p, r.k.charCodeAt(0) * 7 + r.k.charCodeAt(1)); }).filter(Boolean).slice(0, 4);
   // relative strengths: even a bargain-bin player does something better than the rest of his game
   const best = rows.filter(r => r.rel >= 4 && TRAIT_NOUN[r.k]).sort((a, b) => b.rel - a.rel).slice(0, 2)
     .map((r, i) => { const n = TRAIT_NOUN[r.k], pl = /s$/.test(n) && !/ness$|speed$/.test(n); return i === 0 ? `His ${n} ${pl ? 'are' : 'is'} the best part of his game` : `${n[0].toUpperCase() + n.slice(1)} ${pl ? 'stand' : 'stands'} out relative to the rest of his skill set`; });
@@ -208,7 +266,7 @@ function scoutProfile(p, short) {
   const { mean } = scoutRead(p), wAdj = worst ? worst.d - Math.min(0, mean) * 0.55 : 0;
   const lvl = pickStable(LEVEL_WORD[tierOf(p)] || ['Depth-level'], p, 103);
   const mod = second ? pickStable(MODS[second.k], p, 107) : null;
-  const cav = worst ? pickStable(CAVEATS[worst.k][wAdj <= -17 ? 2 : wAdj <= -11 ? 1 : 0], p, 109) : null;
+  const cav = worst ? pickStable(caveatBank(p, worst.k)[wAdj <= -17 ? 2 : wAdj <= -11 ? 1 : 0], p, 109) : null;
   let s = short ? role[0].toUpperCase() + role.slice(1) : `${lvl} ${role}`;
   if (mod) s += ` ${mod}`;
   if (cav) {

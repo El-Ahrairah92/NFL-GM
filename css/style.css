@@ -243,3 +243,6 @@ svg.field .nm { fill: #e6edf3; font-size: 15px; font-weight: 600; text-anchor: m
 .profile { font-size: 16px; font-weight: 600; line-height: 1.35; }
 tr.cutrow td { opacity: .55; text-decoration: line-through; text-decoration-color: var(--bad); }
 tr.cutrow td:last-child, tr.cutrow td:nth-last-child(2) { opacity: 1; text-decoration: none; }
+
+.terms { margin: 8px 0; }
+.terms button[disabled] { opacity: .45; }

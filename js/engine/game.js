@@ -171,6 +171,27 @@ function fgProb(g, K, dist) {
   return clamp(p, 0.02, 0.995);
 }
 
+// Who gets the tackle on the stat sheet. Linemen who hold the point rarely finish the play themselves: the back
+// spills to a linebacker or a defensive back coming downhill. And most tackles draw a second man.
+const TKL_W = { MLB: 2.3, WLB: 2.3, SAM: 2.3, SS: 2, FS: 2, CB: 1.45, NCB: 1.7, DIME: 1.7, EDGE: 0.8, DE: 0.7, DT: 0.6, NT: 0.5 };
+const TKL_SPILL = 0.36, TKL_ASSIST = 0.09, TKL_SCRUM = 0.5;
+function shareTackle(res, def) {
+  if (!res.tackler || (res.kind !== 'run' && res.kind !== 'comp' && res.kind !== 'scramble')) return;
+  const others = () => def.filter(e => e !== res.tackler && e !== res.assist && e.p && !e.blitz);
+  const pickW = l => l.length ? weightedPick(l, l.map(e => TKL_W[e.slot] || 1)) : null;
+  if (res.tackler.depth === 0 && res.kind === 'run' && res.yds >= 1 && rand() < TKL_SPILL) {
+    const t = pickW(others().filter(e => e.depth > 0));
+    if (t) { if (!res.assist && rand() < 0.5) res.assist = res.tackler; res.tackler = t; }
+  }
+  // the free-flowing linebacker and the box safety are in on everything, but the pile gets sorted out more evenly than that
+  else if (res.tackler.depth > 0 && ['MLB', 'WLB', 'SAM', 'SS'].includes(res.tackler.slot) && rand() < TKL_SCRUM) {
+    const lbs = res.tackler.slot === 'SS' ? [] : others().filter(e => e.depth > 0 && TKL_W[e.slot] === TKL_W.MLB);
+    const t = lbs.length && rand() < 0.5 ? pick(lbs) : pickW(others().filter(e => e.depth > 0));
+    if (t) { if (!res.assist && rand() < 0.4) res.assist = res.tackler; res.tackler = t; }
+  }
+  if (!res.assist && rand() < TKL_ASSIST) res.assist = pickW(others());
+}
+
 function runPlay(g, oc, dc) {
   const o = g.poss, d = 1 - o;
   const off = offUnit(g, o, oc.pers, oc), def = defUnit(g, d, dc.front, dc.pkg, dc.subRush);
@@ -192,6 +213,7 @@ function runPlay(g, oc, dc) {
   // fatigue: a carry costs a back extra
   if (res.carrier && res.kind === 'run') res.carrier.extraLoad = 2.3;
   tickFatigue(g, [...off, ...def]);
+  shareTackle(res, def);
   applyResult(g, res, oc, dc, off, def, { downB, togoB, ydlB });
   chartPlay(g, oc, dc, res, before, off, def);
   // injuries: whoever was in the collision, plus the trenches

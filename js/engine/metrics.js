@@ -173,7 +173,7 @@ function chartPlay(g, oc, dc, res, before, off, def) {
     grade(g, cp, 'run', clamp(epa * 0.3, -1, 1) + (yds - ybc - 1.6) * 0.15 + (res.missed || []).length * 0.45 - (res.fumble ? 1.5 : 0));
   }
   if (carrier && res.missed) {
-    if (res.kind === 'comp') avInc(g, carrier.p, 'mtfRec', res.missed.length);
+    if (res.kind === 'comp') { avInc(g, carrier.p, 'mtfRec', res.missed.length); avInc(g, carrier.p, 'recs'); }
     avInc(g, carrier.p, 'mtf', res.missed.length);
     for (const m of res.missed) { avInc(g, m.p, 'mt'); grade(g, m.p, 'tk', -0.7); }
   }
@@ -258,13 +258,13 @@ function advMetrics(a, spot) {
     add('aDOT', a.sepN ? r1(a.adot / a.sepN) : '—');
     add('Tgt / route', pctM(a.sepN || 0, a.routes));
     add('Contested', a.cAtt ? `${a.cWon || 0}/${a.cAtt}` : '—', 'contested catches won');
-    add('Missed tkl forced', a.mtfRec || 0);
+    add('Missed tkl forced', rateTot(a.mtfRec, a.recs), 'per catch (total)');
     add('EPA/target', a.sepN ? r2((a.epaTgt || 0) / a.sepN) : '—');
   }
   if (spot === 'RB' || spot === 'FB' || (a.rush || 0) >= 5) {
     add('Yds before contact', a.rush ? r1(a.ybc / a.rush) : '—', 'per carry — mostly the blocking');
     add('Yds after contact', a.rush ? r1(a.yaco / a.rush) : '—', 'per carry — mostly the runner');
-    add('Missed tkl forced', a.mtf || 0);
+    add('Missed tkl forced', rateTot(a.mtf, a.rush), 'per carry (total)');
     add('Stuff rate', pctM(a.stuff || 0, a.rush), 'carries for 0 or less');
     add('Explosive rate', pctM(a.explR || 0, a.rush), 'carries of 10+');
     add('Success rate', pctM(a.succR || 0, a.rush));
@@ -272,29 +272,52 @@ function advMetrics(a, spot) {
   }
   if (['LT', 'LG', 'C', 'RG', 'RT'].includes(spot)) {
     add('Pass block win%', a.pbSnaps ? pctM(a.pbSnaps - (a.pbLoss || 0), a.pbSnaps) : '—', 'held his man past 3.0s');
-    add('Pressures allowed', a.prsA || 0);
-    add('Sacks allowed', a.sackA || 0);
+    add('Pressure% allowed', rateTot(a.prsA, a.pbSnaps, 1), 'of pass-block snaps (total)');
+    add('Sack% allowed', rateTot(a.sackA, a.pbSnaps, 1), 'of pass-block snaps (total)');
     add('Run block win%', pctM(a.rbWins || 0, a.rbSnaps));
   }
   if (['NT', 'DT', 'DE', 'EDGE'].includes(spot) || (a.prSnaps || 0) > 30) {
     add('Pass rush win%', pctM(a.prWins || 0, a.prSnaps), 'beat his block within 3.0s');
     add('Double-team rate', pctM(a.dbl || 0, a.prSnaps));
     add('Run stop win%', pctM(a.rdWins || 0, a.rdSnaps));
-    add('Stops', a.stops || 0, 'tackles that end in an offensive failure');
+    add('Stop rate', rateTot(a.stops, a.rdSnaps, 1), 'tackles that end in an offensive failure, per run-defense snap (total)');
   }
   if (['MLB', 'WLB', 'CB', 'NCB', 'FS', 'SS'].includes(spot)) {
-    add('Targets allowed', a.tgtA || 0);
+    add('Targeted', rateTot(a.tgtA, a.covSnaps, 1), 'of coverage snaps (total)');
     add('Comp% allowed', pctM(a.cmpA || 0, a.tgtA));
     add('Yds/cov snap', a.covSnaps ? r1((a.ydsA || 0) / a.covSnaps * 100) / 100 : '—');
     add('Rating allowed', ratingAllowed(a) ?? '—');
-    add('Missed tackle%', pctM(a.mt || 0, a.tkAtt), 'of tackle attempts');
-    add('Stops', a.stops || 0);
+    add('Missed tackle%', rateTot(a.mt, a.tkAtt), 'of tackle attempts (total)');
+    add('Stop rate', rateTot(a.stops, a.tkAtt), 'share of his tackles that end in an offensive failure (total)');
   }
   return m;
 }
 
+// volume stats read as a rate with the raw total alongside: "18% (24)"
+function rateTot(n, d, dec) { n = n || 0; return d ? `${(100 * n / d).toFixed(dec || 0)}% (${n})` : n ? `— (${n})` : '—'; }
+// where every qualified player's season grade ranks within his position group: { pid: [rank, of] }
+const GRADE_RANK_GROUP = { QB: 'QB', RB: 'RB', FB: 'FB', WRX: 'WR', WRZ: 'WR', SLOT: 'WR', TEY: 'TE', TEH: 'TE', LT: 'OT', RT: 'OT', LG: 'IOL', C: 'IOL', RG: 'IOL',
+  NT: 'IDL', DT: 'IDL', DE: 'IDL', EDGE: 'EDGE', MLB: 'LB', WLB: 'LB', CB: 'CB', NCB: 'CB', FS: 'S', SS: 'S' };
+let GRADE_RANKS = null, GRADE_RANKS_KEY = '';
+function gradeRanks() {
+  const key = state.season + ':' + state.week + ':' + state.phase;
+  if (GRADE_RANKS && GRADE_RANKS_KEY === key) return GRADE_RANKS;
+  let games = 1; const by = {};
+  for (const id in state.players) { const gp = state.players[id].stats.gp || 0; if (gp > games) games = gp; }
+  for (const id in state.players) {
+    const p = state.players[id], grp = GRADE_RANK_GROUP[p.spot];
+    if (!grp || !p.advS || (p.stats.snp || 0) < games * (grp === 'FB' ? 6 : 15)) continue; // about a quarter of the snaps
+    const g = overallGrade(p.advS, p.spot);
+    if (g !== null) (by[grp] = by[grp] || []).push([p.id, g]);
+  }
+  const out = {};
+  for (const grp in by) { const l = by[grp].sort((a, b) => b[1] - a[1]); l.forEach(([id, g], i) => { const first = l.findIndex(x => x[1] === g); out[id] = [first + 1, l.length, grp]; }); }
+  GRADE_RANKS = out; GRADE_RANKS_KEY = key;
+  return out;
+}
+
 // compact season record for career history: grades plus the raw sums the role's key metrics need
-const CAREER_ADV_KEYS = ['db', 'epaDb', 'att', 'cmp', 'xc', 'air', 'ttt', 'tttN', 'prsd', 'routes', 'sep', 'sepN', 'adot', 'rush', 'ybc', 'yaco', 'mtf', 'stuff', 'explR',
+const CAREER_ADV_KEYS = ['recs', 'mtfRec', 'db', 'epaDb', 'att', 'cmp', 'xc', 'air', 'ttt', 'tttN', 'prsd', 'routes', 'sep', 'sepN', 'adot', 'rush', 'ybc', 'yaco', 'mtf', 'stuff', 'explR',
   'pbSnaps', 'pbLoss', 'prsA', 'sackA', 'rbSnaps', 'rbWins', 'prSnaps', 'prWins', 'rdSnaps', 'rdWins', 'stops', 'tgtA', 'cmpA', 'ydsA', 'tdA', 'intA', 'covSnaps', 'mt', 'tkAtt'];
 function careerAdv(a, spot) {
   const out = { g: overallGrade(a, spot) };

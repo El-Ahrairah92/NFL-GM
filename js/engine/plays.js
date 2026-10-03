@@ -28,7 +28,7 @@ function runToContact(g, carrier, levels, opts = {}) {
       res.yds = Math.round(pos + after);
       // gang tackle / assist
       const next = levels[levels.indexOf(lv) + 1];
-      if (next && next.e && rand() < 0.13) res.assist = next.e;
+      if (next && next.e && rand() < 0.1) res.assist = next.e;
       // ball security vs. punch-outs
       const pf = 0.0105 * (1 + (ea(g, d, 'strp') - 55) * 0.03) * (1 + (68 - ea(g, carrier, 'bsec')) * 0.035) * (opts.fumbleMult || 1);
       if (rand() < Math.max(0.0005, pf)) res.fumble = true;
@@ -399,13 +399,13 @@ function resolvePass(g, off, def, oc, dc) {
     const best = order.slice().sort((a, b) => b.pw - a.pw)[0];
     const rushQ = ea(g, rusher.e, 'prsh') * 0.5 + ea(g, rusher.e, 'bur') * 0.5;
     const evade = pkt * 0.5 + ea(g, qb, 'agi') * 0.25 + ea(g, qb, 'spd') * 0.25;
-    const pSack = clamp(0.13 + (rushQ - evade) * 0.01 + (rusher.free ? 0.12 : 0) - (escaped ? 0.08 : 0), 0.06, 0.5);
+    const pSack = clamp(0.185 + soft(rushQ - evade, 14) * 0.006 + (rusher.free ? 0.15 : 0) - (escaped ? 0.08 : 0), 0.06, 0.5);
     const scrambleP = clamp(0.17 + (ea(g, qb, 'spd') - 55) * 0.007 + (ea(g, qb, 'agi') - 55) * 0.004, 0.04, 0.5) * (escaped ? 1.4 : pressured ? 0.9 : 0.5);
     if (pressured && rand() < pSack) {
       const loss = randInt(3, 10);
       // who finishes it: the first man home, unless the QB slipped him (cleanup) or others arrived together
-      const home = prot.rushers.filter(a => a.t <= t + 0.1);
-      const cand = escaped && home.length > 1 ? home.filter(a => a !== rusher) : home.filter(a => a.t <= rusher.t + 0.45);
+      const home = prot.rushers.filter(a => a.t <= t + 0.35);
+      const cand = escaped && home.length > 1 ? home.filter(a => a !== rusher) : home.filter(a => a.t <= rusher.t + 0.9); // the pocket collapses as a group: the first man home does not always get the sack
       const sk = cand.length > 1 ? weightedPick(cand, cand.map(a => a === rusher ? 1.3 : 1)).e : rusher.e;
       Object.assign(res, { kind: 'sack', yds: -loss, sacker: sk, desc: `${pshort(qb.p)} sacked by ${pshort(sk.p)}` });
       res.fumble = rand() < 0.11 * (1 + (ea(g, sk, 'strp') - 55) * 0.03) * (1 + (65 - ea(g, qb, 'bsec')) * 0.025);

@@ -264,7 +264,7 @@ function campReports(year) {
   state.camp = { season: year || state.season, reports };
   for (const r of reports) {
     const p = P(r.pid);
-    if (r.tid === state.userTid || ['Elite', 'All-Pro'].includes(tierOf(p, perOvr(p)))) addNews(`Camp: ${r.text}`, [r.tid], 'camp');
+    if (r.tid === state.userTid || ['Elite', 'All-Pro'].includes(tierOf(p))) addNews(`Camp: ${r.text}`, [r.tid], 'camp');
   }
   computeThresholds();
 }
@@ -276,7 +276,7 @@ function seasonMovers() {
     .map(p => [p, perOvr(p) - p.per.s0]);
   const up = moved.filter(x => x[1] >= 4).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const down = moved.filter(x => x[1] <= -4).sort((a, b) => a[1] - b[1]).slice(0, 3);
-  for (const [p] of up) addNews(`Breakout season: ${p.lbl} ${pname(p)} (${T(p.tid).abbr}) is now viewed as ${/^[AEIOU]/.test(tierOf(p, perOvr(p))) ? 'an' : 'a'} ${tierOf(p, perOvr(p))}.`, [p.tid], 'prog');
-  for (const [p] of down) addNews(`Disappointing year: ${p.lbl} ${pname(p)} (${T(p.tid).abbr}) has slipped to ${tierOf(p, perOvr(p))}.`, [p.tid], 'prog');
+  for (const [p] of up) addNews(`Breakout season: ${p.lbl} ${pname(p)} (${T(p.tid).abbr}) is now viewed as ${/^[AEIOU]/.test(tierOf(p)) ? 'an' : 'a'} ${tierOf(p)}.`, [p.tid], 'prog');
+  for (const [p] of down) addNews(`Disappointing year: ${p.lbl} ${pname(p)} (${T(p.tid).abbr}) has slipped to ${tierOf(p)}.`, [p.tid], 'prog');
   for (const id in state.players) { const p = state.players[id]; if (p.per) delete p.per.s0; }
 }

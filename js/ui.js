@@ -89,6 +89,9 @@ const TIER_CLS = { 'Elite': 'pt-elite', 'All-Pro': 'pt-allpro', 'Starter': 'pt-s
 const UP_CLS = { 'Elite': 'pt-elite', 'High-End Starter': 'pt-allpro', 'Solid Starter': 'pt-starter', 'Borderline Starter': 'pt-rot', 'Strong Depth': 'pt-depth', 'Decent Depth': 'pt-depth', 'Special Teamer': 'pt-low', 'Limited Upside': 'pt-low' };
 function tierPill(p, v) { const t = tierOf(p, v); return `<span class="pill ${TIER_CLS[t]}">${t}</span>`; }
 function upsidePill(p) { const u = upsideOf(p); return `<span class="pill up ${UP_CLS[u]}">${u}</span>`; }
+// sort keys that follow the labels exactly: tier (or upside) first, then standing within the position group
+function tierSort(p) { return (TIER_ORDER.length - TIER_ORDER.indexOf(tierOf(p))) * 1000 + pctInGroup(p, uOvr(p)) * 100; }
+function upSort(p) { return (UPSIDE_ORDER.length - UPSIDE_ORDER.indexOf(upsideOf(p))) * 1000 + pctInGroup(p, uCeil(p)) * 100; }
 function trueNums(p) { return trueOn() ? ` <span class="small muted" title="True OVR / POT (debug view)">${p.ovr}/${p.pot}</span>` : ''; }
 function traitsTxt(p) { const t = scoutTraits(p); return `<span title="${esc([...t.str.map(x => '+ ' + x), ...t.weak.map(x => '− ' + x)].join(' | '))}">${esc(scoutProfile(p, true))}</span>`; }
 function teamLink(tid, full) {
@@ -377,7 +380,7 @@ function rosterHTML() {
     { k: 'age', l: 'Age', v: p => p.age, num: 1 },
   ];
   const stars = { k: 'star', l: '★', v: p => starsOf(p) || 0, f: p => starHTML(starsOf(p)), title: 'Ability at his position, weighted toward current form' };
-  const tier = { k: 'tier', l: 'Tier', v: p => uOvr(p), f: p => tierPill(p) + trueNums(p) };
+  const tier = { k: 'tier', l: 'Tier', v: tierSort, f: p => tierPill(p) + trueNums(p) };
   const grade = { k: 'gr', l: 'Grade', v: p => p.advS ? overallGrade(p.advS, p.spot) || 0 : 0, f: p => gradeChip(p.advS ? overallGrade(p.advS, p.spot) : null), num: 1 };
   let cols;
   if (vw === 'contract') cols = [...base, tier,
@@ -403,7 +406,7 @@ function rosterHTML() {
     { k: 'hype', l: 'Hype', v: p => p.per ? p.per.h : 0, f: p => p.per ? p.per.h.toFixed(1) : '—', num: 1 },
     { k: 'adapt', l: 'Adapt', v: p => (p.h && p.h.adapt) || 0, num: 1 }];
   else cols = [...base, { k: 'hw', l: 'Ht/Wt', v: p => p.m.wt, f: p => `<span class="small muted">${htwt(p)}</span>` }, stars, tier,
-    { k: 'up', l: 'Upside', v: p => uCeil(p), f: p => upsidePill(p) },
+    { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p) },
     { k: 'sk', l: 'Scouting', f: p => `<span class="small muted wrapcell">${traitsTxt(p)}</span>` },
     { k: 'fit', l: 'Fit', v: p => schemeFit(p, tid), f: p => { const f = schemeFit(p, tid); return `<span class="small ${f >= 1 ? 'good' : f <= -1 ? 'bad' : 'muted'}" title="Scheme fit in ${esc(T(tid).abbr)}'s system">${fitLabel(f).replace(' fit', '')}${trueOn() ? ` (${f > 0 ? '+' : ''}${f})` : ''}</span>`; } },
     { k: 'c', l: 'Contract', v: p => p.contract.yrs > 0 ? p.contract.amt : 0, f: p => fmtContract(p), num: 1 }];
@@ -423,7 +426,7 @@ function decisionsHTML(tid) {
   if (opts.length) h += `<div class="section-title">5th-year options due</div>` + opts.map(p => li(p, `option year ${fmtMoney(optionAmount(p))} (fully guaranteed) <button class="sm primary" data-action="option" data-pid="${p.id}" data-v="1">Exercise</button> <button class="sm" data-action="option" data-pid="${p.id}" data-v="0">Decline</button>`)).join('');
   if (!tagUsed && exp.length) { const top = exp.slice().sort((a, b) => uOvr(b) - uOvr(a)).slice(0, 3); h += `<div class="section-title">Franchise tag (1 per year)</div>` + top.map(p => li(p, `tag ${fmtMoney(tagAmount(p))} for one year <button class="sm" data-action="tag" data-pid="${p.id}">Tag</button>`)).join(''); }
   else if (tagUsed) h += `<div class="small muted" style="margin-top:6px">Franchise tag used this year.</div>`;
-  if (ext.length) h += `<div class="section-title">Extension candidates (entering final year)</div>` + ext.sort((a, b) => uOvr(b) - uOvr(a)).slice(0, 6).map(p => { const a = extensionAsk(p); return li(p, `asks ${a.yrs} yr × ${fmtMoney(a.amt)} <button class="sm" data-action="extend" data-pid="${p.id}">Extend</button>`); }).join('');
+  if (ext.length) h += `<div class="section-title">Extension candidates (entering final year)</div>` + ext.sort((a, b) => uOvr(b) - uOvr(a)).slice(0, 6).map(p => { const a = extensionAsk(p); return li(p, `asks ${a.yrs} yr × ${fmtMoney(a.amt)} <span class="small muted">(leverage ${leverageLabel(leverageOf(p)).toLowerCase()})</span> <button class="sm" data-action="extend" data-pid="${p.id}">Extend</button> <button class="sm" data-action="player" data-pid="${p.id}">Terms…</button>`); }).join('');
   return h + '</div>';
 }
 function practiceSquadHTML(tid, mine) {
@@ -431,7 +434,7 @@ function practiceSquadHTML(tid, mine) {
   if (!ps.length) return '';
   return `<div class="card" style="margin-top:16px"><h3>Practice Squad (${ps.length}/${PS_MAX})</h3><p class="muted small">Develops like everyone else, doesn't dress on game day, can be promoted when injuries hit — and other teams can sign them away to their 53.</p>` + table('ps', [
     { k: 'pos', l: 'Pos', f: p => esc(p.lbl) }, { k: 'n', l: 'Name', f: p => playerLink(p) + ' ' + statusPills(p) }, { k: 'age', l: 'Age', f: p => p.age, num: 1 },
-    { k: 'tier', l: 'Tier', v: p => uOvr(p), f: p => tierPill(p) + trueNums(p) }, { k: 'up', l: 'Upside', v: p => uCeil(p), f: p => upsidePill(p) },
+    { k: 'tier', l: 'Tier', v: tierSort, f: p => tierPill(p) + trueNums(p) }, { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p) },
     { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
     { k: 'a', l: '', f: p => mine ? `<button class="sm primary" data-action="promote" data-pid="${p.id}">Promote</button> <button class="sm danger" data-action="psRelease" data-pid="${p.id}">Release</button>` : '' },
   ], ps, { nosort: 1 }) + '</div>';
@@ -443,7 +446,7 @@ function contractHTML(p) {
   let h = `<div class="section-title">Contract</div><div class="small">`;
   if (p.tid === -3) h += `Practice squad (${T(p.psTid).abbr}) · ${fmtMoney(c.amt)}`;
   else if (p.tid === -1) h += `Free agent · asking ${fmtMoney(p.ask)}/yr`;
-  else if (p.expiring) h += `Expiring · asking ${fmtMoney(p.ask)}/yr`;
+  else if (p.expiring) h += `Expiring · asking ${prefYears(p)} yr × ${fmtMoney(p.ask)} · leverage ${leverageLabel(leverageOf(p)).toLowerCase()}`;
   else {
     const d = deadIfCut(p);
     h += `${fmtMoney(c.amt)}/yr · ${c.yrs} yr${c.yrs > 1 ? 's' : ''} left · ${fmtMoney(c.gtd || 0)} guaranteed remaining`;
@@ -455,8 +458,15 @@ function contractHTML(p) {
   return h + '</div>';
 }
 function rosterActions(p) {
-  if (p.expiring && state.phase === 'RESIGN') return `<button class="sm primary" data-action="resign" data-pid="${p.id}">Re-sign ${fmtMoney(p.ask)}</button> <button class="sm danger" data-action="release" data-pid="${p.id}">Let go</button>`;
+  if (p.expiring && state.phase === 'RESIGN') return `<button class="sm primary" data-action="resign" data-pid="${p.id}" title="His preferred deal. Open his card for other lengths.">Re-sign ${prefYears(p)} yr · ${fmtMoney(p.ask)}</button> <button class="sm" data-action="player" data-pid="${p.id}">Terms…</button> <button class="sm danger" data-action="release" data-pid="${p.id}">Let go</button>`;
   return `<button class="sm danger" data-action="release" data-pid="${p.id}">Release</button>`;
+}
+
+// contract-length choices: his preferred deal first-class, other lengths priced by his leverage (or refused)
+function termButtons(p, kind) {
+  const t = kind === 'extend' ? extensionTerms(p) : resignTerms(p), room = kind === 'extend' ? Infinity : capRoom(p.tid);
+  const btn = o => `<button class="sm ${o.pref ? 'primary' : ''}" data-action="${kind}" data-pid="${p.id}" data-yrs="${o.yrs}" ${!o.ok ? `disabled title="${esc(o.why)}"` : o.amt > room ? 'disabled title="Not enough cap space"' : `title="${o.pref ? 'The deal he wants' : o.amt > t.opts.find(x => x.pref).amt ? 'He charges more for this length' : 'A discount for this length'}"`}>${o.yrs} yr · ${o.ok ? fmtMoney(o.amt) : '✕'}</button>`;
+  return `<div class="terms"><div class="small muted" style="margin-bottom:4px">${kind === 'extend' ? 'Extension' : 'Re-sign'} · leverage: <b>${leverageLabel(t.lev)}</b> · wants ${t.pref} yr${t.pref === 1 ? '' : 's'}</div><div class="row" style="gap:6px">${t.opts.map(btn).join('')}</div></div>`;
 }
 
 // ---------- depth chart ----------
@@ -465,7 +475,7 @@ function chartValue(p, spot) { return uOvr(p) + (slotRating(p, spot) - p.ovr); }
 const CF_CLS = { Natural: 'good', Comfortable: '', Decent: 'warn', Raw: 'bad', Unfamiliar: 'bad' };
 function dcPlayerMeta(p, key, spot) {
   const cf = comfortLabel(comfortOf(p, spot));
-  return `<span class="dc-meta">${['K', 'P', 'KR'].includes(key) ? '' : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p, chartValue(p, spot))}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
+  return `<span class="dc-meta">${['K', 'P', 'KR'].includes(key) ? '' : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p)}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
 }
 // formation boards: [key, grid column, grid row]
 const DC_BOARD = {
@@ -477,7 +487,7 @@ const DC_BOARD = {
 };
 function dcPlayerMeta(p, key, spot) {
   const cf = comfortLabel(comfortOf(p, spot));
-  return `<span class="dc-meta">${['K', 'P', 'KR'].includes(key) ? '' : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p, chartValue(p, spot))}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
+  return `<span class="dc-meta">${['K', 'P', 'KR'].includes(key) ? '' : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p)}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
 }
 function dcBox(c, key, cur, u) {
   const ids = (c.lists[key] || []).filter(id => P(id) && P(id).tid === u), spot = CHART_SPOT[key];
@@ -728,10 +738,10 @@ const STAT_CATS = {
 const ADV_GROUPS = {
   QB: { spots: ['QB'], min: (a, k) => (a.db || 0) >= 60 * k, cols: [['EPA/db', a => a.db ? a.epaDb / a.db : 0, 2], ['CPOE', a => a.att ? 100 * (a.cmp - a.xc) / a.att : 0, 1], ['TTT', a => a.tttN ? a.ttt / a.tttN : 0, 2], ['aDOT', a => a.att ? a.air / a.att : 0, 1], ['Pressured%', a => a.db ? 100 * (a.prsd || 0) / a.db : 0, 0]] },
   'WR/TE': { spots: ['WRX', 'WRZ', 'SLOT', 'TEY', 'TEH'], min: (a, k) => (a.routes || 0) >= 60 * k, cols: [['Routes', a => a.routes || 0, 0], ['Sep (yds)', a => a.sepN ? a.sep / a.sepN : 0, 2], ['Tgt/Route%', a => a.routes ? 100 * (a.sepN || 0) / a.routes : 0, 0], ['aDOT', a => a.sepN ? a.adot / a.sepN : 0, 1], ['EPA/Tgt', a => a.sepN ? (a.epaTgt || 0) / a.sepN : 0, 2]] },
-  RB: { spots: ['RB', 'FB'], min: (a, k) => (a.rush || 0) >= 25 * k, cols: [['YBC/att', a => a.rush ? a.ybc / a.rush : 0, 2], ['YACo/att', a => a.rush ? a.yaco / a.rush : 0, 2], ['MTF', a => a.mtf || 0, 0], ['Stuff%', a => a.rush ? 100 * (a.stuff || 0) / a.rush : 0, 0], ['EPA/rush', a => a.rush ? (a.epaRush || 0) / a.rush : 0, 2]] },
-  OL: { spots: ['LT', 'LG', 'C', 'RG', 'RT'], min: (a, k) => (a.pbSnaps || 0) >= 80 * k, cols: [['PB win%', a => a.pbSnaps ? 100 - 100 * (a.pbLoss || 0) / a.pbSnaps : 0, 1], ['Prs allowed', a => a.prsA || 0, 0], ['Sacks allowed', a => a.sackA || 0, 0], ['RB win%', a => a.rbSnaps ? 100 * (a.rbWins || 0) / a.rbSnaps : 0, 1]] },
-  DL: { spots: ['NT', 'DT', 'DE', 'EDGE'], min: (a, k) => (a.prSnaps || 0) >= 60 * k, cols: [['PR win%', a => a.prSnaps ? 100 * (a.prWins || 0) / a.prSnaps : 0, 1], ['Double%', a => a.prSnaps ? 100 * (a.dbl || 0) / a.prSnaps : 0, 0], ['RS win%', a => a.rdSnaps ? 100 * (a.rdWins || 0) / a.rdSnaps : 0, 1], ['Stops', a => a.stops || 0, 0]] },
-  'LB/DB': { spots: ['MLB', 'WLB', 'CB', 'NCB', 'FS', 'SS'], min: (a, k) => (a.covSnaps || 0) >= 80 * k, cols: [['Tgts', a => a.tgtA || 0, 0], ['Comp%', a => a.tgtA ? 100 * (a.cmpA || 0) / a.tgtA : 0, 0], ['Yds/snap', a => a.covSnaps ? (a.ydsA || 0) / a.covSnaps : 0, 2], ['Rtg allowed', a => ratingAllowed(a) || 0, 1], ['MT%', a => a.tkAtt ? 100 * (a.mt || 0) / a.tkAtt : 0, 0]] },
+  RB: { spots: ['RB', 'FB'], min: (a, k) => (a.rush || 0) >= 25 * k, cols: [['YBC/att', a => a.rush ? a.ybc / a.rush : 0, 2], ['YACo/att', a => a.rush ? a.yaco / a.rush : 0, 2], ['MTF/att%', a => a.rush ? 100 * (a.mtf || 0) / a.rush : 0, 0, a => a.mtf || 0], ['Stuff%', a => a.rush ? 100 * (a.stuff || 0) / a.rush : 0, 0], ['EPA/rush', a => a.rush ? (a.epaRush || 0) / a.rush : 0, 2]] },
+  OL: { spots: ['LT', 'LG', 'C', 'RG', 'RT'], min: (a, k) => (a.pbSnaps || 0) >= 80 * k, cols: [['PB win%', a => a.pbSnaps ? 100 - 100 * (a.pbLoss || 0) / a.pbSnaps : 0, 1], ['Pressure% allowed', a => a.pbSnaps ? 100 * (a.prsA || 0) / a.pbSnaps : 0, 1, a => a.prsA || 0], ['Sack% allowed', a => a.pbSnaps ? 100 * (a.sackA || 0) / a.pbSnaps : 0, 1, a => a.sackA || 0], ['RB win%', a => a.rbSnaps ? 100 * (a.rbWins || 0) / a.rbSnaps : 0, 1]] },
+  DL: { spots: ['NT', 'DT', 'DE', 'EDGE'], min: (a, k) => (a.prSnaps || 0) >= 60 * k, cols: [['PR win%', a => a.prSnaps ? 100 * (a.prWins || 0) / a.prSnaps : 0, 1], ['Double%', a => a.prSnaps ? 100 * (a.dbl || 0) / a.prSnaps : 0, 0], ['RS win%', a => a.rdSnaps ? 100 * (a.rdWins || 0) / a.rdSnaps : 0, 1], ['Stop%', a => a.rdSnaps ? 100 * (a.stops || 0) / a.rdSnaps : 0, 1, a => a.stops || 0]] },
+  'LB/DB': { spots: ['MLB', 'WLB', 'CB', 'NCB', 'FS', 'SS'], min: (a, k) => (a.covSnaps || 0) >= 80 * k, cols: [['Targeted%', a => a.covSnaps ? 100 * (a.tgtA || 0) / a.covSnaps : 0, 1, a => a.tgtA || 0], ['Comp%', a => a.tgtA ? 100 * (a.cmpA || 0) / a.tgtA : 0, 0], ['Yds/snap', a => a.covSnaps ? (a.ydsA || 0) / a.covSnaps : 0, 2], ['Rtg allowed', a => ratingAllowed(a) || 0, 1], ['MT%', a => a.tkAtt ? 100 * (a.mt || 0) / a.tkAtt : 0, 0, a => a.mt || 0]] },
 };
 function advStatsHTML(season) {
   const live = season === state.season && (state.phase === 'REG' || state.phase === 'PLAYOFFS');
@@ -865,12 +875,46 @@ function tradeHTML() {
 }
 
 // ---------- free agents ----------
+// next offseason's class: everyone in the last year of his deal with no extension signed
+function upcomingFA(p) { return p.tid >= 0 && p.a && (p.expiring || (p.contract.yrs <= 1 && !p.contract.next && !(p.contract.rookie && p.contract.opt5 === 'pending'))); }
+function staySignal(p) {
+  if (p.tid === state.userTid) return '<span class="muted">Your call</span>';
+  const v = viewOvr(p, p.tid), t = tierOf(p);
+  if (p.age >= 34 && v < 80) return '<span class="pill">Could retire or walk</span>';
+  if (['Elite', 'All-Pro'].includes(t)) return '<span class="pill bad">Tag or extension likely</span>';
+  if (t === 'Starter' && p.age <= 30) return '<span class="pill warn">Team wants him back</span>';
+  if (t === 'Starter' || t === 'Rotation' || t === 'Backup') return '<span class="pill">Could reach the market</span>';
+  return '<span class="pill good">Likely available</span>';
+}
+function upcomingFAHTML() {
+  const u = state.userTid, resign = state.phase === 'RESIGN';
+  const ps = Object.values(state.players).filter(upcomingFA).filter(p => inFamily(p, ui.faPos));
+  let html = `<div class="callout">${resign ? 'Contracts that just expired. Teams are deciding now: whoever is not re-signed or tagged reaches free agency when you advance.' : `Players in the final year of their deals: the ${state.season + (['REG', 'PLAYOFFS', 'RECAP', 'COACHES'].includes(state.phase) ? 1 : 2)} free agent class as it stands today. Teams will extend, tag or re-sign the best of them before they get there.`}
+    Market value is what the league thinks he is worth per year right now.</div><div class="subtabs">${famTabs(ui.faPos, 'faPos')}</div>`;
+  html += '<div class="card">' + table('upfa', [
+    { k: 'pos', l: 'Pos', v: p => FAM_INDEX[p.spot], f: p => esc(p.lbl) },
+    { k: 'n', l: 'Name', v: p => p.last, f: p => playerLink(p) + ' ' + statusPills(p) },
+    { k: 'tm', l: 'Team', v: p => T(p.tid).abbr, f: p => teamLink(p.tid) },
+    { k: 'age', l: 'Age', v: p => p.age, num: 1 },
+    { k: 'ovr', l: 'Tier', v: tierSort, f: p => tierPill(p) + trueNums(p) },
+    { k: 'pot', l: 'Upside', v: upSort, f: p => upsidePill(p) },
+    { k: 'gr', l: 'Grade', v: p => p.advS ? overallGrade(p.advS, p.spot) || 0 : 0, f: p => gradeChip(p.advS ? overallGrade(p.advS, p.spot) : null), num: 1 },
+    { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
+    { k: 'cur', l: 'Current AAV', v: p => p.contract.amt || p.lastAmt || 0, f: p => p.contract.amt ? fmtMoney(p.contract.amt) : '<span class="muted">—</span>', num: 1 },
+    { k: 'mv', l: 'Market value', v: p => marketValue(p), f: p => fmtMoney(marketValue(p)), num: 1 },
+    { k: 'lev', l: 'Leverage', v: p => leverageOf(p), f: p => leverageLabel(leverageOf(p)) },
+    { k: 'st', l: 'Outlook', f: staySignal },
+  ], ps, { sort: 'ovr', limit: 250 }) + '</div>';
+  return html;
+}
 function faHTML() {
   const u = state.userTid;
+  const tabs = `<div class="subtabs">${[['now', 'Available now'], ['next', 'Upcoming free agents']].map(([k, l]) => `<button class="${(ui.faView || 'now') === k ? 'on' : ''}" data-action="faView" data-v="${k}">${l}</button>`).join('')}</div>`;
+  if (ui.faView === 'next') return tabs + upcomingFAHTML();
   let fas = Object.values(state.players).filter(p => p.tid === -1);
   fas = fas.filter(p => inFamily(p, ui.faPos));
   const canSign = state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP';
-  let html = `<div class="callout">${state.phase === 'FA' ? `Free agency wave ${state.faWave + 1}/${FA_WAVES}. AI teams sign players when you advance. Asking prices drop each wave.` : state.phase === 'REG' ? 'In-season signings are 1-year deals. Players on IR (4+ weeks) don\'t count toward the 53-man limit.' : 'Free agents available now.'}
+  let html = tabs + `<div class="callout">${state.phase === 'FA' ? `Free agency wave ${state.faWave + 1}/${FA_WAVES}. AI teams sign players when you advance. Asking prices drop each wave.` : state.phase === 'REG' ? 'In-season signings are 1-year deals. Players on IR (4+ weeks) don\'t count toward the 53-man limit.' : 'Free agents available now.'}
     Cap space: <b>${fmtMoney(capRoom(u))}</b> · Roster ${rosterCount(u)}/${rosterLimit()}</div>`;
   html += `<div class="subtabs">${famTabs(ui.faPos, 'faPos')}</div>`;
   html += `<div class="card">` + table('fa', [
@@ -878,8 +922,8 @@ function faHTML() {
     { k: 'n', l: 'Name', v: p => p.last, f: p => playerLink(p) + ' ' + statusPills(p) },
     { k: 'age', l: 'Age', v: p => p.age, num: 1 },
     { k: 'hw', l: 'Ht/Wt', v: p => p.m.wt, f: p => `<span class="small muted">${htwt(p)}</span>` },
-    { k: 'ovr', l: 'Tier', v: p => uOvr(p), f: p => tierPill(p) + trueNums(p) },
-    { k: 'pot', l: 'Upside', v: p => uCeil(p), f: p => upsidePill(p) },
+    { k: 'ovr', l: 'Tier', v: tierSort, f: p => tierPill(p) + trueNums(p) },
+    { k: 'pot', l: 'Upside', v: upSort, f: p => upsidePill(p) },
     { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
     { k: 'yoe', l: 'YOE', v: p => p.exp, num: 1, title: 'Years of experience' },
     { k: 'pt', l: 'Prev team', v: p => p.lastTid != null && p.lastTid >= 0 ? T(p.lastTid).abbr : '', f: p => p.lastTid != null && p.lastTid >= 0 ? teamLink(p.lastTid) : '<span class="muted">—</span>' },
@@ -918,8 +962,8 @@ function cutdownHTML() {
     { k: 'n', l: 'Name', v: p => p.last, f: p => playerLink(p) + ' ' + statusPills(p) },
     { k: 'age', l: 'Age', v: p => p.age, num: 1 },
     { k: 'star', l: '★', v: p => starsOf(p) || 0, f: p => starHTML(starsOf(p)) },
-    { k: 'tier', l: 'Tier', v: p => uOvr(p), f: p => tierPill(p) + trueNums(p) },
-    { k: 'up', l: 'Upside', v: p => uCeil(p), f: p => upsidePill(p) },
+    { k: 'tier', l: 'Tier', v: tierSort, f: p => tierPill(p) + trueNums(p) },
+    { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p) },
     { k: 'pre', l: 'Preseason', v: p => preGrade(p) || 0, f: p => p.preS ? `${gradeChip(preGrade(p))} <span class="small muted">${p.preS.snp} snaps</span>` : '<span class="muted small">sat</span>', num: 1 },
     { k: 'c', l: 'Contract', v: p => p.contract.amt, f: p => fmtContract(p), num: 1 },
     { k: 'save', l: 'Cut saves', v: p => cutSavings(p), f: p => { const v = cutSavings(p); return `<span class="${v < 0 ? 'bad' : ''}">${fmtMoney(v)}</span>`; }, num: 1 },
@@ -969,8 +1013,8 @@ function searchHTML() {
     { k: 'age', l: 'Age', v: p => p.age, num: 1 },
     { k: 'yoe', l: 'YOE', v: p => p.exp, num: 1 },
     { k: 'star', l: '★', v: p => starsOf(p) || 0, f: p => p.tid === -2 ? '' : starHTML(starsOf(p)) },
-    { k: 'tier', l: 'Tier', v: p => uOvr(p), f: p => tierPill(p) + trueNums(p) },
-    { k: 'up', l: 'Upside', v: p => uCeil(p), f: p => upsidePill(p) },
+    { k: 'tier', l: 'Tier', v: tierSort, f: p => tierPill(p) + trueNums(p) },
+    { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p) },
     { k: 'sk', l: 'Profile', f: p => `<span class="small muted wrapcell">${traitsTxt(p)}</span>` },
     { k: 'gr', l: 'Grade', v: p => p.advS ? overallGrade(p.advS, p.spot) || 0 : 0, f: p => gradeChip(p.advS ? overallGrade(p.advS, p.spot) : null), num: 1 },
     { k: 'ras', l: 'RAS', v: p => rasOf(p) || 0, f: p => rasHTML(p), num: 1 },
@@ -1006,8 +1050,8 @@ function draftHTML() {
     { k: 'hw', l: 'Ht/Wt', v: p => p.m.wt, f: p => `<span class="small muted">${htwt(p)}</span>` },
     { k: 'forty', l: '40', v: p => -p.m.forty, f: p => p.m.forty.toFixed(2), num: 1 },
     { k: 'ras', l: 'RAS', v: p => rasOf(p) || 0, f: p => rasHTML(p), num: 1, title: 'Relative Athletic Score (0–10) vs. his position' },
-    { k: 'ovr', l: 'Now', v: p => uOvr(p), f: p => tierPill(p) + trueNums(p), title: 'Ready to contribute as…' },
-    { k: 'pot', l: 'Upside', v: p => uCeil(p), f: p => upsidePill(p) },
+    { k: 'ovr', l: 'Now', v: tierSort, f: p => tierPill(p) + trueNums(p), title: 'Ready to contribute as…' },
+    { k: 'pot', l: 'Upside', v: upSort, f: p => upsidePill(p) },
     { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
     { k: 'proj', l: 'Proj', v: p => rankOf.get(p.id), f: p => { const r = Math.ceil(rankOf.get(p.id) / 32); return r > 7 ? 'UDFA' : 'Rd ' + r; } },
     { k: 'a', l: '', f: p => onClock ? `<button class="sm primary" data-action="draftPick" data-pid="${p.id}">Draft</button>` : '' },
@@ -1227,8 +1271,8 @@ function glanceHTML(p, src) {
   }
   return h || `<div class="muted small">Not enough snaps on tape yet.</div>`;
 }
-const ADV_DIR = { 'EPA/db': 1, CPOE: 1, TTT: 0, aDOT: 0, 'Pressured%': -1, Routes: 0, 'Sep (yds)': 1, 'Tgt/Route%': 1, 'EPA/Tgt': 1, 'YBC/att': 1, 'YACo/att': 1, MTF: 1, 'Stuff%': -1, 'EPA/rush': 1,
-  'PB win%': 1, 'Prs allowed': -1, 'Sacks allowed': -1, 'RB win%': 1, 'PR win%': 1, 'Double%': 1, 'RS win%': 1, Stops: 1, Tgts: 0, 'Comp%': -1, 'Yds/snap': -1, 'Rtg allowed': -1, 'MT%': -1 };
+const ADV_DIR = { 'EPA/db': 1, CPOE: 1, TTT: 0, aDOT: 0, 'Pressured%': -1, Routes: 0, 'Sep (yds)': 1, 'Tgt/Route%': 1, 'EPA/Tgt': 1, 'YBC/att': 1, 'YACo/att': 1, 'MTF/att%': 1, 'Stuff%': -1, 'EPA/rush': 1,
+  'PB win%': 1, 'Pressure% allowed': -1, 'Sack% allowed': -1, 'RB win%': 1, 'PR win%': 1, 'Double%': 1, 'RS win%': 1, 'Stop%': 1, 'Targeted%': 0, 'Comp%': -1, 'Yds/snap': -1, 'Rtg allowed': -1, 'MT%': -1 };
 // season metrics with league rank among qualified players at his position group
 function advRankHTML(p, src) {
   if (!src) return '';
@@ -1238,12 +1282,12 @@ function advRankHTML(p, src) {
   const pool = [];
   for (const id in state.players) { const q = state.players[id], a = src.cur ? q.advS : q.advPrev && q.advPrev.season === src.season ? q.advPrev : null; if (a && q.pos === p.pos && G.spots.includes(q.spot) && G.min(a, qualK)) pool.push(a); }
   const mine = src.a, qual = G.min(mine, qualK);
-  const tiles = G.cols.map(([label, fn, dec]) => {
+  const tiles = G.cols.map(([label, fn, dec, tot]) => {
     const v = fn(mine), dir = ADV_DIR[label] === undefined ? 1 : ADV_DIR[label];
     const vals = pool.map(fn).sort((x, y) => dir < 0 ? x - y : y - x);
     let rank = vals.findIndex(x => dir < 0 ? v <= x : v >= x) + 1; if (!rank) rank = vals.length + 1;
     const n = vals.length + (qual ? 0 : 1), pct = n > 1 ? 1 - (rank - 1) / (n - 1) : 0.5;
-    return `<div class="tile" style="${pctStyle(dir < 0 ? 1 - pct : pct, dir)}"><div class="v" style="font-size:15px">${v.toFixed(dec)}</div><div class="l">${label}</div><div class="rk">${qual ? `${rank}/${n}` : 'below min.'}</div></div>`;
+    return `<div class="tile" style="${pctStyle(dir < 0 ? 1 - pct : pct, dir)}"><div class="v" style="font-size:15px">${v.toFixed(dec)}${tot ? ` <span class="small muted" title="season total">(${tot(mine)})</span>` : ''}</div><div class="l">${label}</div><div class="rk">${qual ? `${rank}/${n}` : 'below min.'}</div></div>`;
   }).join('');
   return `<div class="stat-tiles">${tiles}</div>`;
 }
@@ -1295,7 +1339,7 @@ function playerModal(pid, replace) {
       <div class="tile"><div class="v ${TIER_CLS[tierT]}" style="font-size:16px">${tierT}</div><div class="l">${prospect ? 'Ready now as' : 'Tier'}${trueOn() ? ` · true ${p.ovr}` : ''}</div></div>
       <div class="tile"><div class="v ${UP_CLS[upT]}" style="font-size:14px">${upT}</div><div class="l">Upside${trueOn() ? ` · true ${p.pot}` : ''}</div></div>
       ${prospect ? '' : `<div class="tile"><div class="v" style="font-size:15px">${p.tid === -1 ? fmtMoney(p.ask) : fmtContract(p)}</div><div class="l">${p.tid === -1 ? 'Asking / yr' : 'Contract'}</div></div>
-      <div class="tile"><div class="v">${gradeChip(sg)}</div><div class="l">${src ? `${src.season} grade${src.cur ? '' : ' (last season)'}` : 'Season grade'}</div></div>
+      <div class="tile"><div class="v">${gradeChip(sg)}</div><div class="l">${src ? `${src.season} grade${src.cur ? '' : ' (last season)'}` : 'Season grade'}</div>${src ? `<div class="rk">${gradeRankTxt(src.cur ? gradeRanks()[p.id] : seasonRank(p, p.career.find(r => r.season === src.season) || {})) || (sg !== null ? 'below min. snaps' : '')}</div>` : ''}</div>
       <div class="tile"><div class="v" style="font-size:14px">${form.length ? form.map(g => gradeChip(Math.round(g))).join(' ') : '—'}</div><div class="l">Recent games</div></div>`}
     </div>`;
   if (p.injury) html += `<div class="callout"><b class="bad">Injured:</b> ${esc(p.injury.name)} — out ${p.injury.weeks} more week${p.injury.weeks > 1 ? 's' : ''}${onIR(p) ? ' (IR)' : ''}.</div>`;
@@ -1311,11 +1355,11 @@ function playerModal(pid, replace) {
   left += '<div class="row" style="margin-top:12px">';
   if (p.tid === u && optionDue(p) && state.phase === 'RESIGN') left += `<button class="primary" data-action="option" data-pid="${p.id}" data-v="1">Exercise option (${fmtMoney(optionAmount(p))})</button><button data-action="option" data-pid="${p.id}" data-v="0">Decline option</button>`;
   if (p.tid === u && canTag(p)) left += `<button data-action="tag" data-pid="${p.id}">Franchise tag (${fmtMoney(tagAmount(p))})</button>`;
-  if (p.tid === u && extensionDue(p)) { const x = extensionAsk(p); left += `<button data-action="extend" data-pid="${p.id}">Extend: ${x.yrs} yr × ${fmtMoney(x.amt)}</button>`; }
+  if (p.tid === u && extensionDue(p)) left += termButtons(p, 'extend');
   if (p.tid === -3 && p.psTid === u) left += `<button class="primary" data-action="promote" data-pid="${p.id}">Promote to 53</button><button class="danger" data-action="psRelease" data-pid="${p.id}">Release</button>`;
   if (p.tid === -1 && p.exp <= 6 && psRoom(u, p) && ['REG', 'PRESEASON', 'CUTDOWN', 'DRAFT', 'FA'].includes(state.phase)) left += `<button data-action="signPS" data-pid="${p.id}">Sign to practice squad (${fmtMoney(PS_SALARY)})</button>`;
   if (p.tid === u) {
-    if (p.expiring && state.phase === 'RESIGN') left += `<button class="primary" data-action="resign" data-pid="${p.id}">Re-sign for ${fmtMoney(p.ask)}</button>`;
+    if (p.expiring && state.phase === 'RESIGN') left += termButtons(p, 'resign');
     left += `<button class="danger" data-action="release" data-pid="${p.id}">Release</button>`;
   } else if (p.tid === -1 && state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP') left += `<button class="primary" data-action="sign" data-pid="${p.id}">Sign (${fmtMoney(p.ask)})</button>`;
   else if (p.tid >= 0) left += `<button data-action="tradeFor" data-pid="${p.id}">Trade for ${esc(p.last)}</button>`;
@@ -1340,7 +1384,7 @@ function playerModal(pid, replace) {
   if (rows.length) {
     const tot = {}; rows.forEach(r => { const c = Object.assign({}, r, { season: 0 }); delete c.adv; delete c.sp; addStats(tot, c); });
     const cols = [{ k: 's', l: 'Season', f: r => r.tot ? '<b>Career</b>' : r.season + (r.cur ? '*' : '') }, { k: 't', l: 'Tm', f: r => r.tot ? '' : (r.tid >= 0 ? T(r.tid).abbr : 'FA') }, { k: 'gp', l: 'GP', f: r => r.gp || 0, num: 1 }, { k: 'gs', l: 'GS', f: r => r.gs || 0, num: 1 },
-    { k: 'gr', l: 'Grade', f: r => r.tot ? '' : gradeChip(r.cur ? (p.advS ? overallGrade(p.advS, p.spot) : null) : r.adv ? r.adv.g : null), num: 1 },
+    { k: 'gr', l: 'Grade', f: r => r.tot ? '' : gradeChip(r.cur ? (p.advS ? overallGrade(p.advS, p.spot) : null) : r.adv ? r.adv.g : null) + (seasonRank(p, r) ? '<br>' + gradeRankTxt(seasonRank(p, r)) : ''), num: 1 },
     ...cc.map(([k, l, fn]) => ({ k, l, num: 1, f: r => fn ? fn(r) : (r[k] || 0) }))];
     const cv = ui.cardView === 'ratings' ? 'ratings' : 'stats';
     html += `<div class="row" style="margin:18px 0 8px"><span class="section-title" style="margin:0">Career</span><div class="subtabs" style="margin:0">${[['stats', 'Stats'], ['ratings', 'Ratings']].map(([k, l]) => `<button class="${k === cv ? 'on' : ''}" data-action="cardView" data-v="${k}" data-pid="${p.id}">${l}</button>`).join('')}</div></div>`;
@@ -1350,7 +1394,7 @@ function playerModal(pid, replace) {
       const ga = r => r.cur ? (p.advS ? careerAdv(p.advS, p.spot) : {}) : (r.adv || {});
       const fcols = Object.keys(FACETS).filter(f => rows.some(r => ga(r)['g' + f])).map(f => ({ k: f, l: FACETS[f], num: 1, f: r => gradeChip(ga(r)['g' + f] || null) }));
       html += table('careerR', [{ k: 's', l: 'Season', f: r => r.season + (r.cur ? '*' : '') }, { k: 't', l: 'Tm', f: r => r.tid >= 0 ? T(r.tid).abbr : 'FA' }, { k: 'snp', l: 'Snaps', f: r => r.snp || 0, num: 1 },
-        { k: 'g', l: 'Overall', num: 1, f: r => gradeChip(ga(r).g || null) }, ...fcols,
+        { k: 'g', l: 'Overall', num: 1, f: r => gradeChip(ga(r).g || null) + (seasonRank(p, r) ? '<br>' + gradeRankTxt(seasonRank(p, r)) : '') }, ...fcols,
         { k: 'ti', l: 'Tier', f: r => r.cur ? tierPill(p) : r.ti ? `<span class="pill ${TIER_CLS[r.ti] || ''}">${r.ti}</span>` : '<span class="muted">—</span>' },
         { k: 'up', l: 'Upside', f: r => r.cur ? upsidePill(p) : r.up ? `<span class="pill up ${UP_CLS[r.up] || ''}">${r.up}</span>` : '<span class="muted">—</span>' }], rows, { nosort: 1 });
     }
@@ -1483,6 +1527,9 @@ function boxModal(gid) {
 }
 
 // ---------- film room / advanced ----------
+// "9th of 64 DT": where a season grade stands at his position (qualified players only)
+function gradeRankTxt(rk) { return rk ? `<span class="small muted" title="Rank among qualified ${rk[2] || 'players at his position'}">${rk[0]}/${rk[1]}${rk[2] ? ' ' + rk[2] : ''}</span>` : ''; }
+function seasonRank(p, r) { return r.cur ? gradeRanks()[p.id] : r.adv && r.adv.rk ? [r.adv.rk, r.adv.rkN, r.adv.rkG] : null; }
 function gradeChip(v) {
   if (v === null || v === undefined) return '<span class="muted">—</span>';
   const c = v >= 85 ? 'r-elite' : v >= 72 ? 'r-good' : v >= 55 ? 'r-avg' : 'bad';
@@ -1752,7 +1799,7 @@ const actions = {
     }
     closeModal(); save(); render();
   },
-  resign: d => { const err = resignPlayer(+d.pid); if (err) toast(err); else toast('Re-signed!'); closeModal(); save(); render(); },
+  resign: d => { const err = resignPlayer(+d.pid, d.yrs ? +d.yrs : undefined); if (err) toast(err); else toast('Re-signed!'); closeModal(); save(); render(); },
   resignAll: () => {
     let n = 0;
     for (const p of rosterOf(state.userTid).filter(p => p.expiring).sort((a, b) => uOvr(b) - uOvr(a))) {
@@ -1762,7 +1809,7 @@ const actions = {
   },
   option: d => { const err = exerciseOption(+d.pid, d.v === '1'); toast(err || (d.v === '1' ? 'Option exercised.' : 'Option declined.')); closeModal(); save(); render(); },
   tag: d => { const err = franchiseTag(+d.pid); toast(err || 'Franchise tag applied.'); closeModal(); save(); render(); },
-  extend: d => { const err = extendPlayer(+d.pid); toast(err || 'Extension signed.'); closeModal(); save(); render(); },
+  extend: d => { const err = extendPlayer(+d.pid, d.yrs ? +d.yrs : undefined); toast(err || 'Extension signed.'); closeModal(); save(); render(); },
   promote: d => { const err = promoteFromPS(+d.pid, state.userTid); toast(err || 'Promoted to the 53.'); closeModal(); save(); render(); },
   psRelease: d => { releaseFromPS(+d.pid); toast('Released from the practice squad.'); closeModal(); save(); render(); },
   signPS: d => { const err = signToPS(+d.pid, state.userTid); toast(err || 'Signed to the practice squad.'); closeModal(); save(); render(); },
@@ -1779,6 +1826,7 @@ const actions = {
   sign: d => { const err = signFA(+d.pid, state.userTid); if (err) toast(err); else toast('Signed!'); closeModal(); save(); render(); },
   statCat: d => { ui.statCat = d.cat; render(); },
   faPos: d => { ui.faPos = d.pos; render(); },
+  faView: d => { ui.faView = d.v; render(); },
   srchFam: d => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF))).fam = d.pos; render(); },
   cutFam: d => { ui.cutFam = d.pos; render(); },
   cutToggle: d => { const pl = state.cut.plan; if (pl[d.pid] === 'cut') delete pl[d.pid]; else pl[d.pid] = 'cut'; save(); render(); },

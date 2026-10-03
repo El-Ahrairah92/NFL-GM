@@ -63,9 +63,10 @@ function endSeason() {
     if (hc) { hc.rec.w += r.w; hc.rec.l += r.l; hc.rec.t += r.t; if (e === 4) hc.rec.titles++; }
   }
   // archive season stats
+  GRADE_RANKS = null; const grk = gradeRanks();
   for (const id in state.players) {
     const p = state.players[id];
-    if (p.stats.gp) p.career.push(Object.assign({ season: state.season, tid: p.tid }, p.stats, p.advS ? { adv: careerAdv(p.advS, p.spot) } : {}, p.per ? { ti: tierOf(p), up: upsideOf(p) } : {}));
+    if (p.stats.gp) p.career.push(Object.assign({ season: state.season, tid: p.tid }, p.stats, p.advS ? { adv: Object.assign(careerAdv(p.advS, p.spot), grk[p.id] ? { rk: grk[p.id][0], rkN: grk[p.id][1], rkG: grk[p.id][2] } : {}) } : {}, p.per ? { ti: tierOf(p), up: upsideOf(p) } : {}));
     if (p.pstats && p.pstats.gp) { p.pcareer = p.pcareer || []; p.pcareer.push(Object.assign({ season: state.season, tid: p.tid }, p.pstats)); }
     p.advPrev = p.advS ? Object.assign({ season: state.season }, p.advS) : p.advPrev || null; // last season stays viewable through the offseason
     p.glogPrev = p.glog && p.glog.length ? { season: state.season, log: p.glog } : p.glogPrev || null;
@@ -148,8 +149,10 @@ function aiWantsResign(p) {
 function resignPlayer(pid, yrs) {
   const p = P(pid);
   if (!p || !p.expiring) return 'Not expiring';
-  if (p.ask > capRoom(p.tid)) return 'Not enough cap room';
-  p.contract = makeContract(p, p.ask, yrs || contractYears(p));
+  const terms = resignTerms(p), o = terms.opts.find(x => x.yrs === (yrs || terms.pref));
+  if (!o || !o.ok) return o ? o.why : 'Not an option';
+  if (o.amt > capRoom(p.tid)) return 'Not enough cap room';
+  p.contract = makeContract(p, o.amt, o.yrs);
   p.expiring = false; delete p.ask;
   return null;
 }
@@ -162,7 +165,7 @@ function leaveResign() {
         resignPlayer(p.id);
       } else {
         toFreeAgency(p);
-        if (perOvr(p) >= 78 || t.id === state.userTid) addNews(`${p.lbl} ${pname(p)} (${tierOf(p, perOvr(p))}) hits free agency from ${t.abbr}.`, [t.id], 'fa');
+        if (perOvr(p) >= 78 || t.id === state.userTid) addNews(`${p.lbl} ${pname(p)} (${tierOf(p)}) hits free agency from ${t.abbr}.`, [t.id], 'fa');
       }
     }
   }
@@ -187,7 +190,7 @@ function signFA(pid, tid, yrs) {
   setTid(p, tid);
   p.contract = makeContract(p, p.ask, yrs || (state.phase === 'REG' ? 1 : contractYears(p)));
   delete p.ask;
-  if (perOvr(p) >= 72 || tid === state.userTid) addNews(`${T(tid).abbr} signed ${p.lbl} ${pname(p)} (${tierOf(p, perOvr(p))}) — ${p.contract.yrs} yr, ${fmtMoney(p.contract.amt)}/yr.`, [tid], 'sign');
+  if (perOvr(p) >= 72 || tid === state.userTid) addNews(`${T(tid).abbr} signed ${p.lbl} ${pname(p)} (${tierOf(p)}) — ${p.contract.yrs} yr, ${fmtMoney(p.contract.amt)}/yr.`, [tid], 'sign');
   return null;
 }
 function releasePlayer(pid) {

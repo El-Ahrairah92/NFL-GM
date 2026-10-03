@@ -85,9 +85,11 @@ function packageLayout(front, pkg) {
 }
 
 // fatigue: [per-snap load, threshold before rotation pressure]
-const FAT = { QB: [0.25, 99], OL: [0.45, 14], RB: [0.9, 5.5], WR: [0.62, 6.5], TE: [0.6, 7.5], DL: [1.3, 2.0], LB: [0.72, 8], DB: [0.55, 11] };
+const FAT = { QB: [0.25, 99], OL: [0.45, 14], RB: [0.9, 5.5], WR: [0.62, 6.5], TE: [0.6, 7.5], DL: [1.3, 2.0], LB: [0.6, 16], DB: [0.5, 18] };
 // how hard fatigue pushes a player to the sideline (DL rotate by design)
 const FAT_SLOPE = { QB: 1, OL: 1, RB: 1.6, WR: 1.2, TE: 1.2, DL: 4.0, LB: 1, DB: 1 };
+// defensive lines play in waves: the gap between a starter and his backup counts for less than fresh legs
+const ROT_GAP = { DL: 0.5 };
 
 // ---------- team game state ----------
 function slotRating(p, spot) {
@@ -136,8 +138,8 @@ function fillSlots(g, s, slots, table, opts = {}) {
     }
     for (const c of cands) {
       if (used.has(c.p.id)) continue;
-      let sc = c.r - fatPenalty(g, c.p, grp);
-      if (list) { const i = list.indexOf(c.p.id); if (i >= 0) sc = 300 - i * 14 - fatPenalty(g, c.p, grp) + (i === 1 && rotHit ? 30 : 0); }
+      let sc = c.r * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp);
+      if (list) { const i = list.indexOf(c.p.id); if (i >= 0) sc = 300 - i * 14 * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp) + (i === 1 && rotHit ? 30 : 0); }
       if (g.ps[c.p.id] && g.ps[c.p.id].last === name) sc += 1.5; // continuity: no needless shuffling
       if (opts.score && !list) sc += opts.score(c.p, slot);
       if (sc > bs) { bs = sc; best = c; }
@@ -202,7 +204,9 @@ function ea0(p, k) { return p.a && p.a[k] !== undefined ? p.a[k] : 25; }
 // Defensive eleven for a package; sub-rush puts the best four pass rushers on the line
 function defUnit(g, s, front, pkg, subRush) {
   const layout = packageLayout(front, pkg);
-  const score = subRush ? (p, slot) => (DEF_SLOT[slot][1] === 'DL' && p.a ? (ea0(p, 'prsh') - 60) * 0.35 : 0) : null;
+  // coaches keep players in their own rooms: a safety is not a linebacker just because he grades out close
+  const DB_POS = { CB: 1, S: 1 };
+  const score = (p, slot) => { const grp = DEF_SLOT[slot][1]; return (subRush && grp === 'DL' && p.a ? (ea0(p, 'prsh') - 60) * 0.35 : 0) - (grp === 'LB' && p.pos !== 'LB' ? 7 : grp === 'DB' && !DB_POS[p.pos] ? 7 : 0); };
   const chart = userChart(g, s, 'def');
   if (!chart) return fillSlots(g, s, layout, DEF_SLOT, { score });
   // passing downs: your rush specialists take over the edge and interior spots

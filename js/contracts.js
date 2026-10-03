@@ -113,15 +113,52 @@ function extensionDue(p) {
   if (c.rookie && c.opt5 === 'pending') return false; // option decision comes first
   return ['RESIGN', 'FA', 'DRAFT', 'PRESEASON', 'CUTDOWN'].includes(state.phase) || (state.phase === 'REG' && state.week <= TRADE_DEADLINE);
 }
+// ---------- negotiating leverage ----------
+// The more the league wants a player, the more he dictates the terms. A fringe player takes whatever length you offer;
+// a star wants his deal, charges for anything else, and refuses lengths far from what he has in mind.
+function leverageOf(p) {
+  const t = PER_TH && p.per ? tierOf(p, perOvr(p)) : p.ovr >= 82 ? 'All-Pro' : p.ovr >= 72 ? 'Starter' : 'Depth'; // league consensus sets his market
+  let l = { Elite: 1, 'All-Pro': 0.85, Starter: 0.6, Rotation: 0.32, Backup: 0.28, Depth: 0.12 }[t] || 0.05;
+  if (p.age >= 33) l *= 0.5; else if (p.age >= 31) l *= 0.72;
+  if (p.age <= 25 && viewGrowth(p, null) >= 4) l = Math.min(1, l + 0.12); // young and still rising: he knows it
+  return l;
+}
+function leverageLabel(l) { return l >= 0.8 ? 'Very high' : l >= 0.55 ? 'High' : l >= 0.3 ? 'Moderate' : l >= 0.12 ? 'Low' : 'Almost none'; }
+// the length he has in mind: mostly age, with some personality (betting on himself vs. wanting security)
+function prefYears(p, base) {
+  const h = hashGauss(p.id, 41, 7);
+  return clamp((base || contractYears(p)) + (h > 0.9 ? 1 : h < -0.9 ? -1 : 0), 1, 5);
+}
+// every length from 1 to 5 years: the per-year price at that length, or why he will not sign it
+function contractOptions(p, amt, pref, minYrs) {
+  const lev = leverageOf(p), maxY = Math.max(pref, clamp((['QB', 'K', 'P'].includes(p.pos) ? 40 : 36) - p.age, 1, 5)), opts = [];
+  const limit = lev >= 0.8 ? 2 : lev >= 0.55 ? 3 : 9; // how far from his number he will even discuss
+  for (let y = 1; y <= 5; y++) {
+    const dev = y - pref;
+    let ok = true, why = '';
+    if (y < (minYrs || 1)) { ok = false; why = 'Extensions run at least ' + minYrs + ' years'; }
+    else if (y > maxY) { ok = false; why = 'Too long a commitment at his age'; }
+    else if (Math.abs(dev) >= limit && !(dev > 0 && p.age >= 30)) { ok = false; why = dev < 0 ? 'Wants long-term security, not a short deal' : 'Will not lock himself in that long at this price'; }
+    let m = 1 + lev * Math.abs(dev) * (dev < 0 ? 0.05 : 0.06);
+    if (lev < 0.3 && dev > 0) m = 1 - 0.02 * dev; // for a fringe player, extra years of security are worth a small discount
+    else if (p.age >= 30 && dev > 0) m = 1 - 0.01 * dev; // a veteran never turns down extra years: the risk is all yours
+    opts.push({ yrs: y, amt: round2(Math.max(MIN_SALARY, amt * m)), ok, why, pref: dev === 0 });
+  }
+  return { lev, pref, opts };
+}
+function resignTerms(p) { return contractOptions(p, p.ask, prefYears(p)); }
+function extensionTerms(p) { const a = extensionAsk(p); return contractOptions(p, a.amt, a.yrs, 2); }
+
 function extensionAsk(p) {
   const yrs = Math.max(2, contractYears({ age: p.age + 1 }));
   // cap is expected to grow; players price in the bump and the security of signing early
   return { amt: round2(marketValue(p) * (1.04 + hashGauss(p.id, 3, state.season) * 0.03)), yrs };
 }
-function extendPlayer(pid) {
+function extendPlayer(pid, yrs) {
   const p = P(pid);
   if (!p || !extensionDue(p)) return 'Not eligible for an extension';
-  const a = extensionAsk(p);
+  let a = extensionAsk(p);
+  if (yrs && yrs !== a.yrs) { const o = extensionTerms(p).opts.find(x => x.yrs === yrs); if (!o || !o.ok) return o ? o.why : 'Not an option'; a = o; }
   if (payrollNext(p.tid) + a.amt > state.cap * 1.06) return 'Would not fit under next year\'s cap';
   p.contract.next = makeContract(p, a.amt, a.yrs);
   addNews(`${T(p.tid).abbr} extended ${p.lbl} ${pname(p)}: ${a.yrs} yr, ${fmtMoney(p.contract.next.amt)}/yr (${fmtMoney(p.contract.next.gtd)} gtd).`, [p.tid], 'sign');
@@ -285,7 +322,7 @@ function irActivations() {
 }
 
 // ---------- game day: 48 of the 53 dress ----------
-const GAMEDAY_MIN = { QB: 2, RB: 2, WR: 4, TE: 2, OL: 7, DL: 6, LB: 4, CB: 4, S: 3, K: 1, P: 1 };
+const GAMEDAY_MIN = { QB: 2, RB: 2, WR: 4, TE: 2, OL: 7, DL: 8, LB: 5, CB: 5, S: 3, K: 1, P: 1 };
 function gameDayActives(tid) {
   const ro = rosterOf(tid).filter(p => !p.injury);
   if (ro.length <= GAMEDAY_ACTIVE) return new Set(ro.map(p => p.id));
