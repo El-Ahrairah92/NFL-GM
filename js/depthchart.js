@@ -46,6 +46,7 @@ const chartName = k => CHART_NAME[k] || k;
 function ensureChart(tid) {
   const t = T(tid);
   if (!t.dch) t.dch = { auto: { off: true, def: true, st: true }, lists: defaultChart(tid), rot: { RB: 0.2 } };
+  if (!t.dch.prio) t.dch.prio = {}; // pid -> chart key he favors when he starts at two spots on the field together
   // older saves had one 4-man rush list: split it into edge and interior specialists
   if (t.dch.lists.RUSH) {
     const old = t.dch.lists.RUSH.map(id => P(id)).filter(Boolean);
@@ -99,3 +100,14 @@ function practiceReps(tid) {
     if (changed) updateRatings(p);
   }
 }
+
+// players who head the list at 2+ keys in a unit, and which key they favor (explicit, else the package spot)
+function multiStarters(tid, unit) {
+  const c = ensureChart(tid), heads = {};
+  for (const sec of CHART_SECTIONS) if (sec.unit === unit && !sec.pkg) for (const [key] of sec.rows) { // rush/back packages replace players, they don't line up beside them
+    const id = (c.lists[key] || []).find(pid => P(pid) && P(pid).tid === tid);
+    if (id != null) (heads[id] = heads[id] || []).push(key);
+  }
+  return Object.entries(heads).filter(([, ks]) => ks.length >= 2).map(([id, ks]) => ({ pid: +id, keys: ks, prio: ks.includes(c.prio[id]) ? c.prio[id] : defaultPrio(ks) }));
+}
+function setPrio(tid, pid, key) { const c = ensureChart(tid); if (key) c.prio[pid] = key; else delete c.prio[pid]; }

@@ -119,9 +119,15 @@ function fatPenalty(g, p, grp) {
 }
 // Fill a list of slots with the best available players (rating at the slot's spot, minus fatigue, plus continuity)
 function fillSlots(g, s, slots, table, opts = {}) {
-  const T_ = g.side[s], used = new Set(opts.exclude || []), out = [];
+  const T_ = g.side[s], used = new Set(opts.exclude || []), out = new Array(slots.length);
   const chart = opts.chart;
-  for (const [name, slot, x, depth] of slots) {
+  // positional priority: a player who heads the list at two spots in this grouping plays his priority spot,
+  // and the next man on the other list steps in (priority spots are filled first)
+  const reserved = chart ? chartReservations(T_, chart, slots.map(([name, slot]) => opts.keyOf(name, slot))) : null;
+  const order = slots.map((_, i) => i);
+  if (reserved && reserved.size) { const pk = new Set(reserved.values()); order.sort((a, b) => (pk.has(opts.keyOf(slots[b][0], slots[b][1])) ? 1 : 0) - (pk.has(opts.keyOf(slots[a][0], slots[a][1])) ? 1 : 0) || a - b); }
+  for (const idx of order) {
+    const [name, slot, x, depth] = slots[idx];
     const [spot, grp] = table[slot];
     let best = null, bs = -1e9;
     let cands = T_.depth[spot].length ? T_.depth[spot] : T_.roster.map(p => ({ p, r: 30 }));
@@ -136,18 +142,41 @@ function fillSlots(g, s, slots, table, opts = {}) {
     }
     for (const c of cands) {
       if (used.has(c.p.id)) continue;
+      if (reserved && reserved.has(c.p.id) && reserved.get(c.p.id) !== key) continue; // saved for his priority spot
       let sc = c.r - fatPenalty(g, c.p, grp);
       if (list) { const i = list.indexOf(c.p.id); if (i >= 0) sc = 300 - i * 14 - fatPenalty(g, c.p, grp) + (i === 1 && rotHit ? 30 : 0); }
       if (g.ps[c.p.id] && g.ps[c.p.id].last === name) sc += 1.5; // continuity: no needless shuffling
       if (opts.score && !list) sc += opts.score(c.p, slot);
       if (sc > bs) { bs = sc; best = c; }
     }
-    if (!best) best = { p: T_.roster.find(p => !used.has(p.id)) || T_.roster[0], r: 30 };
+    if (!best) best = { p: T_.roster.find(p => !used.has(p.id) && !(reserved && reserved.has(p.id))) || T_.roster.find(p => !used.has(p.id)) || T_.roster[0], r: 30 };
     used.add(best.p.id);
+    // if his priority spot went to someone else this snap (rotation, fatigue), he's free to play his other spot
+    if (reserved) for (const [pid, k] of reserved) if (k === key && pid !== best.p.id) reserved.delete(pid);
     const pen = best.p.a ? comfortPen(best.p, spot) : 0; // how well he knows this spot; his own attributes do the rest
-    out.push({ p: best.p, slot, name, spot, grp, x, depth: depth || 0, pen, s });
+    out[idx] = { p: best.p, slot, name, spot, grp, x, depth: depth || 0, pen, s };
   }
   return out;
+}
+// package-only spots win ties by default: the slot corner in nickel, the 4th receiver in 10 personnel, etc.
+const PRIO_SPECIAL = new Set(['NCB', 'DIME', 'SLOT2', 'Y2', 'OL6', 'FB', 'RB3D', 'RBSY', 'RUSHE', 'RUSHI']);
+function defaultPrio(keys) { return keys.find(k => PRIO_SPECIAL.has(k)) || keys[0]; }
+// pid -> the one chart key he's held for, among the keys in this grouping where he'd start
+function chartReservations(T_, chart, keys) {
+  const first = new Map(); // pid -> [keys he heads]
+  for (const k of new Set(keys)) {
+    const list = k && chart.lists[k];
+    if (!list || !list.length) continue;
+    const id = list.find(pid => T_.roster.some(p => p.id === pid));
+    if (id == null) continue;
+    (first.get(id) || first.set(id, []).get(id)).push(k);
+  }
+  const res = new Map();
+  for (const [pid, ks] of first) if (ks.length >= 2) {
+    const want = chart.prio && chart.prio[pid];
+    res.set(pid, ks.includes(want) ? want : defaultPrio(ks));
+  }
+  return res;
 }
 // Offensive eleven for a personnel grouping
 function offUnit(g, s, pers, call) {

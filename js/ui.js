@@ -496,8 +496,17 @@ function depthChartHTML() {
   let html = `<div class="row" style="margin-bottom:10px"><div class="subtabs" style="margin:0">${[['off', 'Offense'], ['def', 'Defense'], ['pkg', 'Packages & Special Teams']].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="dchTab" data-tab="${k}">${l}</button>`).join('')}</div><span class="spacer"></span>
     ${unitOf ? (c.auto[unitOf] ? `<span class="small muted">The staff is setting the ${tab === 'off' ? 'offense' : 'defense'}.</span> <button class="sm primary" data-action="dchAuto" data-unit="${unitOf}" data-on="0">Take control</button>` : `<span class="small muted">You're setting the ${tab === 'off' ? 'offense' : 'defense'}.</span> <button class="sm" data-action="dchAuto" data-unit="${unitOf}" data-on="1">Hand to staff</button>`) : `<span class="small muted">Special teams: ${c.auto.st ? 'staff' : 'you'}</span> <button class="sm" data-action="dchAuto" data-unit="st" data-on="${c.auto.st ? 0 : 1}">${c.auto.st ? 'Take control' : 'Hand to staff'}</button>`}</div>
     ${state.settings.autoUser ? '<div class="callout"><b>Auto-manage is on</b>: the staff sets the depth chart until you turn it off in Settings.</div>' : ''}
-    <div class="dc-wrap"><div class="card"><div class="dc-board ${tab}">${DC_BOARD[tab].map(([k, col, row]) => `<div style="grid-column:${col};grid-row:${row}">${dcBox(c, k, key, u)}</div>`).join('')}</div>
-    <div class="small muted" style="margin-top:10px">Click a position to set its order. <span class="cfdot warn">●</span> Decent / <span class="cfdot bad">●</span> Raw or unfamiliar at the spot · <span class="cfdot bad">✚</span> injured.${tab === 'off' ? ' Bottom row: sub-package spots (4th WR, 3rd TE, 6th OL).' : ''}</div></div><div class="dc-side">`;
+    <div class="dc-wrap"><div><div class="card"><div class="dc-board ${tab}">${DC_BOARD[tab].map(([k, col, row]) => `<div style="grid-column:${col};grid-row:${row}">${dcBox(c, k, key, u)}</div>`).join('')}</div>
+    <div class="small muted" style="margin-top:10px">Click a position to set its order. <span class="cfdot warn">●</span> Decent / <span class="cfdot bad">●</span> Raw or unfamiliar at the spot · <span class="cfdot bad">✚</span> injured.${tab === 'off' ? ' Bottom row: sub-package spots (4th WR, 3rd TE, 6th OL).' : ''}</div></div>`;
+  // positional priority for players who start at two spots
+  if (unitOf) {
+    const ms = multiStarters(u, unitOf);
+    html += `<div class="card" style="margin-top:12px"><h3>Positional Priority</h3>${ms.length ? ms.map(m => { const p = P(m.pid), other = m.keys.filter(k => k !== m.prio);
+      return `<div class="row small" style="margin-bottom:6px">${esc(p.lbl)} ${playerLink(p)} starts at ${m.keys.map(chartName).join(' + ')}. Favor: <select data-change="dchPrio" data-pid="${m.pid}">${m.keys.map(k => `<option value="${k}" ${k === m.prio ? 'selected' : ''}>${chartName(k)}</option>`).join('')}</select>
+        <span class="muted">When both are on the field he plays ${chartName(m.prio)}; ${other.map(k => { const nx = (c.lists[k] || []).filter(id => P(id) && P(id).tid === u)[1]; return `${nx ? esc(pshort(P(nx))) : 'the next man'} steps in at ${chartName(k)}`; }).join('; ')}.</span></div>`; }).join('')
+      : '<div class="muted small">List the same player first at two spots (say CB and SLOT CB) and choose here which one he plays when both are on the field. The next man on the other list steps in.</div>'}</div>`;
+  }
+  html += '</div><div class="dc-side">';
   // ---- right: the selected slot ----
   const lvl = p => { const cc = comfortOf(p, spot); return cc >= 85 ? 4 : cc >= 60 ? 3 : cc >= 30 ? 2 : cc > 0 ? 1 : 0; };
   const fam = (FAMILIES.find(f => f[1].includes(spot)) || [null, []])[1];
@@ -1755,6 +1764,7 @@ const changes = {
   theme: v => { state.settings.theme = v; save(); },
   dch: (v, el) => { setChart(state.userTid, el.dataset.key, +el.dataset.i, v ? +v : 0); save(); },
   dchAll: (v, el) => { ui.dchAll = el.checked; },
+  dchPrio: (v, el) => { setPrio(state.userTid, +el.dataset.pid, v); save(); },
   dchRot: (v, el) => { ensureChart(state.userTid).rot[el.dataset.key] = +v; ensureChart(state.userTid).auto[CHART_UNIT(el.dataset.key)] = false; save(); },
 };
 
