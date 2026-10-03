@@ -107,7 +107,7 @@ function genVeteran(spotOrGroup, tier) {
 // Prospect quality by position: positions with many prospects per starting job (QB, RB) would otherwise
 // out-select the league's established talent level over a decade (measured in a 10-season drift test).
 const DRAFT_Q_ADJ = { QB: -1.3, RB: -0.5, FB: -0.3, WRX: -0.6, WRZ: -0.6, SLOT: -0.6, TEY: -0.95, TEH: -0.95, LT: 0.05, LG: 0.05, C: 0.05, RG: 0.05, RT: 0.05,
-  NT: -0.1, DT: -0.1, DE: -0.1, EDGE: -0.15, MLB: -0.55, WLB: -0.55, CB: -0.3, NCB: -0.3, FS: -0.3, SS: -0.3, K: 0, P: 0 };
+  NT: -0.1, DT: -0.1, DE: -0.1, EDGE: -0.15, MLB: -0.55, WLB: -0.55, CB: -0.3, NCB: -0.3, FS: -0.3, SS: -0.3, K: -0.55, P: 0 }; // K: bigger classes mean more kickers to choose from
 function genProspect(draftYear) {
   const spot = weightedPick(Object.keys(DRAFT_SPOT_W), Object.values(DRAFT_SPOT_W));
   const p = genPlayer(spot, gauss(-0.45 + (DRAFT_Q_ADJ[spot] || 0), 1.4), randInt(21, 23));
@@ -146,7 +146,7 @@ function shouldRetire(p) {
 
 // ---------- season stat helpers ----------
 const STAT_KEYS = ['gp', 'gs', 'passA', 'passC', 'passY', 'passTD', 'passInt', 'sacked', 'passLng', 'rushA', 'rushY', 'rushTD', 'rushLng', 'fum',
-  'tgt', 'rec', 'recY', 'recTD', 'recLng', 'tkl', 'sck', 'dint', 'pd', 'ff', 'fr', 'dtd', 'fgm', 'fga', 'fgLng', 'xpm', 'xpa', 'pnt', 'pntY'];
+  'tgt', 'rec', 'recY', 'recTD', 'recLng', 'tkl', 'sck', 'dint', 'pd', 'ff', 'fr', 'dtd', 'fgm', 'fga', 'fgLng', 'xpm', 'xpa', 'pnt', 'pntY', 'pen', 'penY'];
 const MAX_KEYS = new Set(['passLng', 'rushLng', 'recLng', 'fgLng']);
 function addStats(into, line) {
   for (const k in line) {

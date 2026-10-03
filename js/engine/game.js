@@ -21,7 +21,7 @@ function coachCtx(tid, oppTid) {
   };
 }
 function newTS() {
-  return { fd: 0, plays: 0, passA: 0, passC: 0, passY: 0, sacks: 0, sackY: 0, rushA: 0, rushY: 0, to: 0, d3a: 0, d3c: 0, d4a: 0, d4c: 0, top: 0, punts: 0, prs: 0, tos: 0 };
+  return { pen: 0, penY: 0, fd: 0, plays: 0, passA: 0, passC: 0, passY: 0, sacks: 0, sackY: 0, rushA: 0, rushY: 0, to: 0, d3a: 0, d3c: 0, d4a: 0, d4c: 0, top: 0, punts: 0, prs: 0, tos: 0 };
 }
 function durMult(p) {
   if (!p || !p.h) return 1;
@@ -141,6 +141,7 @@ function timeoutCheck(g) {
 function snap(g) {
   const o = g.poss, d = 1 - o, diff = g.score[o] - g.score[d];
   // play clock runs between snaps when the game clock is live
+  g.wasRunning = g.running;
   if (g.running) { runClock(g, betweenPlays(g)); if (g.clock <= 0) return; }
   g.running = false;
   const K = kickUnitPlayer(g, o, 'K');
@@ -177,6 +178,8 @@ function runPlay(g, oc, dc) {
   if (oc.form === 'EMP') { const rb = off.find(e => e.slot === 'RB'); if (rb) rb.x = -1.8; }
   if (!g.first[o].off) { g.first[o].off = true; for (const e of off) ln(g, e.p).gs = 1; }
   if (!g.first[d].def) { g.first[d].def = true; for (const e of def) ln(g, e.p).gs = 1; }
+  if (g.pbp) g.pendingDD = `${ordinal(g.down)} & ${g.ydl + g.togo >= 100 ? 'Goal' : g.togo} at ${spotTxt(g)}`;
+  if (checkPreSnap(g, off, def, oc)) return; // false start, offside, delay of game: no play
   // predictability: did the defense's film read match the call?
   const keyed = oc.isRun ? (dc.runEst - 0.5) * 2 : (0.5 - dc.runEst) * 2;
   const dcp = knob(C(T(g.tids[o]).oc), 'dcp');
@@ -192,7 +195,11 @@ function runPlay(g, oc, dc) {
   // fatigue: a carry costs a back extra
   if (res.carrier && res.kind === 'run') res.carrier.extraLoad = 2.3;
   tickFatigue(g, [...off, ...def]);
+  // a flag on the play: the non-offending side takes the penalty or the result
+  if (checkLive(g, res, oc, off, def)) { injuryCheck(g, (res.involved || []).filter(Boolean)); return; }
+  const declined = g.penDeclined; g.penDeclined = null;
   applyResult(g, res, oc, dc, off, def, { downB, togoB, ydlB });
+  if (declined && g.pbp) pbpLog(g, `(${PEN[declined.k].n} on ${T(g.tids[declined.s]).abbr} ${pshort(declined.e.p)}, declined)`, false);
   chartPlay(g, oc, dc, res, before, off, def);
   // injuries: whoever was in the collision, plus the trenches
   injuryCheck(g, (res.involved || []).filter(Boolean));
@@ -469,17 +476,19 @@ function punt(g) {
   if (100 - recv <= 20 && text !== 'touchback') inc(g, Pn.p, 'pi20');
   inc(g, Pn.p, 'pntY', gross);
   pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds, ${text}`);
+  if (text.startsWith('returned')) recv = returnFoul(g, d, recv);
   changePoss(g, clamp(recv, 1, 99), 'Punt');
 }
 function kickoff(g, kickSide, safetyKick) {
   if (g.over) return;
   const recv = 1 - kickSide, K = kickUnitPlayer(g, kickSide, 'K');
   const ret = returner(g, recv), cover = coverUnitScore(g, kickSide);
-  let start;
+  let start, returned = false;
   const tbP = safetyKick ? 0 : clamp(0.18 + (ea(g, K, 'krng') - 70) * 0.008 + (ea(g, K, 'ktrj') - 70) * 0.003, 0.05, 0.6);
   if (rand() < tbP) { start = 35; pbpLog(g, `${pshort(K.p)} kicks off — touchback`, false); }
   else {
     const rc = ea(g, ret, 'elu') * 0.3 + ea(g, ret, 'vis') * 0.25 + ea(g, ret, 'spd') * 0.3 + ea(g, ret, 'bur') * 0.15;
+    returned = true;
     start = Math.round(gauss((safetyKick ? 38 : 27) + (rc - cover) * 0.12 + g.cx[recv].st * 0.025 - (ea(g, K, 'ktrj') - 70) * 0.04, 6.5));
     if (rand() < 0.012) start += randInt(20, 45);
     start = clamp(start, 5, 99);
@@ -494,6 +503,7 @@ function kickoff(g, kickSide, safetyKick) {
     }
     pbpLog(g, `${pshort(K.p)} ${safetyKick ? 'free kick' : 'kicks off'}, ${pshort(ret.p)} returns to the ${start < 50 ? T(g.tids[recv]).abbr + ' ' + start : start === 50 ? '50' : T(g.tids[kickSide]).abbr + ' ' + (100 - start)}`, false);
   }
+  if (returned) start = returnFoul(g, recv, start); // a hold on the return brings it back
   startPossession(g, recv, clamp(start, 1, 99));
 }
 

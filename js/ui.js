@@ -181,7 +181,7 @@ function setupHTML() {
   return html + '</div></div>';
 }
 
-const PAGES = [['home', 'Home'], ['roster', 'Roster'], ['depth', 'Depth Chart'], ['coaches', 'Staff'], ['playbook', 'Playbook'], ['schedule', 'Schedule'], ['standings', 'Standings'], ['stats', 'League Stats'], ['trade', 'Trade'], ['fa', 'Free Agents'], ['draft', 'Draft'], ['news', 'News'], ['history', 'History'], ['settings', 'Settings']];
+const PAGES = [['home', 'Home'], ['roster', 'Roster'], ['depth', 'Depth Chart'], ['coaches', 'Staff'], ['playbook', 'Playbook'], ['schedule', 'Schedule'], ['standings', 'Standings'], ['stats', 'League Stats'], ['scout', 'Scouting'], ['trade', 'Trade'], ['fa', 'Free Agents'], ['draft', 'Draft'], ['news', 'News'], ['history', 'History'], ['settings', 'Settings']];
 
 function continueLabel() {
   switch (state.phase) {
@@ -225,6 +225,7 @@ function pageHTML() {
     case 'trade': return tradeHTML();
     case 'fa': return faHTML();
     case 'draft': return draftHTML();
+    case 'scout': return scoutHTML();
     case 'coaches': return coachesHTML();
     case 'news': return newsHTML();
     case 'history': return historyHTML();
@@ -515,7 +516,7 @@ function depthChartHTML() {
   const related = all.filter(p => key === 'KR' || ['K', 'P'].includes(key) || lvl(p) > 0 || fam.includes(p.spot));
   const cands = (ui.dchAll ? all : related).sort((x, y) => key === 'KR' ? returnScore(y) - returnScore(x) : lvl(y) - lvl(x) || chartValue(y, spot) - chartValue(x, spot));
   const rot = ROT_KEYS.has(key) ? `<label class="small muted">No. 2 snaps</label> <select data-change="dchRot" data-key="${key}">${ROT_OPTS.map(([v, l]) => `<option value="${v}" ${(c.rot[key] || 0) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>` : '';
-  html += `<div class="card"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">${chartName(key)} · ${esc(label)}</h3><span class="spacer"></span>${rot}</div>
+  html += `<div class="card"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">${chartName(key)} · ${esc(label)}</h3><span class="spacer"></span>${SCOUT_KEYS.off.concat(SCOUT_KEYS.def, SCOUT_KEYS.st).includes(key) ? `<button class="sm" data-action="scoutKey" data-key="${key}">Find targets</button>` : ''} ${rot}</div>
     <div class="section-title" style="margin-top:6px">Depth order <span class="small muted">· drag to reorder</span></div><div class="dc-order">
     ${list.map((id, i) => { const p = P(id); return `<div class="dc-row" draggable="true" data-dcpid="${id}" data-dcfrom="${i}" data-dcdrop="${i}"><span class="n">${i + 1}</span><span>${esc(p.lbl)} ${playerLink(p)}</span><span class="dc-meta">${dcPlayerMeta(p, key, spot)}<button class="sm" data-action="dchRemove" data-key="${key}" data-i="${i}" title="Remove">✕</button></span></div>`; }).join('')}
     <div class="dc-drop" data-dcdrop="${list.length}">${list.length < n ? `Drop a player here for No. ${list.length + 1}` : `Drop here to make him No. ${n} (bumps the last man)`}</div></div>
@@ -733,6 +734,7 @@ const STAT_CATS = {
   returns: { min: s => (s.krA || 0) + (s.prA || 0) >= 1, sort: 'krY', cols: [['krA', 'KR'], ['krY', 'KR Yds'], ['kravg', 'KR Avg', s => s.krA ? round1(s.krY / s.krA) : 0], ['prA', 'PR'], ['prY', 'PR Yds'], ['pravg', 'PR Avg', s => s.prA ? round1(s.prY / s.prA) : 0]] },
   kicking: { pos: ['K', 'P'], min: s => (s.fga || 0) + (s.pnt || 0) >= 1, sort: 'fgm', cols: [['fgm', 'FGM'], ['fga', 'FGA'], ['fgp', 'FG%', s => s.fga ? round1(100 * s.fgm / s.fga) : 0], ['fgLng', 'Lng'], ['xpm', 'XPM'], ['xpa', 'XPA'], ['pnt', 'Punts'], ['pavg', 'P Avg', s => s.pnt ? round1(s.pntY / s.pnt) : 0], ['pi20', 'In 20']] },
 };
+STAT_CATS.penalties = { min: s => (s.pen || 0) >= 1, sort: 'pen', cols: [['pen', 'Penalties'], ['penY', 'Yds'], ['ppg', 'Per game', s => s.gp ? round1((s.pen || 0) / s.gp) : 0]] };
 const ADV_GROUPS = {
   QB: { spots: ['QB'], min: (a, k) => (a.db || 0) >= 60 * k, cols: [['EPA/db', a => a.db ? a.epaDb / a.db : 0, 2], ['CPOE', a => a.att ? 100 * (a.cmp - a.xc) / a.att : 0, 1], ['TTT', a => a.tttN ? a.ttt / a.tttN : 0, 2], ['aDOT', a => a.att ? a.air / a.att : 0, 1], ['Pressured%', a => a.db ? 100 * (a.prsd || 0) / a.db : 0, 0]] },
   'WR/TE': { spots: ['WRX', 'WRZ', 'SLOT', 'TEY', 'TEH'], min: (a, k) => (a.routes || 0) >= 60 * k, cols: [['Routes', a => a.routes || 0, 0], ['Sep (yds)', a => a.sepN ? a.sep / a.sepN : 0, 2], ['Tgt/Route%', a => a.routes ? 100 * (a.sepN || 0) / a.routes : 0, 0], ['aDOT', a => a.sepN ? a.adot / a.sepN : 0, 1], ['EPA/Tgt', a => a.sepN ? (a.epaTgt || 0) / a.sepN : 0, 2]] },
@@ -989,6 +991,53 @@ function draftHTML() {
   return html;
 }
 
+// ---------- scouting department ----------
+function scoutHTML() {
+  const u = state.userTid;
+  ensureChart(u); refreshChart(u);
+  const needs = scoutNeeds(u);
+  const key = ui.scoutKey && needs.some(n => n.key === ui.scoutKey) ? ui.scoutKey : needs.slice().sort((a, b) => b.score - a.score)[0].key; // default: the biggest need
+  const row = n => `<div class="sc-row ${n.key === key ? 'on' : ''}" data-action="scoutKey" data-key="${n.key}"><b class="sc-k">${chartName(n.key)}</b><span class="grow">${n.s1 ? `${esc(pshort(n.s1))} ${tierPill(n.s1, staffValueAt(n.s1, n.spot, u))}` : '<span class="muted">nobody</span>'}</span><span class="pill ${n.cls}">${n.lvl}</span></div>`;
+  let html = `<div class="callout">Your scouts' read on every spot of the depth chart. Click a spot to see free agents, draft prospects and trade targets who would help there, ranked by how much better they'd be than your current starter (your staff's view, not true ratings).</div>`;
+  html += `<div class="sc-wrap"><div class="card"><h3>Offense</h3>${needs.filter(n => SCOUT_KEYS.off.includes(n.key)).map(row).join('')}<h3 style="margin-top:14px">Defense</h3>${needs.filter(n => SCOUT_KEYS.def.includes(n.key)).map(row).join('')}<h3 style="margin-top:14px">Specialists</h3>${needs.filter(n => SCOUT_KEYS.st.includes(n.key)).map(row).join('')}</div>`;
+  const t = scoutTargets(u, key), spot = t.need.spot, tab = ui.scoutTab || 'fa';
+  const vs = r => { const g = Math.round(r.gain); return `<span class="${g >= 3 ? 'good' : g >= 0 ? '' : 'muted'}">${g > 0 ? '+' : ''}${g}</span>`; };
+  const cmpTitle = 'Improvement over your current starter, as your staff sees it';
+  let body;
+  if (tab === 'fa') body = table('scfa', [
+    { k: 'n', l: 'Player', v: r => r.p.last, f: r => `${esc(r.p.lbl)} ${playerLink(r.p)}` },
+    { k: 'age', l: 'Age', v: r => r.p.age, num: 1 },
+    { k: 't', l: 'Tier', v: r => r.v, f: r => tierPill(r.p, r.v) },
+    { k: 'g', l: 'vs. starter', v: r => r.gain, f: vs, num: 1, title: cmpTitle },
+    { k: 'fit', l: 'Fit', v: r => r.fit, f: r => r.fit >= 3 ? '<span class="good">Good</span>' : r.fit <= -3 ? '<span class="bad">Poor</span>' : '<span class="muted">OK</span>', title: 'Scheme fit' },
+    { k: 'rep', l: 'Reputation', f: r => repPill(r.p) },
+    { k: 'ask', l: 'Asking', v: r => r.p.ask, f: r => fmtMoney(r.p.ask), num: 1 },
+    { k: 'a', l: '', f: r => state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP' ? `<button class="sm primary" data-action="sign" data-pid="${r.p.id}" ${r.p.ask > capRoom(u) ? 'disabled title="Not enough cap space"' : ''}>Sign</button>` : '' },
+  ], t.fa, { nosort: 1 });
+  else if (tab === 'draft') body = !t.draft.length ? `<div class="muted">${state.draft ? 'No prospects at this spot.' : 'The draft class is revealed when the offseason starts.'}</div>` : table('scdr', [
+    { k: 'n', l: 'Prospect', v: r => r.p.last, f: r => `${esc(r.p.lbl)} ${playerLink(r.p)} <span class="muted small">${esc(r.p.college)}</span>` },
+    { k: 't', l: 'Now', f: r => tierPill(r.p, r.now) },
+    { k: 'u', l: 'Upside', f: r => upsidePill(r.p) },
+    { k: 'g', l: 'vs. starter', v: r => r.gain, f: vs, num: 1, title: 'Expected improvement once he develops' },
+    { k: 'fit', l: 'Fit', v: r => r.fit, f: r => r.fit >= 3 ? '<span class="good">Good</span>' : r.fit <= -3 ? '<span class="bad">Poor</span>' : '<span class="muted">OK</span>' },
+    { k: 'pr', l: 'Proj', v: r => r.rank || 999, f: r => projLabel(r.rank) },
+    { k: 'pk', l: 'Your pick', f: r => r.pick ? `#${r.pick.pick} <span class="muted small">(Rd ${r.pick.round})</span>` : '<span class="muted">—</span>', title: 'Your first pick where he is likely still on the board' },
+  ], t.draft, { nosort: 1 }) + `<div style="margin-top:8px"><button class="sm" data-action="nav" data-view="draft">Go to the draft board</button></div>`;
+  else body = table('sctr', [
+    { k: 'n', l: 'Player', v: r => r.p.last, f: r => `${esc(r.p.lbl)} ${playerLink(r.p)} <span class="muted small">${T(r.p.tid).abbr}</span>` },
+    { k: 'age', l: 'Age', v: r => r.p.age, num: 1 },
+    { k: 't', l: 'Tier', f: r => tierPill(r.p, r.v) },
+    { k: 'g', l: 'vs. starter', v: r => r.gain, f: vs, num: 1, title: cmpTitle },
+    { k: 'c', l: 'Contract', f: r => fmtContract(r.p) },
+    { k: 'av', l: 'Available?', f: r => `<span class="${r.avail === 'Likely' ? 'good' : r.avail === 'Possible' ? 'warn' : 'muted'}">${r.avail}</span>`, title: 'Backups, vets on losing teams and overpaid players are easier to pry loose' },
+    { k: 'a', l: '', f: r => tradeWindowOpen() ? `<button class="sm" data-action="tradeFor" data-pid="${r.p.id}">Build trade</button>` : '' },
+  ], t.trade, { nosort: 1 });
+  html += `<div class="card"><div class="row" style="margin-bottom:8px"><h3 style="margin:0">${chartName(key)} · ${esc(chartLabel(key))}</h3><span class="pill ${t.need.cls}">${t.need.lvl}</span><span class="spacer"></span><button class="sm" data-action="dchJump" data-key="${key}">Depth chart</button></div>
+    <div class="callout small">${esc(scoutTake(u, key, t))}</div>
+    <div class="subtabs">${[['fa', `Free agents (${t.fa.length})`], ['draft', `Draft (${t.draft.length})`], ['trade', `Trade (${t.trade.length})`]].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-action="scoutTab" data-t="${k}">${l}</button>`).join('')}</div>${body}</div></div>`;
+  return html;
+}
+
 // ---------- coaches ----------
 function tierChip(v) { const t = coachTier(v); return `<span class="pill tier-${t}">${t}</span>`; }
 function pctS(x) { return Math.round(x * 100) + '%'; }
@@ -1137,7 +1186,7 @@ const CAREER_COLS = {
   K: [['fgm', 'FGM'], ['fga', 'FGA'], ['fgp', 'FG%', s => s.fga ? round1(100 * s.fgm / s.fga) : 0], ['fgLng', 'Lng'], ['xpm', 'XPM'], ['xpa', 'XPA']],
   P: [['pnt', 'Punts'], ['pntY', 'Yds'], ['pavg', 'Avg', s => s.pnt ? round1(s.pntY / s.pnt) : 0]],
 };
-function careerCols(pos) { return pos === 'TE' ? CAREER_COLS.WR : DEF_POS.includes(pos) ? CAREER_COLS.DEF : CAREER_COLS[pos]; }
+function careerCols(pos) { const c = pos === 'TE' ? CAREER_COLS.WR : DEF_POS.includes(pos) ? CAREER_COLS.DEF : CAREER_COLS[pos]; return pos === 'K' || pos === 'P' ? c : [...c, ['pen', 'Pen']]; }
 
 // ---------- player card: an at-a-glance read ----------
 // red (bottom) → grey (middle) → green (top); dir -1 means lower is better, 0 means no judgment
@@ -1374,7 +1423,7 @@ function boxModal(gid) {
   html += `<div class="section-title">Team Stats</div><table style="max-width:520px"><thead><tr><th class="num">${T(a).abbr}</th><th style="text-align:center"></th><th>${T(h).abbr}</th></tr></thead><tbody>
     ${tsr('First Downs', t => t.fd)}${tsr('Total Yards', t => t.passY - t.sackY + t.rushY)}${tsr('Passing', t => t.passY - t.sackY)}${tsr('Comp-Att', t => t.passC + '-' + t.passA)}
     ${tsr('Sacked-Yds', t => t.sacks + '-' + t.sackY)}${tsr('Rushing', t => `${t.rushY} (${t.rushA} car)`)}${tsr('3rd Down', t => `${t.d3c}-${t.d3a}`)}${tsr('4th Down', t => `${t.d4c}-${t.d4a}`)}
-    ${tsr('Turnovers', t => t.to)}${tsr('Punts', t => t.punts)}${tsr('Possession', t => fmtClock(t.top))}</tbody></table>`;
+    ${tsr('Turnovers', t => t.to)}${tsr('Penalties-Yds', t => `${t.pen || 0}-${t.penY || 0}`)}${tsr('Punts', t => t.punts)}${tsr('Possession', t => fmtClock(t.top))}</tbody></table>`;
   html += filmRoomHTML(b);
   // player stats
   const lines = Object.entries(b.stats).map(([pid, l]) => ({ p: P(pid) || (+pid < 0 ? { id: +pid, first: 'Emergency', last: l.nm || 'Sub', lbl: '—', pos: 'WR', spot: 'WRZ', tid: l.tid } : null), l })).filter(x => x.p);
@@ -1582,7 +1631,7 @@ function gameWrapModal(gid) {
       ${[[1, a], [0, h]].map(([s, tid]) => `<tr><td>${T(tid).abbr}</td>${b.qs[s].slice(0, nq).map(x => `<td>${x}</td>`).join('')}<td class="final">${b.score[s]}</td></tr>`).join('')}</tbody></table>
       <table style="max-width:420px;margin-top:10px"><thead><tr><th class="num">${T(a).abbr}</th><th></th><th class="num">${T(h).abbr}</th></tr></thead><tbody>
       ${stat('Total yards', t => t.passY - t.sackY + t.rushY)}${stat('Passing', t => `${t.passC}/${t.passA}, ${t.passY - t.sackY}`)}${stat('Rushing', t => `${t.rushA}-${t.rushY}`)}
-      ${stat('First downs', t => t.fd)}${stat('3rd down', t => `${t.d3c}/${t.d3a}`)}${stat('Turnovers', t => t.to)}${stat('Sacks allowed', t => t.sacks)}${stat('Possession', t => fmtTop(t.top))}</tbody></table>
+      ${stat('First downs', t => t.fd)}${stat('3rd down', t => `${t.d3c}/${t.d3a}`)}${stat('Turnovers', t => t.to)}${stat('Penalties', t => `${t.pen || 0}-${t.penY || 0}`)}${stat('Sacks allowed', t => t.sacks)}${stat('Possession', t => fmtTop(t.top))}</tbody></table>
     </div><div>
       <div class="section-title" style="margin-top:0">Best of ${T(u).abbr}</div>${mine.slice(0, 4).map(line).join('') || '<div class="small muted">—</div>'}
       ${breakouts.length ? `<div class="section-title good">Breakout performances</div>${breakouts.map(line).join('')}` : ''}
@@ -1715,6 +1764,9 @@ const actions = {
     simDraftToEnd(); save(); render();
   },
   draftTab: d => { ui.draftTab = d.t; render(); },
+  scoutKey: d => { ui.scoutKey = d.key; view = 'scout'; render(); },
+  scoutTab: d => { ui.scoutTab = d.t; render(); },
+  dchJump: d => { ui.dchKey = d.key; ui.dchTab = CHART_UNIT(d.key) === 'def' ? 'def' : ['K', 'P', 'KR'].includes(d.key) ? 'pkg' : 'off'; view = 'depth'; render(); },
   draftRound: d => { ui.draftRound = +d.r; render(); },
   draftTradeFor: d => {
     const pk = state.picks.find(x => x.id === +d.pick);

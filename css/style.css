@@ -257,3 +257,12 @@ tr.me td { background: var(--me); }
 @media (max-width: 700px) { .trunc { max-width: 140px; } .dpk { width: 120px; } }
 .pill.rep.elite { color: var(--elite); border-color: var(--elite-b); }
 .pill.rep { font-weight: 600; }
+
+/* scouting */
+.sc-wrap { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .sc-wrap { grid-template-columns: 1fr; } }
+.sc-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.sc-row:hover { background: var(--hover); }
+.sc-row.on { background: var(--me); outline: 1px solid var(--accent); }
+.sc-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-k { width: 64px; flex: none; font-size: 12.5px; }
