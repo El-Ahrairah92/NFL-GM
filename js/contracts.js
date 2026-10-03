@@ -219,7 +219,7 @@ function psRoom(tid, p) {
 function signToPS(pid, tid) {
   const p = P(pid);
   if (!p || p.tid !== -1) return 'Not a free agent';
-  if (p.exp > 6) return 'Too experienced for the practice squad';
+  if (p.waiver) return 'He is on waivers';
   if (!psRoom(tid, p)) return 'Practice squad is full';
   setTid(p, -3); p.psTid = tid; p.contract = { amt: PS_SALARY, yrs: 1, gtd: 0 }; delete p.ask;
   return null;
@@ -242,7 +242,7 @@ function fillPS(tid) {
   const cap = pos => Math.max(1, Math.ceil(ROSTER_TEMPLATE[pos] / 3));
   const counts = {}; psOf(tid).forEach(p => counts[p.pos] = (counts[p.pos] || 0) + 1);
   const score = p => viewCeil(p, tid) + (p.lastTid === tid ? 2 : 0) - p.age * 0.3;
-  const pool = Object.values(state.players).filter(p => p.tid === -1 && p.exp <= 6 && !p.injury && p.age <= 28).sort((a, b) => score(b) - score(a));
+  const pool = Object.values(state.players).filter(p => p.tid === -1 && !p.waiver && p.exp <= 6 && !p.injury && p.age <= 28).sort((a, b) => score(b) - score(a));
   for (let guard = 0; psRoom(tid) && guard < 40; guard++) {
     const open = POSITIONS.filter(x => x !== 'K' && x !== 'P' && (counts[x] || 0) < cap(x));
     if (!open.length) break;
@@ -267,7 +267,8 @@ function psPoaching() {
 }
 // promote from your own squad when a position runs dry (AI always; your team only in a true emergency or on auto)
 function psPromotions(tid) {
-  const auto = isAI(tid) || state.settings.autoUser;
+  if (!isAI(tid)) return; // your call-ups are yours to make
+  const auto = true;
   for (const pos of POSITIONS) {
     const healthy = rosterOf(tid).filter(p => p.pos === pos && !p.injury).length;
     const need = LINEUP_NEED[pos] + (auto && pos === 'QB' ? 1 : 0);
@@ -283,9 +284,24 @@ function psPromotions(tid) {
     promoteFromPS(c.id, tid, `${pos} injuries`);
   }
 }
+// a reserve/future contract for one of your practice squad players (offseason)
+function signFutures(pid) {
+  const p = P(pid), tid = state.userTid;
+  if (!p || p.tid !== -3 || p.psTid !== tid) return 'Not on your practice squad';
+  if (rosterOf(tid).length >= OFFSEASON_MAX) return 'Roster is full';
+  setTid(p, tid); delete p.psTid; p.contract = makeContract(p, MIN_SALARY, 2, 0);
+  addNews(`${T(tid).abbr} signed ${p.lbl} ${pname(p)} to a reserve/future deal.`, [tid], 'sign');
+  return null;
+}
+function releaseUserPS() { for (const p of psOf(state.userTid)) { releaseFromPS(p.id); p.lastTid = state.userTid; } }
+// positions where you cannot field a healthy lineup this week
+function lineupShort(tid) {
+  return POSITIONS.map(pos => [pos, rosterOf(tid).filter(p => p.pos === pos && !p.injury).length]).filter(([pos, n]) => n < LINEUP_NEED[pos]).map(([pos, n]) => `${pos} (${n} healthy, need ${LINEUP_NEED[pos]})`);
+}
 // offseason: squads dissolve; teams keep the best on reserve/future deals
 function psOffseason() {
   for (const t of state.teams) {
+    if (!isAI(t.id)) continue; // you decide who gets a reserve/future deal during the re-signing period
     const ps = psOf(t.id).sort((a, b) => viewCeil(b, t.id) - viewCeil(a, t.id));
     ps.forEach((p, i) => {
       if (i < 8 && p.age <= 27) { setTid(p, t.id); delete p.psTid; p.contract = makeContract(p, MIN_SALARY, 2, 0); }

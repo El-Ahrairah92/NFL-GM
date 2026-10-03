@@ -4,7 +4,7 @@
 // =====================================================================
 const PHASE_LABEL = {
   REG: 'Regular Season', PLAYOFFS: 'Playoffs', RECAP: 'Season Recap', COACHES: 'Coaching Carousel',
-  RESIGN: 'Re-sign Players', FA: 'Free Agency', DRAFT: 'Draft', UDFA: 'Rookie Free Agency', PRESEASON: 'Preseason', CUTDOWN: 'Cutdown Day',
+  RESIGN: 'Re-sign Players', FA: 'Free Agency', DRAFT: 'Draft', UDFA: 'Rookie Free Agency', PRESEASON: 'Preseason', CUTDOWN: 'Cutdown Day', WAIVERS: 'Waiver Claims',
 };
 const ROUND_NAMES = ['Wild Card', 'Divisional', 'Conference Final', 'Championship'];
 
@@ -45,6 +45,7 @@ function newLeague(userTid) {
   state.ratingsVer = typeof DERIVED !== 'undefined' ? DERIVED.version : 0;
   ensureDraftClass(START_SEASON + 1);
   computeThresholds(); seasonStartSnapshot();
+  for (const t of shuffle(state.teams.slice())) fillPS(t.id); // every club starts with a practice squad in place, yours included
   addNews(`Welcome to the ${START_SEASON} season. You are the GM of the ${teamName(userTid)}.`, [userTid]);
   return state;
 }

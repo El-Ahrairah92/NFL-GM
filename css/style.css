@@ -246,3 +246,9 @@ tr.cutrow td:last-child, tr.cutrow td:nth-last-child(2) { opacity: 1; text-decor
 
 .terms { margin: 8px 0; }
 .terms button[disabled] { opacity: .45; }
+
+.seg { display: inline-flex; gap: 0; }
+.seg button { border-radius: 0; margin: 0 -1px 0 0; }
+.seg button:first-child { border-radius: 6px 0 0 6px; }
+.seg button:last-child { border-radius: 0 6px 6px 0; }
+button.on { background: var(--hover); border-color: var(--good-b); font-weight: 600; }

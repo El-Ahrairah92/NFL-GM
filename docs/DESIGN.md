@@ -333,6 +333,18 @@ Games were decided by 16.9 on average (NFL 11.3) with 21% decided by 28+. Talent
 - Offers are a guaranteed signing bonus ($0 to $200K) on a three-year minimum deal. Every other team builds its own target board each round. On "Send Offers" each player picks a team: money, his path to a roster spot there, and personal preference.
 - The user's roster is never auto-filled: no camp signings and no roster fill at the start of the season. Warnings fire before camp opens thin and before a season starts short at a position. (Practice squad auto-fill is unchanged.)
 
+## 16. Camp roster, cutdown, waivers and the practice squad
+- **Roster rules (checked against the NFL):** 90 in the offseason and camp, one cutdown to 53 after the last preseason game; practice squad 16, of which up to 6 may have 3+ seasons (no experience ceiling on those six); players with fewer than 4 seasons go through waivers when released, veterans are free agents at once.
+- **Cutdown Day:** each player is Keep, Cut or Practice squad, with an "If waived" read on whether another team would claim him.
+- **Waivers phase** (`WAIVERS`, between cutdown and week 1): every team's cuts hit the wire together. Claims are awarded worst record first; the claiming team takes the existing contract and names who it drops. You can also mark other teams' cuts as practice squad targets (they may prefer their old club). Your own practice-squad designations come back if they clear.
+- **Nothing is done for the user:** no practice squad fill, no injury call-ups (a warning fires if you would play short-handed), no automatic reserve/future deals (sign them one by one in the re-signing period; the rest are released). New leagues start with a practice squad in place.
+
+## 17. Preseason playing time
+- Plan per team (`state.prePlan` for the user; other teams use the coach's plan): starters sit, or play a series, a quarter or a half. "Coach's plan" is a series in game one, a quarter in game two, the night off in game three.
+- Per player: Feature (stays in for extra snaps) or Hold out. Set from the Preseason roster view or his card.
+- Who is in is re-evaluated every drive. Backups give way to the third string after halftime.
+- The game wrap shows a snap report: snaps, grade, preseason total and who is still short of film. No bonus for playing starters: the gains are film and positional reps, the cost is injury exposure.
+
 ## Deferred
 - Penalties / Discipline attribute
 - Leadership / intangibles

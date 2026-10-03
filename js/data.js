@@ -3,7 +3,8 @@
 let CAP = 280;               // salary cap, $M (grows each league year: state.cap)
 let MIN_SALARY = 0.9;        // scales with the cap
 const ROSTER_MAX = 53;       // regular season (IR doesn't count)
-const OFFSEASON_MAX = 70;
+const OFFSEASON_MAX = 90;      // camp roster limit (one cutdown to 53 after the last preseason game)
+const WAIVER_EXP = 4;         // players with fewer accrued seasons than this go through waivers when released
 const SEASON_WEEKS = 17;
 const TRADE_DEADLINE = 9;    // last week trades are allowed
 const IR_WEEKS = 4;          // injuries this long go to IR and free a roster spot

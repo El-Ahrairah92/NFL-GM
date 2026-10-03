@@ -568,6 +568,8 @@ function startPossession(g, side, ydl) {
   if (g.over) return;
   if (g.q >= 5) { checkOT(g); if (g.over) return; g.otStarted[side] = 1; }
   g.poss = side; g.ydl = ydl; g.down = 1; g.togo = Math.min(10, 100 - ydl); g.running = false; g.spikeNext = false;
+  // exhibitions: who is in changes drive by drive (starters come out, featured players stay in)
+  if (g.pre && g.side[0] && g.side[1]) for (let s = 0; s < 2; s++) { const a = preseasonActives(g.tids[s], g), cur = g.side[s].active; if (!cur || a.size !== cur.size || [...a].some(id => !cur.has(id))) { g.side[s].active = a; initSide(g, s); } }
   g.drive = { side, q: g.q, clock: g.clock, start: ydl, plays: 0, yds: 0, time: 0 };
   // committee backs: some series go to the No. 2
   const rb1 = g.cx[side].ot.rb1;

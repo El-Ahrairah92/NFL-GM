@@ -195,7 +195,8 @@ function continueLabel() {
     case 'DRAFT': { const pk = currentPick(); return pk && pk.owner === state.userTid ? 'Auto-pick for Me' : 'Sim to My Pick'; }
     case 'UDFA': return state.udfa && state.udfa.round >= UDFA_ROUNDS - 1 ? 'Final Round: Send Offers & Open Camp →' : `Send Offers (Round ${(state.udfa ? state.udfa.round : 0) + 1} of ${UDFA_ROUNDS}) →`;
     case 'PRESEASON': return `▶ Play Preseason Game ${(state.pre ? state.pre.wk : 0) + 1}`;
-    case 'CUTDOWN': return `Finalize Roster & Start ${state.season + 1} Season →`;
+    case 'CUTDOWN': return 'Finalize Cuts → Waiver Wire';
+    case 'WAIVERS': return `Process Claims & Start ${state.season + 1} Season →`;
   }
 }
 function topbarHTML() {
@@ -214,7 +215,7 @@ function topbarHTML() {
     <button class="primary" data-action="continue">${continueLabel()}</button>
     ${sim2}
     <button data-action="simYear" title="Auto-manages your team through the rest of this season and the offseason">⏭ Sim to Next Season</button>
-  </div><nav class="tabs">${(state.phase === 'CUTDOWN' ? [['cutdown', '✂ Cutdown Day'], ...PAGES] : PAGES).map(([k, l]) => `<button class="${view === k ? 'on' : ''}" data-action="nav" data-view="${k}">${l}</button>`).join('')}</nav></div>`;
+  </div><nav class="tabs">${(state.phase === 'CUTDOWN' ? [['cutdown', '✂ Cutdown Day'], ...PAGES] : state.phase === 'WAIVERS' ? [['waivers', '📋 Waiver Wire'], ...PAGES] : PAGES).map(([k, l]) => `<button class="${view === k ? 'on' : ''}" data-action="nav" data-view="${k}">${l}</button>`).join('')}</nav></div>`;
 }
 function pageHTML() {
   switch (view) {
@@ -229,6 +230,7 @@ function pageHTML() {
     case 'fa': return faHTML();
     case 'search': return searchHTML();
     case 'cutdown': return state.phase === 'CUTDOWN' ? cutdownHTML() : homeHTML();
+    case 'waivers': return state.phase === 'WAIVERS' ? waiversHTML() : homeHTML();
     case 'draft': return draftHTML();
     case 'coaches': return coachesHTML();
     case 'news': return newsHTML();
@@ -256,6 +258,7 @@ function phaseCallout() {
     case 'DRAFT': { const pk = currentPick(); return pk ? `Pick ${pk.pick} (Rd ${pk.round}): <b>${T(pk.owner).abbr}</b> on the clock. ${pk.owner === u ? 'That\'s you! Choose on the <b>Draft</b> tab.' : ''}` : ''; }
     case 'UDFA': { const n = rosterOf(u).length, o = state.udfa ? Object.keys(state.udfa.offers).length : 0; return `Rookie free agency, round ${(state.udfa ? state.udfa.round : 0) + 1} of ${UDFA_ROUNDS}. Every team is bidding for the best undrafted players. Make your offers on the <b>Free Agents</b> tab, then send them. You have <b>${n}</b> of ${OFFSEASON_MAX} camp spots filled and <b>${o}</b> offer${o === 1 ? '' : 's'} out. Nobody is signed for you.`; }
     case 'PRESEASON': return `Preseason: ${PRESEASON_GAMES} exhibition games. Your starters sit; the bubble players and rookies get the snaps, and what they put on film sharpens every evaluation before <b>Cutdown Day</b>.`;
+    case 'WAIVERS': { const n = onWaivers().length, pos = state.wv.prio.indexOf(u) + 1; return `Cuts are in across the league: <b>${n}</b> players are on waivers. You are <b>#${pos}</b> of ${state.teams.length} in claim order (worst record first). Put in claims and line up your practice squad on the <b>Waiver Wire</b> tab, then start the season.`; }
     case 'CUTDOWN': { const n = rosterOf(u).filter(countsOn53).length; return `Cutdown Day: ${n} players, ${ROSTER_MAX} spots. Go through each position group with your staff on the <b>Cutdown Day</b> tab. Anything you leave undecided, the staff decides.`; }
   }
   return '';
@@ -354,7 +357,7 @@ function recapHTML() {
 }
 
 // ---------- roster ----------
-const ROSTER_VIEWS = [['scout', 'Scouting'], ['contract', 'Contracts'], ['stats', 'Season Stats'], ['adv', 'Advanced'], ['comfort', 'Positional Comfort'], ['true', 'True Ratings (debug)']];
+const ROSTER_VIEWS = [['scout', 'Scouting'], ['pre', 'Preseason'], ['contract', 'Contracts'], ['stats', 'Season Stats'], ['adv', 'Advanced'], ['comfort', 'Positional Comfort'], ['true', 'True Ratings (debug)']];
 function starHTML(n) {
   if (n === null || n === undefined) return '';
   let h = ''; for (let i = 1; i <= 5; i++) h += `<i class="${n >= i ? 'f' : n >= i - 0.5 ? 'h' : 'e'}">★</i>`;
@@ -374,6 +377,7 @@ function rosterHTML() {
     <div class="muted small" style="margin-bottom:8px">Cap ${fmtMoney(state.cap)} · Payroll ${fmtMoney(payroll(tid))} · Cap space <b>${fmtMoney(capRoom(tid))}</b>${T(tid).dead ? ` · Dead money ${fmtMoney(T(tid).dead)}` : ''} · Next year committed ${fmtMoney(payrollNext(tid))} · ${rosterCount(tid)}/${rosterLimit()} players${state.phase === 'REG' ? ' (IR excluded)' : ''} · PS ${psOf(tid).length}/${PS_MAX}</div>
     <div class="subtabs">${famTabs(ui.rosterPos || 'ALL', 'rosterPos')}</div>`;
   if (mine && state.phase === 'RESIGN') html += decisionsHTML(tid);
+  if (mine && state.phase === 'PRESEASON' && state.prePlan) html += prePlanHTML();
   const dv = depthView(tid), starters = new Set();
   for (const e of [...dv.off, ...dv.nickel, ...dv.base, dv.k, dv.p]) starters.add(e.p.id);
   const base = [
@@ -393,6 +397,13 @@ function rosterHTML() {
     { k: 'save', l: 'Cut saves', v: p => cutSavings(p), f: p => { const v = cutSavings(p); return `<span class="${v < 0 ? 'bad' : ''}">${fmtMoney(v)}</span>`; }, num: 1 },
     { k: 'nx', l: 'Status', v: p => p.contract.next ? 2 : p.expiring ? 1 : 0, f: p => fmtContract(p).replace(/^.*?<\/span>/, '') + (p.expiring ? ' <span class="pill exp">Expiring</span>' : '') + (p.contract.rookie ? ' <span class="pill">Rookie deal</span>' : '') },
   ];
+  else if (vw === 'pre') { const pl = state.prePlan || { feat: {}, hold: {} }, canPlan = mine && state.phase === 'PRESEASON';
+    cols = [...base, tier, { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p) },
+      { k: 'psn', l: 'Pre snaps', v: p => p.preS ? p.preS.snp : 0, num: 1 }, { k: 'pg', l: 'Pre grade', v: p => preGrade(p) || 0, f: p => gradeChip(preGrade(p)), num: 1 },
+      { k: 'pl', l: 'Line', f: p => p.preS && p.preS.gp ? `<span class="small">${statSummary(p.preS.st, p.pos)}</span>` : '' },
+      { k: 'role', l: 'Role', f: p => starters.has(p.id) ? '<span class="pill">Starter</span>' : '<span class="muted small">Competing</span>' },
+      { k: 'plan', l: 'Playing time', f: p => !canPlan ? (pl.feat[p.id] ? 'Featured' : pl.hold[p.id] ? 'Held out' : '') : `<span class="seg">${[['', 'Normal'], ['feat', 'Feature'], ['hold', 'Hold out']].map(([k, l]) => `<button class="sm ${(pl.feat[p.id] ? 'feat' : pl.hold[p.id] ? 'hold' : '') === k ? 'on' : ''}" data-action="preFeat" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span>` }];
+  }
   else if (vw === 'stats') cols = [...base, { k: 'gp', l: 'GP', v: p => p.stats.gp || 0, num: 1 }, { k: 'gs', l: 'GS', v: p => p.stats.gs || 0, num: 1 }, { k: 'snp', l: 'Snaps', v: p => p.stats.snp || 0, num: 1 },
     { k: 'line', l: 'Season', v: p => hypeMetric(p, p.stats), f: p => `<span class="small">${p.stats.gp ? statSummary(p.stats, p.pos) : ''}</span>` },
     { ...STAT_NUM('tkl'), l: 'Tkl' }, { ...STAT_NUM('sck'), l: 'Sck' }, { ...STAT_NUM('dint'), l: 'INT' }, { ...STAT_NUM('pd'), l: 'PD' }, grade];
@@ -428,13 +439,15 @@ function decisionsHTML(tid) {
   if (opts.length) h += `<div class="section-title">5th-year options due</div>` + opts.map(p => li(p, `option year ${fmtMoney(optionAmount(p))} (fully guaranteed) <button class="sm primary" data-action="option" data-pid="${p.id}" data-v="1">Exercise</button> <button class="sm" data-action="option" data-pid="${p.id}" data-v="0">Decline</button>`)).join('');
   if (!tagUsed && exp.length) { const top = exp.slice().sort((a, b) => uOvr(b) - uOvr(a)).slice(0, 3); h += `<div class="section-title">Franchise tag (1 per year)</div>` + top.map(p => li(p, `tag ${fmtMoney(tagAmount(p))} for one year <button class="sm" data-action="tag" data-pid="${p.id}">Tag</button>`)).join(''); }
   else if (tagUsed) h += `<div class="small muted" style="margin-top:6px">Franchise tag used this year.</div>`;
+  const fut = psOf(tid).sort((a, b) => uCeil(b) - uCeil(a));
+  if (fut.length) h += `<div class="section-title">Practice squad: reserve/future deals</div><div class="small muted" style="margin-bottom:4px">Two years at the minimum, nothing guaranteed. Anyone you do not sign is released when you continue.</div>` + fut.map(p => li(p, `${upsidePill(p)} <span class="muted">age ${p.age}</span> <button class="sm" data-action="futures" data-pid="${p.id}">Sign futures deal</button>`)).join('');
   if (ext.length) h += `<div class="section-title">Extension candidates (entering final year)</div>` + ext.sort((a, b) => uOvr(b) - uOvr(a)).slice(0, 6).map(p => { const a = extensionAsk(p); return li(p, `asks ${a.yrs} yr × ${fmtMoney(a.amt)} <span class="small muted">(leverage ${leverageLabel(leverageOf(p)).toLowerCase()})</span> <button class="sm" data-action="extend" data-pid="${p.id}">Extend</button> <button class="sm" data-action="player" data-pid="${p.id}">Terms…</button>`); }).join('');
   return h + '</div>';
 }
 function practiceSquadHTML(tid, mine) {
   const ps = psOf(tid).sort(famOrder);
-  if (!ps.length) return '';
-  return `<div class="card" style="margin-top:16px"><h3>Practice Squad (${ps.length}/${PS_MAX})</h3><p class="muted small">Develops like everyone else, doesn't dress on game day, can be promoted when injuries hit — and other teams can sign them away to their 53.</p>` + table('ps', [
+  if (!ps.length) return mine && ['REG', 'PLAYOFFS'].includes(state.phase) ? `<div class="card" style="margin-top:16px"><h3>Practice Squad (0/${PS_MAX})</h3><p class="muted small">Empty. Sign free agents to it from the Free Agents tab or a player's card: up to ${PS_MAX} players, ${PS_VETS} of them with 3+ seasons.</p></div>` : '';
+  return `<div class="card" style="margin-top:16px"><h3>Practice Squad (${ps.length}/${PS_MAX})</h3><p class="muted small">Develops like everyone else, doesn't dress on game day, can be promoted by you at any time, and other teams can sign them away to their 53. Nobody is promoted for you when injuries hit.</p>` + table('ps', [
     { k: 'pos', l: 'Pos', f: p => esc(p.lbl) }, { k: 'n', l: 'Name', f: p => playerLink(p) + ' ' + statusPills(p) }, { k: 'age', l: 'Age', f: p => p.age, num: 1 },
     { k: 'tier', l: 'Tier', v: tierSort, f: p => tierPill(p) + trueNums(p) }, { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p) },
     { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
@@ -877,6 +890,83 @@ function tradeHTML() {
 }
 
 // ---------- free agents ----------
+// ---------- waiver wire (after league-wide cuts) ----------
+function waiversHTML() {
+  const u = state.userTid, wv = state.wv, fam = ui.wvFam || 'ALL';
+  const all = onWaivers(), mineOut = all.filter(p => p.waiver.from === u), wire = all.filter(p => p.waiver.from !== u && inFamily(p, fam));
+  const cleared = Object.values(state.players).filter(p => p.tid === -1 && !p.waiver && p.lastTid === u && wv.ps.includes(p.id));
+  const active = rosterOf(u).filter(p => !onIR(p)).length, claims = Object.keys(wv.claims).length, psCount = wv.ps.length + Object.keys(wv.want).length;
+  const RISK = { 'Will be claimed': 'bad', 'Could be claimed': 'warn', 'Should clear': 'good' };
+  let html = `<div class="card" style="margin-bottom:14px"><div class="row"><div><div class="big">#${wv.prio.indexOf(u) + 1}</div><div class="small muted">your claim priority (worst record goes first)</div></div>
+    <div style="margin-left:28px"><div class="big">${active} / ${ROSTER_MAX}</div><div class="small muted">active roster · ${claims} claim${claims === 1 ? '' : 's'} in</div></div>
+    <div style="margin-left:28px"><div class="big">${psCount} / ${PS_MAX}</div><div class="small muted">practice squad targets</div></div></div>
+    <p class="small muted" style="margin:10px 0 0"><b>Claim</b> a player to add him to your 53 on his current contract; if two teams claim him, the one higher in the order gets him. Mark <b>PS target</b> to try to sign him to your practice squad if nobody claims him (he may prefer to return to his old club). Your own cuts marked for the practice squad come back automatically if they clear.</p></div>`;
+  if (mineOut.length || cleared.length) html += '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Your cuts</h3>' + table('wvmine', [
+    { k: 'pos', l: 'Pos', f: p => esc(p.lbl) }, { k: 'n', l: 'Name', f: p => playerLink(p) }, { k: 'age', l: 'Age', f: p => p.age, num: 1 }, { k: 'exp', l: 'YOE', f: p => p.exp, num: 1 },
+    { k: 'tier', l: 'Tier', f: p => tierPill(p) }, { k: 'up', l: 'Upside', f: p => upsidePill(p) },
+    { k: 'plan', l: 'Your plan', f: p => wv.ps.includes(p.id) ? '<span class="pill on">Practice squad</span>' : '<span class="muted">Released</span>' },
+    { k: 'risk', l: 'Waivers', f: p => p.waiver ? `<span class="pill ${RISK[waiverRisk(p)]}">${waiverRisk(p)}</span>` : '<span class="pill good">Free agent: no waivers</span>' },
+  ], [...mineOut, ...cleared].sort(famOrder), { nosort: 1 }) + '</div>';
+  html += `<div class="subtabs">${famTabs(fam, 'wvFam')}</div><div class="card">` + table('wire', [
+    { k: 'pos', l: 'Pos', v: p => FAM_INDEX[p.spot], f: p => esc(p.lbl) },
+    { k: 'n', l: 'Name', v: p => p.last, f: p => playerLink(p) },
+    { k: 'tm', l: 'Waived by', v: p => T(p.waiver.from).abbr, f: p => teamLink(p.waiver.from) },
+    { k: 'age', l: 'Age', v: p => p.age, num: 1 }, { k: 'exp', l: 'YOE', v: p => p.exp, num: 1 },
+    { k: 'tier', l: 'Tier', v: tierSort, f: p => tierPill(p) + trueNums(p) },
+    { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p) },
+    { k: 'pre', l: 'Preseason', v: p => preGrade(p) || 0, f: p => p.preS ? `${gradeChip(preGrade(p))} <span class="small muted">${p.preS.snp} snaps</span>` : '<span class="muted small">—</span>', num: 1 },
+    { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
+    { k: 'c', l: 'Contract', v: p => p.waiver.c.amt, f: p => `${fmtMoney(p.waiver.c.amt)} × ${Math.max(1, p.waiver.c.yrs || 1)} yr`, num: 1 },
+    { k: 'risk', l: 'Interest', v: p => (wv.ai[p.id] || []).length, f: p => `<span class="pill ${RISK[waiverRisk(p)]}">${waiverRisk(p) === 'Should clear' ? 'None seen' : waiverRisk(p) === 'Could be claimed' ? 'Some' : 'Heavy'}</span>` },
+    { k: 'a', l: '', f: p => { const c = wv.claims[p.id]; return `<button class="sm ${c !== undefined ? 'primary' : ''}" data-action="wvClaim" data-pid="${p.id}">${c !== undefined ? '✓ Claim in' + (c ? ' (drop ' + esc(P(c).last) + ')' : '') : 'Claim'}</button> <button class="sm ${wv.want[p.id] ? 'on' : ''}" data-action="wvWant" data-pid="${p.id}">${wv.want[p.id] ? '✓ PS target' : 'PS target'}</button>`; } },
+  ], wire, { sort: 'up', limit: 300 }) + '</div>';
+  return html;
+}
+function waiverDropModal(pid) {
+  const p = P(pid), u = state.userTid, used = new Set(Object.values(state.wv.claims).filter(Boolean));
+  const cands = rosterOf(u).filter(x => !onIR(x) && !used.has(x.id)).sort((a, b) => cutValue(a) - cutValue(b)).slice(0, 14);
+  openModal(`<h2 style="margin-top:0">Claim ${esc(pname(p))}</h2><p class="small muted">Your 53 is full. Choose who you release if the claim is awarded (nothing happens if you lose the claim).</p>` +
+    cands.map(x => `<div class="row small" style="margin:5px 0"><span style="min-width:60px">${esc(x.lbl)}</span> ${playerLink(x)} ${tierPill(x)} <span class="muted">saves ${fmtMoney(cutSavings(x))}</span><span class="spacer"></span><button class="sm danger" data-action="wvClaimDrop" data-pid="${p.id}" data-drop="${x.id}">Release if claimed</button></div>`).join(''));
+}
+function waiverResultModal(r) {
+  const row = (p, txt) => `<div class="row small" style="margin:4px 0">${playerLink(p)} <span class="muted">${esc(p.lbl)}${txt ? ' · ' + esc(txt) : ''}</span></div>`;
+  let h = '<h2 style="margin-top:0">Waivers processed</h2>';
+  if (r.won.length) h += '<div class="section-title">Claims awarded to you</div>' + r.won.map(p => row(p)).join('');
+  if (r.lost.length) h += '<div class="section-title">Claims you lost</div>' + r.lost.map(x => row(x.p, x.to !== null ? 'awarded to ' + T(x.to).abbr + ' (higher priority)' : 'your claim could not be completed')).join('');
+  if (r.taken.length) h += '<div class="section-title bad">Your cuts claimed by other teams</div>' + r.taken.map(x => row(x.p, 'claimed by ' + T(x.to).abbr + (x.ps ? ' before he could reach your practice squad' : ''))).join('');
+  if (r.ps.length) h += '<div class="section-title">Signed to your practice squad</div>' + r.ps.map(p => row(p)).join('');
+  if (r.psLost.length) h += '<div class="section-title">Practice squad targets who went elsewhere</div>' + r.psLost.map(x => row(x.p, x.why)).join('');
+  if (!r.won.length && !r.lost.length && !r.taken.length && !r.ps.length && !r.psLost.length) h += '<p class="muted">No claims involved you.</p>';
+  const u = state.userTid, short = rosterShortfalls(u);
+  h += `<p class="small muted" style="margin-top:14px">Active roster ${rosterOf(u).filter(p => !onIR(p)).length}/${ROSTER_MAX} · practice squad ${psOf(u).length}/${PS_MAX}. ${psOf(u).length < PS_MAX ? 'Open practice squad spots are yours to fill from the Free Agents tab. ' : ''}${short.length ? 'Short at: ' + short.join(', ') + '.' : ''}</p>`;
+  openModal(h);
+}
+// ---------- preseason playing-time plan ----------
+function prePlanHTML() {
+  const pl = state.prePlan || { starters: 'auto', feat: {}, hold: {} }, u = state.userTid;
+  const names = o => Object.keys(o).map(id => P(+id)).filter(p => p && p.tid === u).map(p => playerLink(p, true)).join(', ') || '<span class="muted">none</span>';
+  const wk = state.pre ? state.pre.wk : 0, eff = prePlanFor(u).mode;
+  return `<div class="card" style="margin-bottom:14px"><div class="row"><h3 style="margin:0">Preseason plan · game ${Math.min(wk + 1, PRESEASON_GAMES)} of ${PRESEASON_GAMES}</h3><span class="spacer"></span>
+    <label class="small muted">Starters</label> <select data-change="preStarters">${PRE_MODES.map(([k, l]) => `<option value="${k}" ${pl.starters === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <p class="small muted" style="margin:8px 0 6px">This game: <b>${{ sit: 'starters sit', series: 'starters play the opening series', quarter: 'starters play the first quarter', half: 'starters play the first half' }[eff]}</b>. Backups take over from there and give way to the third string after halftime. More snaps means better film and faster learning at a new spot, and more exposure to injury.</p>
+    <div class="small"><b>Featured</b> (stay in for extra snaps): ${names(pl.feat)}</div><div class="small" style="margin-top:3px"><b>Held out</b>: ${names(pl.hold)}</div>
+    <div class="small muted" style="margin-top:6px">Set these per player in the <b>Preseason</b> roster view or on his card.</div></div>`;
+}
+function preSnapReport(b) {
+  const u = state.userTid;
+  const rows = Object.entries(b.stats).map(([pid, l]) => ({ p: P(pid), l })).filter(x => x.p && x.l.tid === u && (x.l.snp || 0) > 0 && x.p.pos !== 'K' && x.p.pos !== 'P')
+    .map(x => ({ ...x, g: b.adv && b.adv[x.p.id] && x.l.snp >= 10 ? overallGrade(b.adv[x.p.id], x.p.spot) : null, tot: x.p.preS ? x.p.preS.snp : x.l.snp })).sort((a, c) => c.l.snp - a.l.snp);
+  const sat = rosterOf(u).filter(p => !p.injury && !b.stats[p.id] && p.pos !== 'K' && p.pos !== 'P' && !(state.prePlan && state.prePlan.hold[p.id]));
+  const thin = rosterOf(u).filter(p => p.exp <= 2 && (!p.preS || p.preS.snp < 30) && !p.injury).sort((a, c) => uCeil(c) - uCeil(a)).slice(0, 8);
+  return `<div class="section-title">Snap report</div>` + table('presnap', [
+    { k: 'pos', l: 'Pos', f: x => esc(x.p.lbl) }, { k: 'n', l: 'Name', f: x => playerLink(x.p) },
+    { k: 's', l: 'Snaps', f: x => x.l.snp, num: 1 }, { k: 'g', l: 'Grade', f: x => gradeChip(x.g), num: 1 },
+    { k: 't', l: 'Preseason total', f: x => `${x.tot} <span class="small ${x.tot < 30 ? 'warn' : 'muted'}">${x.tot < 30 ? 'thin sample' : ''}</span>`, num: 1 },
+  ], rows.slice(0, 40), { nosort: 1 }) +
+    (thin.length ? `<div class="small" style="margin-top:8px"><b>Still short of film:</b> ${thin.map(p => playerLink(p, true) + ' <span class="muted">(' + (p.preS ? p.preS.snp : 0) + ')</span>').join(', ')}</div>` : '') +
+    (sat.length ? `<div class="small muted" style="margin-top:4px">${sat.length} healthy player${sat.length === 1 ? '' : 's'} did not play.</div>` : '');
+}
+
 // post-draft bidding for undrafted rookies
 function udfaHTML() {
   const u = state.userTid, s = state.udfa, n = rosterOf(u).length, offers = Object.keys(s.offers).length;
@@ -954,6 +1044,7 @@ function faHTML() {
   if (fv === 'next') return tabs + upcomingFAHTML();
   if (fv === 'udfa' && udfa) return tabs + udfaHTML();
   if (udfa) fas = fas.filter(p => !isUdfa(p));
+  fas = fas.filter(p => !p.waiver); // players on waivers are on the Waiver Wire tab until claims are processed
   let fas = Object.values(state.players).filter(p => p.tid === -1);
   fas = fas.filter(p => inFamily(p, ui.faPos));
   const canSign = state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP';
@@ -983,14 +1074,16 @@ function faHTML() {
 function cutdownHTML() {
   const u = state.userTid, plan = state.cut.plan, prev = cutPreview(u);
   const ro = rosterOf(u), on = ro.filter(countsOn53);
-  const keeps = on.filter(p => plan[p.id] !== 'cut'), need = keeps.length - ROSTER_MAX;
+  const gone = v => v === 'cut' || v === 'ps';
+  const keeps = on.filter(p => !gone(plan[p.id])), need = keeps.length - ROSTER_MAX;
+  const psN = on.filter(p => plan[p.id] === 'ps').length, psVets = on.filter(p => plan[p.id] === 'ps' && psVet(p)).length;
   const fam = ui.cutFam || 'ALL';
   const coachFor = p => { const t = T(u), side = SPOTS[p.spot].side; return C(side === 'off' ? t.oc : side === 'def' ? t.dc : t.stc) || C(t.hc); };
-  let html = `<div class="card" style="margin-bottom:14px"><div class="row"><div><div class="big ${need > 0 ? 'bad' : 'good'}">${keeps.length} / ${ROSTER_MAX}</div><div class="small muted">${need > 0 ? `Cut ${need} more to get to ${ROSTER_MAX}` : need < 0 ? `${-need} open spot${need === -1 ? '' : 's'}: the staff will fill them with camp bodies` : 'Roster is set'} · ${ro.length - on.length} heading to IR (not counted) · dead money so far ${fmtMoney(on.filter(p => plan[p.id] === 'cut').reduce((s, p) => { const d = deadIfCut(p); return s + d.now + d.next; }, 0))}</div></div>
+  let html = `<div class="card" style="margin-bottom:14px"><div class="row"><div><div class="big ${need > 0 ? 'bad' : 'good'}">${keeps.length} / ${ROSTER_MAX}</div><div class="small muted">${need > 0 ? `Cut ${need} more to get to ${ROSTER_MAX}` : need < 0 ? `${-need} open spot${need === -1 ? '' : 's'}: nobody will be signed for you` : 'Roster is set'} · practice squad ${psN}/${PS_MAX} marked (${psVets}/${PS_VETS} veterans) · ${ro.length - on.length} heading to IR (not counted) · dead money so far ${fmtMoney(on.filter(p => plan[p.id] === 'cut').reduce((s, p) => { const d = deadIfCut(p); return s + d.now + d.next; }, 0))}</div></div>
     <span class="spacer"></span><button data-action="cutStaff">Use the staff's recommendations</button><button data-action="cutClear">Clear my cuts</button></div>
-    <p class="small muted" style="margin:10px 0 0">Go group by group. Each player has the staff's call and their reasoning; <b>Cut</b> / <b>Keep</b> is yours. Young players you cut can land on your practice squad if they clear. When you're done, press <b>Finalize Roster</b> at the top.</p></div>`;
+    <p class="small muted" style="margin:10px 0 0">Go group by group. Each player has the staff's call and their reasoning; <b>Keep</b>, <b>Cut</b> or <b>Practice squad</b> is yours. Players with fewer than ${WAIVER_EXP} seasons must clear waivers before they can come back to your practice squad: the "If waived" column shows who is likely to be claimed. Veterans are free agents and can go straight to it. When you're done, press <b>Finalize Roster</b> at the top.</p></div>`;
   // position rooms: how many you're carrying vs. what the staff would carry
-  const room = FAMILIES.map(([f, spots]) => { const all = on.filter(p => spots.includes(p.spot)); return { f, n: all.filter(p => plan[p.id] !== 'cut').length, staff: all.filter(p => !prev.cuts.has(p.id)).length, total: all.length }; }).filter(r => r.total);
+  const room = FAMILIES.map(([f, spots]) => { const all = on.filter(p => spots.includes(p.spot)); return { f, n: all.filter(p => !gone(plan[p.id])).length, staff: all.filter(p => !prev.cuts.has(p.id)).length, total: all.length }; }).filter(r => r.total);
   html += `<div class="subtabs"><button class="${fam === 'ALL' ? 'on' : ''}" data-action="cutFam" data-pos="ALL">All (${keeps.length})</button>${room.map(r => `<button class="${fam === r.f ? 'on' : ''}" data-action="cutFam" data-pos="${r.f}" title="Staff would carry ${r.staff}">${r.f} ${r.n}${r.n !== r.staff ? `<span class="small" style="opacity:.75"> (staff ${r.staff})</span>` : ''}</button>`).join('')}</div>`;
   const list = ro.filter(p => inFamily(p, fam));
   if (fam !== 'ALL' && list.length) {
@@ -1011,8 +1104,9 @@ function cutdownHTML() {
     { k: 'c', l: 'Contract', v: p => p.contract.amt, f: p => fmtContract(p), num: 1 },
     { k: 'save', l: 'Cut saves', v: p => cutSavings(p), f: p => { const v = cutSavings(p); return `<span class="${v < 0 ? 'bad' : ''}">${fmtMoney(v)}</span>`; }, num: 1 },
     { k: 'staff', l: 'Staff says', v: p => (prev.cuts.has(p.id) ? 0 : prev.bubble.has(p.id) ? 1 : 2), f: p => { const [t, c] = verdict(p); return `<span class="pill ${c}">${t}</span> <span class="small muted wrapcell" style="max-width:340px">${esc(cutNote(p, prev))}</span>`; } },
-    { k: 'd', l: 'Your call', f: p => !countsOn53(p) ? '' : plan[p.id] === 'cut' ? `<button class="sm danger" data-action="cutToggle" data-pid="${p.id}">✂ Cut · undo</button>` : `<button class="sm" data-action="cutToggle" data-pid="${p.id}">Keep · cut</button>` },
-  ], list, { sort: 'pos', dir: 1, rowClass: p => plan[p.id] === 'cut' ? 'cutrow' : '' }) + '</div>';
+    { k: 'risk', l: 'If waived', f: p => { if (!countsOn53(p)) return ''; const r = claimRiskIfCut(p); return `<span class="pill ${r === 'Will be claimed' ? 'bad' : r === 'Could be claimed' ? 'warn' : r === 'Should clear' ? 'good' : ''}">${r}</span>`; }, title: 'Would another team claim him off waivers?' },
+    { k: 'd', l: 'Your call', f: p => !countsOn53(p) ? '' : `<span class="seg">${[['keep', 'Keep'], ['cut', 'Cut'], ['ps', 'Practice squad']].map(([k, l]) => `<button class="sm ${(plan[p.id] || 'keep') === k ? (k === 'keep' ? 'primary' : k === 'cut' ? 'danger' : 'on') : ''}" data-action="cutSet" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span>` },
+  ], list, { sort: 'pos', dir: 1, rowClass: p => gone(plan[p.id]) ? 'cutrow' : '' }) + '</div>';
   return html;
 }
 
@@ -1399,11 +1493,13 @@ function playerModal(pid, replace) {
   if (p.tid === u && optionDue(p) && state.phase === 'RESIGN') left += `<button class="primary" data-action="option" data-pid="${p.id}" data-v="1">Exercise option (${fmtMoney(optionAmount(p))})</button><button data-action="option" data-pid="${p.id}" data-v="0">Decline option</button>`;
   if (p.tid === u && canTag(p)) left += `<button data-action="tag" data-pid="${p.id}">Franchise tag (${fmtMoney(tagAmount(p))})</button>`;
   if (p.tid === u && extensionDue(p)) left += termButtons(p, 'extend');
+  if (p.tid === u && state.phase === 'PRESEASON' && state.prePlan && p.pos !== 'K' && p.pos !== 'P') { const pl = state.prePlan, cur = pl.feat[p.id] ? 'feat' : pl.hold[p.id] ? 'hold' : ''; left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Preseason playing time${p.preS ? ` · ${p.preS.snp} snaps so far` : ''}</div><span class="seg">${[['', 'Normal'], ['feat', 'Feature'], ['hold', 'Hold out']].map(([k, l]) => `<button class="sm ${cur === k ? 'on' : ''}" data-action="preFeat" data-card="1" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span></div>`; }
   if (p.tid === -3 && p.psTid === u) left += `<button class="primary" data-action="promote" data-pid="${p.id}">Promote to 53</button><button class="danger" data-action="psRelease" data-pid="${p.id}">Release</button>`;
   if (p.tid === -1 && p.exp <= 6 && psRoom(u, p) && ['REG', 'PRESEASON', 'CUTDOWN', 'DRAFT', 'FA'].includes(state.phase)) left += `<button data-action="signPS" data-pid="${p.id}">Sign to practice squad (${fmtMoney(PS_SALARY)})</button>`;
   if (p.tid === u) {
     if (p.expiring && state.phase === 'RESIGN') left += termButtons(p, 'resign');
     left += `<button class="danger" data-action="release" data-pid="${p.id}">Release</button>`;
+  } else if (p.waiver) { left += '<div class="small muted">On waivers: claim him from the Waiver Wire tab.</div>';
   } else if (state.phase === 'UDFA' && state.udfa && isUdfa(p)) { const cur = state.udfa.offers[p.id], pl = udfaPathLabel(udfaPath(p, u)); left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Undrafted rookie · market: <b>${udfaInterest(p)}</b> · his view of your roster: <b>${pl}</b>${cur !== undefined ? ` · your offer: <b>${fmtBonus(cur)}</b>` : ''}</div><div class="row" style="gap:6px">${UDFA_BONUS.map(b => `<button class="sm ${cur === b ? 'primary' : ''}" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="${b}">${b ? fmtBonus(b) : 'No bonus'}</button>`).join('')}${cur !== undefined ? `<button class="sm danger" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="">Withdraw</button>` : ''}</div></div>`;
   } else if (p.tid === -1 && state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP') left += `<button class="primary" data-action="sign" data-pid="${p.id}">Sign (${fmtMoney(p.ask)})</button>`;
   else if (p.tid >= 0) left += `<button data-action="tradeFor" data-pid="${p.id}">Trade for ${esc(p.last)}</button>`;
@@ -1667,7 +1763,7 @@ function pregameModal() {
   };
   openModal(`<div class="muted small">${m.po ? m.po : `Week ${state.week}`} · ${home ? 'Home' : 'Away'}</div>
     <h2 style="margin:4px 0">${T(m.a).abbr} @ ${T(m.h).abbr}</h2>
-    ${state.phase === 'PRESEASON' ? '<div class="small muted" style="margin-bottom:12px">Exhibition: starters sit, the bubble plays. The result does not count; the film does.</div>' : `<div class="row small" style="margin-bottom:12px"><span>Line: <b>${T(fav).abbr} −${(Math.round(sp * 2) / 2).toFixed(1)}</b></span><span class="muted">·</span><span>Your win chance ≈ <b>${Math.round(pUser * 100)}%</b></span></div>`}
+    ${state.phase === 'PRESEASON' ? `<div class="small muted" style="margin-bottom:12px">Exhibition. Your plan: ${{ sit: 'starters sit', series: 'starters play the opening series', quarter: 'starters play the first quarter', half: 'starters play the first half' }[prePlanFor(u).mode]}. Change it on the Roster tab. The result does not count; the film does.</div>` : `<div class="row small" style="margin-bottom:12px"><span>Line: <b>${T(fav).abbr} −${(Math.round(sp * 2) / 2).toFixed(1)}</b></span><span class="muted">·</span><span>Your win chance ≈ <b>${Math.round(pUser * 100)}%</b></span></div>`}
     <div class="grid g2">${side(u)}${side(opp)}</div>
     <div class="row" style="margin-top:14px"><button class="primary" data-action="playGame" data-recap="1">▶ Sim game</button><button data-action="playGame" data-recap="0">Sim without recap</button><span class="spacer"></span><button class="sm" data-action="popupsOff">Turn off game popups</button></div>`);
 }
@@ -1749,6 +1845,7 @@ function gameWrapModal(gid) {
       ${(b.injuries || []).length ? `<div class="section-title bad">Injuries</div>${b.injuries.map(x => P(x.pid) ? `<div class="small">${T(x.tid).abbr} ${playerLink(P(x.pid))} — ${esc(x.name)} <span class="muted">(${x.weeks} wk)</span></div>` : '').join('')}` : ''}
     </div></div>
     ${others.length ? `<div class="section-title">Around the league</div><div class="row small" style="gap:6px 16px">${others.map(x => `<span>${T(x.tids[1]).abbr} ${x.score[1]} @ ${T(x.tids[0]).abbr} ${x.score[0]}</span>`).join('')}</div>` : ''}
+    ${b.pre ? preSnapReport(b) : ''}
     <div class="row" style="margin-top:14px"><button class="primary" data-action="box" data-gid="${b.id}">Full box score & Film Room</button><button data-action="closeModal">Continue</button></div>`;
   openModal(html);
 }
@@ -1775,7 +1872,8 @@ function stepContinue() {
     case 'DRAFT': { const pk = currentPick(); if (pk && pk.owner === state.userTid) simDraftPick(); else simDraftToUser(); break; }
     case 'UDFA': { const res = resolveUdfaRound(); if (!state.settings.autoUser) ui.udfaResult = res; break; }
     case 'PRESEASON': simPreseasonWeek(); if (state.phase === 'CUTDOWN' && !state.settings.autoUser) view = 'cutdown'; break;
-    case 'CUTDOWN': applyCutPlan(); startNewSeason(); if (view === 'cutdown') view = 'home'; break;
+    case 'CUTDOWN': beginWaivers(); if (state.settings.autoUser) resolveWaivers(); else view = 'waivers'; break;
+    case 'WAIVERS': { const r = resolveWaivers(); if (!state.settings.autoUser) ui.wvResult = r; if (view === 'waivers') view = 'home'; break; }
   }
 }
 function phaseLabel() {
@@ -1800,16 +1898,21 @@ const actions = {
       if (n < ROSTER_MAX + 8 && !confirm(`This is the last round and you would go to camp with at most ${n} players. Nobody will be signed for you. Open camp anyway?`)) return;
     }
     if (state.phase === 'CUTDOWN' && !state.settings.autoUser) {
-      const short = rosterShortfalls(state.userTid), have = rosterOf(state.userTid).filter(p => countsOn53(p) && state.cut.plan[p.id] !== 'cut').length;
+      const gone = v => v === 'cut' || v === 'ps';
+      const short = rosterShortfalls(state.userTid), have = rosterOf(state.userTid).filter(p => countsOn53(p) && !gone(state.cut.plan[p.id])).length;
       if ((short.length || have < ROSTER_MAX) && !confirm(`${have < ROSTER_MAX ? `You only have ${have} of ${ROSTER_MAX} roster spots filled. ` : ''}${short.length ? `You are short at: ${short.join(', ')}. ` : ''}Nobody will be signed for you. Start the season anyway?`)) return;
-      const left = rosterOf(state.userTid).filter(p => countsOn53(p) && (state.cut.plan[p.id] !== 'cut')).length - ROSTER_MAX;
+      const left = have - ROSTER_MAX;
       if (left > 0 && !confirm(`You still need to cut ${left} more player${left === 1 ? '' : 's'}. Let the staff make the remaining cuts?`)) return;
+    }
+    if ((state.phase === 'REG' || state.phase === 'PLAYOFFS') && !state.settings.autoUser && userMatchup()) {
+      const short = lineupShort(state.userTid);
+      if (short.length && !confirm(`You are short-handed at ${short.join(', ')}. Nobody will be promoted or signed for you. Play anyway?`)) return;
     }
     if (state.phase === 'REG' || state.phase === 'PLAYOFFS' || state.phase === 'PRESEASON') {
       if (state.phase === 'PRESEASON' && !state.pre) startPreseason();
       if (state.settings.gamePopups !== false && userMatchup()) { pregameModal(); return; }
       playWeek(false);
-    } else { stepContinue(); save(); render(); if (ui.udfaResult) { const r = ui.udfaResult; ui.udfaResult = null; udfaResultModal(r); } }
+    } else { stepContinue(); save(); render(); if (ui.udfaResult) { const r = ui.udfaResult; ui.udfaResult = null; udfaResultModal(r); } if (ui.wvResult) { const r = ui.wvResult; ui.wvResult = null; waiverResultModal(r); } }
   },
   playGame: d => { closeModal(); playWeek(d.recap !== '0'); },
   popupsOff: () => { state.settings.gamePopups = false; save(); closeModal(); playWeek(false); toast('Game popups off. Turn them back on in Settings.'); },
@@ -1882,6 +1985,21 @@ const actions = {
   srchFam: d => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF))).fam = d.pos; render(); },
   cutFam: d => { ui.cutFam = d.pos; render(); },
   cutToggle: d => { const pl = state.cut.plan; if (pl[d.pid] === 'cut') delete pl[d.pid]; else pl[d.pid] = 'cut'; save(); render(); },
+  cutSet: d => {
+    const pl = state.cut.plan, p = P(+d.pid);
+    if (d.v === 'ps') { const marked = Object.keys(pl).filter(id => pl[id] === 'ps' && +id !== p.id).map(id => P(+id)).filter(Boolean);
+      if (marked.length >= PS_MAX) { toast('Your practice squad is full (' + PS_MAX + ')'); return; }
+      if (psVet(p) && marked.filter(psVet).length >= PS_VETS) { toast('Only ' + PS_VETS + ' practice squad spots can go to players with 3+ seasons'); return; } }
+    if (d.v === 'keep') delete pl[d.pid]; else pl[d.pid] = d.v; save(); render();
+  },
+  wvClaim: d => { const p = P(+d.pid); if (state.wv.claims[p.id] !== undefined) { waiverClaim(p.id, null); save(); render(); return; }
+    const err = waiverClaim(p.id, 0); if (!err) { save(); render(); return; }
+    if (/roster is full/.test(err)) { waiverDropModal(p.id); return; } toast(err); },
+  wvClaimDrop: d => { const err = waiverClaim(+d.pid, +d.drop); if (err) toast(err); closeModal(); save(); render(); },
+  wvWant: d => { wantForPS(+d.pid, !state.wv.want[d.pid]); save(); render(); },
+  wvFam: d => { ui.wvFam = d.pos; render(); },
+  futures: d => { const err = signFutures(+d.pid); toast(err || 'Signed to a reserve/future deal.'); save(); render(); },
+  preFeat: d => { const pl = state.prePlan, id = +d.pid; if (d.v === 'feat') { pl.feat[id] = 1; delete pl.hold[id]; } else if (d.v === 'hold') { pl.hold[id] = 1; delete pl.feat[id]; } else { delete pl.feat[id]; delete pl.hold[id]; } save(); if (d.card) playerModal(id, true); render(); },
   cutStaff: () => { const prev = cutPreview(state.userTid); state.cut.plan = {}; prev.cuts.forEach(id => state.cut.plan[id] = 'cut'); save(); render(); },
   cutClear: () => { state.cut.plan = {}; save(); render(); },
   srchReset: () => { ui.search = Object.assign({}, SEARCH_DEF); render(); },
@@ -1921,6 +2039,7 @@ const actions = {
 const changes = {
   rosterTeam: v => { ui.rosterTid = +v; },
   rosterView: v => { ui.rosterView = v; },
+  preStarters: v => { state.prePlan.starters = v; save(); },
   udfaOffer: (v, el) => { const err = udfaOffer(+el.dataset.pid, v === '' ? null : +v); if (err) toast(err); save(); render(); },
   srch: (v, el) => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF)))[el.dataset.f] = v; },
   srchChk: (v, el) => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF)))[el.dataset.f] = el.checked; },

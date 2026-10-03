@@ -14,10 +14,11 @@ function startPreseason() {
     state.pre.sched.push(wk);
   }
   for (const id in state.players) delete state.players[id].preS;
+  state.prePlan = { starters: (state.prePlan && state.prePlan.starters) || 'auto', feat: {}, hold: {} };
   for (const t of shuffle(state.teams.slice())) if (isAI(t.id)) campSignings(t.id); // your camp roster is yours to build
 }
 // every team brings extra bodies to camp: undrafted rookies and street free agents on minimum, non-guaranteed deals
-const CAMP_TARGET = { QB: 4, RB: 5, WR: 9, TE: 5, OL: 12, DL: 13, LB: 7, CB: 8, S: 5, K: 1, P: 1 }; // 70
+const CAMP_TARGET = { QB: 4, RB: 6, WR: 12, TE: 6, OL: 16, DL: 16, LB: 9, CB: 11, S: 7, K: 2, P: 1 }; // 90
 function campSignings(tid) {
   const counts = {}; rosterOf(tid).forEach(p => counts[p.pos] = (counts[p.pos] || 0) + 1);
   const pool = Object.values(state.players).filter(p => p.tid === -1 && !p.injury && p.age <= 27 && p.exp <= 4 && p.ask <= MIN_SALARY * 1.3)
@@ -39,7 +40,7 @@ function campSignings(tid) {
 //  bonus on a minimum deal. The player picks his spot on money, his path to a roster place, and personal preference.
 //  Nobody is signed for you: what you do not go and get, you do not have in camp.
 // =====================================================================
-const UDFA_ROUNDS = 3, UDFA_KEEP = 240;
+const UDFA_ROUNDS = 3, UDFA_KEEP = 460;
 const UDFA_BONUS = [0, 0.02, 0.05, 0.1, 0.2]; // $M guaranteed
 function fmtBonus(b) { return b ? '$' + Math.round(b * 1000) + 'K' : 'no bonus'; }
 function isUdfa(p) { return p.tid === -1 && p.udfa === state.season + 1; }
@@ -154,11 +155,35 @@ function rosterShortfalls(tid) {
 
 // who dresses for an exhibition: everyone healthy except the established starters (enough bodies are kept at every group)
 // After halftime (g given) the players who carried the first half sit too, so the third string gets its tape.
+// Playing-time plan. Starters: how long the ones play ('auto' follows the usual build-up: a series, a quarter, then
+// the night off). feat: bubble players who stay in for extra film. hold: players kept out entirely.
+const PRE_MODES = [['auto', 'Coach\'s plan (a series, a quarter, then sit)'], ['sit', 'Starters sit'], ['series', 'Starters play one series'], ['quarter', 'Starters play a quarter'], ['half', 'Starters play a half']];
+const PRE_AUTO = ['series', 'quarter', 'sit'];
+function prePlanFor(tid) {
+  const pl = tid === state.userTid && !state.settings.autoUser && state.prePlan ? state.prePlan : null;
+  let mode = pl ? pl.starters : 'auto';
+  if (mode === 'auto') mode = PRE_AUTO[state.pre ? Math.min(state.pre.wk, 2) : 0];
+  return { mode, feat: pl ? pl.feat : {}, hold: pl ? pl.hold : {} };
+}
+function preStarters(tid, g) {
+  if (g && g.preStart && g.preStart[tid]) return g.preStart[tid];
+  const dv = depthView(tid), s = new Set();
+  for (const e of [...dv.off, ...dv.nickel, ...dv.base]) if (e.p.a) s.add(e.p.id);
+  if (g) (g.preStart = g.preStart || {})[tid] = s;
+  return s;
+}
 function preseasonActives(tid, g) {
-  const dv = depthView(tid), sit = new Set();
-  for (const e of [...dv.off, ...dv.nickel, ...dv.base]) if (e.p.a) sit.add(e.p.id);
+  const plan = prePlanFor(tid), starters = preStarters(tid, g), sit = new Set();
+  const q = g && g.q ? g.q : 1, snp = id => (g && g.ps[id] ? g.ps[id].snp : 0);
   const ro = rosterOf(tid).filter(p => !p.injury);
-  const played = g ? new Set(ro.filter(p => !sit.has(p.id) && g.ps[p.id] && g.ps[p.id].snp >= 12 && p.pos !== 'K' && p.pos !== 'P').map(p => p.id)) : new Set();
+  const startSnaps = Math.max(0, ...ro.filter(p => starters.has(p.id)).map(p => snp(p.id)));
+  const startersIn = plan.mode === 'half' ? q <= 2 : plan.mode === 'quarter' ? q <= 1 : plan.mode === 'series' ? q <= 1 && startSnaps < 12 : false;
+  for (const p of ro) {
+    if (plan.hold[p.id]) sit.add(p.id);
+    else if (starters.has(p.id) && !plan.feat[p.id]) { if (!startersIn) sit.add(p.id); }
+  }
+  // the twos give way to the threes after halftime, unless you want more film on someone
+  const played = new Set(ro.filter(p => !sit.has(p.id) && !plan.feat[p.id] && p.pos !== 'K' && p.pos !== 'P' && ((q >= 3 && snp(p.id) >= 22) || snp(p.id) >= 45)).map(p => p.id));
   const play = ro.filter(p => !sit.has(p.id) && !played.has(p.id));
   for (const pos of POSITIONS) {
     let n = play.filter(p => p.pos === pos).length;
@@ -233,6 +258,6 @@ function cutNote(p, prev) {
 }
 function applyCutPlan() {
   const plan = (state.cut && state.cut.plan) || {};
-  for (const id in plan) { const p = P(+id); if (plan[id] === 'cut' && p && p.tid === state.userTid) releasePlayer(p.id); }
+  for (const id in plan) { const p = P(+id); if ((plan[id] === 'cut' || plan[id] === 'ps') && p && p.tid === state.userTid) releasePlayer(p.id); }
   state.cut = null;
 }
