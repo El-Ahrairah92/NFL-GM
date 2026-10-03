@@ -4,7 +4,7 @@
 // =====================================================================
 const PHASE_LABEL = {
   REG: 'Regular Season', PLAYOFFS: 'Playoffs', RECAP: 'Season Recap', COACHES: 'Coaching Carousel',
-  RESIGN: 'Re-sign Players', FA: 'Free Agency', DRAFT: 'Draft', PRESEASON: 'Preseason', CUTDOWN: 'Cutdown Day',
+  RESIGN: 'Re-sign Players', FA: 'Free Agency', DRAFT: 'Draft', UDFA: 'Rookie Free Agency', PRESEASON: 'Preseason', CUTDOWN: 'Cutdown Day',
 };
 const ROUND_NAMES = ['Wild Card', 'Divisional', 'Conference Final', 'Championship'];
 

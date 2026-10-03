@@ -185,6 +185,7 @@ function rosterCount(tid) { return state.phase === 'REG' || state.phase === 'PLA
 function signFA(pid, tid, yrs) {
   const p = P(pid);
   if (!p || p.tid !== -1) return 'Player is not a free agent';
+  if (state.phase === 'UDFA' && isUdfa(p)) return 'Undrafted rookies choose between offers: make yours on the Free Agents tab';
   if (rosterCount(tid) >= rosterLimit()) return 'Roster is full';
   if (p.ask > capRoom(tid)) return 'Not enough cap room';
   setTid(p, tid);
@@ -290,13 +291,13 @@ function simDraftToUser() {
 function finishDraft() {
   const left = prospects().sort((a, b) => perOvr(b) + b.per.g * 0.5 - perOvr(a) - a.per.g * 0.5);
   left.forEach((p, i) => {
-    if (i < 90) { setTid(p, -1); p.ask = MIN_SALARY; p.contract = { amt: MIN_SALARY, yrs: 0 }; }
+    if (i < UDFA_KEEP) { setTid(p, -1); p.ask = MIN_SALARY; p.contract = { amt: MIN_SALARY, yrs: 0 }; p.udfa = state.draft.year; }
     else delete state.players[p.id]; rostersDirty();
   });
   state.picks = state.picks.filter(pk => pk.season !== state.draft.year);
-  state.phase = 'PRESEASON';
-  startPreseason();
-  addNews(`The ${state.draft.year} draft is complete. Undrafted rookies are now free agents.`);
+  state.phase = 'UDFA';
+  startUdfa();
+  addNews(`The ${state.draft.year} draft is complete. The race for undrafted rookies is on.`);
   campReports(state.draft.year);
 }
 
@@ -349,7 +350,7 @@ function fixCap(tid) {
 }
 
 function startNewSeason() {
-  state.pre = null; state.cut = null;
+  state.pre = null; state.cut = null; state.udfa = null;
   trainingCamp();
   // anyone still hurt opens the season on IR (decided before cutdown so the 53 is real)
   for (const p of Object.values(state.players)) { if (p.tid >= 0 && p.injury && p.injury.weeks >= IR_WEEKS) p.ir = { wk: 1 }; else delete p.ir; }
@@ -359,7 +360,7 @@ function startNewSeason() {
       const cuts = autoCut(t.id, ROSTER_MAX, true);
       if (cuts.length) addNews(`Cutdown day: ${cuts.length} player(s) auto-released to reach ${ROSTER_MAX}.`, [t.id]);
     }
-    fillRoster(t.id, ROSTER_TEMPLATE); // open spots get minimum-salary camp bodies (yours too)
+    if (isAI(t.id)) fillRoster(t.id, ROSTER_TEMPLATE); // open spots get minimum-salary camp bodies. Not yours: you fill your own roster.
   }
   // practice squads (yours too — edit it any time from the roster page)
   for (const t of shuffle(state.teams.slice())) fillPS(t.id);

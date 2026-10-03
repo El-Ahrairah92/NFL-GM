@@ -193,6 +193,7 @@ function continueLabel() {
     case 'RESIGN': return 'Done Re-signing →';
     case 'FA': return `Next FA Wave (${state.faWave + 1}/${FA_WAVES}) →`;
     case 'DRAFT': { const pk = currentPick(); return pk && pk.owner === state.userTid ? 'Auto-pick for Me' : 'Sim to My Pick'; }
+    case 'UDFA': return state.udfa && state.udfa.round >= UDFA_ROUNDS - 1 ? 'Final Round: Send Offers & Open Camp →' : `Send Offers (Round ${(state.udfa ? state.udfa.round : 0) + 1} of ${UDFA_ROUNDS}) →`;
     case 'PRESEASON': return `▶ Play Preseason Game ${(state.pre ? state.pre.wk : 0) + 1}`;
     case 'CUTDOWN': return `Finalize Roster & Start ${state.season + 1} Season →`;
   }
@@ -253,6 +254,7 @@ function phaseCallout() {
     case 'RESIGN': { const n = rosterOf(u).filter(p => p.expiring).length; return `You have <b>${n}</b> expiring contract${n === 1 ? '' : 's'}. Re-sign players on the <b>Roster</b> tab. Anyone you don't re-sign becomes a free agent.`; }
     case 'FA': return `Free agency wave ${state.faWave + 1} of ${FA_WAVES}. Sign players on the <b>Free Agents</b> tab before AI teams do. Unsigned players lower their asking price each wave.`;
     case 'DRAFT': { const pk = currentPick(); return pk ? `Pick ${pk.pick} (Rd ${pk.round}): <b>${T(pk.owner).abbr}</b> on the clock. ${pk.owner === u ? 'That\'s you! Choose on the <b>Draft</b> tab.' : ''}` : ''; }
+    case 'UDFA': { const n = rosterOf(u).length, o = state.udfa ? Object.keys(state.udfa.offers).length : 0; return `Rookie free agency, round ${(state.udfa ? state.udfa.round : 0) + 1} of ${UDFA_ROUNDS}. Every team is bidding for the best undrafted players. Make your offers on the <b>Free Agents</b> tab, then send them. You have <b>${n}</b> of ${OFFSEASON_MAX} camp spots filled and <b>${o}</b> offer${o === 1 ? '' : 's'} out. Nobody is signed for you.`; }
     case 'PRESEASON': return `Preseason: ${PRESEASON_GAMES} exhibition games. Your starters sit; the bubble players and rookies get the snaps, and what they put on film sharpens every evaluation before <b>Cutdown Day</b>.`;
     case 'CUTDOWN': { const n = rosterOf(u).filter(countsOn53).length; return `Cutdown Day: ${n} players, ${ROSTER_MAX} spots. Go through each position group with your staff on the <b>Cutdown Day</b> tab. Anything you leave undecided, the staff decides.`; }
   }
@@ -875,6 +877,44 @@ function tradeHTML() {
 }
 
 // ---------- free agents ----------
+// post-draft bidding for undrafted rookies
+function udfaHTML() {
+  const u = state.userTid, s = state.udfa, n = rosterOf(u).length, offers = Object.keys(s.offers).length;
+  const ps = Object.values(state.players).filter(isUdfa).filter(p => inFamily(p, ui.faPos));
+  const committed = Object.values(s.offers).reduce((a, b) => a + MIN_SALARY + b, 0);
+  let html = `<div class="callout"><b>Round ${s.round + 1} of ${UDFA_ROUNDS}.</b> Offer a guaranteed signing bonus on a three-year minimum deal (${fmtMoney(MIN_SALARY)}/yr). When you send offers, each player picks a team: the money matters, but so does whether he sees a job to win and where he simply wants to be. The bonus is dead money if you cut him.
+    Camp roster <b>${n}/${OFFSEASON_MAX}</b> · offers out <b>${offers}</b> · committed ${fmtMoney(committed)} of ${fmtMoney(capRoom(u))} cap room.${s.round === UDFA_ROUNDS - 1 ? ' <b>Last round:</b> after this, camp opens with whoever you have.' : ''}</div>
+    <div class="subtabs">${famTabs(ui.faPos, 'faPos')}</div>`;
+  const offerCell = p => {
+    const cur = s.offers[p.id];
+    return `<select data-change="udfaOffer" data-pid="${p.id}" class="${cur !== undefined ? 'on' : ''}"><option value="">No offer</option>${UDFA_BONUS.map(b => `<option value="${b}" ${cur === b ? 'selected' : ''}>${b ? fmtBonus(b) + ' guaranteed' : 'Offer, no bonus'}</option>`).join('')}</select>`;
+  };
+  const HEAT = { 'Bidding war': 'bad', 'Several teams': 'warn', 'A team or two': '', Quiet: 'good' }, PATH = { 'Clear path to a job': 'good', 'Fair shot': '', 'Crowded room': 'warn', 'Long odds': 'bad' };
+  html += '<div class="card">' + table('udfa', [
+    { k: 'pos', l: 'Pos', v: p => FAM_INDEX[p.spot], f: p => esc(p.lbl) },
+    { k: 'n', l: 'Name', v: p => p.last, f: p => playerLink(p) },
+    { k: 'age', l: 'Age', v: p => p.age, num: 1 },
+    { k: 'hw', l: 'Ht/Wt', v: p => p.m.wt, f: p => `<span class="small muted">${htwt(p)}</span>` },
+    { k: 'ovr', l: 'Ready now as', v: tierSort, f: p => tierPill(p) + trueNums(p) },
+    { k: 'pot', l: 'Upside', v: upSort, f: p => upsidePill(p) },
+    { k: 'ras', l: 'RAS', v: p => rasOf(p) || 0, f: p => rasHTML(p), num: 1 },
+    { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
+    { k: 'heat', l: 'Market', v: p => (s.ai[p.id] || []).length, f: p => { const h = udfaInterest(p); return `<span class="pill ${HEAT[h]}">${h}</span>`; }, title: 'How many other teams are after him this round' },
+    { k: 'path', l: 'His view of you', v: p => udfaPath(p, u), f: p => { const l = udfaPathLabel(udfaPath(p, u)); return `<span class="pill ${PATH[l]}">${l}</span>`; }, title: 'Does he see a job to win on your roster?' },
+    { k: 'o', l: 'Your offer', v: p => s.offers[p.id] !== undefined ? 1 + s.offers[p.id] : 0, f: offerCell },
+  ], ps, { sort: 'pot', limit: 240 }) + '</div>';
+  return html;
+}
+function udfaResultModal(res) {
+  const won = res.filter(r => r.won), lost = res.filter(r => !r.won);
+  let h = `<h2 style="margin-top:0">Rookie free agency: ${state.phase === 'UDFA' ? 'round ' + state.udfa.round + ' results' : 'final results'}</h2>`;
+  if (!res.length) h += '<p class="muted">You made no offers this round.</p>';
+  if (won.length) h += '<div class="section-title">Signed</div>' + won.map(r => `<div class="row small" style="margin:4px 0">${playerLink(r.p)} <span class="muted">${esc(r.p.lbl)} · ${fmtBonus(r.b)}${r.rivals ? ' · chose you over ' + r.rivals + ' other team' + (r.rivals === 1 ? '' : 's') : ''}</span></div>`).join('');
+  if (lost.length) h += '<div class="section-title">Got away</div>' + lost.map(r => `<div class="row small" style="margin:4px 0">${playerLink(r.p)} <span class="muted">${esc(r.p.lbl)} · ${r.to !== undefined ? 'signed with ' + T(r.to).abbr + ': ' : ''}${esc(r.why)}</span></div>`).join('');
+  h += `<p class="small muted" style="margin-top:14px">${state.phase === 'UDFA' ? 'Players still unsigned are back on the board for the next round.' : 'Camp is open. Your roster: ' + rosterOf(state.userTid).length + '/' + OFFSEASON_MAX + '. Anyone left unsigned can still be signed from the Free Agents tab.'}</p>`;
+  openModal(h);
+}
+
 // next offseason's class: everyone in the last year of his deal with no extension signed
 function upcomingFA(p) { return p.tid >= 0 && p.a && (p.expiring || (p.contract.yrs <= 1 && !p.contract.next && !(p.contract.rookie && p.contract.opt5 === 'pending'))); }
 function staySignal(p) {
@@ -909,8 +949,11 @@ function upcomingFAHTML() {
 }
 function faHTML() {
   const u = state.userTid;
-  const tabs = `<div class="subtabs">${[['now', 'Available now'], ['next', 'Upcoming free agents']].map(([k, l]) => `<button class="${(ui.faView || 'now') === k ? 'on' : ''}" data-action="faView" data-v="${k}">${l}</button>`).join('')}</div>`;
-  if (ui.faView === 'next') return tabs + upcomingFAHTML();
+  const udfa = state.phase === 'UDFA' && state.udfa, fv = ui.faView || (udfa ? 'udfa' : 'now');
+  const tabs = `<div class="subtabs">${[...(udfa ? [['udfa', 'Undrafted rookies']] : []), ['now', udfa ? 'Veterans' : 'Available now'], ['next', 'Upcoming free agents']].map(([k, l]) => `<button class="${fv === k ? 'on' : ''}" data-action="faView" data-v="${k}">${l}</button>`).join('')}</div>`;
+  if (fv === 'next') return tabs + upcomingFAHTML();
+  if (fv === 'udfa' && udfa) return tabs + udfaHTML();
+  if (udfa) fas = fas.filter(p => !isUdfa(p));
   let fas = Object.values(state.players).filter(p => p.tid === -1);
   fas = fas.filter(p => inFamily(p, ui.faPos));
   const canSign = state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP';
@@ -1361,6 +1404,7 @@ function playerModal(pid, replace) {
   if (p.tid === u) {
     if (p.expiring && state.phase === 'RESIGN') left += termButtons(p, 'resign');
     left += `<button class="danger" data-action="release" data-pid="${p.id}">Release</button>`;
+  } else if (state.phase === 'UDFA' && state.udfa && isUdfa(p)) { const cur = state.udfa.offers[p.id], pl = udfaPathLabel(udfaPath(p, u)); left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Undrafted rookie · market: <b>${udfaInterest(p)}</b> · his view of your roster: <b>${pl}</b>${cur !== undefined ? ` · your offer: <b>${fmtBonus(cur)}</b>` : ''}</div><div class="row" style="gap:6px">${UDFA_BONUS.map(b => `<button class="sm ${cur === b ? 'primary' : ''}" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="${b}">${b ? fmtBonus(b) : 'No bonus'}</button>`).join('')}${cur !== undefined ? `<button class="sm danger" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="">Withdraw</button>` : ''}</div></div>`;
   } else if (p.tid === -1 && state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP') left += `<button class="primary" data-action="sign" data-pid="${p.id}">Sign (${fmtMoney(p.ask)})</button>`;
   else if (p.tid >= 0) left += `<button data-action="tradeFor" data-pid="${p.id}">Trade for ${esc(p.last)}</button>`;
   left += '</div>';
@@ -1729,6 +1773,7 @@ function stepContinue() {
     case 'RESIGN': leaveResign(); break;
     case 'FA': advanceFA(); break;
     case 'DRAFT': { const pk = currentPick(); if (pk && pk.owner === state.userTid) simDraftPick(); else simDraftToUser(); break; }
+    case 'UDFA': { const res = resolveUdfaRound(); if (!state.settings.autoUser) ui.udfaResult = res; break; }
     case 'PRESEASON': simPreseasonWeek(); if (state.phase === 'CUTDOWN' && !state.settings.autoUser) view = 'cutdown'; break;
     case 'CUTDOWN': applyCutPlan(); startNewSeason(); if (view === 'cutdown') view = 'home'; break;
   }
@@ -1750,7 +1795,13 @@ const actions = {
       const n = rosterOf(state.userTid).filter(p => p.expiring).length;
       if (n && !confirm(`${n} expiring player(s) will leave in free agency. Continue?`)) return;
     }
+    if (state.phase === 'UDFA' && !state.settings.autoUser && state.udfa.round >= UDFA_ROUNDS - 1) {
+      const n = rosterOf(state.userTid).length + Object.keys(state.udfa.offers).length;
+      if (n < ROSTER_MAX + 8 && !confirm(`This is the last round and you would go to camp with at most ${n} players. Nobody will be signed for you. Open camp anyway?`)) return;
+    }
     if (state.phase === 'CUTDOWN' && !state.settings.autoUser) {
+      const short = rosterShortfalls(state.userTid), have = rosterOf(state.userTid).filter(p => countsOn53(p) && state.cut.plan[p.id] !== 'cut').length;
+      if ((short.length || have < ROSTER_MAX) && !confirm(`${have < ROSTER_MAX ? `You only have ${have} of ${ROSTER_MAX} roster spots filled. ` : ''}${short.length ? `You are short at: ${short.join(', ')}. ` : ''}Nobody will be signed for you. Start the season anyway?`)) return;
       const left = rosterOf(state.userTid).filter(p => countsOn53(p) && (state.cut.plan[p.id] !== 'cut')).length - ROSTER_MAX;
       if (left > 0 && !confirm(`You still need to cut ${left} more player${left === 1 ? '' : 's'}. Let the staff make the remaining cuts?`)) return;
     }
@@ -1758,7 +1809,7 @@ const actions = {
       if (state.phase === 'PRESEASON' && !state.pre) startPreseason();
       if (state.settings.gamePopups !== false && userMatchup()) { pregameModal(); return; }
       playWeek(false);
-    } else { stepContinue(); save(); render(); }
+    } else { stepContinue(); save(); render(); if (ui.udfaResult) { const r = ui.udfaResult; ui.udfaResult = null; udfaResultModal(r); } }
   },
   playGame: d => { closeModal(); playWeek(d.recap !== '0'); },
   popupsOff: () => { state.settings.gamePopups = false; save(); closeModal(); playWeek(false); toast('Game popups off. Turn them back on in Settings.'); },
@@ -1827,6 +1878,7 @@ const actions = {
   statCat: d => { ui.statCat = d.cat; render(); },
   faPos: d => { ui.faPos = d.pos; render(); },
   faView: d => { ui.faView = d.v; render(); },
+  udfaOfferBtn: d => { const err = udfaOffer(+d.pid, d.b === '' ? null : +d.b); if (err) toast(err); save(); playerModal(+d.pid, true); render(); },
   srchFam: d => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF))).fam = d.pos; render(); },
   cutFam: d => { ui.cutFam = d.pos; render(); },
   cutToggle: d => { const pl = state.cut.plan; if (pl[d.pid] === 'cut') delete pl[d.pid]; else pl[d.pid] = 'cut'; save(); render(); },
@@ -1869,6 +1921,7 @@ const actions = {
 const changes = {
   rosterTeam: v => { ui.rosterTid = +v; },
   rosterView: v => { ui.rosterView = v; },
+  udfaOffer: (v, el) => { const err = udfaOffer(+el.dataset.pid, v === '' ? null : +v); if (err) toast(err); save(); render(); },
   srch: (v, el) => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF)))[el.dataset.f] = v; },
   srchChk: (v, el) => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF)))[el.dataset.f] = el.checked; },
   staffTeam: v => { ui.staffTid = +v; },

@@ -181,7 +181,7 @@ function offUnit(g, s, pers, call) {
     // committee series: the No. 2 back gets his drive unless he's hopelessly outclassed
     const backs = T_.depth.RB.filter(x => x.p.spot === 'RB');
     const rb2 = backs[T_.rb3Turn && backs[2] && backs[1].r - backs[2].r <= 14 ? 2 : 1]; // the third back gets the odd series
-    return rb2 && p.id === rb2.p.id && backs[0].r - rb2.r <= 25 ? backs[0].r - rb2.r + 2 : 0;
+    return rb2 && p.id === rb2.p.id && backs[0].r - rb2.r <= 45 ? backs[0].r - rb2.r + 2 : 0; // even a star gets spelled
   };
   const chart = userChart(g, s, 'off');
   if (!chart) return fillSlots(g, s, slots, OFF_SLOT, { score: rbScore });

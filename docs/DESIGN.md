@@ -328,6 +328,11 @@ Games were decided by 16.9 on average (NFL 11.3) with 21% decided by 28+. Talent
 - **Sacks by alignment** match the NFL (edge ~50%, interior ~26%, blitzers ~23%): interior rushers get home slower (`TUNE.insideRush`) and finish less often, and credit is shared among everyone arriving with the first rusher. About 23 players reach 10 sacks; tackles average ~3.5. Check with `sackdist.js` and `sackslot.js`.
 - Injuries away from the ball, in the trenches and on sacks are more common: about 19 QBs start 16+ games and over a third of starting linemen miss time. Check with `offuse.js`.
 
+## 15. Rookie free agency (post-draft)
+- New phase `UDFA` between the draft and preseason, three rounds. The undrafted class is topped up to 240 players; the league sees them as depth or projects at best (a few are really much better).
+- Offers are a guaranteed signing bonus ($0 to $200K) on a three-year minimum deal. Every other team builds its own target board each round. On "Send Offers" each player picks a team: money, his path to a roster spot there, and personal preference.
+- The user's roster is never auto-filled: no camp signings and no roster fill at the start of the season. Warnings fire before camp opens thin and before a season starts short at a position. (Practice squad auto-fill is unchanged.)
+
 ## Deferred
 - Penalties / Discipline attribute
 - Leadership / intangibles

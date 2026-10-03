@@ -271,7 +271,8 @@ function applyResult(g, res, oc, dc, off, def, b) {
     if (res.pbu) inc(g, res.pbu.p, 'pd');
   } else if (res.kind === 'sack') {
     yds = Math.max(res.yds, -g.ydl);
-    inc(g, res.qb.p, 'sacked'); inc(g, res.sacker.p, 'sck'); inc(g, res.sacker.p, 'tkl'); inc(g, res.sacker.p, 'tfl');
+    inc(g, res.qb.p, 'sacked'); inc(g, res.sacker.p, 'sck', res.sacker2 ? 0.5 : 1); inc(g, res.sacker.p, 'tkl'); inc(g, res.sacker.p, 'tfl');
+    if (res.sacker2) { inc(g, res.sacker2.p, 'sck', 0.5); inc(g, res.sacker2.p, 'tkl'); }
     ts.sacks++; ts.sackY -= yds;
     if (res.fumble) {
       inc(g, res.sacker.p, 'ff');

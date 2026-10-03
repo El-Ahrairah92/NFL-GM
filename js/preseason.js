@@ -14,7 +14,7 @@ function startPreseason() {
     state.pre.sched.push(wk);
   }
   for (const id in state.players) delete state.players[id].preS;
-  for (const t of shuffle(state.teams.slice())) campSignings(t.id);
+  for (const t of shuffle(state.teams.slice())) if (isAI(t.id)) campSignings(t.id); // your camp roster is yours to build
 }
 // every team brings extra bodies to camp: undrafted rookies and street free agents on minimum, non-guaranteed deals
 const CAMP_TARGET = { QB: 4, RB: 5, WR: 9, TE: 5, OL: 12, DL: 13, LB: 7, CB: 8, S: 5, K: 1, P: 1 }; // 70
@@ -33,6 +33,125 @@ function campSignings(tid) {
   }
   if (n && tid === state.userTid) addNews(`${T(tid).abbr} signed ${n} undrafted and street free agents to fill out the camp roster.`, [tid], 'sign');
 }
+// =====================================================================
+//  POST-DRAFT FREE AGENCY
+//  Three rounds of bidding for undrafted rookies. Every team (yours included) makes offers: a guaranteed signing
+//  bonus on a minimum deal. The player picks his spot on money, his path to a roster place, and personal preference.
+//  Nobody is signed for you: what you do not go and get, you do not have in camp.
+// =====================================================================
+const UDFA_ROUNDS = 3, UDFA_KEEP = 240;
+const UDFA_BONUS = [0, 0.02, 0.05, 0.1, 0.2]; // $M guaranteed
+function fmtBonus(b) { return b ? '$' + Math.round(b * 1000) + 'K' : 'no bonus'; }
+function isUdfa(p) { return p.tid === -1 && p.udfa === state.season + 1; }
+// the players nobody drafted: mostly camp bodies, with the occasional one every team missed on
+function genUdfaClass(year, n) {
+  for (let i = 0; i < n; i++) {
+    const spot = weightedPick(Object.keys(DRAFT_SPOT_W), Object.values(DRAFT_SPOT_W));
+    const p = genPlayer(spot, gauss(-1.25 + (DRAFT_Q_ADJ[spot] || 0), 1.05), randInt(21, 24));
+    p.exp = 0; initPerception(p, 'prospect'); p.draftYear = year; p.udfa = year;
+    // 32 teams passed on him seven times: nobody sees a starter here, whatever he really is
+    const t = th(p); p.per.b = Math.min(p.per.b, t.rotation - 1 - rand() * 5); p.per.h = Math.min(p.per.h || 0, 0);
+    p.per.g = Math.min(p.per.g, Math.max(1, t.mid - p.per.b - rand() * 4));
+    setTid(p, -1); p.ask = MIN_SALARY; p.contract = { amt: MIN_SALARY, yrs: 0 };
+  }
+}
+function startUdfa() {
+  const year = state.season + 1, have = Object.values(state.players).filter(isUdfa).length;
+  genUdfaClass(year, Math.max(0, UDFA_KEEP - have));
+  state.udfa = { round: 0, offers: {}, ai: {}, log: [] };
+  udfaAiOffers();
+}
+// how he sees a team: is there a job to win there?
+function udfaPath(p, tid) {
+  const room = rosterOf(tid).filter(x => x.pos === p.pos);
+  const ahead = room.filter(x => perOvr(x) >= perOvr(p) - 1).length;
+  return clamp((ROSTER_TEMPLATE[p.pos] - ahead) * 1.3, -5, 5) + clamp((CAMP_TARGET[p.pos] || 3) - room.length, -3, 4) * 0.5;
+}
+function udfaPathLabel(x) { return x >= 3 ? 'Clear path to a job' : x >= 0 ? 'Fair shot' : x >= -3 ? 'Crowded room' : 'Long odds'; }
+function udfaAppeal(p, tid, bonus) { return Math.sqrt(bonus / 0.05) * 3 + udfaPath(p, tid) + hashGauss(p.id, 500 + tid, state.season) * 1.5; }
+// how hot his market is: the best undrafted players draw real money
+function udfaHeat(p) {
+  const pool = Object.values(state.players).filter(isUdfa).map(x => perOvr(x) + x.per.g * 0.5).sort((a, b) => b - a);
+  const v = perOvr(p) + p.per.g * 0.5, rank = pool.findIndex(x => x <= v);
+  return pool.length ? 1 - (rank < 0 ? pool.length : rank) / pool.length : 0;
+}
+// every other front office lines up its targets for this round
+function udfaAiOffers() {
+  const u = state.udfa, share = [0.5, 0.65, 1][u.round] || 1;
+  u.ai = {};
+  const pool = Object.values(state.players).filter(isUdfa);
+  const heat = {}; for (const p of pool) heat[p.id] = udfaHeat(p);
+  for (const t of shuffle(state.teams.slice())) {
+    if (!isAI(t.id)) continue;
+    const counts = {}; rosterOf(t.id).forEach(p => counts[p.pos] = (counts[p.pos] || 0) + 1);
+    const mine = pool.slice().sort((a, b) => viewCeil(b, t.id) - viewCeil(a, t.id));
+    let room = OFFSEASON_MAX - rosterOf(t.id).length;
+    for (const pos of POSITIONS) {
+      const need = Math.ceil(Math.max(0, CAMP_TARGET[pos] - (counts[pos] || 0)) * share);
+      // every staff has its own board: targets come from its top handful at the position, not a league-wide ranking
+      const board = mine.filter(x => x.pos === pos).slice(0, need * 5 + 3), targets = [];
+      while (targets.length < need && board.length) { const i = board.indexOf(weightedPick(board, board.map((_, k) => 1 / (k + 2)))); targets.push(board.splice(i, 1)[0]); }
+      for (const p of targets) {
+        if (room-- <= 0) break;
+        const h = heat[p.id], bonus = h > 0.92 ? pick([0.1, 0.2, 0.2]) : h > 0.75 ? pick([0.05, 0.1]) : h > 0.5 ? pick([0, 0.02, 0.05]) : pick([0, 0, 0.02]);
+        (u.ai[p.id] = u.ai[p.id] || []).push([t.id, bonus]);
+      }
+    }
+  }
+}
+function udfaInterest(p) { const n = ((state.udfa && state.udfa.ai[p.id]) || []).length; return n >= 5 ? 'Bidding war' : n >= 3 ? 'Several teams' : n >= 1 ? 'A team or two' : 'Quiet'; }
+function udfaOffer(pid, bonus) {
+  const p = P(pid), u = state.udfa;
+  if (!u || !p || !isUdfa(p)) return 'He is not available';
+  if (bonus == null) { delete u.offers[pid]; return null; }
+  const open = OFFSEASON_MAX - rosterOf(state.userTid).length - Object.keys(u.offers).filter(id => +id !== pid).length;
+  if (open <= 0) return 'You have an offer out for every open roster spot';
+  const committed = Object.entries(u.offers).filter(([id]) => +id !== pid).reduce((s, [, b]) => s + MIN_SALARY + b, 0);
+  if (committed + MIN_SALARY + bonus > capRoom(state.userTid)) return 'Not enough cap room for that offer';
+  u.offers[pid] = bonus;
+  return null;
+}
+function udfaSign(p, tid, bonus) {
+  setTid(p, tid);
+  p.contract = { amt: MIN_SALARY, yrs: 3, gtd: round2(bonus) };
+  delete p.ask;
+}
+// players choose. Returns what happened to your offers.
+function resolveUdfaRound() {
+  const u = state.udfa, me = state.userTid, out = [];
+  const ids = new Set([...Object.keys(u.ai), ...Object.keys(u.offers)].map(Number));
+  const order = [...ids].map(id => P(id)).filter(p => p && isUdfa(p)).sort((a, b) => udfaHeat(b) - udfaHeat(a)); // the best ones sign first
+  for (const p of order) {
+    const bids = (u.ai[p.id] || []).slice();
+    if (u.offers[p.id] !== undefined && !isAI(me)) bids.push([me, u.offers[p.id]]);
+    const live = bids.filter(([tid]) => rosterOf(tid).length < OFFSEASON_MAX && capRoom(tid) >= MIN_SALARY)
+      .map(([tid, b]) => ({ tid, b, a: udfaAppeal(p, tid, b), path: udfaPath(p, tid) })).sort((x, y) => y.a - x.a);
+    if (!live.length) { if (u.offers[p.id] !== undefined) out.push({ p, won: false, why: 'you had no roster spot or cap room left' }); continue; }
+    const win = live[0], mine = live.find(x => x.tid === me);
+    udfaSign(p, win.tid, win.b);
+    if (mine) {
+      if (win.tid === me) out.push({ p, won: true, rivals: live.length - 1, b: win.b });
+      else out.push({ p, won: false, to: win.tid, b: win.b, why: win.b > mine.b && win.path <= mine.path + 1 ? `more guaranteed money (${fmtBonus(win.b)})` : win.path > mine.path + 1 ? 'a clearer path to a roster spot' : 'he simply liked the fit better' });
+    }
+    if (win.b >= 0.1 || win.tid === me) addNews(`${T(win.tid).abbr} signed undrafted ${p.lbl} ${pname(p)} (${fmtBonus(win.b)} guaranteed${live.length > 2 ? ', beat out ' + (live.length - 1) + ' teams' : ''}).`, [win.tid], 'sign');
+  }
+  u.offers = {}; u.round++;
+  u.log.push(out);
+  if (u.round >= UDFA_ROUNDS) finishUdfa(); else udfaAiOffers();
+  return out;
+}
+function finishUdfa() {
+  state.udfa = null;
+  state.phase = 'PRESEASON';
+  startPreseason();
+  addNews('Rookie free agency is over. Camp rosters are set; anyone still unsigned is a free agent.');
+}
+// positions where a roster is short of what it needs to line up
+function rosterShortfalls(tid) {
+  const counts = {}; rosterOf(tid).filter(p => !onIR(p)).forEach(p => counts[p.pos] = (counts[p.pos] || 0) + 1);
+  return POSITIONS.filter(pos => (counts[pos] || 0) < ROSTER_MIN[pos]).map(pos => `${pos} ${counts[pos] || 0}/${ROSTER_MIN[pos]}`);
+}
+
 // who dresses for an exhibition: everyone healthy except the established starters (enough bodies are kept at every group)
 // After halftime (g given) the players who carried the first half sit too, so the third string gets its tape.
 function preseasonActives(tid, g) {

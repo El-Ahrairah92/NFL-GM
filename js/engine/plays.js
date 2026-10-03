@@ -420,7 +420,10 @@ function resolvePass(g, off, def, oc, dc) {
       const cand = escaped && home.length > 1 ? home.filter(a => a !== rusher) : home.filter(a => a.t <= rusher.t + 1.3); // the pocket collapses as a group: the first man home does not always get the sack
       // edges and blitzers close from space and finish; interior push more often flushes the QB into someone else
       const sk = cand.length > 1 ? weightedPick(cand, cand.map(a => (a.e.blitz ? 1.3 : a.e.depth === 0 && Math.abs(a.e.x) < 2 ? 0.7 : 1))).e : rusher.e;
-      Object.assign(res, { kind: 'sack', yds: -loss, sacker: sk, desc: `${pshort(qb.p)} sacked by ${pshort(sk.p)}` });
+      // two men home together split it
+      const skA = cand.find(a => a.e === sk), mates = cand.filter(a => a.e !== sk && skA && Math.abs(a.t - skA.t) <= 0.9);
+      const sk2 = mates.length && rand() < 0.75 ? pick(mates).e : null;
+      Object.assign(res, { kind: 'sack', yds: -loss, sacker: sk, sacker2: sk2, desc: `${pshort(qb.p)} sacked by ${pshort(sk.p)}${sk2 ? ' and ' + pshort(sk2.p) : ''}` });
       res.fumble = rand() < 0.11 * (1 + (ea(g, sk, 'strp') - 55) * 0.03) * (1 + (65 - ea(g, qb, 'bsec')) * 0.025);
       res.involved = [qb.p, sk.p];
       return res;
