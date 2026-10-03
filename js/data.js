@@ -9,6 +9,10 @@ const TRADE_DEADLINE = 9;    // last week trades are allowed
 const IR_WEEKS = 4;          // injuries this long go to IR and free a roster spot
 const FA_WAVES = 3;
 const DRAFT_ROUNDS = 7;
+const DRAFT_CLASS_SIZE = 450; // prospects per class (224 picks: the rest go undrafted)
+const UDFA_KEEP = 260;        // undrafted rookies who stay in the free-agent pool
+const FA_POOL_MIN = 350;      // free agents available at all times (topped up with street veterans)
+const FA_POOL_MAX = 600;
 const START_SEASON = 2026;
 
 const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K', 'P'];

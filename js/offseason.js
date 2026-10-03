@@ -117,7 +117,9 @@ function startOffseason() {
     delete state.players[p.id]; rostersDirty();
   }
   psOffseason();
-  for (let i = 0; i < 256; i++) genProspect(year);
+  for (let i = 0; i < DRAFT_CLASS_SIZE; i++) genProspect(year);
+  state.draft.board = consensusBoard();
+  state.lastDraft = null;
   coachOffseason();
   state.phase = 'COACHES';
 }
@@ -243,6 +245,19 @@ function advanceFA() {
 // ---------- draft ----------
 function prospects() { return Object.values(state.players).filter(p => p.tid === -2); }
 function currentPick() { return state.draft && state.draft.order[state.draft.idx]; }
+// the league's consensus big board, snapshotted once when the class is revealed (so projections don't reset as players come off the board)
+function consensusGrade(p) { return perOvr(p) + 0.55 * p.per.g + ({ QB: 3, RB: -2, K: -10, P: -12 }[p.pos] || 0); }
+function consensusBoard() { return prospects().sort((a, b) => consensusGrade(b) - consensusGrade(a)).map(p => p.id); }
+let BOARD_CACHE = null;
+function boardRank(p) {
+  const d = state.draft || state.lastDraft;
+  if (!d) return null;
+  if (!d.board) d.board = consensusBoard();
+  if (!BOARD_CACHE || BOARD_CACHE.b !== d.board) BOARD_CACHE = { b: d.board, m: new Map(d.board.map((id, i) => [id, i + 1])) };
+  return BOARD_CACHE.m.get(p.id) || null;
+}
+function projRound(rank) { return rank ? Math.ceil(rank / 32) : 99; } // 8+ = undrafted
+function projLabel(rank) { const r = projRound(rank); return r > DRAFT_ROUNDS ? 'UDFA' : 'Rd ' + r; }
 function draftPlayer(pid) {
   const d = state.draft, pk = d.order[d.idx], p = P(pid);
   if (!pk || !p || p.tid !== -2) return;
@@ -250,6 +265,7 @@ function draftPlayer(pid) {
   p.contract = rookieContract(pk.pick, pk.round);
   p.draft = { year: d.year, round: pk.round, pick: pk.pick, tid: pk.owner };
   pk.pid = p.id;
+  pk.proj = boardRank(p);
   if (pk.round === 1 || pk.owner === state.userTid)
     addNews(`Rd ${pk.round} Pick ${pk.inRound}: ${T(pk.owner).abbr} select ${p.lbl} ${pname(p)} (${p.college}).`, [pk.owner], 'draft');
   d.idx++;
@@ -284,13 +300,21 @@ function simDraftToUser() {
     simDraftPick();
   }
 }
+// your staff picks for you the rest of the way
+function simDraftToEnd() {
+  let guard = 0;
+  while (state.phase === 'DRAFT' && currentPick() && guard++ < 2000) simDraftPick();
+}
 function finishDraft() {
   const left = prospects().sort((a, b) => perOvr(b) + b.per.g * 0.5 - perOvr(a) - a.per.g * 0.5);
   left.forEach((p, i) => {
-    if (i < 90) { setTid(p, -1); p.ask = MIN_SALARY; p.contract = { amt: MIN_SALARY, yrs: 0 }; }
-    else delete state.players[p.id]; rostersDirty();
+    if (i < UDFA_KEEP) { setTid(p, -1); p.ask = MIN_SALARY; p.contract = { amt: MIN_SALARY, yrs: 0 }; p.udfa = state.draft.year; }
+    else delete state.players[p.id];
   });
+  rostersDirty();
   state.picks = state.picks.filter(pk => pk.season !== state.draft.year);
+  // keep the finished board viewable until the next class is revealed
+  state.lastDraft = { year: state.draft.year, order: state.draft.order.map(o => ({ round: o.round, pick: o.pick, inRound: o.inRound, orig: o.orig, owner: o.owner, pid: o.pid, proj: o.proj })) };
   state.phase = 'PRESEASON';
   addNews(`The ${state.draft.year} draft is complete. Undrafted rookies are now free agents.`);
   campReports(state.draft.year);
@@ -364,7 +388,9 @@ function startNewSeason() {
 
   // trim free agent pool
   const fas = Object.values(state.players).filter(p => p.tid === -1).sort((a, b) => perOvr(b) - perOvr(a));
-  fas.forEach((p, i) => { if (i >= 160 || perOvr(p) < 45 || p.age >= 36) delete state.players[p.id]; rostersDirty(); });
+  fas.forEach((p, i) => { if (i >= FA_POOL_MAX || perOvr(p) < 42 || p.age >= 36) delete state.players[p.id]; });
+  rostersDirty();
+  topUpFreeAgents();
   state.season++;
   state.week = 1; state.phase = 'REG';
   updateSystems();
@@ -474,4 +500,16 @@ function spotNeedBonus(tid, p) {
   let best = 0;
   for (const s in (p.cf || { [p.spot]: 100 })) if (comfortOf(p, s) >= 60) best = Math.max(best, spotDeficit(tid, s));
   return best;
+}
+
+// the street is never empty: veterans looking for a job, weighted toward the positions teams carry most
+function topUpFreeAgents(min) {
+  min = min || FA_POOL_MIN;
+  let n = Object.values(state.players).filter(p => p.tid === -1).length;
+  while (n < min) {
+    const pos = weightedPick(POSITIONS, POSITIONS.map(p => ROSTER_TEMPLATE[p]));
+    const p = genVeteran(pos, rand() < 0.3 ? 'backup' : 'fringe');
+    setTid(p, -1); p.ask = round2(Math.max(MIN_SALARY, marketValue(p) * 0.8)); p.contract = { amt: p.ask, yrs: 0 };
+    n++;
+  }
 }

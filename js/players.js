@@ -53,7 +53,16 @@ function playerValue(p, forTid) {
   if (p.injury && p.injury.weeks > 8) val *= 0.75;
   return Math.max(0.1, val);
 }
+// draft-slot value curve (roughly the classic trade chart): #1 ≈ 26, #32 ≈ 9.7, #64 ≈ 5, #128 ≈ 2.1, #224 ≈ 0.8
+function slotValue(n) { return 18 * Math.exp(-n / 20) + 9 * Math.exp(-n / 90) + 0.3; }
+function pickSlot(pk) {
+  const d = state.draft;
+  if (!d || pk.season !== d.year) return null;
+  return d.order.find(o => o.pickId === pk.id) || null;
+}
 function pickValue(pk) {
+  const slot = pickSlot(pk);
+  if (slot) return slotValue(slot.pick); // the order is set: price the actual slot
   const base = [0, 14, 6.5, 3.5, 2.2, 1.4, 0.9, 0.6][pk.round];
   // earlier-projected picks (from bad teams) are worth more
   const rec = teamRecord(pk.orig);
@@ -102,11 +111,24 @@ const DRAFT_Q_ADJ = { QB: -1.3, RB: -0.5, FB: -0.3, WRX: -0.6, WRZ: -0.6, SLOT: 
 function genProspect(draftYear) {
   const spot = weightedPick(Object.keys(DRAFT_SPOT_W), Object.values(DRAFT_SPOT_W));
   const p = genPlayer(spot, gauss(-0.45 + (DRAFT_Q_ADJ[spot] || 0), 1.4), randInt(21, 23));
+  collegeReps(p);
   setTid(p, -2); // draft prospect
   p.exp = 0;
   initPerception(p, 'prospect'); // scouting fog: everyone (you and the AI) sees prospects through it
   p.draftYear = draftYear;
   return p;
+}
+
+// college usage: plenty of prospects lined up somewhere else too (a corner who played the slot, a guard who played tackle)
+function collegeReps(p) {
+  if (!p.cf) genComfort(p);
+  const nb = (SPOT_NEIGHBORS[p.spot] || []).filter(s => !p.cf[s]);
+  if (nb.length && rand() < 0.32) p.cf[pick(nb)] = Math.round(clamp(gauss(48, 18), 15, 88));
+  if (rand() < 0.05) { // a true utility player: a second spot a step further away, on his side of the ball
+    const side = SPOTS[p.spot].side, far = (SPOTS_BY_SIDE[side] || []).filter(s => !p.cf[s] && s !== 'K' && s !== 'P' && s !== 'QB');
+    if (far.length) p.cf[pick(far)] = Math.round(clamp(gauss(38, 14), 12, 75));
+  }
+  if (typeof updateRatings === 'function') updateRatings(p);
 }
 
 // ---------- retirement ----------

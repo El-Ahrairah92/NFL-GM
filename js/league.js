@@ -35,11 +35,7 @@ function newLeague(userTid) {
   fillCoachPool(9);
   updateSystems();
   for (const t of state.teams) { t.sys.O.yrs = 1; t.sys.D.yrs = 1; } // existing staffs: systems already installed
-  for (let i = 0; i < 70; i++) {
-    const pos = weightedPick(POSITIONS, POSITIONS.map(p => ROSTER_TEMPLATE[p]));
-    const p = genVeteran(pos, rand() < 0.25 ? 'backup' : 'fringe');
-    setTid(p, -1); p.ask = marketValue(p);
-  }
+  topUpFreeAgents(FA_POOL_MIN);
   ensurePicks();
   state.schedule = genSchedule();
   state.ratingsVer = typeof DERIVED !== 'undefined' ? DERIVED.version : 0;
@@ -106,7 +102,8 @@ function ensurePicks() {
 }
 function pickLabel(pk) {
   const own = pk.orig === pk.owner ? '' : ` (${T(pk.orig).abbr})`;
-  return `${pk.season} Rd ${pk.round}${own}`;
+  const slot = typeof pickSlot === 'function' ? pickSlot(pk) : null;
+  return `${pk.season} Rd ${pk.round}${slot ? ' #' + slot.pick : ''}${own}`;
 }
 
 function addNews(text, tids = [], type = '') {

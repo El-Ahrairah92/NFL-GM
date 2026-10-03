@@ -134,10 +134,10 @@ function table(id, cols, rows, opts = {}) {
     });
   }
   if (opts.limit) rows = rows.slice(0, opts.limit);
-  const head = cols.map(c => `<th class="${c.num ? 'num' : ''} ${c.v && !opts.nosort ? 'sortable' : ''} ${ss && ss.k === c.k ? 'sorted' : ''}" ${c.v && !opts.nosort ? `data-action="sort" data-table="${id}" data-k="${c.k}"` : ''} title="${c.title || ''}">${c.l}${ss && ss.k === c.k ? (ss.dir < 0 ? ' ▾' : ' ▴') : ''}</th>`).join('');
+  const head = cols.map(c => `<th class="${c.num ? 'num' : ''} ${c.cls || ''} ${c.v && !opts.nosort ? 'sortable' : ''} ${ss && ss.k === c.k ? 'sorted' : ''}" ${c.v && !opts.nosort ? `data-action="sort" data-table="${id}" data-k="${c.k}"` : ''} title="${c.title || ''}">${c.l}${ss && ss.k === c.k ? (ss.dir < 0 ? ' ▾' : ' ▴') : ''}</th>`).join('');
   const body = rows.map((r, i) => {
     const cls = opts.rowClass ? opts.rowClass(r, i) : '';
-    return `<tr class="${cls}">` + cols.map(c => `<td class="${c.num ? 'num' : ''}">${c.f ? c.f(r, i) : (c.v ? c.v(r) : '')}</td>`).join('') + '</tr>';
+    return `<tr class="${cls}">` + cols.map(c => `<td class="${c.num ? 'num' : ''} ${c.cls || ''}">${c.f ? c.f(r, i) : (c.v ? c.v(r) : '')}</td>`).join('') + '</tr>';
   }).join('');
   return `<div class="tbl-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length}" class="muted">Nothing here.</td></tr>`}</tbody></table></div>`;
 }
@@ -152,6 +152,8 @@ function render() {
   let page;
   try { page = pageHTML(); } catch (e) { showError(e, `drawing the ${view} page`); page = `<div class="callout bad">This page hit an error (details at the bottom of the screen).</div>`; }
   app.innerHTML = topbarHTML() + `<main>${page}</main>`;
+  const cur = document.getElementById('dpk-cur'), tr = document.getElementById('dtrack');
+  if (cur && tr) tr.scrollLeft = cur.offsetLeft - tr.offsetLeft - tr.clientWidth / 2 + cur.clientWidth / 2;
 }
 // any error shows on screen instead of failing silently (so a "dead" click has an explanation)
 function showError(e, where) {
@@ -398,7 +400,7 @@ function rosterHTML() {
     { k: 'seen', l: 'Seen as', v: p => uOvr(p), f: p => `${uOvr(p).toFixed(0)} <span class="muted small">(${(uOvr(p) - p.ovr) > 0 ? '+' : ''}${(uOvr(p) - p.ovr).toFixed(1)})</span>`, num: 1 },
     { k: 'hype', l: 'Hype', v: p => p.per ? p.per.h : 0, f: p => p.per ? p.per.h.toFixed(1) : '—', num: 1 },
     { k: 'adapt', l: 'Adapt', v: p => (p.h && p.h.adapt) || 0, num: 1 }];
-  else cols = [...base, { k: 'hw', l: 'Ht/Wt', v: p => p.m.wt, f: p => `<span class="small muted">${htwt(p)}</span>` }, stars, tier,
+  else cols = [...base, { k: 'ht', l: 'Ht', v: p => p.m.ht, f: p => fmtHeight(p.m.ht), num: 1 }, { k: 'wt', l: 'Wt', v: p => p.m.wt, num: 1 }, stars, tier,
     { k: 'up', l: 'Upside', v: p => uCeil(p), f: p => upsidePill(p) },
     { k: 'sk', l: 'Scouting', f: p => `<span class="small muted wrapcell">${traitsTxt(p)}</span>` },
     { k: 'fit', l: 'Fit', v: p => schemeFit(p, tid), f: p => { const f = schemeFit(p, tid); return `<span class="small ${f >= 1 ? 'good' : f <= -1 ? 'bad' : 'muted'}" title="Scheme fit in ${esc(T(tid).abbr)}'s system">${fitLabel(f).replace(' fit', '')}${trueOn() ? ` (${f > 0 ? '+' : ''}${f})` : ''}</span>`; } },
@@ -865,7 +867,7 @@ function faHTML() {
     { k: 'pos', l: 'Pos', v: p => FAM_INDEX[p.spot], f: p => esc(p.lbl) },
     { k: 'n', l: 'Name', v: p => p.last, f: p => playerLink(p) + ' ' + statusPills(p) },
     { k: 'age', l: 'Age', v: p => p.age, num: 1 },
-    { k: 'hw', l: 'Ht/Wt', v: p => p.m.wt, f: p => `<span class="small muted">${htwt(p)}</span>` },
+    { k: 'ht', l: 'Ht', v: p => p.m.ht, f: p => fmtHeight(p.m.ht), num: 1 }, { k: 'wt', l: 'Wt', v: p => p.m.wt, num: 1 },
     { k: 'ovr', l: 'Tier', v: p => uOvr(p), f: p => tierPill(p) + trueNums(p) },
     { k: 'pot', l: 'Upside', v: p => uCeil(p), f: p => upsidePill(p) },
     { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
@@ -881,45 +883,100 @@ function faHTML() {
 }
 
 // ---------- draft ----------
+// spots (other than his own) a player is at least Decent at, as the user's scouts read it
+function flexSpots(p) { return Object.entries(p.cf || {}).filter(([s, c]) => s !== p.spot && seenComfort(p, s) >= 30).sort((a, b) => b[1] - a[1]).map(([s]) => s); }
+function flexHint(p) { const f = flexSpots(p); return f.length ? ` <span class="muted small" title="Also played: ${f.map(s => SPOTS[s].l).join(', ')}">+${f.map(s => SPOTS[s].l).join('/')}</span>` : ''; }
+function pickChip(o, cur, u) {
+  const p = o.pid ? P(o.pid) : null, t = T(o.owner);
+  const cls = ['dpk', cur ? 'cur' : '', o.owner === u ? 'me' : '', p ? 'done' : ''].join(' ');
+  const traded = o.owner !== o.orig ? `<span class="muted" title="Originally ${T(o.orig).abbr}'s pick"> via ${T(o.orig).abbr}</span>` : '';
+  const body = p ? `<div class="dpk-p">${esc(p.lbl)} ${esc(pshort(p))}</div>` : cur ? '<div class="dpk-p"><b>On the clock</b></div>'
+    : o.owner !== u && state.phase === 'DRAFT' ? `<button class="sm" data-action="draftTradeFor" data-pick="${o.pickId}" title="Build a trade for this pick">⇄ Trade</button>` : '<div class="dpk-p muted">—</div>';
+  return `<div class="${cls}" ${cur ? 'id="dpk-cur"' : ''}><div class="dpk-h"><span class="dot" style="background:${t.color}"></span><b>${o.round}.${String(o.inRound).padStart(2, '0')}</b> <span>${t.abbr}</span>${traded}</div>${body}</div>`;
+}
+function draftRoundBoard(order, round, u) {
+  const rows = order.filter(o => o.round === round);
+  return table('draftRd' + round, [
+    { k: 'pk', l: 'Pick', v: o => o.pick, f: o => `${o.round}.${String(o.inRound).padStart(2, '0')} <span class="muted small">#${o.pick}</span>`, num: 1 },
+    { k: 't', l: 'Team', v: o => T(o.owner).abbr, f: o => teamLink(o.owner) + (o.owner !== o.orig ? ` <span class="muted small">via ${T(o.orig).abbr}</span>` : '') },
+    { k: 'n', l: 'Player', f: o => { const p = o.pid ? P(o.pid) : null; return p ? `${esc(p.lbl)} ${playerLink(p)}` : o.pid ? '<span class="muted">(retired)</span>' : '<span class="muted">—</span>'; } },
+    { k: 'col', l: 'College', f: o => { const p = o.pid ? P(o.pid) : null; return p ? `<span class="muted small">${esc(p.college)}</span>` : ''; } },
+    { k: 'pr', l: 'Proj', v: o => o.proj || 999, f: o => o.pid && o.proj ? projLabel(o.proj) : '', title: 'Where the consensus board had him before the draft' },
+    { k: 'vl', l: 'Value', v: o => o.proj ? o.pick - o.proj : -999, f: o => { if (!o.pid || !o.proj) return ''; const d = o.pick - o.proj; return d >= 12 ? `<span class="good">Steal +${d}</span>` : d <= -24 ? `<span class="warn">Reach ${d}</span>` : '<span class="muted">Fair</span>'; }, title: 'Pick number minus consensus rank' },
+  ], rows, { sort: 'pk', dir: 1, rowClass: o => o.owner === u ? 'me' : '' });
+}
+function myDraftClassHTML(u) {
+  const d = state.draft || state.lastDraft;
+  const mine = d ? d.order.filter(o => o.owner === u && o.pid && P(o.pid)) : [];
+  let h = `<div class="card dsum"><h3>Your Class${d ? ' · ' + d.year : ''}</h3>`;
+  h += mine.length ? mine.map(o => { const p = P(o.pid); return `<div class="row small" style="gap:6px"><b>${o.round}.${String(o.inRound).padStart(2, '0')}</b> ${esc(p.lbl)} ${playerLink(p)} ${tierPill(p)} ${upsidePill(p)}</div>`; }).join('') : '<div class="muted small">No picks made yet.</div>';
+  // earlier drafts: your draftees still in the league
+  const prev = Object.values(state.players).filter(p => p.draft && p.draft.tid === u && p.draft.year > START_SEASON && (!d || p.draft.year !== d.year)); // drafts held in this league
+  if (prev.length) {
+    const yrs = [...new Set(prev.map(p => p.draft.year))].sort((a, b) => b - a).slice(0, 4);
+    h += `<div class="section-title">Previous drafts</div>` + yrs.map(y => `<div class="small"><b>${y}:</b> ${prev.filter(p => p.draft.year === y).sort((a, b) => a.draft.pick - b.draft.pick).map(p => `${esc(p.lbl)} ${playerLink(p, true)}${p.tid !== u ? ` <span class="muted">(${p.tid >= 0 ? T(p.tid).abbr : 'FA'})</span>` : ''}`).join(', ')}</div>`).join('');
+  }
+  return h + '</div>';
+}
 function draftHTML() {
   const u = state.userTid;
-  const my = state.picks.filter(pk => pk.owner === u).sort((a, b) => a.season - b.season || a.round - b.round);
-  let html = '';
-  if (!['COACHES', 'RESIGN', 'FA', 'DRAFT'].includes(state.phase)) {
-    html += `<div class="callout">The draft class is revealed when the offseason starts.</div>`;
-    return html + `<div class="card"><h3>Your Picks</h3>${my.map(pk => `<div>${pickLabel(pk)}</div>`).join('') || '<div class="muted">None.</div>'}</div>`;
+  const my = tradablePicks(u);
+  const live = ['COACHES', 'RESIGN', 'FA', 'DRAFT'].includes(state.phase) && state.draft;
+  if (!live) {
+    let html = `<div class="callout">The next draft class is revealed when the offseason starts.</div>`;
+    html += `<div class="grid g3"><div class="card"><h3>Your Picks</h3>${my.map(pk => `<div>${pickLabel(pk)}</div>`).join('') || '<div class="muted">None.</div>'}</div>${myDraftClassHTML(u)}</div>`;
+    if (state.lastDraft) {
+      const rd = ui.draftRound || 1;
+      html += `<div class="card" style="margin-top:16px"><h3>${state.lastDraft.year} Draft Board</h3><div class="subtabs">${Array.from({ length: DRAFT_ROUNDS }, (_, i) => `<button class="${rd === i + 1 ? 'on' : ''}" data-action="draftRound" data-r="${i + 1}">Rd ${i + 1}</button>`).join('')}</div>${draftRoundBoard(state.lastDraft.order, rd, u)}</div>`;
+    }
+    return html;
   }
   const d = state.draft, pk = currentPick();
-  const onClock = state.phase === 'DRAFT' && pk && pk.owner === u;
-  let pros = prospects();
-  pros = pros.filter(p => inFamily(p, ui.draftPos));
-  const grade = p => uOvr(p) + 0.55 * p.per.g + ({ QB: 3, RB: -2, K: -10, P: -12 }[p.pos] || 0); // consensus big board
-  const ranked = prospects().sort((a, b) => grade(b) - grade(a));
-  const rankOf = new Map(ranked.map((p, i) => [p.id, i + 1]));
-  html += `<div class="callout">${state.phase !== 'DRAFT' ? `Draft preview — the draft happens after free agency. Everything here is your scouts' read: prospects are the foggiest players in football, and workout numbers get overhyped.` : onClock ? `<b>You're on the clock</b> with pick #${pk.pick} (Round ${pk.round}). Choose a player below.` : pk ? `Pick #${pk.pick}: ${T(pk.owner).abbr} on the clock.` : ''}</div>`;
-  html += `<div class="grid" style="grid-template-columns:minmax(0,3fr) minmax(260px,1fr)"><div class="card"><h3>Prospects</h3>
-    <div class="subtabs">${famTabs(ui.draftPos, 'draftPos')}</div>` + table('draft', [
-    { k: 'rk', l: 'Rank', v: p => rankOf.get(p.id), num: 1 },
-    { k: 'pos', l: 'Pos', v: p => FAM_INDEX[p.spot], f: p => esc(p.lbl) },
-    { k: 'n', l: 'Name', v: p => p.last, f: p => playerLink(p) },
-    { k: 'col', l: 'College', v: p => p.college, f: p => `<span class="muted">${esc(p.college)}</span>` },
+  const drafting = state.phase === 'DRAFT';
+  const onClock = drafting && pk && pk.owner === u && !state.settings.autoUser;
+  const curRound = pk ? pk.round : DRAFT_ROUNDS;
+  let html = `<div class="callout">${!drafting ? `Draft preview: the draft happens after free agency. Everything here is your scouts' read. Prospects are the foggiest players in football, and workout numbers get overhyped.` : onClock ? `<b>You're on the clock</b> with pick #${pk.pick} (Round ${pk.round}, pick ${pk.inRound}). Choose a player below, or trade the pick.` : pk ? `Pick #${pk.pick} (Round ${pk.round}): <b>${T(pk.owner).abbr}</b> on the clock.` : ''}</div>`;
+  if (drafting) {
+    const nextMine = d.order.slice(d.idx).find(o => o.owner === u);
+    html += `<div class="row" style="margin-bottom:10px">
+      <button data-action="draftSimPick" ${onClock ? 'disabled title="It\'s your pick"' : ''}>Sim pick</button>
+      <button data-action="draftSimToMe" ${onClock || !nextMine ? 'disabled' : ''}>Sim to my pick${nextMine ? ` (#${nextMine.pick})` : ''}</button>
+      <button data-action="draftSimEnd">Sim to end of draft</button>
+      <span class="muted small">${d.idx}/${d.order.length} picks made</span></div>`;
+  }
+  // tracker strip
+  html += `<div class="dtrack" id="dtrack">${d.order.map((o, i) => pickChip(o, drafting && i === d.idx, u)).join('')}</div>`;
+  // trade-down offers
+  if (onClock) {
+    const offers = draftOffers();
+    if (offers.length) html += `<div class="callout"><b>Trade offers for pick #${pk.pick}</b>${offers.map((o, i) => `<div class="row small" style="margin-top:6px">${teamLink(o.tid)} offers <b>${o.give.map(id => pickLabel(state.picks.find(x => x.id === id))).join(' + ')}</b> <span class="muted">(chart value ${o.v} vs. your ${o.myV})</span> <button class="sm primary" data-action="draftOfferAccept" data-i="${i}">Accept</button></div>`).join('')}<div style="margin-top:6px"><button class="sm" data-action="draftOfferDecline">Decline all</button></div></div>`;
+  }
+  // summary strip: your class · upcoming picks · last picks
+  const recent = drafting ? d.order.slice(0, d.idx).reverse().slice(0, 8) : [];
+  html += `<div class="grid g3" style="margin-bottom:16px">${myDraftClassHTML(u)}
+    <div class="card dsum"><h3>Your Upcoming Picks</h3>${my.filter(x => x.season === d.year).map(x => `<div class="small">${pickLabel(x)}</div>`).join('') || '<div class="muted small">None left this year.</div>'}${my.some(x => x.season > d.year) ? `<div class="small muted" style="margin-top:4px">Future: ${my.filter(x => x.season > d.year).map(x => pickLabel(x)).join(', ')}</div>` : ''}</div>
+    <div class="card dsum"><h3>Last Picks</h3>${recent.map(o => { const p = P(o.pid); return `<div class="small ${o.owner === u ? 'good' : ''}">#${o.pick} ${T(o.owner).abbr}: ${p ? `${esc(p.lbl)} ${playerLink(p)} <span class="muted">(${projLabel(o.proj)})</span>` : ''}</div>`; }).join('') || '<div class="muted small">None yet.</div>'}</div></div>`;
+  // tabs: prospects, or a round's board
+  const tab = ui.draftTab || 'pros';
+  html += `<div class="subtabs"><button class="${tab === 'pros' ? 'on' : ''}" data-action="draftTab" data-t="pros">Prospects</button>${Array.from({ length: DRAFT_ROUNDS }, (_, i) => `<button class="${tab === 'r' + (i + 1) ? 'on' : ''}" data-action="draftTab" data-t="r${i + 1}">Rd ${i + 1}${drafting && i + 1 < curRound ? ' ✓' : ''}</button>`).join('')}</div>`;
+  if (tab !== 'pros') return html + `<div class="card">${draftRoundBoard(d.order, +tab.slice(1), u)}</div>`;
+  const pros = prospects().filter(p => inFamily(p, ui.draftPos));
+  html += `<div class="card"><div class="subtabs">${famTabs(ui.draftPos, 'draftPos')}</div>` + table('draft', [
+    { k: 'a', l: '', cls: 'stk', f: p => onClock ? `<button class="sm primary" data-action="draftPick" data-pid="${p.id}">Draft</button>` : '' },
+    { k: 'rk', l: 'Rank', v: p => boardRank(p) || 999, num: 1, title: 'Consensus big board (set when the class was revealed)' },
+    { k: 'pos', l: 'Pos', v: p => FAM_INDEX[p.spot], f: p => esc(p.lbl) + flexHint(p) },
+    { k: 'n', l: 'Name', v: p => p.last, f: p => `<span title="${esc(p.college)}">${playerLink(p)}</span>` },
     { k: 'age', l: 'Age', v: p => p.age, num: 1 },
-    { k: 'hw', l: 'Ht/Wt', v: p => p.m.wt, f: p => `<span class="small muted">${htwt(p)}</span>` },
+    { k: 'ht', l: 'Ht', v: p => p.m.ht, f: p => fmtHeight(p.m.ht), num: 1 },
+    { k: 'wt', l: 'Wt', v: p => p.m.wt, num: 1 },
     { k: 'forty', l: '40', v: p => -p.m.forty, f: p => p.m.forty.toFixed(2), num: 1 },
     { k: 'ras', l: 'RAS', v: p => rasOf(p) || 0, f: p => rasHTML(p), num: 1, title: 'Relative Athletic Score (0–10) vs. his position' },
     { k: 'ovr', l: 'Now', v: p => uOvr(p), f: p => tierPill(p) + trueNums(p), title: 'Ready to contribute as…' },
     { k: 'pot', l: 'Upside', v: p => uCeil(p), f: p => upsidePill(p) },
-    { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
-    { k: 'proj', l: 'Proj', v: p => rankOf.get(p.id), f: p => { const r = Math.ceil(rankOf.get(p.id) / 32); return r > 7 ? 'UDFA' : 'Rd ' + r; } },
-    { k: 'a', l: '', f: p => onClock ? `<button class="sm primary" data-action="draftPick" data-pid="${p.id}">Draft</button>` : '' },
+    { k: 'proj', l: 'Proj', v: p => boardRank(p) || 999, f: p => { const r = boardRank(p), pr = projRound(r); return projLabel(r) + (drafting && pr < curRound ? ' <span class="pill good" title="Projected to go earlier than this round">Value</span>' : ''); } },
+    { k: 'sk', l: 'Scouting', f: p => `<span class="small muted trunc" title="${traitsTxt(p)}">${traitsTxt(p)}</span>` },
   ], pros, { sort: 'rk', dir: 1, limit: 300 }) + '</div>';
-  // side: my picks + recent picks
-  html += `<div><div class="card"><h3>Your Picks</h3>${my.map(x => { const o = d && d.order.find(z => z.pickId === x.id); return `<div>${pickLabel(x)}${o ? ` <span class="muted">— #${o.pick}</span>` : ''}</div>`; }).join('') || '<div class="muted">None.</div>'}</div>`;
-  if (state.phase === 'DRAFT') {
-    const done = d.order.slice(0, d.idx).reverse().slice(0, 40);
-    html += `<div class="card" style="margin-top:16px"><h3>Recent Picks</h3>${done.map(o => { const p = P(o.pid); return `<div class="small ${o.owner === u ? 'good' : ''}">#${o.pick} ${T(o.owner).abbr} — ${p ? `${esc(p.lbl)} ${playerLink(p)}` : ''}</div>`; }).join('') || '<div class="muted">None yet.</div>'}</div>`;
-  }
-  return html + '</div></div>';
+  return html;
 }
 
 // ---------- coaches ----------
@@ -1162,9 +1219,11 @@ function strengthsHTML(p) {
     <div><div class="sw-h bad">Weaknesses</div>${weak.length ? weak.map(t => `<div class="sw bad">− ${esc(t)}</div>`).join('') : '<div class="muted small">No glaring holes.</div>'}</div></div>`;
 }
 function comfortHTML(p) {
-  const cf = Object.entries(p.cf || {}).sort((a, b) => b[1] - a[1]);
-  return cf.map(([s, c]) => `<span class="pill ${CF_CLS[comfortLabel(c)]}" title="${trueOn() ? Math.round(c) : ''}">${SPOTS[s].l} · ${comfortLabel(c)}</span>`).join(' ') +
-    ` <span class="small muted">· learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an average pace'}</span>`;
+  const prospect = p.tid === -2;
+  const cf = Object.keys(p.cf || {}).map(s => [s, seenComfort(p, s)]).sort((a, b) => b[1] - a[1]);
+  return cf.map(([s, c]) => `<span class="pill ${CF_CLS[comfortLabel(c)]}" title="${trueOn() ? Math.round(comfortOf(p, s)) : ''}">${SPOTS[s].l} · ${comfortLabel(c)}</span>`).join(' ') +
+    (prospect ? (cf.length > 1 ? ' <span class="small muted">· from college tape: expect to be able to line up here</span>' : ' <span class="small muted">· played one spot in college</span>')
+      : ` <span class="small muted">· learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an average pace'}</span>`);
 }
 function playerModal(pid) {
   const p = P(pid);
@@ -1186,8 +1245,8 @@ function playerModal(pid) {
   // ---- left: the scouting read, comfort, fit, contract ----
   let left = scoutingHTML(p).replace(/<div class="row small" style="margin-top:6px">[\s\S]*?<\/div>/, '');
   left += `<div class="section-title">Strengths &amp; Weaknesses</div>` + strengthsHTML(p);
+  left += `<div class="section-title">${prospect ? 'Positional Flexibility (played in college)' : 'Positional Comfort'}</div><div class="row small">${comfortHTML(p)}</div>`;
   if (!prospect) {
-    left += `<div class="section-title">Positional Comfort</div><div class="row small">${comfortHTML(p)}</div>`;
     const fitTeams = [...new Set([p.tid >= 0 ? p.tid : null, u].filter(t => t !== null && t >= 0))];
     if (SPOTS[p.spot].side === 'off' || SPOTS[p.spot].side === 'def') left += `<div class="section-title">Scheme Fit</div><div class="row small">${fitTeams.map(t => { const f = schemeFit(p, t), sk = SPOTS[p.spot].side === 'off' ? offArch(T(t)) : defArch(T(t)), lab = sk ? (SPOTS[p.spot].side === 'off' ? OFF_ARCH : DEF_ARCH)[sk].l : '—'; return `<span class="pill">${T(t).abbr} ${esc(lab)}: <b class="${f >= 1 ? 'good' : f <= -1 ? 'bad' : ''}">${fitLabel(f)}</b>${trueOn() ? ` ${f > 0 ? '+' : ''}${f}` : ''}</span>`; }).join(' ')}</div>`;
   }
@@ -1638,11 +1697,23 @@ const actions = {
   rosterPos: d => { ui.rosterPos = d.pos; render(); },
   draftPos: d => { ui.draftPos = d.pos; render(); },
   newsMine: d => { ui.newsMine = d.v === '1'; render(); },
-  draftPick: d => {
-    draftPlayer(+d.pid);
-    simDraftToUser();
-    save(); render();
+  draftPick: d => { draftPlayer(+d.pid); save(); render(); },
+  draftSimPick: () => { simDraftPick(); save(); render(); },
+  draftSimToMe: () => { simDraftToUser(); save(); render(); },
+  draftSimEnd: () => {
+    if (!confirm('Sim the rest of the draft? Your staff will make your remaining picks.')) return;
+    simDraftToEnd(); save(); render();
   },
+  draftTab: d => { ui.draftTab = d.t; render(); },
+  draftRound: d => { ui.draftRound = +d.r; render(); },
+  draftTradeFor: d => {
+    const pk = state.picks.find(x => x.id === +d.pick);
+    if (!pk) return;
+    ui.tradeTid = pk.owner; ui.give = { players: [], picks: [] }; ui.get = { players: [], picks: [pk.id] };
+    view = 'trade'; render(); window.scrollTo(0, 0);
+  },
+  draftOfferAccept: d => { const err = acceptDraftOffer(+d.i); toast(err || 'Trade accepted: you moved down.'); save(); render(); },
+  draftOfferDecline: () => { declineDraftOffers(); render(); },
   fireCoach: d => { if (confirm('Fire this coach?')) { fireCoach(state.userTid, d.role); save(); render(); } },
   coach: d => coachModal(+d.cid),
   film: d => filmModal(+d.gid, +d.pid),

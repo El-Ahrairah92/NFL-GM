@@ -54,6 +54,13 @@ function viewGrowth(p, tid) {
   return tid != null && tid === p.tid ? 0.5 * p.per.g + 0.5 * Math.max(0, p.pot - p.ovr) : p.per.g;
 }
 function viewCeil(p, tid) { return viewOvr(p, tid) + viewGrowth(p, tid); }
+// positional comfort as the user's scouts read it: for prospects they know where he lined up in college, not how well
+function seenComfort(p, s) {
+  const c = comfortOf(p, s);
+  if (!c || s === p.spot || p.tid !== -2 || !p.per) return c;
+  const i = Object.keys(SPOTS).indexOf(s) + 1;
+  return clamp(Math.round(c + hashGauss(p.id, 900 + i, p.draftYear || 0) * 22 * (1 - p.per.conf)), 5, 95);
+}
 // what the user's front office sees
 function uOvr(p) { return viewOvr(p, state.userTid); }
 function uCeil(p) { return viewCeil(p, state.userTid); }

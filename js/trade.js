@@ -4,10 +4,12 @@
 // =====================================================================
 function tradeWindowOpen() {
   if (state.phase === 'REG') return state.week <= TRADE_DEADLINE;
-  return ['RECAP', 'COACHES', 'RESIGN', 'FA', 'PRESEASON'].includes(state.phase);
+  return ['RECAP', 'COACHES', 'RESIGN', 'FA', 'DRAFT', 'PRESEASON'].includes(state.phase);
 }
+// picks already used in the current draft can't be traded
+function pickUsed(pk) { const o = pickSlot(pk); return !!(o && o.pid); }
 function tradablePicks(tid) {
-  return state.picks.filter(pk => pk.owner === tid).sort((a, b) => a.season - b.season || a.round - b.round);
+  return state.picks.filter(pk => pk.owner === tid && !pickUsed(pk)).sort((a, b) => a.season - b.season || a.round - b.round || (pickSlot(a) ? pickSlot(a).pick : 0) - (pickSlot(b) ? pickSlot(b).pick : 0));
 }
 // how much the AI team values an asset (it values its own starters a bit more)
 function aiAssetValue(p, aiTid, giving) {
@@ -120,3 +122,60 @@ function aiTrade() {
   }
   return false;
 }
+
+// ---------- draft-day trade-down offers (you're on the clock) ----------
+// A team picking later that likes someone still on the board offers its pick plus a sweetener worth ~105–115% of yours.
+function draftOffers() {
+  const d = state.draft, pk = currentPick();
+  if (state.phase !== 'DRAFT' || !pk || pk.owner !== state.userTid) return [];
+  d.offers = d.offers || {};
+  if (d.offers[d.idx]) return d.offers[d.idx].filter(o => offerStillValid(o));
+  const mine = state.picks.find(x => x.id === pk.pickId);
+  const out = [];
+  if (!mine) { d.offers[d.idx] = out; return out; }
+  const myV = pickValue(mine);
+  // the best player left on the consensus board drives interest
+  const top = prospects().sort((a, b) => (boardRank(a) || 999) - (boardRank(b) || 999))[0];
+  const steal = top && boardRank(top) < pk.pick - 4; // a slider makes teams jump
+  // not every pick draws calls: early picks and a falling star do
+  if (!steal && rand() > (pk.round <= 2 ? 0.7 : 0.45)) { d.offers[d.idx] = out; return out; }
+  const later = d.order.slice(d.idx + 1, d.idx + 1 + (pk.round === 1 ? 20 : 28)).filter(o => o.owner !== state.userTid);
+  const seen = new Set();
+  for (const o of shuffle(later.slice())) {
+    if (out.length >= 2 || seen.has(o.owner)) continue;
+    if (rand() > (steal ? 0.5 : 0.22)) continue;
+    seen.add(o.owner);
+    const theirs = state.picks.find(x => x.id === o.pickId);
+    if (!theirs || theirs.owner !== o.owner) continue;
+    const want = myV * (1.05 + rand() * 0.1);
+    const give = [theirs.id];
+    let v = pickValue(theirs);
+    // sweeten with their next-best picks: this draft first, then next year's
+    const extras = tradablePicks(o.owner).filter(x => x.id !== theirs.id).map(x => [x, pickValue(x)]).sort((a, b) => a[1] - b[1]);
+    let guard = 0;
+    while (v < want && extras.length && guard++ < 4) {
+      // the smallest pick that closes the gap without overpaying, else the biggest one that still leaves a gap
+      let j = extras.findIndex(([, xv]) => v + xv >= want && v + xv <= myV * 1.2);
+      if (j < 0) { j = -1; for (let k = extras.length - 1; k >= 0; k--) if (v + extras[k][1] < want) { j = k; break; } }
+      if (j < 0) break;
+      const [x, xv] = extras.splice(j, 1)[0];
+      give.push(x.id); v += xv;
+    }
+    if (v < myV * 1.03 || v > myV * 1.2) continue;
+    out.push({ tid: o.owner, mine: mine.id, give, v: round2(v), myV: round2(myV) });
+  }
+  d.offers[d.idx] = out;
+  return out;
+}
+function offerStillValid(o) {
+  const mine = state.picks.find(x => x.id === o.mine);
+  return mine && mine.owner === state.userTid && o.give.every(id => { const x = state.picks.find(pk => pk.id === id); return x && x.owner === o.tid && !pickUsed(x); });
+}
+function acceptDraftOffer(i) {
+  const d = state.draft, offers = (d.offers && d.offers[d.idx]) || [], o = offers[i];
+  if (!o || !offerStillValid(o)) return 'That offer is no longer available.';
+  executeTrade(state.userTid, o.tid, { players: [], picks: [o.mine] }, { players: [], picks: o.give });
+  d.offers[d.idx] = [];
+  return null;
+}
+function declineDraftOffers() { const d = state.draft; if (d && d.offers) d.offers[d.idx] = []; }
