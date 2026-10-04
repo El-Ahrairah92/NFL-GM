@@ -1039,13 +1039,13 @@ function upcomingFAHTML() {
 }
 function faHTML() {
   const u = state.userTid;
-  const udfa = state.phase === 'UDFA' && state.udfa, fv = ui.faView || (udfa ? 'udfa' : 'now');
+  const udfa = state.phase === 'UDFA' && state.udfa, fv = ui.faView && (ui.faView !== 'udfa' || udfa) ? ui.faView : udfa ? 'udfa' : 'now';
   const tabs = `<div class="subtabs">${[...(udfa ? [['udfa', 'Undrafted rookies']] : []), ['now', udfa ? 'Veterans' : 'Available now'], ['next', 'Upcoming free agents']].map(([k, l]) => `<button class="${fv === k ? 'on' : ''}" data-action="faView" data-v="${k}">${l}</button>`).join('')}</div>`;
   if (fv === 'next') return tabs + upcomingFAHTML();
   if (fv === 'udfa' && udfa) return tabs + udfaHTML();
+  let fas = Object.values(state.players).filter(p => p.tid === -1);
   if (udfa) fas = fas.filter(p => !isUdfa(p));
   fas = fas.filter(p => !p.waiver); // players on waivers are on the Waiver Wire tab until claims are processed
-  let fas = Object.values(state.players).filter(p => p.tid === -1);
   fas = fas.filter(p => inFamily(p, ui.faPos));
   const canSign = state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP';
   let html = tabs + `<div class="callout">${state.phase === 'FA' ? `Free agency wave ${state.faWave + 1}/${FA_WAVES}. AI teams sign players when you advance. Asking prices drop each wave.` : state.phase === 'REG' ? 'In-season signings are 1-year deals. Players on IR (4+ weeks) don\'t count toward the 53-man limit.' : 'Free agents available now.'}
@@ -1093,6 +1093,26 @@ function cutdownHTML() {
     html += `<div class="callout"><b>${c ? esc(cname(c)) : 'Staff'}:</b> "We'd carry ${r.staff} in this room.${bub.length ? ` The tough call${bub.length > 1 ? 's are' : ' is'} ${bub.slice(0, 3).map(p => esc(p.last)).join(', ')}.` : ' No hard decisions here.'}${stars && preGrade(stars) >= 75 ? ` ${esc(stars.last)} had the best preseason of the group.` : ''}"</div>`;
   }
   const verdict = p => !countsOn53(p) ? ['IR', 'muted'] : prev.cuts.has(p.id) ? [p.exp <= 2 && p.age <= 25 ? 'Cut → PS' : 'Cut', 'bad'] : prev.bubble.has(p.id) ? ['Bubble', 'warn'] : ['Keep', 'good'];
+  // two ways to look at the room: the staff's case for each player, or what he actually did this preseason
+  const film = ui.cutView === 'film';
+  const fam_ = p => (FAMILIES.find(([, spots]) => spots.includes(p.spot)) || [p.pos])[0];
+  const roomRank = {}; { const by = {}; for (const p of on) if (preGrade(p) !== null) (by[fam_(p)] = by[fam_(p)] || []).push(p); for (const k in by) by[k].sort((x, y) => preGrade(y) - preGrade(x)).forEach((p, i) => roomRank[p.id] = [i + 1, by[k].length]); }
+  const facets = p => !p.preS ? '' : Object.keys(FACETS).map(k => [k, (p.preS.adv['n' + k] || 0) >= 8 ? facetGrade(p.preS.adv, k) : null]).filter(x => x[1] !== null).map(([k, g]) => `<span class="small" style="white-space:nowrap;margin-right:8px">${FACETS[k]} ${gradeChip(g)}</span>`).join('');
+  const mid = film ? [
+    { k: 'pgp', l: 'GP', v: p => p.preS ? p.preS.gp : 0, num: 1 },
+    { k: 'psn', l: 'Snaps', v: p => p.preS ? p.preS.snp : 0, f: p => p.preS ? `${p.preS.snp}${p.preS.snp < 30 ? ' <span class="small warn" title="Thin sample: grades on this little film are unreliable">thin</span>' : ''}` : '<span class="muted small">sat</span>', num: 1 },
+    { k: 'pre', l: 'Grade', v: p => preGrade(p) || 0, f: p => gradeChip(preGrade(p)), num: 1 },
+    { k: 'rk', l: 'In room', v: p => roomRank[p.id] ? -roomRank[p.id][0] : -99, f: p => roomRank[p.id] ? `<span class="small muted">${roomRank[p.id][0]}/${roomRank[p.id][1]}</span>` : '', title: 'Preseason grade rank within his position group on your roster', num: 1 },
+    { k: 'fac', l: 'By area', f: p => `<span class="wrapcell" style="max-width:330px;display:inline-block">${facets(p)}</span>` },
+    { k: 'line', l: 'Preseason stats', f: p => p.preS && p.preS.gp ? `<span class="small">${statSummary(p.preS.st, p.pos)}</span>` : '' },
+    { k: 'staff', l: 'Staff', v: p => (prev.cuts.has(p.id) ? 0 : prev.bubble.has(p.id) ? 1 : 2), f: p => { const [t, c] = verdict(p); return `<span class="pill ${c}" title="${esc(cutNote(p, prev))}">${t}</span>`; } },
+  ] : [
+    { k: 'pre', l: 'Preseason', v: p => preGrade(p) || 0, f: p => p.preS ? `${gradeChip(preGrade(p))} <span class="small muted">${p.preS.snp} snaps</span>` : '<span class="muted small">sat</span>', num: 1 },
+    { k: 'c', l: 'Contract', v: p => p.contract.amt, f: p => fmtContract(p), num: 1 },
+    { k: 'save', l: 'Cut saves', v: p => cutSavings(p), f: p => { const v = cutSavings(p); return `<span class="${v < 0 ? 'bad' : ''}">${fmtMoney(v)}</span>`; }, num: 1 },
+    { k: 'staff', l: 'Staff says', v: p => (prev.cuts.has(p.id) ? 0 : prev.bubble.has(p.id) ? 1 : 2), f: p => { const [t, c] = verdict(p); return `<span class="pill ${c}">${t}</span> <span class="small muted wrapcell" style="max-width:340px">${esc(cutNote(p, prev))}</span>`; } },
+  ];
+  html += `<div class="subtabs" style="margin-top:0">${[['staff', 'Staff meeting'], ['film', 'Preseason stats & grades']].map(([k, l]) => `<button class="${(film ? 'film' : 'staff') === k ? 'on' : ''}" data-action="cutView" data-v="${k}">${l}</button>`).join('')}</div>`;
   html += `<div class="card">` + table('cutdown', [
     { k: 'pos', l: 'Pos', v: p => FAM_INDEX[p.spot] * 1000 - uOvr(p), f: p => esc(p.lbl) },
     { k: 'n', l: 'Name', v: p => p.last, f: p => playerLink(p) + ' ' + statusPills(p) },
@@ -1100,10 +1120,7 @@ function cutdownHTML() {
     { k: 'star', l: '★', v: p => starsOf(p) || 0, f: p => starHTML(starsOf(p)) },
     { k: 'tier', l: 'Tier', v: tierSort, f: p => tierPill(p) + trueNums(p) },
     { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p) },
-    { k: 'pre', l: 'Preseason', v: p => preGrade(p) || 0, f: p => p.preS ? `${gradeChip(preGrade(p))} <span class="small muted">${p.preS.snp} snaps</span>` : '<span class="muted small">sat</span>', num: 1 },
-    { k: 'c', l: 'Contract', v: p => p.contract.amt, f: p => fmtContract(p), num: 1 },
-    { k: 'save', l: 'Cut saves', v: p => cutSavings(p), f: p => { const v = cutSavings(p); return `<span class="${v < 0 ? 'bad' : ''}">${fmtMoney(v)}</span>`; }, num: 1 },
-    { k: 'staff', l: 'Staff says', v: p => (prev.cuts.has(p.id) ? 0 : prev.bubble.has(p.id) ? 1 : 2), f: p => { const [t, c] = verdict(p); return `<span class="pill ${c}">${t}</span> <span class="small muted wrapcell" style="max-width:340px">${esc(cutNote(p, prev))}</span>`; } },
+    ...mid,
     { k: 'risk', l: 'If waived', f: p => { if (!countsOn53(p)) return ''; const r = claimRiskIfCut(p); return `<span class="pill ${r === 'Will be claimed' ? 'bad' : r === 'Could be claimed' ? 'warn' : r === 'Should clear' ? 'good' : ''}">${r}</span>`; }, title: 'Would another team claim him off waivers?' },
     { k: 'd', l: 'Your call', f: p => !countsOn53(p) ? '' : `<span class="seg">${[['keep', 'Keep'], ['cut', 'Cut'], ['ps', 'Practice squad']].map(([k, l]) => `<button class="sm ${(plan[p.id] || 'keep') === k ? (k === 'keep' ? 'primary' : k === 'cut' ? 'danger' : 'on') : ''}" data-action="cutSet" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span>` },
   ], list, { sort: 'pos', dir: 1, rowClass: p => gone(plan[p.id]) ? 'cutrow' : '' }) + '</div>';
@@ -1984,6 +2001,7 @@ const actions = {
   udfaOfferBtn: d => { const err = udfaOffer(+d.pid, d.b === '' ? null : +d.b); if (err) toast(err); save(); playerModal(+d.pid, true); render(); },
   srchFam: d => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF))).fam = d.pos; render(); },
   cutFam: d => { ui.cutFam = d.pos; render(); },
+  cutView: d => { ui.cutView = d.v; render(); },
   cutToggle: d => { const pl = state.cut.plan; if (pl[d.pid] === 'cut') delete pl[d.pid]; else pl[d.pid] = 'cut'; save(); render(); },
   cutSet: d => {
     const pl = state.cut.plan, p = P(+d.pid);

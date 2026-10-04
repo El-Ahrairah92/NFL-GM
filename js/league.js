@@ -54,6 +54,7 @@ const SAVE_VERSION = 3;
 // bring older saves up to date
 function migrateState(st) {
   state = st;
+  if (!st.prePlan) st.prePlan = { starters: 'auto', feat: {}, hold: {} }; // saves from before the preseason plan
   if (st.version === 2) {
     // v3: five-coach staffs with knobs & tendencies — regenerate all coaches
     st.coaches = {}; st.nextCid = 1;
