@@ -153,6 +153,7 @@ function fillSlots(g, s, slots, table, opts = {}) {
       let sc = c.r * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp);
       if (list) { const i = list.indexOf(c.p.id); if (i >= 0) sc = 300 - i * 14 * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp) + (i === 1 && rotHit ? 30 : 0); }
       if (T_.rest && T_.rest.has(c.p.id)) sc -= 40; // a planned series off
+      if (g.pbNeed && slot !== 'QB' && c.p.a) { const k = pbOf(c.p), need = g.pbNeed[s]; if (k < need) sc -= (need - k) * 0.3; } // he does not know this call
       if (g.ps[c.p.id] && g.ps[c.p.id].last === name) sc += 1.5; // continuity: no needless shuffling
       if (opts.score && !list) sc += opts.score(c.p, slot);
       if (sc > bs) { bs = sc; best = c; }
@@ -269,7 +270,8 @@ function ea(g, e, k) {
   v += p._gs || 0;
   const grp = ATTRS[k] ? ATTRS[k][2] : null;
   if (grp === 'T' || grp === 'M') v -= e.pen;
-  if (grp === 'M') v -= g.famPen[e.s];
+  if (grp === 'M') v -= (100 - pbOf(p)) * 0.05; // still thinking instead of playing
+  if (e.bust) v -= 18; // blew the assignment
   const st = g.ps[p.id];
   if (st && st.fat > TUNE.fatFree) v -= (st.fat - TUNE.fatFree) * (grp === 'E' ? 0.8 : 0.35);
   return v;

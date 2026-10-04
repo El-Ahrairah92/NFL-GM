@@ -252,3 +252,7 @@ tr.cutrow td:last-child, tr.cutrow td:nth-last-child(2) { opacity: 1; text-decor
 .seg button:first-child { border-radius: 6px 0 0 6px; }
 .seg button:last-child { border-radius: 0 6px 6px 0; }
 button.on { background: var(--hover); border-color: var(--good-b); font-weight: 600; }
+
+.pbbar { display: inline-block; width: 70px; height: 8px; border-radius: 4px; background: var(--hover); vertical-align: middle; overflow: hidden; }
+.pbbar i { display: block; height: 100%; }
+.pdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 3px; }

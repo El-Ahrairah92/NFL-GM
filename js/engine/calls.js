@@ -141,6 +141,8 @@ function offenseCall(g) {
   if (t.length > 1 && !(t.length === 2 && ((t.includes('PA') && t.includes('BOOT')) || (t.includes('RUB') && t.includes('SIDE'))))) {
     call.tags = new Set(call.tags.has('MOTION') ? ['MOTION', t[0]] : [t[0]]);
   }
+  // a quarterback who is still learning the playbook gets a simpler menu
+  { const qbP = starterQB(g, o); if (qbP && qbP.a) { const k = pbOf(qbP), need = offNeed(call); if (k < need && rand() < clamp((need - k) / 35, 0, 1)) { call.tags = new Set(); if (call.type === 'DEEP' || call.type === 'GADGET') call.type = 'DROP'; else if (call.type === 'OPTION' || call.type === 'JET') call.type = 'RUN'; call.simple = true; } } }
   call.isRun = RUN_TYPES.has(call.type);
   return call;
 }

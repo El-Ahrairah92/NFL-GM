@@ -182,7 +182,7 @@ function setupHTML() {
   return html + '</div></div>';
 }
 
-const PAGES = [['home', 'Home'], ['roster', 'Roster'], ['depth', 'Depth Chart'], ['coaches', 'Staff'], ['playbook', 'Playbook'], ['schedule', 'Schedule'], ['standings', 'Standings'], ['stats', 'League Stats'], ['trade', 'Trade'], ['fa', 'Free Agents'], ['search', 'Player Search'], ['draft', 'Draft'], ['news', 'News'], ['history', 'History'], ['settings', 'Settings']];
+const PAGES = [['home', 'Home'], ['roster', 'Roster'], ['depth', 'Depth Chart'], ['practice', 'Practice'], ['coaches', 'Staff'], ['playbook', 'Playbook'], ['schedule', 'Schedule'], ['standings', 'Standings'], ['stats', 'League Stats'], ['trade', 'Trade'], ['fa', 'Free Agents'], ['search', 'Player Search'], ['draft', 'Draft'], ['news', 'News'], ['history', 'History'], ['settings', 'Settings']];
 
 function continueLabel() {
   switch (state.phase) {
@@ -227,6 +227,7 @@ function pageHTML() {
     case 'standings': return standingsHTML();
     case 'stats': return statsHTML();
     case 'trade': return tradeHTML();
+    case 'practice': return practiceHTML();
     case 'fa': return faHTML();
     case 'search': return searchHTML();
     case 'cutdown': return state.phase === 'CUTDOWN' ? cutdownHTML() : homeHTML();
@@ -890,6 +891,54 @@ function tradeHTML() {
 }
 
 // ---------- free agents ----------
+// ---------- practice: rooms, reps, playbook install ----------
+function charPill(p, k) { const l = charRead(p, k); return l ? `<span class="pill ${charCls(l)}">${l}</span>` : '<span class="muted small">Too early to say</span>'; }
+function pbBar(k) { const c = k >= 85 ? 'var(--good)' : k >= 60 ? 'var(--mid, #c9a227)' : 'var(--bad)'; return `<span class="pbbar" title="${Math.round(k)}% of the playbook"><i style="width:${Math.round(k)}%;background:${c}"></i></span> <span class="small">${Math.round(k)}%</span>`; }
+function pracChip(p) {
+  const pr = p.prac;
+  if (!pr) return '<span class="muted small">—</span>';
+  if (pr.dnp) return '<span class="pill inj">Did not practice</span>';
+  const l = pracGradeLabel(pr.g), c = pr.g >= 59 ? 'good' : pr.g < 42 ? 'bad' : '';
+  return `<span class="pill ${c}">${l}</span>`;
+}
+function pracTrend(p) { const h = (p.pracH || []).slice(-5); return h.map(g => `<i class="pdot" style="background:${g >= 59 ? 'var(--good)' : g < 42 ? 'var(--bad)' : 'var(--muted)'}" title="${pracGradeLabel(g)}"></i>`).join(''); }
+function practiceHTML() {
+  const u = state.userTid, t = T(u);
+  const when = state.phase === 'REG' ? `Week ${state.week}` : state.phase === 'PRESEASON' ? 'Preseason' : state.phase === 'PLAYOFFS' ? 'Playoffs' : PHASE_LABEL[state.phase];
+  let html = `<div class="callout"><b>Practice report · ${when}.</b> A strong week is a small edge on game day and a poor one a small drag. Work Ethic and Discipline drive it, the veterans in each room set the tone (for better or worse), and Consistency keeps a player from having bad weeks.
+    Players learn the playbook through reps: use the arrows to set who gets the first-team reps in each room. A player who does not know a call loses that snap to someone who does when possible, and can blow the assignment when he has to play it.</div>`;
+  for (const [side, name, groups] of PRAC_ROOMS) {
+    const coach = side === 'O' ? offCaller(t) : defCaller(t), sys = t.sys && t.sys[side];
+    const sidePs = rosterOf(u).filter(p => PRAC_SIDE[p.pos] === side), install = sidePs.length ? sidePs.reduce((s, p) => s + pbOf(p), 0) / sidePs.length : 100;
+    html += `<h2 style="margin:22px 0 8px">${name} <span class="small muted" style="font-weight:400">· ${coach ? esc(cname(coach)) : 'no play-caller'}${sys && sys.yrs <= 0 ? ' · <b>new system this year</b>' : sys ? ` · year ${sys.yrs + 1} in the system` : ''} · playbook installed: ${Math.round(install)}%</span></h2>`;
+    for (const pos of groups) {
+      const rs = roomState(u, pos), order = repsOrder(u, pos), squad = psOf(u).filter(p => p.pos === pos);
+      if (!order.length && !squad.length) continue;
+      const graded = order.filter(p => p.prac && p.prac.g != null), avg = graded.length ? graded.reduce((s, p) => s + p.prac.g, 0) / graded.length : null;
+      const lead = rs.voices[0], drag = rs.voices.filter(v => v.a < -0.15).sort((a, b) => a.w * a.a - b.w * b.a)[0];
+      const known = v => (v.p.seenW || 0) >= 2;
+      const tone = rs.tone > 0.3 ? ['Strong room', 'good'] : rs.tone < -0.2 ? ['Bad habits spreading', 'bad'] : ['Neutral', ''];
+      html += `<div class="card" style="margin-bottom:12px"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">${ROOM_NAME[pos]}</h3>
+        <span class="pill ${tone[1]}">${tone[0]}</span>${avg !== null ? `<span class="small muted">room average: ${pracGradeLabel(avg).toLowerCase()}</span>` : ''}
+        <span class="spacer"></span><span class="small muted">${lead && known(lead) ? `Sets the tone: ${playerLink(lead.p, true)}${lead.a < -0.15 ? ' <span class="bad">(not a good example)</span>' : ''}` : rs.voices.length ? 'Your staff is still learning who runs this room' : 'No veteran voice in this room'}${drag && lead && drag.p !== lead.p && known(drag) ? ` · dragging it down: ${playerLink(drag.p, true)}` : ''}</span></div>` +
+        table('prac' + pos, [
+          { k: 'ord', l: 'Reps', f: p => p.tid === -3 ? '<span class="muted small">Practice squad</span>' : `<span class="seg"><button class="sm" data-action="repMove" data-pid="${p.id}" data-d="-1" title="More reps">▲</button><button class="sm" data-action="repMove" data-pid="${p.id}" data-d="1" title="Fewer reps">▼</button></span> <span class="small ${repsTier(order.indexOf(p), pos) === 0 ? '' : 'muted'}">${REPS_NAME[repsTier(order.indexOf(p), pos)]}</span>` },
+          { k: 'n', l: 'Name', f: p => playerLink(p) + ' ' + statusPills(p) },
+          { k: 'pos', l: 'Pos', f: p => esc(p.lbl) },
+          { k: 'exp', l: 'Yrs', f: p => p.exp === 0 ? 'R' : p.exp, num: 1 },
+          { k: 'tier', l: 'Tier', f: p => tierPill(p) },
+          { k: 'pb', l: 'Playbook', f: p => `${pbBar(pbOf(p))} <span class="small muted">${pbLabel(pbOf(p))}</span>` },
+          { k: 'pr', l: 'This week', f: p => pracChip(p) },
+          { k: 'tr', l: 'Recent', f: p => pracTrend(p) },
+          { k: 'we', l: 'Work ethic', f: p => charPill(p, 'work') },
+          { k: 'di', l: 'Discipline', f: p => charPill(p, 'disc') },
+          { k: 'le', l: 'Leadership', f: p => charPill(p, 'lead') },
+        ], [...order, ...squad], { nosort: 1 }) + '</div>';
+    }
+  }
+  return html;
+}
+
 // ---------- waiver wire (after league-wide cuts) ----------
 function waiversHTML() {
   const u = state.userTid, wv = state.wv, fam = ui.wvFam || 'ALL';
@@ -1509,6 +1558,7 @@ function playerModal(pid, replace) {
   left += '<div class="row" style="margin-top:12px">';
   if (p.tid === u && optionDue(p) && state.phase === 'RESIGN') left += `<button class="primary" data-action="option" data-pid="${p.id}" data-v="1">Exercise option (${fmtMoney(optionAmount(p))})</button><button data-action="option" data-pid="${p.id}" data-v="0">Decline option</button>`;
   if (p.tid === u && canTag(p)) left += `<button data-action="tag" data-pid="${p.id}">Franchise tag (${fmtMoney(tagAmount(p))})</button>`;
+  if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && PRAC_SIDE[p.pos]) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">In the building${p.seenW ? ` · ${p.seenW} week${p.seenW === 1 ? '' : 's'} with your staff` : ''}</div><div class="small" style="margin-bottom:4px">Playbook ${pbBar(pbOf(p))} <span class="muted">${pbLabel(pbOf(p))}</span> · this week ${pracChip(p)}</div><div class="row small" style="gap:6px">${charPill(p, 'work')}${charPill(p, 'disc')}${charPill(p, 'lead')}</div></div>`;
   if (p.tid === u && extensionDue(p)) left += termButtons(p, 'extend');
   if (p.tid === u && state.phase === 'PRESEASON' && state.prePlan && p.pos !== 'K' && p.pos !== 'P') { const pl = state.prePlan, cur = pl.feat[p.id] ? 'feat' : pl.hold[p.id] ? 'hold' : ''; left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Preseason playing time${p.preS ? ` · ${p.preS.snp} snaps so far` : ''}</div><span class="seg">${[['', 'Normal'], ['feat', 'Feature'], ['hold', 'Hold out']].map(([k, l]) => `<button class="sm ${cur === k ? 'on' : ''}" data-action="preFeat" data-card="1" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span></div>`; }
   if (p.tid === -3 && p.psTid === u) left += `<button class="primary" data-action="promote" data-pid="${p.id}">Promote to 53</button><button class="danger" data-action="psRelease" data-pid="${p.id}">Release</button>`;
@@ -1998,6 +2048,7 @@ const actions = {
   statCat: d => { ui.statCat = d.cat; render(); },
   faPos: d => { ui.faPos = d.pos; render(); },
   faView: d => { ui.faView = d.v; render(); },
+  repMove: d => { moveReps(+d.pid, +d.d); save(); render(); },
   udfaOfferBtn: d => { const err = udfaOffer(+d.pid, d.b === '' ? null : +d.b); if (err) toast(err); save(); playerModal(+d.pid, true); render(); },
   srchFam: d => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF))).fam = d.pos; render(); },
   cutFam: d => { ui.cutFam = d.pos; render(); },

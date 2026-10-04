@@ -127,6 +127,7 @@ function resignAsk(p) { return round2(marketValue(p) * (0.95 + rand() * 0.2)); }
 // ---------- coaches (see coaches.js) ----------
 function leaveCoaches() {
   fillCoachVacancies();
+  systemChangeKnowledge(); // new coordinators mean new playbooks
   state.phase = 'RESIGN';
   for (const t of state.teams) if (isAI(t.id)) aiContractDecisions(t.id); // options, extensions, tags
 }
@@ -464,6 +465,7 @@ function resolveWaivers() {
   ensureDraftClass(state.season + 1); // next spring's class is on the board all year
   refreshPerception();
   seasonStartSnapshot();
+  practiceWeekAll(); // the week before the opener
   addNews(`The ${state.season} regular season is underway.`);
   return out;
 }
@@ -523,6 +525,7 @@ function trainingCamp() {
     if (!p.a || (p.tid < 0 && p.tid !== -3)) continue;
     const L = learnRate(p);
     let changed = false;
+    pbLearn(p, 0.9, 0, 5); // install: camp is worth about five weeks of work
     if (comfortOf(p, p.spot) < 100 && learnSpot(p, p.spot, 30 * L)) changed = true;
     for (const s of campFocus(p)) if (s !== p.spot && learnSpot(p, s, 30 * L)) changed = true;
     updateRatings(p);

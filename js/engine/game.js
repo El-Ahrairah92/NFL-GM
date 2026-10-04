@@ -39,13 +39,14 @@ function simGame(hTid, aTid, opts = {}) {
     runY: [[0, 0], [0, 0]], runCred: [4.2, 4.2], pbp: opts.pbp ? [] : null, adv: {}, tadv: [{}, {}], first: [{}, {}], basePass: [0.57, 0.57], tilt: [0, 0], advEst: [{}, {}],
   };
   g.cx = [coachCtx(hTid, aTid), coachCtx(aTid, hTid)];
-  g.famPen = [0, 1].map(s => g.cx[s].famO * 0.6 + g.cx[s].famD * 0.6);
+  g.famPen = [0, 0]; // system familiarity now lives in each player's playbook knowledge
   const bonus = [g.neutral ? 0 : TUNE.hfa, 0].map((h, s) => h + gauss(0, TUNE.teamForm));
   // game-day form: Consistency (steadied by Culture), minus accumulated wear, plus home field & team form
   g.dressed = [...rosterOf(hTid), ...rosterOf(aTid)];
   for (const p of g.dressed) {
     const s = p.tid === hTid ? 0 : 1, cul = knob(C(T(p.tid).hc), 'cul');
-    p._gs = (p.h ? gauss(0, (0.5 + (100 - p.h.cons) / 25) * (1.15 - cul / 330)) - wearPenalty(p) : 0) + bonus[s];
+    // form: the week of practice (known beforehand) plus what nobody could see coming
+    p._gs = (p.h ? gauss(0, (0.5 + (100 - p.h.cons) / 25) * (1.15 - cul / 330) * 0.78) + pracBump(p) - repPenalty(p) - wearPenalty(p) : 0) + bonus[s];
   }
   for (let s = 0; s < 2; s++) initSide(g, s);
   for (let s = 0; s < 2; s++) {
@@ -195,7 +196,10 @@ function shareTackle(res, def) {
 
 function runPlay(g, oc, dc) {
   const o = g.poss, d = 1 - o;
+  g.pbNeed = [0, 0]; g.pbNeed[o] = offNeed(oc); g.pbNeed[d] = defNeed(dc);
   const off = offUnit(g, o, oc.pers, oc), def = defUnit(g, d, dc.front, dc.pkg, dc.subRush);
+  g.pbNeed = null; // only real snaps are gated
+  { const need = [0, 0]; need[o] = offNeed(oc); need[d] = defNeed(dc); g.pbNeed = need; playbookBusts(g, [...off, ...def]); g.pbNeed = null; }
   if (oc.form === 'EMP') { const rb = off.find(e => e.slot === 'RB'); if (rb) rb.x = -1.8; }
   if (!g.first[o].off) { g.first[o].off = true; for (const e of off) ln(g, e.p).gs = 1; }
   if (!g.first[d].def) { g.first[d].def = true; for (const e of def) ln(g, e.p).gs = 1; }

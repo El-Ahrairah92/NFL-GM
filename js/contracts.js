@@ -221,6 +221,7 @@ function signToPS(pid, tid) {
   if (!p || p.tid !== -1) return 'Not a free agent';
   if (p.waiver) return 'He is on waivers';
   if (!psRoom(tid, p)) return 'Practice squad is full';
+  if (p.pbTid !== tid) pbArrive(p, tid);
   setTid(p, -3); p.psTid = tid; p.contract = { amt: PS_SALARY, yrs: 1, gtd: 0 }; delete p.ask;
   return null;
 }

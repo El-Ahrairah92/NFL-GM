@@ -7,7 +7,11 @@ function T(tid) { return state.teams[tid]; }
 // rosters are indexed in one pass and rebuilt lazily after any move (always change teams through setTid)
 let ROSTERS = null;
 function rostersDirty() { ROSTERS = null; }
-function setTid(p, tid) { p.tid = tid; ROSTERS = null; }
+function setTid(p, tid) {
+  // joining a club means learning its playbook (initial league rosters know theirs)
+  if (tid >= 0 && p.pbTid !== tid) { if (typeof pbArrive === 'function' && state && state.schedule && state.schedule.length) pbArrive(p, tid); else p.pbTid = tid; }
+  p.tid = tid; ROSTERS = null;
+}
 function rosterOf(tid) {
   if (!ROSTERS || ROSTERS.st !== state) {
     ROSTERS = { st: state, m: {} };

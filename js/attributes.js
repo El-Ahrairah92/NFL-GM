@@ -307,6 +307,11 @@ function progressPlayer(p, dev) {
 }
 
 // ---------- generation ----------
+// character: how he works, how he follows his assignments, and whether a room follows him
+function genCharacter() {
+  const work = clamp(gauss(56, 17), 5, 99);
+  return { work: Math.round(work), disc: Math.round(clamp(0.35 * work + 0.65 * gauss(56, 17), 5, 99)), lead: Math.round(clamp(gauss(45, 20), 5, 99)) };
+}
 function genHidden() {
   return {
     dur: Math.round(clamp(gauss(55, 18), 5, 99)),
@@ -314,6 +319,7 @@ function genHidden() {
     stam: Math.round(clamp(gauss(60, 15), 10, 99)),
     curve: weightedPick(['early', 'normal', 'late'], [2, 6, 2]),
     adapt: Math.round(clamp(gauss(55, 18), 5, 99)), // learns new positions / schemes
+    ...genCharacter(),
   };
 }
 function genAging() {

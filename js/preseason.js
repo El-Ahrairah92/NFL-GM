@@ -206,6 +206,7 @@ function simPreseasonWeek() {
   }
   injuryTick();
   state.pre.wk++;
+  practiceWeekAll();
   refreshPerception();
   if (state.pre.wk >= PRESEASON_GAMES) { state.phase = 'CUTDOWN'; state.cut = { plan: {} }; addNews('Preseason is over. Rosters must be down to 53 before Week 1.'); }
 }
