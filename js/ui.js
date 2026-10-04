@@ -902,11 +902,17 @@ function pracChip(p) {
   return `<span class="pill ${c}">${l}</span>`;
 }
 function pracTrend(p) { const h = (p.pracH || []).slice(-5); return h.map(g => `<i class="pdot" style="background:${g >= 59 ? 'var(--good)' : g < 42 ? 'var(--bad)' : 'var(--muted)'}" title="${pracGradeLabel(g)}"></i>`).join(''); }
+function crossTrainSelect(p) {
+  if (p.tid !== state.userTid) return '';
+  const opts = crossTrainSpots(p);
+  if (!opts.length) return '';
+  return `<select data-change="xtSet" data-pid="${p.id}" class="${p.xt ? 'on' : ''}" title="Practice time at a second position"><option value="">—</option>${opts.map(s => `<option value="${s}" ${p.xt === s ? 'selected' : ''}>${SPOTS[s].l} (${comfortLabel(comfortOf(p, s))})</option>`).join('')}</select>`;
+}
 function practiceHTML() {
   const u = state.userTid, t = T(u);
   const when = state.phase === 'REG' ? `Week ${state.week}` : state.phase === 'PRESEASON' ? 'Preseason' : state.phase === 'PLAYOFFS' ? 'Playoffs' : PHASE_LABEL[state.phase];
   let html = `<div class="callout"><b>Practice report · ${when}.</b> A strong week is a small edge on game day and a poor one a small drag. Work Ethic and Discipline drive it, the veterans in each room set the tone (for better or worse), and Consistency keeps a player from having bad weeks.
-    Players learn the playbook through reps: use the arrows to set who gets the first-team reps in each room. A player who does not know a call loses that snap to someone who does when possible, and can blow the assignment when he has to play it.</div>`;
+    Use <b>Cross-train</b> to teach a player a second position (it takes weeks to months, quicker for nearby jobs and quick learners, and costs him a little at his own). Players learn the playbook through reps: use the arrows to set who gets the first-team reps in each room. A player who does not know a call loses that snap to someone who does when possible, and can blow the assignment when he has to play it.</div>`;
   for (const [side, name, groups] of PRAC_ROOMS) {
     const coach = side === 'O' ? offCaller(t) : defCaller(t), sys = t.sys && t.sys[side];
     const sidePs = rosterOf(u).filter(p => PRAC_SIDE[p.pos] === side), install = sidePs.length ? sidePs.reduce((s, p) => s + pbOf(p), 0) / sidePs.length : 100;
@@ -928,6 +934,7 @@ function practiceHTML() {
           { k: 'exp', l: 'Yrs', f: p => p.exp === 0 ? 'R' : p.exp, num: 1 },
           { k: 'tier', l: 'Tier', f: p => tierPill(p) },
           { k: 'pb', l: 'Playbook', f: p => `${pbBar(pbOf(p))} <span class="small muted">${pbLabel(pbOf(p))}</span>` },
+          { k: 'xt', l: 'Cross-train', f: p => crossTrainSelect(p), title: 'Give him practice time at another position. It costs him a little of his own week.' },
           { k: 'pr', l: 'This week', f: p => pracChip(p) },
           { k: 'tr', l: 'Recent', f: p => pracTrend(p) },
           { k: 'we', l: 'Work ethic', f: p => charPill(p, 'work') },
@@ -1558,7 +1565,7 @@ function playerModal(pid, replace) {
   left += '<div class="row" style="margin-top:12px">';
   if (p.tid === u && optionDue(p) && state.phase === 'RESIGN') left += `<button class="primary" data-action="option" data-pid="${p.id}" data-v="1">Exercise option (${fmtMoney(optionAmount(p))})</button><button data-action="option" data-pid="${p.id}" data-v="0">Decline option</button>`;
   if (p.tid === u && canTag(p)) left += `<button data-action="tag" data-pid="${p.id}">Franchise tag (${fmtMoney(tagAmount(p))})</button>`;
-  if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && PRAC_SIDE[p.pos]) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">In the building${p.seenW ? ` · ${p.seenW} week${p.seenW === 1 ? '' : 's'} with your staff` : ''}</div><div class="small" style="margin-bottom:4px">Playbook ${pbBar(pbOf(p))} <span class="muted">${pbLabel(pbOf(p))}</span> · this week ${pracChip(p)}</div><div class="row small" style="gap:6px">${charPill(p, 'work')}${charPill(p, 'disc')}${charPill(p, 'lead')}</div></div>`;
+  if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && PRAC_SIDE[p.pos]) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">In the building${p.seenW ? ` · ${p.seenW} week${p.seenW === 1 ? '' : 's'} with your staff` : ''}</div><div class="small" style="margin-bottom:4px">Playbook ${pbBar(pbOf(p))} <span class="muted">${pbLabel(pbOf(p))}</span> · this week ${pracChip(p)}</div><div class="row small" style="gap:6px">${charPill(p, 'work')}${charPill(p, 'disc')}${charPill(p, 'lead')}</div>${p.tid === u && crossTrainSpots(p).length ? `<div class="small" style="margin-top:6px">Cross-train at ${crossTrainSelect(p).replace('data-pid=', 'data-card="1" data-pid=')}${p.xt ? ` <span class="muted">now ${comfortLabel(comfortOf(p, p.xt)).toLowerCase()} (${Math.round(comfortOf(p, p.xt))}/100)</span>` : ''}</div>` : ''}</div>`;
   if (p.tid === u && extensionDue(p)) left += termButtons(p, 'extend');
   if (p.tid === u && state.phase === 'PRESEASON' && state.prePlan && p.pos !== 'K' && p.pos !== 'P') { const pl = state.prePlan, cur = pl.feat[p.id] ? 'feat' : pl.hold[p.id] ? 'hold' : ''; left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Preseason playing time${p.preS ? ` · ${p.preS.snp} snaps so far` : ''}</div><span class="seg">${[['', 'Normal'], ['feat', 'Feature'], ['hold', 'Hold out']].map(([k, l]) => `<button class="sm ${cur === k ? 'on' : ''}" data-action="preFeat" data-card="1" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span></div>`; }
   if (p.tid === -3 && p.psTid === u) left += `<button class="primary" data-action="promote" data-pid="${p.id}">Promote to 53</button><button class="danger" data-action="psRelease" data-pid="${p.id}">Release</button>`;
@@ -2109,6 +2116,7 @@ const changes = {
   rosterTeam: v => { ui.rosterTid = +v; },
   rosterView: v => { ui.rosterView = v; },
   preStarters: v => { state.prePlan.starters = v; save(); },
+  xtSet: (v, el) => { setCrossTrain(+el.dataset.pid, v || null); save(); if (el.dataset.card) playerModal(+el.dataset.pid, true); render(); },
   udfaOffer: (v, el) => { const err = udfaOffer(+el.dataset.pid, v === '' ? null : +v); if (err) toast(err); save(); render(); },
   srch: (v, el) => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF)))[el.dataset.f] = v; },
   srchChk: (v, el) => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF)))[el.dataset.f] = el.checked; },

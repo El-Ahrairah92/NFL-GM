@@ -510,7 +510,7 @@ function comfortOffseason(p) {
 }
 // which spots a player cross-trains at in camp: your depth chart decides for your team; AI staffs pick a neighbor he could help at
 function campFocus(p) {
-  if (p.tid === state.userTid && typeof userDepthSpots === 'function') { const s = userDepthSpots(p); if (s.length) return s; }
+  if (p.tid === state.userTid && !isAI(p.tid)) { const s = userDepthSpots(p); if (p.xt && !s.includes(p.xt)) s.unshift(p.xt); if (s.length) return s; }
   if (p.age >= 31) return [];
   const nb = (SPOT_NEIGHBORS[p.spot] || []).filter(s => comfortOf(p, s) < 85);
   // staffs cross-train where the roster is thin first

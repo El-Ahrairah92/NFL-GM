@@ -127,6 +127,7 @@ function pbArrive(p, tid) {
   let v = (inSeason ? 26 : 36) + rand() * 8 + (p.exp >= 3 ? 6 : 0);
   if (p.pbArch && arch && p.pbArch === arch) v += 28; // he ran this system somewhere else
   p.pb = Math.round(clamp(v, 10, 100)); p.pbArch = arch;
+  delete p.xt; // a new club has its own plans for him
 }
 function pbLearn(p, reps, room, weeks) {
   if (!PB_RATE[p.pos] || pbOf(p) >= 100) return;
@@ -179,6 +180,24 @@ function roomState(tid, pos) {
 // what the veterans above him add or take away
 function roomEffectOn(p, rs) { return clamp(rs.voices.filter(v => v.p !== p && v.p.exp > p.exp).reduce((s, v) => s + v.w * v.a, 0), -1.5, 1.5); }
 function pracGradeLabel(g) { return g >= 72 ? 'Great week' : g >= 59 ? 'Good week' : g >= 42 ? 'Solid' : g >= 30 ? 'Poor week' : 'Bad week'; }
+// ---- cross-training: practice time at a second position ----
+// Any spot on his side of the ball. Neighbouring jobs come quickest; a real position change takes most of a season
+// per comfort level. The time comes out of his own work: a slightly worse week and slower playbook learning.
+const XT_GROUPS = [['RB', 'FB', 'WRX', 'WRZ', 'SLOT', 'TEY', 'TEH'], ['LT', 'LG', 'C', 'RG', 'RT'], ['NT', 'DT', 'DE', 'EDGE', 'MLB', 'WLB'], ['MLB', 'WLB', 'CB', 'NCB', 'FS', 'SS']]; // a back can learn receiver; nobody is turning him into a tackle
+function crossTrainSpots(p) { const ok = new Set(); for (const g of XT_GROUPS) if (g.includes(p.spot)) g.forEach(s => ok.add(s)); ok.delete(p.spot); return SPOT_KEYS.filter(s => ok.has(s)); }
+function setCrossTrain(pid, spot) { const p = P(pid); if (!p) return; if (spot && crossTrainSpots(p).includes(spot)) p.xt = spot; else delete p.xt; }
+function crossTrainRate(p, spot) { return (SPOT_NEIGHBORS[p.spot] || []).includes(spot) ? 1 : 0.7; }
+function crossTrainWeek(p, weeks) {
+  if (!p.xt || !p.a || p.injury) return;
+  if (comfortOf(p, p.xt) >= 100) { delete p.xt; return; }
+  ensureCharacter(p);
+  const pts = 2.4 * learnRate(p) * (0.75 + p.h.work / 200) * crossTrainRate(p, p.xt) * (weeks || 1);
+  if (learnSpot(p, p.xt, pts)) {
+    updateRatings(p);
+    if (p.tid === state.userTid) addNews(`${pname(p)} is now ${comfortLabel(comfortOf(p, p.xt)).toLowerCase()} at ${SPOTS[p.xt].l} after cross-training.`, [p.tid], 'prog');
+  }
+  if (comfortOf(p, p.xt) >= 100) delete p.xt;
+}
 function practiceTeam(tid) {
   const cul = knob(C(T(tid).hc), 'cul'), wk = state.season * 100 + (state.phase === 'REG' ? state.week : 0);
   for (const pos in PRAC_SIDE) {
@@ -190,10 +209,12 @@ function practiceTeam(tid) {
       if (p.injury) { p.prac = { g: null, t: tier, wk, dnp: 1 }; pbLearn(p, 0.35, eff); continue; } // meetings only
       let noise = gauss(0, 10);
       if (noise < 0) noise *= clamp(1.3 - p.h.cons / 90, 0.3, 1.25); // steady players rarely have a bad week
-      const g = clamp(46 + (p.h.work - 55) * 0.42 + (p.h.disc - 55) * 0.28 + eff * 9 + (pbOf(p) - 75) * 0.14 + (cul - 50) * 0.08 + noise, 5, 99);
+      const xt = p.xt && p.tid === tid ? 1 : 0; // splitting his week between two jobs
+      const g = clamp(46 - xt * 3 + (p.h.work - 55) * 0.42 + (p.h.disc - 55) * 0.28 + eff * 9 + (pbOf(p) - 75) * 0.14 + (cul - 50) * 0.08 + noise, 5, 99);
       p.prac = { g: Math.round(g), t: tier, wk };
       (p.pracH = p.pracH || []).push(Math.round(g)); if (p.pracH.length > 6) p.pracH.shift();
-      pbLearn(p, REPS_MULT[tier], eff);
+      pbLearn(p, REPS_MULT[tier] * (xt ? 0.85 : 1), eff);
+      if (xt) crossTrainWeek(p);
       if (p.tid === state.userTid || p.psTid === state.userTid) p.seenW = (p.seenW || 0) + 1; // your staff gets to know him
     }
   }
