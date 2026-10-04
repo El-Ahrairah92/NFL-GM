@@ -361,6 +361,18 @@ Games were decided by 16.9 on average (NFL 11.3) with 21% decided by 28+. Talent
 - **Hiring:** a new coordinator replaces about half his side's assistants with his own people; open jobs are filled when the carousel closes. The user may replace or promote any assistant during the carousel.
 - **Ladder:** strong position coaches become specialists, strong specialists become coordinators (league-wide each offseason, or by the user into an open job). On promotion the background keyword becomes the system, the lean is baked into the tendencies, and ratings are rolled around his old level with real variance.
 
+## 20. The coaching search
+- **The web:** every coach has ties (`c.links`) to men he has worked with. A season on the same staff strengthens them (most along the chain of command); time apart fades them. A coach's "people" (`guysOf`) are his strongest ties who could take a job under him: free coaches in that job, or coaches a tier below for whom it is a promotion. Nobody leaves a club for a sideways move.
+- **Four days:** other clubs hire head coaches on day 1, coordinators on day 2, specialists on day 3, and everything left on day 4. Their hires bring their own people too.
+- **Interviews** (5 head coach, 3 per coordinator, 2 each special teams and strength) reveal a candidate's real ratings and his demands. Assistants can be negotiated with directly.
+- **Demands:** play-calling (hard insist, soft desire, none) · staff slots (asked in bulk, promised one by one; firm for his closest people if he has the reputation) · one upcoming free agent re-signed · salary, years, guaranteed years.
+- **Interest** is his view of your offer against the best he could get elsewhere: team appeal (quarterback, record, how often you fire head coaches), money and security, promises kept or refused. A coach tied to a boss still on the market may hold out to follow him.
+- **Promises are kept by construction:** a promised slot is filled by his man and locked (you cannot fire or replace him while the coach who was promised it is on staff); promised play-calling is applied and cannot be promised twice; a promised re-signing is made at market value automatically if you leave the re-signing period without doing it.
+- **Requests:** a man who arrives with his boss asks for his own people; these are requests you may grant or decline.
+- **Staff budget** (`t.staffBud`, grows 5% a year): every coach has a salary, years and guaranteed years; letting a coach go leaves his guaranteed years on that year's budget.
+- **College class:** each offseason adds candidates with no ties, cheap asks and wide uncertainty.
+- Later pass: consequences for breaking promises by other means, coach morale, renegotiation at contract expiry (deals currently roll over for two years at market).
+
 ## Deferred
 - Penalties / Discipline attribute
 - Leadership / intangibles

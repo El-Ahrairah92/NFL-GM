@@ -189,7 +189,7 @@ function continueLabel() {
     case 'REG': return `▶ Play Week ${state.week}`;
     case 'PLAYOFFS': return `▶ Play ${ROUND_NAMES[state.playoffs.round]}`;
     case 'RECAP': return 'Start Offseason →';
-    case 'COACHES': return 'Done with Coaches →';
+    case 'COACHES': { const d = state.car ? state.car.day : 0; return d >= CAROUSEL_DAYS - 1 ? 'Close the Coaching Search →' : `Next Day of the Search (${d + 1} of ${CAROUSEL_DAYS}) →`; }
     case 'RESIGN': return 'Done Re-signing →';
     case 'FA': return `Next FA Wave (${state.faWave + 1}/${FA_WAVES}) →`;
     case 'DRAFT': { const pk = currentPick(); return pk && pk.owner === state.userTid ? 'Auto-pick for Me' : 'Sim to My Pick'; }
@@ -253,7 +253,7 @@ function phaseCallout() {
       return 'You missed the playoffs. Watch the bracket unfold, then the offseason begins.';
     }
     case 'RECAP': return 'The season is over. Review the awards below, then start the offseason: players age and progress, contracts expire and a draft class is revealed.';
-    case 'COACHES': return 'Coaching carousel: fire and hire coaches on the <b>Coaches</b> tab. Any open spots get filled automatically when you continue.';
+    case 'COACHES': { const d = state.car ? state.car.day : 0, open = ALL_ROLES.filter(r => !staffCoach(T(u), r)).length; return `Coaching search, day ${d + 1} of ${CAROUSEL_DAYS}. Other clubs hire <b>${DAY_NAME[Math.min(d, 3)].toLowerCase()}</b> when you advance. Interview, negotiate and hire on the <b>Staff</b> tab. You have <b>${open}</b> open job${open === 1 ? '' : 's'} and ${fmtMoney(staffRoom(u))} of staff budget left. Jobs still open when the search closes are filled by the coaches above them.`; }
     case 'RESIGN': { const n = rosterOf(u).filter(p => p.expiring).length; return `You have <b>${n}</b> expiring contract${n === 1 ? '' : 's'}. Re-sign players on the <b>Roster</b> tab. Anyone you don't re-sign becomes a free agent.`; }
     case 'FA': return `Free agency wave ${state.faWave + 1} of ${FA_WAVES}. Sign players on the <b>Free Agents</b> tab before AI teams do. Unsigned players lower their asking price each wave.`;
     case 'DRAFT': { const pk = currentPick(); return pk ? `Pick ${pk.pick} (Rd ${pk.round}): <b>${T(pk.owner).abbr}</b> on the clock. ${pk.owner === u ? 'That\'s you! Choose on the <b>Draft</b> tab.' : ''}` : ''; }
@@ -1328,9 +1328,11 @@ function assistantsHTML(t, mine, canHire) {
     const coord = C(t[coordKey]), infl = tendInfluences(t, side);
     const act = (role, c) => {
       if (!canHire) return '';
-      if (!c) return `<button class="sm primary" data-action="asstPool" data-role="${role}">Hire</button>`;
+      const lock = t.locks && t.locks[role] && C(t.locks[role]) && C(t.locks[role]).tid === t.id ? C(t.locks[role]) : null;
+      if (!c) return `<button class="sm primary" data-action="searchRole" data-role="${role}">Find someone</button>`;
+      if (lock) return `<span class="small muted" title="You promised this job to ${esc(cname(lock))} for his man">🔒 ${esc(lock.last)}'s man</span>`;
       const up = SPEC_ROLES.includes(role) ? !coord : !asst(t, SPEC_OVER[role]);
-      return `${up ? `<button class="sm primary" data-action="asstPromote" data-cid="${c.id}" title="Move him up into the open job above him">Promote</button> ` : ''}<button class="sm" data-action="asstPool" data-role="${role}">Replace</button>`;
+      return `${up ? `<button class="sm primary" data-action="asstPromote" data-cid="${c.id}" title="Move him up into the open job above him">Promote</button> ` : ''}<button class="sm danger" data-action="fireCoach" data-role="${role}">Let go</button>`;
     };
     const spec = SPEC_ROLES.filter(r => ASST_SIDE[r] === side).map(role => ({ role, c: asst(t, role) }));
     const pos = POS_ROLES.filter(r => ASST_SIDE[r] === side).map(role => ({ role, c: asst(t, role) }));
@@ -1344,6 +1346,7 @@ function assistantsHTML(t, mine, canHire) {
         { k: 'e', l: 'Expertise', f: r => r.c ? wordPill(asstWord(r.c, 'exp')) : '' },
         { k: 'k', l: 'Background', f: r => r.c ? `<span class="small muted">${esc(bgLabel(r.c))} · ${esc(r.c.style)}</span>` : '' },
         { k: 't', l: 'Track record', f: r => r.c ? `<span class="small muted">${asstTrack(r.c)}</span>` : '' },
+        { k: 'ct', l: 'Contract', f: r => r.c && r.c.sal !== undefined ? `<span class="small">${fmtMoney(r.c.sal)} × ${r.c.cyrs}</span>` : '' },
         { k: 'x', l: '', f: r => act(r.role, r.c) },
       ], spec, { nosort: 1 }) + '<div style="height:10px"></div>' +
       table('pos' + side, [
@@ -1354,6 +1357,7 @@ function assistantsHTML(t, mine, canHire) {
         { k: 'i', l: 'Discipline', f: r => r.c ? wordPill(asstWord(r.c, 'disc')) : '' },
         { k: 'k', l: 'Keywords', f: r => r.c ? kwPills(r.c) : '' },
         { k: 't', l: 'Track record', f: r => r.c ? `<span class="small muted">${asstTrack(r.c)}</span>` : '' },
+        { k: 'ct', l: 'Contract', f: r => r.c && r.c.sal !== undefined ? `<span class="small">${fmtMoney(r.c.sal)} × ${r.c.cyrs}</span>` : '' },
         { k: 'x', l: '', f: r => act(r.role, r.c) },
       ], pos, { nosort: 1 }) + '</div>';
   }
@@ -1393,11 +1397,93 @@ function asstModal(c) {
   ], c.hist.slice().reverse(), { nosort: 1 });
   openModal(h);
 }
+// ---------- the coaching search ----------
+function promiseChips(t, role, c) {
+  const bits = [];
+  if (c.prom && c.prom.call) bits.push('calls the ' + (c.prom.call === 'O' ? 'offense' : 'defense'));
+  const n = c.prom && c.prom.slots ? Object.keys(c.prom.slots).length : 0; if (n) bits.push(n + ' staff slot' + (n === 1 ? '' : 's'));
+  if (c.prom && c.prom.resign && P(c.prom.resign)) bits.push('re-sign ' + P(c.prom.resign).last);
+  const lock = t.locks && t.locks[role] && C(t.locks[role]) && C(t.locks[role]).tid === t.id ? C(t.locks[role]) : null;
+  if (lock) bits.push('🔒 ' + lock.last + "'s man");
+  return bits.length ? `<span class="small muted">${esc(bits.join(' · '))}</span>` : '';
+}
+const SEARCH_TABS = [['HC', 'Head coach'], ['OC', 'Off. coordinator'], ['DC', 'Def. coordinator'], ['STC', 'Special teams'], ['SC', 'Strength'], ['SPEC', 'Specialists'], ['POS', 'Position coaches']];
+function tiesTo(c, t) { // who on your staff (or in your plans) he is tied to
+  const out = [];
+  for (const r of ALL_ROLES) { const s = staffCoach(t, r); if (s && linkOf(c, s) >= 0.3) out.push(`${s.last} (${linkWord(linkOf(c, s))})`); }
+  const boss = Object.keys(c.links || {}).map(id => C(+id)).filter(b => b && b.tid < 0 && linkOf(c, b) >= 0.5 && ROLE_TIER[b.role] < ROLE_TIER[c.role]).sort((a, b) => linkOf(c, b) - linkOf(c, a))[0];
+  if (boss) out.push(`follows ${boss.last} (${ROLE_SHORT[boss.role]}, on the market)`);
+  return out.join(' · ');
+}
+function searchHTML2(t) {
+  const car = state.car, tab = ui.searchTab || 'HC', u = t.id;
+  const roles = tab === 'SPEC' ? SPEC_ROLES : tab === 'POS' ? POS_ROLES : [tab];
+  const sub = (tab === 'SPEC' || tab === 'POS') && roles.includes(ui.searchRole) ? ui.searchRole : roles[0];
+  const role = roles.length > 1 ? sub : tab;
+  const pay = staffPayroll(u), open = ALL_ROLES.filter(r => !staffCoach(t, r));
+  let html = `<div class="card" style="margin-top:16px"><div class="row"><h3 style="margin:0">Coaching search · day ${car.day + 1} of ${CAROUSEL_DAYS}</h3><span class="spacer"></span>
+    <span class="small">Staff budget <b>${fmtMoney(pay)}</b> of ${fmtMoney(t.staffBud)}${t.staffDead ? ` <span class="muted">(incl. ${fmtMoney(t.staffDead)} owed to coaches you let go)</span>` : ''} · <b class="${staffRoom(u) < 0 ? 'bad' : 'good'}">${fmtMoney(staffRoom(u))} left</b></span></div>
+    <p class="small muted" style="margin:8px 0">Every coach here is his own man with his own ties. <b>Interview</b> a head coach or coordinator to learn what he really is and what he wants; then <b>negotiate</b>: play-calling, which of his people he may bring (each slot you promise is a job you no longer fill), a player re-signed, money and guaranteed years. Other clubs hire <b>${DAY_NAME[Math.min(car.day, 3)].toLowerCase()}</b> when you advance, so the best are gone first.
+    Interviews left: ${Object.entries(car.ivLeft).map(([r, n]) => `${ROLE_SHORT[r]} ${n}`).join(' · ')}. Open jobs: ${open.length ? open.map(r => ROLE_SHORT[r]).join(', ') : 'none'}.</p>`;
+  if (car.req.length) html += '<div class="callout"><b>Requests from your new staff.</b> These are asks, not demands: granting one fills the job with his man and makes it his to keep.' + car.req.map((r, i) => { const by = C(r.by), g = C(r.cid), cur = staffCoach(t, r.role); return `<div class="row small" style="margin:6px 0">${coachNameLink(by)} would like ${coachNameLink(g)} <span class="muted">(${linkWord(r.w)})</span> as ${roleName(r.role).toLowerCase()}${cur ? ` <span class="muted">in place of ${esc(cname(cur))}${owedIfFired(cur) ? ', who is owed ' + fmtMoney(owedIfFired(cur)) : ''}</span>` : ''} · ${fmtMoney(coachAsk(g, r.role))}/yr<span class="spacer"></span><button class="sm primary" data-action="reqYes" data-i="${i}">Grant</button><button class="sm" data-action="reqNo" data-i="${i}">Keep the job</button></div>`; }).join('') + '</div>';
+  html += `<div class="subtabs">${SEARCH_TABS.map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="searchTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
+  if (roles.length > 1) html += `<div class="subtabs" style="margin-top:-4px">${roles.map(r => `<button class="${r === role ? 'on' : ''}" data-action="searchRole" data-role="${r}">${ASST_LABEL[r].replace(' Coach', '').replace(' Coordinator', '')}${staffCoach(t, r) ? '' : ' <span class="bad">●</span>'}</button>`).join('')}</div>`;
+  const cur = staffCoach(t, role);
+  const pool = Object.values(state.coaches).filter(c => c.tid !== u && fitsJob(c, role, t)).sort((a, b) => repOf(b) - repOf(a));
+  const light = ROLE_TIER[role] >= 3;
+  html += `<div class="small muted" style="margin-bottom:6px">${cur ? `${roleName(role)}: currently ${coachNameLink(cur)}${t.locks && t.locks[role] && C(t.locks[role]) && C(t.locks[role]).tid === u ? ' 🔒 promised' : ''}. Hiring someone else lets him go${owedIfFired(cur) ? ' (he is owed ' + fmtMoney(owedIfFired(cur)) + ')' : ''}.` : `The ${roleName(role).toLowerCase()} job is open.`}</div>` + table('search' + role, [
+    { k: 'n', l: 'Name', v: c => c.last, f: c => coachNameLink(c) + (c.role !== role ? ` <span class="pill">promotion from ${ROLE_SHORT[c.role]}</span>` : '') + (c.tid >= 0 ? ` <span class="small muted">${T(c.tid).abbr}</span>` : '') },
+    { k: 'a', l: 'Age', v: c => c.age, num: 1 },
+    { k: 'rep', l: 'Reputation', v: c => repOf(c), f: c => `<span class="small">${repLabel(c)}</span>` },
+    { k: 's', l: light ? 'Keywords' : 'System', f: c => isAsst(c) ? kwPills(c) : `<span class="small">${esc(schemeLabel(c) || '—')}</span>` },
+    { k: 'q', l: 'Your read', v: c => coachKnown(c) ? c.ovr : 0, f: c => !coachKnown(c) ? '<span class="muted small">Interview to learn more</span>' : isAsst(c) ? (c.exp !== undefined ? 'Expertise ' + wordPill(asstWord(c, 'exp')) : 'Dev ' + wordPill(asstWord(c, 'dev')) + ' Disc ' + wordPill(asstWord(c, 'disc'))) : tierChip(c.ovr) + ` <span class="small muted">${coachStrengths(c)}</span>` },
+    { k: 'g', l: 'His people', f: c => { const g = guysOf(c, role, t); return g.length ? `<span class="small muted">${g.length} he would bring</span>` : '<span class="small muted">comes alone</span>'; } },
+    { k: 't', l: 'Ties', f: c => `<span class="small muted wrapcell">${esc(tiesTo(c, t))}</span>` },
+    { k: 'ask', l: 'Asking', v: c => coachAsk(c, role), f: c => `<span class="small">${fmtMoney(coachAsk(c, role))}</span>`, num: 1 },
+    { k: 'x', l: '', f: c => coachKnown(c) || light ? `<button class="sm primary" data-action="negOpen" data-cid="${c.id}" data-role="${role}">Negotiate</button>` : `<button class="sm" data-action="interview" data-cid="${c.id}" ${(car.ivLeft[c.role] || 0) <= 0 ? 'disabled title="No interviews left for this job"' : ''}>Interview</button>` },
+  ], pool, { sort: 'rep', limit: 40 }) + '</div>';
+  return html;
+}
+// the negotiating table
+function negModal() {
+  const n = ui.neg, c = C(n.cid), t = T(state.userTid), d = demandsOf(c, n.role), j = judgeOffer(c, n), [il, ic] = interestLabel(j);
+  const cur = staffCoach(t, n.role), side = callSide(c, n.role), held = side ? callHeldBy(t, side) : null;
+  const chk = (on, act, extra, label, dis) => `<label class="row small" style="margin:5px 0;gap:8px"><input type="checkbox" data-change="${act}" ${extra || ''} ${on ? 'checked' : ''} ${dis ? 'disabled' : ''}> <span>${label}</span></label>`;
+  let h = `<div class="row"><h2 style="margin:0">${esc(cname(c))}</h2><span class="pill">${roleName(n.role)}</span><span class="pill ${ic}">${il}</span><span class="spacer"></span><button class="sm" data-action="coach" data-cid="${c.id}">His card</button></div>
+    <div class="muted small" style="margin:4px 0 10px">${repLabel(c)} · age ${c.age}${schemeLabel(c) ? ' · ' + esc(schemeLabel(c)) : ''}${c.role !== n.role ? ' · this would be a promotion' : ''}${cur ? ` · replaces ${esc(cname(cur))}${owedIfFired(cur) ? ' (owed ' + fmtMoney(owedIfFired(cur)) + ')' : ''}` : ''}</div>`;
+  h += '<div class="grid card-cols"><div>';
+  h += '<div class="section-title" style="margin-top:0">Play-calling</div>';
+  if (d.call === 'none') h += '<div class="small muted">He has no wish to call plays.</div>';
+  else h += chk(n.call, 'negCall', '', `He ${d.call === 'hard' ? '<b>insists on</b>' : 'would like'} calling the ${side === 'O' ? 'offense' : 'defense'}${held && held !== c ? ` <span class="bad">(already promised to ${esc(cname(held))})</span>` : ''}`, held && held !== c);
+  h += `<div class="section-title">His people <span class="small muted">· ${d.slots.length ? 'each slot you promise is a job you no longer fill' : ''}</span></div>`;
+  if (!d.slots.length) h += '<div class="small muted">He comes alone: every job under him stays yours to fill.</div>';
+  else {
+    h += d.slots.map(g => { const x = C(g.cid), occ = staffCoach(t, g.role), lock = t.locks && t.locks[g.role] && C(t.locks[g.role]) && C(t.locks[g.role]).tid === t.id;
+      return chk(n.slots[g.role] === g.cid, 'negSlot', `data-role="${g.role}" data-g="${g.cid}"`, `<b>${roleName(g.role)}</b>: ${coachNameLink(x)} <span class="muted">(${linkWord(g.w)}${g.firm ? ', <b>he insists</b>' : ''}) · ${fmtMoney(coachAsk(x, g.role))}/yr${occ ? ` · replaces ${esc(cname(occ))}${owedIfFired(occ) ? ', owed ' + fmtMoney(owedIfFired(occ)) : ''}` : ''}${lock ? ' · <span class="bad">already promised to someone else</span>' : ''}</span>`, lock); }).join('');
+    h += `<div class="row" style="margin-top:6px"><button class="sm" data-action="negAll" data-v="1">Give him all of them</button><button class="sm" data-action="negAll" data-v="0">None</button></div>`;
+  }
+  h += '<div class="section-title">Roster</div>';
+  if (d.resign && P(d.resign)) h += chk(n.resign, 'negResign', '', `He wants ${playerLink(P(d.resign))} re-signed <span class="muted">(a market-value offer of ${fmtMoney(P(d.resign).ask)}/yr keeps your word; it is made for you if you forget)</span>`);
+  else h += '<div class="small muted">No requests about your players.</div>';
+  h += '</div><div>';
+  h += `<div class="section-title" style="margin-top:0">Contract <span class="small muted">· he is asking ${fmtMoney(d.sal)} × ${d.yrs} yr, ${d.gtd} guaranteed</span></div>
+    <div class="row small" style="gap:10px 14px"><label>Salary $M <input type="number" step="0.05" min="0.1" style="width:86px" data-change="negSal" value="${n.sal}"></label>
+    <label>Years <select data-change="negYrs">${[1, 2, 3, 4, 5, 6].map(y => `<option ${y === n.yrs ? 'selected' : ''}>${y}</option>`).join('')}</select></label>
+    <label>Guaranteed <select data-change="negGtd">${[0, 1, 2, 3, 4, 5, 6].filter(y => y <= n.yrs).map(y => `<option ${y === n.gtd ? 'selected' : ''}>${y}</option>`).join('')}</select></label></div>
+    <div class="small muted" style="margin-top:6px">Guaranteed years stay on your staff budget if you let him go early.</div>`;
+  const slotCost = Object.entries(n.slots).reduce((s, [r, id]) => { const occ = staffCoach(t, r); return s + coachAsk(C(id), r) - (occ ? occ.sal || 0 : 0) + (occ ? owedIfFired(occ) : 0); }, 0);
+  const cost = n.sal - (cur ? cur.sal || 0 : 0) + (cur ? owedIfFired(cur) : 0) + slotCost, room = staffRoom(t.id);
+  h += `<div class="section-title">Where it stands</div><div class="small">This deal adds <b>${fmtMoney(cost)}</b> to this year's staff budget (${fmtMoney(room)} available)${cost > room + 0.001 ? ' <b class="bad">· over budget</b>' : ''}.</div>`;
+  h += j.hard ? `<div class="callout small bad" style="margin-top:8px">${esc(j.hard)}.</div>` : `<div class="small" style="margin-top:8px">${j.notes.length ? j.notes.map(([s, x]) => `<div class="${s === '+' ? 'good' : 'bad'}">${s === '+' ? '＋' : '－'} ${esc(x)}</div>`).join('') : '<span class="muted">Nothing is bothering him.</span>'}</div>`;
+  h += `<div class="row" style="margin-top:14px"><button class="primary" data-action="negOffer" ${cost > room + 0.001 ? 'disabled' : ''}>Make the offer</button><button data-action="closeModal">Walk away</button></div>`;
+  h += '</div></div>';
+  openModal(h, !!ui.negOpen); ui.negOpen = true;
+}
 function coachesHTML() {
   const tid = ui.staffTid == null ? state.userTid : ui.staffTid, t = T(tid), mine = tid === state.userTid, canHire = state.phase === 'COACHES' && mine;
   const opts = state.teams.map(x => `<option value="${x.id}" ${x.id === tid ? 'selected' : ''}>${x.region} ${x.name}</option>`).join('');
   let html = `<div class="row" style="margin-bottom:10px"><select data-change="staffTeam">${opts}</select><span class="spacer"></span>
-    <span class="small muted">${state.phase === 'COACHES' ? 'Coaching carousel is open: fire a coach to open the spot, then hire from the pool below.' : 'Coaching changes happen during the Coaching Carousel phase of the offseason.'}</span></div>`;
+    <span class="small muted">${state.phase === 'COACHES' ? 'The coaching search is open: let a coach go to open his job, then interview and negotiate below.' : 'Coaching changes happen during the coaching search each offseason.'}</span></div>`;
   const rows = COACH_ROLES.map(role => ({ role, c: C(t[role.toLowerCase()]) }));
   html += `<div class="card">` + table('staff', [
     { k: 'r', l: 'Role', v: r => COACH_ROLES.indexOf(r.role), f: r => `<b>${ROLE_SHORT[r.role]}</b> <span class="small muted">${ROLE_LABEL[r.role]}</span>` },
@@ -1407,10 +1493,13 @@ function coachesHTML() {
     { k: 's', l: 'System', v: r => schemeLabel(r.c), f: r => r.c ? `<span class="small">${esc(schemeLabel(r.c) || '—')}${r.role === 'HC' && r.c.t.caller ? ` · calls ${r.c.t.caller === 'O' ? 'offense' : 'defense'}` : ''}</span>` : '' },
     { k: 'b', l: 'Best at', f: r => r.c ? `<span class="small muted">${coachStrengths(r.c)}</span>` : '' },
     { k: 'l', l: 'Last season', f: r => r.c ? `<span class="small">${lastUnitLine(r.c) || '—'}</span>` : '' },
-    { k: 'x', l: '', f: r => canHire && r.c ? `<button class="sm danger" data-action="fireCoach" data-role="${r.role}">Fire</button>` : '' },
+    { k: 'ct', l: 'Contract', f: r => r.c && r.c.sal !== undefined ? `<span class="small">${fmtMoney(r.c.sal)} × ${r.c.cyrs} yr${r.c.cgtd ? ` <span class="muted">(${r.c.cgtd} gtd)</span>` : ''}</span>` : '' },
+    { k: 'pr', l: 'Promised', f: r => r.c ? promiseChips(t, r.role, r.c) : '' },
+    { k: 'x', l: '', f: r => canHire && r.c ? `<button class="sm danger" data-action="fireCoach" data-role="${r.role}">Let go</button>` : '' },
   ], rows, { sort: 'r', dir: 1 }) + `<div class="muted small" style="margin-top:6px">Click a coach for his card. Coordinators set the system and call the game; their specialists bend it, and the position coaches below develop the players.</div></div>`;
   html += assistantsHTML(t, mine, canHire);
-  if (state.phase === 'COACHES') {
+  if (state.phase === 'COACHES' && mine && state.car) html += searchHTML2(t);
+  else if (state.phase === 'COACHES' && false) {
     const role = ui.coachRole || 'HC';
     const pool = Object.values(state.coaches).filter(c => c.tid < 0 && c.role === role);
     html += `<div class="card" style="margin-top:16px"><h3>Available Coaches</h3><div class="subtabs">${COACH_ROLES.map(r => `<button class="${r === role ? 'on' : ''}" data-action="coachRole" data-role="${r}">${ROLE_SHORT[r]}</button>`).join('')}</div>` + table('pool' + role, [
@@ -1439,7 +1528,7 @@ function coachModal(cid) {
   if (callsFor) html += `<div class="callout small">The head coach calls the ${c.role === 'OC' ? 'offense' : 'defense'}: this coordinator contributes design and development.</div>`;
   const gd = KNOBS[c.role].filter(k => GAMEDAY_KNOBS.has(k)), dv = KNOBS[c.role].filter(k => !GAMEDAY_KNOBS.has(k));
   let left = `<div class="section-title" style="margin-top:0">Game Day</div>`;
-  left += gd.length ? gd.map(k => knobRow(c, k)).join('') : '<div class="muted small">No game-day duties.</div>';
+  left += !coachKnown(c) ? `<div class="muted small">You only know his reputation (${repLabel(c)}). Interview him to see what he is really good at and what he would want from you.</div>` : gd.length ? gd.map(k => knobRow(c, k)).join('') : '<div class="muted small">No game-day duties.</div>';
   const tend = tendencySummary(c);
   if (tend) left += `<div class="section-title">Tendencies</div><div class="small">${tend}</div>`;
   const lu = lastUnitLine(c);
@@ -2027,7 +2116,7 @@ function stepContinue() {
     case 'REG': simWeek(); break;
     case 'PLAYOFFS': simPlayoffRound(); break;
     case 'RECAP': startOffseason(); break;
-    case 'COACHES': leaveCoaches(); break;
+    case 'COACHES': advanceCarousel(); break;
     case 'RESIGN': leaveResign(); break;
     case 'FA': advanceFA(); break;
     case 'DRAFT': { const pk = currentPick(); if (pk && pk.owner === state.userTid) simDraftPick(); else simDraftToUser(); break; }
@@ -2174,7 +2263,15 @@ const actions = {
     simDraftToUser();
     save(); render();
   },
-  fireCoach: d => { if (confirm('Fire this coach?')) { fireCoach(state.userTid, d.role); save(); render(); } },
+  fireCoach: d => { const c = staffCoach(T(state.userTid), d.role); if (!c) return; const owed = owedIfFired(c); if (!confirm(`Let ${cname(c)} go?${owed ? ' He is owed ' + fmtMoney(owed) + ', which stays on this year\'s staff budget.' : ''}`)) return; const err = userFire(d.role); if (err) toast(err); save(); render(); },
+  searchTab: d => { ui.searchTab = d.tab; render(); },
+  searchRole: d => { ui.searchRole = d.role; ui.searchTab = SPEC_ROLES.includes(d.role) ? 'SPEC' : POS_ROLES.includes(d.role) ? 'POS' : d.role; render(); },
+  interview: d => { const err = interview(+d.cid); if (err) toast(err); else { save(); render(); actions.negOpen({ cid: d.cid, role: C(+d.cid).role }); } },
+  negOpen: d => { const c = C(+d.cid), role = d.role || c.role; state.car.iv[c.id] = state.car.iv[c.id] || (ROLE_TIER[role] >= 3 ? 1 : state.car.iv[c.id]); const dm = demandsOf(c, role); ui.neg = { cid: c.id, role, call: dm.call !== 'none' && !(callSide(c, role) && callHeldBy(T(state.userTid), callSide(c, role))), slots: {}, resign: !!dm.resign, sal: dm.sal, yrs: dm.yrs, gtd: dm.gtd }; ui.negOpen = false; negModal(); },
+  negAll: d => { const n = ui.neg, t = T(state.userTid); n.slots = {}; if (d.v === '1') for (const g of demandsOf(C(n.cid), n.role).slots) if (!(t.locks && t.locks[g.role] && C(t.locks[g.role]) && C(t.locks[g.role]).tid === t.id)) n.slots[g.role] = g.cid; negModal(); },
+  negOffer: () => { const n = ui.neg, err = userHire(n.cid, n); if (err) { toast(err); negModal(); return; } toast('He signed.'); ui.negOpen = false; closeModal(true); save(); render(); },
+  reqYes: d => { const err = answerRequest(+d.i, true); if (err) toast(err); save(); render(); },
+  reqNo: d => { answerRequest(+d.i, false); save(); render(); },
   coach: d => coachModal(+d.cid),
   film: d => filmModal(+d.gid, +d.pid),
   advGrp: d => { ui.advGrp = d.g; render(); },
@@ -2205,6 +2302,12 @@ const actions = {
 const changes = {
   rosterTeam: v => { ui.rosterTid = +v; },
   rosterView: v => { ui.rosterView = v; },
+  negCall: (v, el) => { ui.neg.call = el.checked; negModal(); },
+  negSlot: (v, el) => { if (el.checked) ui.neg.slots[el.dataset.role] = +el.dataset.g; else delete ui.neg.slots[el.dataset.role]; negModal(); },
+  negResign: (v, el) => { ui.neg.resign = el.checked; negModal(); },
+  negSal: v => { ui.neg.sal = Math.max(0.1, +v || 0.1); negModal(); },
+  negYrs: v => { ui.neg.yrs = +v; ui.neg.gtd = Math.min(ui.neg.gtd, ui.neg.yrs); negModal(); },
+  negGtd: v => { ui.neg.gtd = +v; negModal(); },
   preStarters: v => { state.prePlan.starters = v; save(); },
   xtSet: (v, el) => { setCrossTrain(+el.dataset.pid, v || null); save(); if (el.dataset.card) playerModal(+el.dataset.pid, true); render(); },
   udfaOffer: (v, el) => { const err = udfaOffer(+el.dataset.pid, v === '' ? null : +v); if (err) toast(err); save(); render(); },

@@ -121,12 +121,15 @@ function startOffseason() {
   ensureDraftClass(year);
   coachOffseason();
   state.phase = 'COACHES';
+  startCarousel();
 }
 function resignAsk(p) { return round2(marketValue(p) * (0.95 + rand() * 0.2)); }
 
 // ---------- coaches (see coaches.js) ----------
 function leaveCoaches() {
-  fillCoachVacancies();
+  state.car = null;
+  fillCoachVacancies(); // safety net: anything still open
+  ensureCoachContracts(); for (const t of state.teams) setCaller(t);
   systemChangeKnowledge(); // new coordinators mean new playbooks
   state.phase = 'RESIGN';
   for (const t of state.teams) if (isAI(t.id)) aiContractDecisions(t.id); // options, extensions, tags
@@ -158,6 +161,7 @@ function resignPlayer(pid, yrs) {
   return null;
 }
 function leaveResign() {
+  if (!isAI(state.userTid)) keepResignPromises(state.userTid); // your word to a coach
   autoOptions(state.userTid); // undecided options get the staff's recommendation
   if (!isAI(state.userTid)) releaseUserPS(); // practice squad players you did not sign to a futures deal move on
   for (const t of state.teams) {
