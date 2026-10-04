@@ -55,7 +55,7 @@ function chartSpotFor(tid, key0) {
 // the views of a depth chart: one per defensive package and per offensive personnel grouping your staff actually uses
 function dcViews(t, tab) {
   if (tab === 'off') { const pers = offTend(t).pers, tot = Object.values(pers).reduce((a, b) => a + b, 0) || 1;
-    const ks = Object.keys(PERSONNEL).filter(k => (pers[k] || 0) > 0 || k === '11' || k === 'JUMBO').sort((a, b) => (pers[b] || 0) - (pers[a] || 0));
+    const ks = Object.keys(PERSONNEL).sort((a, b) => (pers[b] || 0) - (pers[a] || 0));
     return ks.map(k => ({ id: k, label: k === 'JUMBO' ? 'Jumbo' : k + ' personnel', share: (pers[k] || 0) / tot })); }
   const dt = defTend(t), fr = (dt.pk && dt.pk.fr) || {}, v = [{ id: 'BASE', label: dt.front + ' base', share: dt.base }, { id: 'NICKEL', label: 'Nickel' }, { id: 'DIME', label: 'Dime' }, { id: 'GL', label: 'Goal line' }];
   if (fr.BIGN) v.splice(2, 0, { id: 'BIGN', label: 'Big nickel' });
@@ -104,12 +104,13 @@ function refreshChart(tid) {
     if (c.auto[sec.unit]) c.lists[key] = def[key] || [];
     else c.lists[key] = (c.lists[key] || []).filter(id => mine.has(id));
   }
-  for (const key in c.lists) if (key.includes(':')) { c.lists[key] = c.lists[key].filter(id => mine.has(id)); if (!c.lists[key].length) delete c.lists[key]; }
+  for (const key in c.lists) if (key.includes(':')) c.lists[key] = c.lists[key].filter(id => mine.has(id));
+  ensureViewLists(tid);
 }
 function setChart(tid, key, i, pid) {
   const c = ensureChart(tid), unit = CHART_UNIT(key);
-  if (c.auto[unit]) { c.auto[unit] = false; }
-  const list = (c.lists[key] || c.lists[baseKey(key)] || []).slice(); // a package order starts as a copy of the base order
+  if (c.auto[unit]) setChartAuto(tid, unit, false); // taking control copies the staff's chart into every grouping first
+  const list = (c.lists[key] || []).slice();
   if (pid) { const j = list.indexOf(pid); if (j >= 0) list.splice(j, 1); list.splice(Math.min(i, list.length), 0, pid); }
   else list.splice(i, 1);
   c.lists[key] = list.slice(0, Math.max(CHART_DEPTH[baseKey(key)] || 3, 3));
@@ -120,15 +121,73 @@ function chartBlocked(tid, key, pid) {
   if (!p || !['QB', 'K', 'P'].includes(k)) return null;
   return comfortOf(p, CHART_SPOT[k]) > 0 ? null : `${pname(p)} has never played ${SPOTS[CHART_SPOT[k]].l}. Tick "Show everyone" if you really want him there.`;
 }
+// ---- one chart per grouping ----
+// When you run a unit, every personnel grouping and every defensive package has its own order at every spot.
+// They start as a copy of the staff's chart at the moment you take control; after that nothing is filled in for you.
+const CHART_TABS = { off: 'off', def: 'def' };
+function viewSlots(t, tab) { const out = []; for (const v of dcViews(t, tab)) for (const b of dcLayout(t, tab, v.id)) out.push({ v, b, k: v.id + ':' + b.key }); return out; }
+function ensureViewLists(tid) {
+  const t = T(tid), c = t.dch; if (!c) return;
+  for (const tab of ['off', 'def']) {
+    if (c.auto[tab]) continue;
+    const mine = new Set(rosterOf(tid).map(p => p.id)), firsts = {};
+    c.vl = c.vl || {};
+    const seed = !c.vl[tab]; c.vl[tab] = true; // only the moment you take control copies the staff's chart; a look added later starts empty
+    for (const { v, b, k } of viewSlots(t, tab)) {
+      if (c.lists[k] !== undefined) continue;
+      if (!seed) { c.lists[k] = []; continue; }
+      // first time: copy what is there now (an older package order if you had one, else the base order)
+      c.lists[k] = (c.lists[b.key] || []).filter(id => mine.has(id)).slice(0, 3);
+      (firsts[v.id] = firsts[v.id] || []).push({ k, spot: b.spot });
+    }
+    // the copy never starts one man at two spots in the same look: he keeps the job he is more at home in
+    for (const vid in firsts) { const boxes = firsts[vid];
+      for (let pass = 0; pass < 4; pass++) { const at = {}; let clash = false;
+        for (const x of boxes) { const l = c.lists[x.k]; if (!l.length) continue; const o = at[l[0]];
+          if (!o) { at[l[0]] = x; continue; }
+          clash = true; const p = P(l[0]), lose = comfortOf(p, x.spot) > comfortOf(p, o.spot) ? o : x, ll = c.lists[lose.k];
+          if (ll.length > 1) ll.push(ll.shift()); if (lose === o) at[l[0]] = x; }
+        if (!clash) break; }
+      // still doubled up (a thin room): rebuild that spot from the best men who are not starting elsewhere in this look
+      const at = {}; for (const x of boxes) { const l = c.lists[x.k]; if (!l.length) continue; if (!at[l[0]]) { at[l[0]] = x; continue; }
+        const taken = new Set(boxes.map(y => c.lists[y.k][0]).filter(Boolean));
+        const alt = rosterOf(tid).filter(p => p.a && !onIR(p) && !taken.has(p.id) && SPOTS[p.spot].side === SPOTS[x.spot].side).sort((a, b2) => slotRating(b2, x.spot) - slotRating(a, x.spot)).slice(0, 2).map(p => p.id);
+        c.lists[x.k] = [...alt, ...l.filter(id => !alt.includes(id))].slice(0, 3); if (c.lists[x.k].length) at[c.lists[x.k][0]] = x; } }
+  }
+}
 function setChartAuto(tid, unit, on) {
   const c = ensureChart(tid);
-  c.auto[unit] = on;
-  if (on) refreshChart(tid);
+  if (on) { for (const k in c.lists) if (k.includes(':') && CHART_UNIT(k) === unit) delete c.lists[k]; if (c.vl) delete c.vl[unit]; c.auto[unit] = true; refreshChart(tid); }
+  else { c.auto[unit] = true; refreshChart(tid); if (c.vl) delete c.vl[unit]; c.auto[unit] = false; ensureViewLists(tid); } // start from the staff's chart as it stands
+}
+function copyView(tid, tab, from, to) {
+  const t = T(tid), c = ensureChart(tid);
+  if (c.auto[tab]) setChartAuto(tid, tab, false);
+  const src = dcLayout(t, tab, from);
+  for (const b of dcLayout(t, tab, to)) if (src.some(s => s.key === b.key)) c.lists[to + ':' + b.key] = (c.lists[from + ':' + b.key] || []).slice();
+}
+// what is wrong with the charts you run: empty spots, and one man listed first at two spots in the same look
+function chartProblems(tid) {
+  const t = T(tid), c = t.dch, out = [];
+  if (!c || isAI(tid)) return out;
+  for (const tab of ['off', 'def']) {
+    if (c.auto[tab]) continue;
+    const seen = {};
+    for (const { v, b, k } of viewSlots(t, tab)) {
+      const l = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === tid);
+      if (!l.length) { out.push({ tab, view: v.id, key: b.key, text: `${v.label}: nobody at ${b.label}` }); continue; }
+      const s = seen[v.id] || (seen[v.id] = {});
+      if (s[l[0].id]) out.push({ tab, view: v.id, key: b.key, text: `${v.label}: ${l[0].last} is first at both ${s[l[0].id]} and ${b.label}` });
+      else s[l[0].id] = b.label;
+    }
+  }
+  return out;
 }
 // spots a player is listed at (other than his primary): where he cross-trains in camp
 function userDepthSpots(p) {
   const c = T(p.tid).dch;
   if (!c) return [];
+  // (listed anywhere in any grouping counts as practice time at that spot)
   const out = new Set();
   for (const key in c.lists) if (!c.auto[CHART_UNIT(key)] && c.lists[key].includes(p.id)) { const s = chartSpotFor(p.tid, key); if (s !== p.spot && comfortOf(p, s) < 100) out.add(s); }
   return [...out];

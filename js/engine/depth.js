@@ -151,7 +151,7 @@ function fillSlots(g, s, slots, table, opts = {}) {
     const key = chart ? opts.keyOf(name, slot) : null;
     // a package can have its own order at a spot (your nickel linebacker need not be your base one); otherwise the base order
     let list = null;
-    if (key) { for (const pk of opts.pkgKeys || []) { const l = chart.lists[pk + ':' + key]; if (l && l.length) { list = l; break; } } if (!list && chart.lists[key] && chart.lists[key].length) list = chart.lists[key]; }
+    if (key) { for (const pk of opts.pkgKeys || []) { const l = chart.lists[pk + ':' + key]; if (l) { list = l; break; } } if (!list && chart.lists[key] && chart.lists[key].length) list = chart.lists[key]; }
     let rotHit = false;
     if (list) {
       const listed = list.map(id => T_.roster.find(p => p.id === id)).filter(Boolean).filter(p => !cands.some(c => c.p === p)).map(p => ({ p, r: slotRating(p, spot) }));
