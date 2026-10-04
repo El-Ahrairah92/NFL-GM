@@ -112,8 +112,8 @@ function updateCoachOvr(c) {
 function coachTier(v) { return v >= 85 ? 'Elite' : v >= 70 ? 'Strong' : v >= 50 ? 'Average' : 'Weak'; }
 function schemeLabel(c) {
   if (!c) return '';
-  if (c.role === 'OC' || (c.role === 'HC' && c.t.caller === 'O')) return OFF_ARCH[c.arch] ? OFF_ARCH[c.arch].l : '';
-  if (c.role === 'DC' || (c.role === 'HC' && c.t.caller === 'D')) return DEF_ARCH[c.arch] ? DEF_ARCH[c.arch].l : '';
+  if (c.role === 'OC' || (c.role === 'HC' && c.t.caller === 'O')) { ensureOffPk(c); return offSheetLabel(c.role === 'HC' ? c.ct : c.t); }
+  if (c.role === 'DC' || (c.role === 'HC' && c.t.caller === 'D')) { ensureDefPk(c); return defSheetLabel((c.role === 'HC' ? c.ct : c.t).front, c.pk); }
   return '';
 }
 
@@ -460,10 +460,15 @@ function blendedTend(t, side) {
   if (hit && hit.ver === TEND_VER && hit.st === state) return hit.t;
   const caller = side === 'O' ? offCaller(t) : defCaller(t), coord = C(side === 'O' ? t.oc : t.dc);
   let tn;
+  [caller, coord, ...SPEC_ROLES.map(r => asst(t, r))].forEach(c => { ensureOffPk(c); });
   if (!caller) tn = Object.assign({}, side === 'O' ? OFF_ARCH.WCO.t : DEF_ARCH.C3.t);
   else if (caller.role === 'HC') { tn = Object.assign({}, caller.ct); if (coord && coord.t) for (const k in tn) if (typeof tn[k] === 'number' && typeof coord.t[k] === 'number') tn[k] = round2(tn[k] * 0.7 + coord.t[k] * 0.3); }
   else tn = Object.assign({}, caller.t);
-  for (const r of SPEC_ROLES) { if (ASST_SIDE[r] !== side || r === 'DPC') continue; const sp = asst(t, r); if (sp) applyLean(tn, r, sp.lean, leanStrength(t, sp)); }
+  if (side === 'O') { // the pass game and run game coordinators install their packages on top of the caller's sheet
+    tn.pers = Object.assign({}, tn.pers); ensureOffSheet(tn, caller ? caller.arch : 'WCO'); tn.by = {};
+    for (const r of ['PGC', 'RGC']) { const sp = asst(t, r); if (!sp || !sp.pks) continue; const b = 0.06 + sp.exp / 1000; for (const id of sp.pks) { if (!OFF_PK[id]) continue; const had = OFF_PK[id][3](tn); OFF_PK[id][2](tn, b); if (!had && OFF_PK[id][3](tn)) tn.by[id] = sp.id; else if (!had) { OFF_PK[id][2](tn, b); if (OFF_PK[id][3](tn)) tn.by[id] = sp.id; } } }
+    for (const k in tn) if (typeof tn[k] === 'number') tn[k] = round2(clamp(tn[k], 0, 0.95));
+  } else { const sp = asst(t, 'DRC'); if (sp) applyLean(tn, 'DRC', sp.lean, leanStrength(t, sp)); }
   if (side === 'D') { const pk = teamDefPk(t); tn.pk = pk; tn.man = pkShare(pk.sh, MAN_SHELLS); tn.high = pkShare(pk.sh, HIGH_SHELLS); tn.blitz = pkShare(pk.pr, ['BLITZ', 'FZ']); tn.sim = pk.pr.SIM || 0; tn.stunt = pk.stunt; }
   TEND_CACHE[key] = { ver: TEND_VER, st: state, t: tn };
   return tn;
@@ -473,7 +478,8 @@ function tendInfluences(t, side) {
   const out = [], caller = side === 'O' ? offCaller(t) : defCaller(t), coord = C(side === 'O' ? t.oc : t.dc);
   if (caller && caller.role === 'HC' && coord) out.push(`${cname(coord)} (coordinator) shapes about 30% of the head coach's call sheet`);
   if (side === 'D') { const sp = asst(t, 'DPC'); if (sp) { ensureDefPk(sp); out.push(`${cname(sp)} (DPC) installed: ${sp.pks.map(id => PK_NAME[id]).join(', ') || 'nothing of his own'}`); } }
-  for (const r of SPEC_ROLES) { if (ASST_SIDE[r] !== side || r === 'DPC') continue; const sp = asst(t, r); if (!sp) continue; const s = leanStrength(t, sp), L = LEANS[r][sp.lean];
+  if (side === 'O') for (const r of ['PGC', 'RGC']) { const sp = asst(t, r); if (sp) { ensureOffPk(sp); out.push(`${cname(sp)} (${r}) installed: ${sp.pks.map(id => PK_NAME[id]).join(', ')}`); } }
+  for (const r of SPEC_ROLES) { if (ASST_SIDE[r] !== side || r !== 'DRC') continue; const sp = asst(t, r); if (!sp) continue; const s = leanStrength(t, sp), L = LEANS[r][sp.lean];
     out.push(`${cname(sp)} (${r}): ${Object.entries(L[1]).map(([k, v]) => `${{ deep: 'deep shots', pa: 'play-action', quick: 'quick game', boot: 'bootlegs', screen: 'screens', zone: 'zone runs', qbRun: 'QB runs', rpo: 'RPOs', blitz: 'blitzes', sim: 'simulated pressure', man: 'man coverage', high: 'two-high shells', stunt: 'stunts', base: 'base personnel' }[k] || k} ${v > 0 ? '+' : '−'}${Math.round(Math.abs(v) * s * 100)}%`).join(', ')}`); }
   return out;
 }
@@ -482,7 +488,7 @@ function promoteToSpecialist(c) {
   const role = SPEC_OVER[c.role];
   c.role = role; c.tier = 3; c.exp = Math.round(clamp(gauss((c.dev + c.disc) / 2, 8), 20, 95));
   if (!LEANS[role][c.lean]) c.lean = pick(Object.keys(LEANS[role]));
-  delete c.pks; ensureDefPk(c);
+  delete c.pks; ensureDefPk(c); ensureOffPk(c);
   c.yrs = 0; updateCoachOvr(c); TEND_VER++;
   return c;
 }
@@ -497,6 +503,7 @@ function promoteToCoordinator(c) {
   const boost = { PGC: ['passD'], RGC: ['runD'], DPC: ['covD', 'presD'], DRC: ['frontD'] }[from] || [];
   for (const k of boost) c.k[k] = Math.round(clamp(c.k[k] + 7, 15, 97));
   if (role === 'DC') { c.pk = genDefPk(c.arch); for (const id of c.pks || []) { if (SHELLS[id]) c.pk.sh[id] = (c.pk.sh[id] || 0) + 0.15; else if (PRESSURES[id]) c.pk.pr[id] = (c.pk.pr[id] || 0) + 0.12; else if (id === 'DISG') c.pk.disg = Math.min(0.6, c.pk.disg + 0.25); else if (id === 'STUNT') c.pk.stunt = Math.min(0.5, c.pk.stunt + 0.1); } normShares(c.pk.sh); normShares(c.pk.pr); }
+  if (role === 'OC') { ensureOffSheet(c.t, c.arch); c.t.pers = Object.assign({}, c.t.pers); for (const id of c.pks || []) if (OFF_PK[id]) OFF_PK[id][2](c.t, 0.15); for (const k in c.t) if (typeof c.t[k] === 'number') c.t[k] = round2(clamp(c.t[k], 0, 0.95)); }
   delete c.pks;
   c.role = role; c.tier = 2; delete c.exp; delete c.dev; delete c.disc; c.promoted = state.season;
   updateCoachOvr(c); TEND_VER++;
@@ -832,11 +839,13 @@ function normShares(o) { const s = Object.values(o).reduce((a, b) => a + b, 0) |
 function genDefPk(arch) {
   const T_ = DEF_PK_TEMPLATE[arch] || DEF_PK_TEMPLATE.C3, jit = o => { const r = {}; for (const k in o) r[k] = o[k] * Math.exp(gauss(0, 0.25)); return r; };
   const top = (o, n, keep) => { const e = Object.entries(o).sort((a, b) => b[1] - a[1]); const r = {}; e.forEach(([k, v], i) => { if (i < n || k === keep) r[k] = v; }); return normShares(r); };
-  return { sh: top(jit(T_.sh), 4), pr: top(jit(T_.pr), 3, 'FOUR'), stunt: round2(clamp((DEF_ARCH[arch] ? DEF_ARCH[arch].t.stunt : 0.15) * Math.exp(gauss(0, 0.2)), 0, 0.5)), disg: round2(T_.disg ? clamp(T_.disg * Math.exp(gauss(0, 0.2)), 0, 0.6) : rand() < 0.15 ? 0.2 : 0) };
+  const odd = DEF_ARCH[arch] && ['3-4', 'Tite'].includes(DEF_ARCH[arch].t.front);
+  const fr = { UNDER: !odd && rand() < 0.5 ? round2(0.1 + rand() * 0.25) : 0, BEAR: rand() < (odd ? 0.4 : 0.3) ? round2(0.05 + rand() * 0.14) : 0, BIGN: rand() < 0.35 ? round2(0.12 + rand() * 0.28) : 0 };
+  return { fr, sh: top(jit(T_.sh), 4), pr: top(jit(T_.pr), 3, 'FOUR'), stunt: round2(clamp((DEF_ARCH[arch] ? DEF_ARCH[arch].t.stunt : 0.15) * Math.exp(gauss(0, 0.2)), 0, 0.5)), disg: round2(T_.disg ? clamp(T_.disg * Math.exp(gauss(0, 0.2)), 0, 0.6) : rand() < 0.15 ? 0.2 : 0) };
 }
 // a pass defense coordinator's own packages, by what he believes in
-const SPEC_PK_POOL = { PRESSURE: ['FZ', 'BLITZ', 'SIM', 'C0', 'STUNT'], MAN: ['C1', 'C2M', 'C0', 'BLITZ'], SHELL: ['T2', 'C6', 'C4', 'C2', 'DISG'], PENETRATE: ['STUNT'], TWOGAP: [] };
-function genSpecPk(c) { const pool = (SPEC_PK_POOL[c.lean] || []).slice(); shuffle(pool); return pool.slice(0, c.role === 'DPC' ? 3 : 1); }
+const SPEC_PK_POOL = { PRESSURE: ['FZ', 'BLITZ', 'SIM', 'C0', 'STUNT'], MAN: ['C1', 'C2M', 'C0', 'BLITZ'], SHELL: ['T2', 'C6', 'C4', 'C2', 'DISG', 'BIGN'], PENETRATE: ['STUNT', 'UNDER'], TWOGAP: ['BEAR', 'BIGN'] };
+function genSpecPk(c) { const pool = (SPEC_PK_POOL[c.lean] || []).slice(); shuffle(pool); return pool.slice(0, c.role === 'DPC' ? 3 : 2); }
 function ensureDefPk(c) {
   if (!c) return;
   if ((c.role === 'DC' || (c.role === 'HC' && c.t && c.t.caller === 'D')) && !c.pk) c.pk = genDefPk(c.arch);
@@ -848,12 +857,114 @@ function teamDefPk(t) {
   const caller = defCaller(t), coord = C(t.dc);
   [caller, coord, asst(t, 'DPC'), asst(t, 'DRC')].forEach(ensureDefPk);
   const src = caller && caller.pk ? caller.pk : genDefPk('C3');
-  const pk = { sh: Object.assign({}, src.sh), pr: Object.assign({}, src.pr), stunt: src.stunt, disg: src.disg, by: {} };
+  const pk = { sh: Object.assign({}, src.sh), pr: Object.assign({}, src.pr), fr: Object.assign({ UNDER: 0, BEAR: 0, BIGN: 0 }, src.fr || {}), stunt: src.stunt, disg: src.disg, by: {} };
   if (caller && caller.role === 'HC' && coord && coord.pk) { for (const cat of ['sh', 'pr']) { for (const k in pk[cat]) pk[cat][k] *= 0.7; for (const k in coord.pk[cat]) pk[cat][k] = (pk[cat][k] || 0) + coord.pk[cat][k] * 0.3; } pk.stunt = pk.stunt * 0.7 + coord.pk.stunt * 0.3; pk.disg = pk.disg * 0.7 + coord.pk.disg * 0.3; }
   for (const r of ['DPC', 'DRC']) { const sp = asst(t, r); if (!sp || !sp.pks) continue; const b = 0.06 + sp.exp / 1000;
-    for (const id of sp.pks) { if (SHELLS[id]) pk.sh[id] = (pk.sh[id] || 0) + b; else if (PRESSURES[id]) pk.pr[id] = (pk.pr[id] || 0) + b; else if (id === 'STUNT') pk.stunt = Math.min(0.6, pk.stunt + b); else if (id === 'DISG') pk.disg = Math.min(0.7, pk.disg + b * 2); pk.by[id] = sp.id; } }
+    for (const id of sp.pks) { if (SHELLS[id]) pk.sh[id] = (pk.sh[id] || 0) + b; else if (PRESSURES[id]) pk.pr[id] = (pk.pr[id] || 0) + b; else if (id === 'STUNT') pk.stunt = Math.min(0.6, pk.stunt + b); else if (id === 'DISG') pk.disg = Math.min(0.7, pk.disg + b * 2); else if (pk.fr[id] !== undefined) pk.fr[id] = round2(Math.min(0.5, pk.fr[id] + b * (id === 'BEAR' ? 1 : 2))); pk.by[id] = sp.id; } }
   normShares(pk.sh); normShares(pk.pr); pk.stunt = round2(pk.stunt); pk.disg = round2(pk.disg);
   return pk;
 }
 function pkShare(o, ids) { return round2(ids.reduce((s, k) => s + (o[k] || 0), 0)); }
 function pkList(o, names) { return Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${names[k]} ${Math.round(v * 100)}%`).join(' · '); }
+
+// =====================================================================
+//  OFFENSIVE PACKAGES · FRONTS · WHAT A PLAYBOOK IS CALLED
+//  The offense's call sheet is a set of numbers (how often it goes quick, deep, play-action, zone, ...). A package is
+//  a named piece of that sheet. Coordinators carry a core; the pass game and run game coordinators install three
+//  each. New looks (trips, bunch, tight splits, counter, duo, option routes, max protect, no-huddle) only exist on a
+//  sheet if somebody on the staff brought them.
+// =====================================================================
+const OFF_PK = {
+  QUICK: ['Quick game', 'Pass', (t, b) => { t.quick += b * 0.8; }, t => t.quick >= 0.3, t => t.quick],
+  SHOT: ['Shot plays', 'Pass', (t, b) => { t.deep += b * 0.6; }, t => t.deep >= 0.17, t => t.deep],
+  PA: ['Play-action', 'Pass', (t, b) => { t.pa += b * 0.8; }, t => t.pa >= 0.17, t => t.pa],
+  BOOT: ['Bootlegs', 'Pass', (t, b) => { t.boot += b * 0.5; }, t => t.boot >= 0.07, t => t.boot],
+  RPO: ['Run-pass options', 'Pass', (t, b) => { t.rpo += b * 0.7; }, t => t.rpo >= 0.1, t => t.rpo],
+  SCREEN: ['Screen game', 'Pass', (t, b) => { t.screen += b * 0.5; }, t => t.screen >= 0.09, t => t.screen],
+  OPTRT: ['Option routes', 'Pass', (t, b) => { t.optrt += b * 2.2; }, t => t.optrt >= 0.08, t => t.optrt],
+  MAXP: ['Max protect', 'Pass', (t, b) => { t.maxp += b * 2; }, t => t.maxp >= 0.1, t => t.maxp],
+  IZ: ['Inside zone', 'Run', (t, b) => { t.zone += b; t.wz -= b; }, t => t.zone >= 0.45 && t.wz < 0.5, t => t.zone * (1 - t.wz)],
+  WZ: ['Wide zone', 'Run', (t, b) => { t.zone += b; t.wz += b * 2; }, t => t.zone >= 0.45 && t.wz >= 0.5, t => t.zone * t.wz],
+  POWER: ['Power', 'Run', (t, b) => { t.zone -= b; }, t => t.zone < 0.55, t => (1 - t.zone) * Math.max(0, 1 - t.counter - t.duo)],
+  COUNTER: ['Counter', 'Run', (t, b) => { t.counter += b * 2.5; t.zone -= b * 0.4; }, t => t.counter >= 0.1, t => (1 - t.zone) * t.counter],
+  DUO: ['Duo', 'Run', (t, b) => { t.duo += b * 2.5; t.zone -= b * 0.4; }, t => t.duo >= 0.1, t => (1 - t.zone) * t.duo],
+  OPTION: ['Zone read', 'Run', (t, b) => { t.qbRun += b * 0.6; t.rpo += b * 0.3; }, t => t.qbRun >= 0.08, t => t.qbRun],
+  TRIPS: ['Trips', 'Formation', (t, b) => { t.trips += b * 3; }, t => t.trips >= 0.1, t => t.trips],
+  BUNCH: ['Bunch and stack', 'Formation', (t, b) => { t.bunch += b * 3; }, t => t.bunch >= 0.1, t => t.bunch],
+  TIGHT: ['Tight splits', 'Formation', (t, b) => { t.tight += b * 3; }, t => t.tight >= 0.1, t => t.tight],
+  EMPTY: ['Empty', 'Formation', (t, b) => { t.empty += b * 1.2; }, t => t.empty >= 0.05, t => t.empty],
+  PISTOL: ['Pistol', 'Formation', (t, b) => { t.pistol += b * 3; }, t => t.pistol >= 0.1 || t.rpo + t.qbRun > 0.25, t => Math.max(t.pistol, t.rpo + t.qbRun > 0.25 ? 0.35 : 0)],
+  FOURWIDE: ['Four-wide', 'Formation', (t, b) => { t.pers[10] = (t.pers[10] || 0) + b * 100; }, t => (t.pers[10] || 0) >= 12, t => (t.pers[10] || 0) / 100],
+  TWOTE: ['Two tight ends', 'Formation', (t, b) => { t.pers[12] = (t.pers[12] || 0) + b * 120; t.uc += b; }, t => (t.pers[12] || 0) >= 26, t => (t.pers[12] || 0) / 100],
+  HEAVY: ['Heavy sets', 'Formation', (t, b) => { t.pers[13] = (t.pers[13] || 0) + b * 60; t.pers[22] = (t.pers[22] || 0) + b * 40; }, t => (t.pers[13] || 0) + (t.pers[22] || 0) >= 14, t => ((t.pers[13] || 0) + (t.pers[22] || 0)) / 100],
+  TWOBACK: ['Two-back', 'Formation', (t, b) => { t.pers[21] = (t.pers[21] || 0) + b * 100; }, t => (t.pers[21] || 0) >= 10, t => (t.pers[21] || 0) / 100],
+  MOTION: ['Pre-snap motion', 'Tempo', (t, b) => { t.motion += b * 2; }, t => t.motion >= 0.45, t => t.motion],
+  NOHUD: ['No-huddle', 'Tempo', (t, b) => { t.nohud += b * 3; }, t => t.nohud >= 0.1, t => t.nohud],
+};
+for (const k in OFF_PK) PK_NAME[k] = OFF_PK[k][0];
+Object.assign(PK_NAME, { UNDER: 'Under front', BEAR: 'Bear front', BIGN: 'Big nickel' });
+const OFF_NEW_FIELDS = ['wz', 'counter', 'duo', 'trips', 'bunch', 'tight', 'optrt', 'maxp', 'nohud', 'empty', 'pistol'];
+// what each school installs of the newer looks (a coach may not carry all of them)
+const OFF_NEW_TEMPLATE = {
+  WZ: { wz: 0.72, tight: 0.3, duo: 0.1, counter: 0.05 }, SPREAD: { wz: 0.3, trips: 0.3, nohud: 0.25, bunch: 0.1, empty: 0.08, optrt: 0.06 },
+  POWER: { wz: 0.2, counter: 0.3, duo: 0.3, tight: 0.15, maxp: 0.2 }, WCO: { wz: 0.35, bunch: 0.25, optrt: 0.16, trips: 0.15, counter: 0.1 },
+  VERT: { wz: 0.3, maxp: 0.3, trips: 0.25, duo: 0.1, counter: 0.1 }, RPO: { wz: 0.4, trips: 0.2, nohud: 0.2, counter: 0.15, bunch: 0.1, pistol: 0.3 },
+};
+function ensureOffSheet(tn, arch) { // fill in the newer fields on a play-caller's sheet (older saves, new coaches)
+  if (!tn || tn.wz !== undefined) return tn;
+  const T_ = OFF_NEW_TEMPLATE[arch] || {};
+  for (const k of OFF_NEW_FIELDS) { let v = T_[k] || 0; if (k !== 'wz') { if (v && rand() < 0.3) v = 0; else if (!v && rand() < 0.08) v = 0.15; } tn[k] = round2(clamp(v * Math.exp(gauss(0, 0.25)), 0, 0.9)); }
+  return tn;
+}
+const OFF_SPEC_POOL = { VERT: ['SHOT', 'PA', 'MAXP', 'TRIPS'], TIMING: ['QUICK', 'OPTRT', 'BUNCH', 'MOTION'], PA: ['PA', 'BOOT', 'TIGHT', 'TWOTE'], QUICK: ['QUICK', 'SCREEN', 'RPO', 'TRIPS', 'NOHUD', 'EMPTY'],
+  ZONE: ['WZ', 'IZ', 'TIGHT', 'BOOT'], GAP: ['POWER', 'COUNTER', 'DUO', 'HEAVY', 'TWOBACK'], OPTION: ['OPTION', 'RPO', 'PISTOL', 'COUNTER'] };
+function ensureOffPk(c) {
+  if (!c) return;
+  if (c.role === 'OC') ensureOffSheet(c.t, c.arch);
+  if (c.role === 'HC' && c.t && c.t.caller === 'O') ensureOffSheet(c.ct, c.arch);
+  if ((c.role === 'PGC' || c.role === 'RGC') && !c.pks) { const pool = (OFF_SPEC_POOL[c.lean] || []).slice(); shuffle(pool); c.pks = pool.slice(0, 3); }
+}
+function offInstalled(tn) { return Object.keys(OFF_PK).filter(k => OFF_PK[k][3](tn)); }
+function offPkHTML(tn) { // grouped, with who brought what
+  const by = tn.by || {}, out = [];
+  for (const cat of ['Formation', 'Run', 'Pass', 'Tempo']) { const ids = offInstalled(tn).filter(k => OFF_PK[k][1] === cat).sort((a, b) => OFF_PK[b][4](tn) - OFF_PK[a][4](tn));
+    if (ids.length) out.push(`<b>${cat === 'Formation' ? 'Formations' : cat === 'Tempo' ? 'Tempo' : cat + ' concepts'}:</b> ${ids.map(k => OFF_PK[k][0] + (by[k] && C(by[k]) ? ` <span class="muted">(${C(by[k]).last})</span>` : '')).join(' · ')}`); }
+  return out.join('<br>');
+}
+// ---- what a sheet is called: read off what is on it ----
+function offSheetLabel(t) {
+  if (!t) return '';
+  const p10 = (t.pers && t.pers[10]) || 0;
+  if (t.qbRun >= 0.12 && t.rpo >= 0.22) return 'RPO / QB Run';
+  if ((t.optrt || 0) >= 0.2 && t.quick >= 0.3) return 'Erhardt-Perkins';
+  if (t.pass >= 0.6 && p10 >= 10 && t.quick >= 0.36) return 'Air Raid';
+  if (t.zone >= 0.66 && (t.wz || 0) >= 0.5 && t.pa + t.boot >= 0.32) return 'Shanahan Wide Zone';
+  if (t.zone <= 0.4) return 'Power / Gap';
+  if (t.deep >= 0.24) return 'Air Coryell';
+  if (t.quick >= 0.36) return 'West Coast';
+  if (t.pass >= 0.58) return 'Spread';
+  return 'Pro-Style';
+}
+function defSheetLabel(front, pk) {
+  if (!pk) return '';
+  const s = k => pk.sh[k] || 0, man = pkShare(pk.sh, MAN_SHELLS), high = pkShare(pk.sh, HIGH_SHELLS), blitz = (pk.pr.BLITZ || 0) + (pk.pr.FZ || 0), odd = front === '3-4' || front === 'Tite';
+  if (man >= 0.48 && blitz >= 0.3) return 'Man-Pressure';
+  if ((pk.pr.FZ || 0) >= 0.15 && odd) return '3-4 Zone Blitz';
+  if (s('T2') + s('C2') >= 0.4) return 'Tampa 2';
+  if (s('C3') >= 0.42) return 'Cover 3';
+  if (s('C4') + s('C6') >= 0.4) return high >= 0.55 && (pk.pr.SIM || 0) >= 0.12 ? 'Fangio Two-High' : 'Quarters / Match';
+  if (front === 'Wide-9') return 'Wide-9 Attack';
+  if (odd) return '3-4 Two-Gap';
+  if (high >= 0.55) return 'Two-High';
+  return 'Multiple';
+}
+function teamSchemeLabel(t, side) { const tn = blendedTend(t, side); return side === 'O' ? offSheetLabel(tn) : defSheetLabel(tn.front, tn.pk); }
+// ---- how much of a playbook carries over ----
+function pkVector(t, side) {
+  const tn = blendedTend(t, side), v = {};
+  if (side === 'O') for (const k of offInstalled(tn)) v[k] = 1;
+  else { for (const k in tn.pk.sh) v[k] = tn.pk.sh[k] * 4; for (const k in tn.pk.pr) v[k] = tn.pk.pr[k] * 3; v['F_' + tn.front] = 2; if (tn.pk.disg) v.DISG = 1; for (const k of ['UNDER', 'BEAR', 'BIGN']) if (tn.pk.fr && tn.pk.fr[k]) v[k] = 0.5; }
+  return v;
+}
+function pkOverlap(a, b) { let mn = 0, mx = 0; for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) { mn += Math.min(a[k] || 0, b[k] || 0); mx += Math.max(a[k] || 0, b[k] || 0); } return mx ? mn / mx : 1; }
+function snapPlaybooks() { for (const t of state.teams) t.pkSnap = { O: pkVector(t, 'O'), D: pkVector(t, 'D') }; }

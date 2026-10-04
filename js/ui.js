@@ -293,7 +293,7 @@ function homeHTML() {
     </div>
     <div class="kv" style="margin-top:12px">
       ${COACH_ROLES.map(r => `<div>${ROLE_SHORT[r] === 'HC' ? 'Head Coach' : ROLE_SHORT[r]}</div><div>${coachLink(C(t[r.toLowerCase()]))}</div>`).join('')}
-      <div>Schemes</div><div class="small">${esc(OFF_ARCH[offArch(t)] ? OFF_ARCH[offArch(t)].l : '—')} · ${esc(DEF_ARCH[defArch(t)] ? DEF_ARCH[defArch(t)].l : '—')}</div>
+      <div>Schemes</div><div class="small">${esc(teamSchemeLabel(t, 'O') || '—')} · ${esc(teamSchemeLabel(t, 'D') ? teamSchemeLabel(t, 'D') : '—')}</div>
       <div>Team Rating</div><div>Off ${rat(teamOvr(u, 'off'))} · Def ${rat(teamOvr(u, 'def'))}</div>
     </div></div>`;
   // games card
@@ -644,12 +644,12 @@ function playbookHTML() {
   const src = t.advS && t.advS.plays ? { a: t.advS, lbl: `${state.season} season to date` } : t.advPrev && t.advPrev.plays ? { a: t.advPrev, lbl: `${t.advPrev.season} season` } : null;
   // ---- identity ----
   const persTot = Object.values(ot.pers || {}).reduce((s, v) => s + v, 0) || 1;
-  html += `<div class="grid g2"><div class="card"><h3>Offense · ${esc(OFF_ARCH[offArch(t)] ? OFF_ARCH[offArch(t)].l : '—')}</h3><div class="small muted" style="margin-bottom:8px">Play caller: ${coachNameLink(oc)} ${oc ? `(${ROLE_SHORT[oc.role]})` : ''}</div>
+  html += `<div class="grid g2"><div class="card"><h3>Offense · ${esc(teamSchemeLabel(t, 'O') || '—')}</h3><div class="small" style="margin-bottom:8px">${offPkHTML(offTend(t))}<br><span class="muted">This is what your staff has installed. Names in brackets are packages your specialists brought. The name of the offense is read off the sheet.</span></div><div class="small muted" style="margin-bottom:8px">Play caller: ${coachNameLink(oc)} ${oc ? `(${ROLE_SHORT[oc.role]})` : ''}</div>
     ${tendBar('Pass rate', ot.pass, 'Share of dropbacks on neutral downs')}${tendBar('Zone runs', ot.zone, 'Zone vs gap/power run scheme')}${tendBar('Under center', ot.uc)}${tendBar('Quick game', ot.quick)}${tendBar('Deep shots', ot.deep)}
     ${tendBar('Screens', ot.screen)}${tendBar('Play-action', ot.pa)}${tendBar('Motion', ot.motion)}${tendBar('RPO', ot.rpo)}${tendBar('Bootlegs', ot.boot)}${tendBar('QB runs', ot.qbRun)}${tendBar('Lead back share', ot.rb1, 'How much the No. 1 back carries it')}
     <div class="section-title">Personnel mix</div><div class="row small">${Object.entries(ot.pers || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="pill">${k} · ${Math.round(100 * v / persTot)}%</span>`).join(' ')}</div></div>
-    <div class="card"><h3>Defense · ${esc(DEF_ARCH[defArch(t)] ? DEF_ARCH[defArch(t)].l : '—')}</h3><div class="small muted" style="margin-bottom:8px">Play caller: ${coachNameLink(dc)} ${dc ? `(${ROLE_SHORT[dc.role]})` : ''} · ${esc(dt.front || '')} front</div>
-    ${dt.pk ? `<div class="small" style="margin-bottom:8px"><b>Coverage packages:</b> ${Object.entries(dt.pk.sh).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${SHELLS[k]} ${Math.round(v * 100)}%${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join(' · ')}<br><b>Pressure packages:</b> ${Object.entries(dt.pk.pr).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${PRESSURES[k]} ${Math.round(v * 100)}%${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join(' · ')}${dt.pk.disg ? `<br>Disguises the coverage on ${Math.round(dt.pk.disg * 100)}% of snaps${dt.pk.by.DISG && C(dt.pk.by.DISG) ? ` <span class="muted">(${esc(C(dt.pk.by.DISG).last)})</span>` : ''}` : ''}<br><span class="muted">Names in brackets are packages your specialists installed. The bars below are read off this sheet.</span></div>` : ''}
+    <div class="card"><h3>Defense · ${esc(teamSchemeLabel(t, 'D') || '—')}</h3><div class="small muted" style="margin-bottom:8px">Play caller: ${coachNameLink(dc)} ${dc ? `(${ROLE_SHORT[dc.role]})` : ''} · ${esc(dt.front || '')} front</div>
+    ${dt.pk ? `<div class="small" style="margin-bottom:8px"><b>Coverage packages:</b> ${Object.entries(dt.pk.sh).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${SHELLS[k]} ${Math.round(v * 100)}%${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join(' · ')}<br><b>Pressure packages:</b> ${Object.entries(dt.pk.pr).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${PRESSURES[k]} ${Math.round(v * 100)}%${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join(' · ')}${dt.pk.fr && (dt.pk.fr.UNDER || dt.pk.fr.BEAR || dt.pk.fr.BIGN) ? `<br><b>Front and sub packages:</b> ${dt.front} base${['UNDER', 'BEAR', 'BIGN'].filter(k => dt.pk.fr[k]).map(k => ` · ${PK_NAME[k]}${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join('')}` : ''}${dt.pk.disg ? `<br>Disguises the coverage on ${Math.round(dt.pk.disg * 100)}% of snaps${dt.pk.by.DISG && C(dt.pk.by.DISG) ? ` <span class="muted">(${esc(C(dt.pk.by.DISG).last)})</span>` : ''}` : ''}<br><span class="muted">Names in brackets are packages your specialists installed. The bars below are read off this sheet.</span></div>` : ''}
     ${tendBar('Man coverage', dt.man)}${tendBar('Two-high shells', dt.high)}${tendBar('Blitz', dt.blitz)}${tendBar('Simulated pressure', dt.sim)}${tendBar('Stunts', dt.stunt)}${tendBar('Base personnel', dt.base, 'vs. nickel/dime')}</div></div>`;
   html += formationViewerHTML(tid);
   // ---- self-scout ----
@@ -1290,7 +1290,7 @@ function tendencySummary(c) {
     const ck = c.t.clock >= 0.62 ? 'grinds clock with a lead' : c.t.clock <= 0.38 ? 'keeps attacking with a lead' : 'standard clock management';
     return `${a} on 4th down · ${ck}${c.t.caller ? ` · <b>calls the ${c.t.caller === 'O' ? 'offense' : 'defense'}</b>` : ''}`;
   }
-  if (c.role === 'OC') { const t = c.t; return `${pctS(t.pass)} pass · zone ${pctS(t.zone)} · deep ${pctS(t.deep)} · PA ${pctS(t.pa)} · motion ${pctS(t.motion)} · RPO ${pctS(t.rpo)} · QB runs ${pctS(t.qbRun)} · RB1 ${pctS(t.rb1)} of carries`; }
+  if (c.role === 'OC') { ensureOffPk(c); const t = c.t; return `<div style="margin-bottom:6px">${offPkHTML(t)}</div>${pctS(t.pass)} pass · zone ${pctS(t.zone)} · deep ${pctS(t.deep)} · PA ${pctS(t.pa)} · motion ${pctS(t.motion)} · RPO ${pctS(t.rpo)} · QB runs ${pctS(t.qbRun)} · RB1 ${pctS(t.rb1)} of carries`; }
   if (c.role === 'DC' && c.pk) { const t = c.t; return `${t.front} front · base personnel ${pctS(t.base)}<div style="margin-top:6px"><b>Coverage packages:</b> ${pkList(c.pk.sh, SHELLS)}</div><div style="margin-top:4px"><b>Pressure packages:</b> ${pkList(c.pk.pr, PRESSURES)}</div><div style="margin-top:4px">Stunts ${pctS(c.pk.stunt)}${c.pk.disg ? ` · disguises the coverage ${pctS(c.pk.disg)} of the time` : ' · shows what he is playing'}</div>`; }
   if (c.role === 'DC') { const t = c.t; return `${t.front} front · man ${pctS(t.man)} · two-high ${pctS(t.high)} · blitz ${pctS(t.blitz)} · sim pressure ${pctS(t.sim)} · stunts ${pctS(t.stunt)} · base pkg ${pctS(t.base)}`; }
   return '';
@@ -1345,7 +1345,7 @@ function assistantsHTML(t, mine, canHire) {
         { k: 'n', l: 'Coach', f: r => coachNameLink(r.c) },
         { k: 'a', l: 'Age', f: r => r.c ? r.c.age : '', num: 1 },
         { k: 'l', l: 'Leans', f: r => r.c ? `<span class="pill on">${esc(leanLabel(r.c))}</span>` : '' },
-        { k: 'p', l: 'Brings', f: r => { if (!r.c) return ''; ensureDefPk(r.c); return r.c.pks && r.c.pks.length ? `<span class="small">${r.c.pks.map(id => PK_NAME[id]).join(', ')}</span>` : '<span class="small muted">—</span>'; } },
+        { k: 'p', l: 'Brings', f: r => { if (!r.c) return ''; ensureDefPk(r.c); ensureOffPk(r.c); return r.c.pks && r.c.pks.length ? `<span class="small">${r.c.pks.map(id => PK_NAME[id]).join(', ')}</span>` : '<span class="small muted">—</span>'; } },
         { k: 'e', l: 'Expertise', f: r => r.c ? wordPill(asstWord(r.c, 'exp')) : '' },
         { k: 'k', l: 'Background', f: r => r.c ? `<span class="small muted">${esc(bgLabel(r.c))} · ${esc(r.c.style)}</span>` : '' },
         { k: 't', l: 'Track record', f: r => r.c ? `<span class="small muted">${asstTrack(r.c)}</span>` : '' },
@@ -1386,7 +1386,7 @@ function asstModal(c) {
     <div class="row" style="gap:6px;margin-bottom:12px">${kwPills(c)}</div>`;
   if (spec) {
     const L = LEANS[c.role][c.lean];
-    ensureDefPk(c);
+    ensureDefPk(c); ensureOffPk(c);
     if (c.pks && c.pks.length) h += `<div class="small" style="margin-bottom:10px"><b>His packages:</b> ${c.pks.map(id => `<span class="pill on">${PK_NAME[id]}</span>`).join(' ')}</div>`;
     h += `<div class="stat-tiles" style="margin-bottom:12px"><div class="tile"><div class="v" style="font-size:15px">${esc(L[0])}</div><div class="l">Leans</div></div><div class="tile"><div class="v" style="font-size:15px">${asstWord(c, 'exp')}</div><div class="l">Expertise</div></div></div>
       <p class="small">He bends his coordinator's playbook toward what he believes in, and sharpens (or dulls) the design in his area. ${t ? tendInfluences(t, ASST_SIDE[c.role]).filter(x => x.includes(cname(c))).map(esc).join(' ') : ''}</p>`;

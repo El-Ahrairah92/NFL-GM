@@ -114,6 +114,7 @@ function runClock(g, secs) {
 function betweenPlays(g) {
   const o = g.poss, diff = g.score[o] - g.score[1 - o];
   if (isHurry(g)) return randInt(14, 20);
+  if (g.nohud) return randInt(22, 30);
   if (g.q >= 4 && diff > 0 && g.clock < 480) return randInt(37, 40) - (g.cx[o].clock < 0.4 ? 8 : 0);
   return randInt(33, 40);
 }
@@ -197,8 +198,9 @@ function shareTackle(res, def) {
 function runPlay(g, oc, dc) {
   const o = g.poss, d = 1 - o;
   g.pbNeed = [0, 0]; g.pbNeed[o] = offNeed(oc); g.pbNeed[d] = defNeed(dc);
-  const off = offUnit(g, o, oc.pers, oc), def = defUnit(g, d, dc.front, dc.pkg, dc.subRush);
+  const off = offUnit(g, o, oc.pers, oc), def = defUnit(g, d, dc.front, dc.pkg, dc.subRush, dc.bign);
   g.pbNeed = null; // only real snaps are gated
+  g.nohud = !!oc.nohud; if (oc.nohud) for (const e of def) e.extraLoad = 1.3; // no time to substitute or catch a breath
   { const need = [0, 0]; need[o] = offNeed(oc); need[d] = defNeed(dc); g.pbNeed = need; playbookBusts(g, [...off, ...def]); g.pbNeed = null; }
   if (oc.form === 'EMP') { const rb = off.find(e => e.slot === 'RB'); if (rb) rb.x = -1.8; }
   if (!g.first[o].off) { g.first[o].off = true; for (const e of off) ln(g, e.p).gs = 1; }
@@ -233,7 +235,9 @@ function playText(oc, dc, res) {
   const tags = [...oc.tags].map(t => ({ MOTION: 'motion', PA: 'play-action', BOOT: 'boot', RUB: 'rub', RPO: 'RPO', SIDE: 'sideline', TRICK: 'trick' }[t])).join(', ');
   const cov = { C0: 'Cover 0', C1: 'Cover 1', C2: 'Cover 2', C2M: '2-Man', C3: 'Cover 3', C4: 'Quarters', T2: 'Tampa 2', C6: 'Cover 6' }[dc.cov] + (dc.disg ? ' (disguised)' : '');
   const pres = { FOUR: '4-man rush', THREE: '3-man rush', BLITZ: 'blitz', SIM: 'sim pressure', FZ: 'fire zone' }[dc.pres] + (dc.stunt ? ' + stunt' : '');
-  return { pre: `(${form}, ${oc.pers}${tags ? ', ' + tags : ''})`, post: `[${dc.pkg.toLowerCase()}, ${cov}, ${pres}]` };
+  const looks = [oc.trips && 'trips', oc.bunch && 'bunch', oc.tight && 'tight splits', oc.counter && 'counter', oc.duo && 'duo', oc.wide && 'wide zone', oc.optrt && 'option routes', oc.maxp && 'max protect', oc.nohud && 'no-huddle'].filter(Boolean).join(', ');
+  const fr = dc.front === 'Bear' ? 'Bear ' : dc.front === 'Under' ? 'under ' : '';
+  return { pre: `(${form}, ${oc.pers}${tags ? ', ' + tags : ''}${looks ? ', ' + looks : ''})`, post: `[${fr}${dc.bign ? 'big nickel' : dc.pkg.toLowerCase()}, ${cov}, ${pres}]` };
 }
 
 // Apply a play result: stats, field position, downs, scoring, clock
@@ -551,7 +555,7 @@ function touchdown(g, side, text) {
       const save = { poss: g.poss, ydl: g.ydl, down: g.down, togo: g.togo, drive: g.drive };
       g.poss = side; g.ydl = 98; g.down = 4; g.togo = 2; g.drive = null;
       const oc = offenseCall(g), dc = defenseCall(g, oc);
-      const off = offUnit(g, side, oc.pers, oc), def = defUnit(g, 1 - side, dc.front, dc.pkg, dc.subRush);
+      const off = offUnit(g, side, oc.pers, oc), def = defUnit(g, 1 - side, dc.front, dc.pkg, dc.subRush, dc.bign);
       const res = oc.isRun ? resolveRun(g, off, def, oc, dc) : resolvePass(g, off, def, oc, dc);
       const good = (res.kind === 'run' || res.kind === 'scramble' || res.kind === 'comp') && res.yds >= 2;
       if (good) { g.score[side] += 2; g.qs[side][Math.min(g.q, 5) - 1] += 2; entry.text += ' (2-pt good)'; } else entry.text += ' (2-pt failed)';

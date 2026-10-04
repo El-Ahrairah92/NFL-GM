@@ -23,23 +23,24 @@ const TUNE = {
   runScale: 0.12,
   comboBonus: 16,
   // coverage / passing
-  openBase: -0.52,
+  openBase: -0.6,
   openScale: 0.034,
   covWeight: 1.7,      // a defender's coverage skill counts this much more than the receiver's route skill
   holeBonus: 0.9,
   readTime: 0.52,
-  catchBase: 2.55,
+  catchBase: 2.8,
   shade: 0.35, // how hard defenses roll coverage toward the best receiver
   dropBase: 0.07,
-  intBase: 0.0078,
+  intBase: 0.0067,
   // tackling
   tackleBase: 2.0,
   tackleScale: 0.03,
-  runAfter: 1.15,       // yards a back typically adds after first contact
+  runAfter: 1.08,       // yards a back typically adds after first contact
   carryLoad: 3.8,      // how much more a carry tires a back than an ordinary snap
   pocketOpen: 1.2,
-  deepCov: -1.0,      // deep routes start covered: they need time (or a beaten defender) to come open
-  midCov: -0.68,     // separation a receiver gains per second the QB can hold the ball in a clean pocket
+  shortOpen: 0.44,     // defenses give up the underneath
+  deepCov: -1.08,      // deep routes start covered: they need time (or a beaten defender) to come open
+  midCov: -0.75,     // separation a receiver gains per second the QB can hold the ball in a clean pocket
   paBite: -0.8,        // logit: how readily second-level defenders bite on play-action
   paOpen: 0.22,        // separation gained downfield when they do
   screenLead: 4,       // yards the screen's convoy buys before the first tackler arrives
@@ -71,16 +72,23 @@ const INLINE = new Set(['Y', 'H', 'Y2', 'OL6']);
 // ---------- defense ----------
 const DEF_SLOT = {
   EDGE: ['EDGE', 'DL'], DE: ['DE', 'DL'], DT: ['DT', 'DL'], NT: ['NT', 'DL'],
-  MLB: ['MLB', 'LB'], WLB: ['WLB', 'LB'], SAM: ['WLB', 'LB'],
+  MLB: ['MLB', 'LB'], WLB: ['WLB', 'LB'], SAM: ['WLB', 'LB'], BIGN: ['SS', 'DB'], // big nickel: a third safety plays the slot
   CB: ['CB', 'DB'], NCB: ['NCB', 'DB'], DIME: ['NCB', 'DB'], FS: ['FS', 'DB'], SS: ['SS', 'DB'],
 };
 // [name, slot type, x, depth]. Depth 0 = on the line. Names are unique within a package.
 function packageLayout(front, pkg) {
   const e = front === 'Wide-9' ? 3.6 : 2.85;
   const DB2 = [['CB1', 'CB', -4, 7], ['CB2', 'CB', 4, 7], ['FS', 'FS', -0.5, 13], ['SS', 'SS', 1.5, 9]];
-  const odd = front === '3-4' || front === 'Tite';
+  let odd = front === '3-4' || front === 'Tite';
   if (pkg === 'GL') return [['LE', 'EDGE', -3, 0], ['LT', 'DT', -1.3, 0], ['NT', 'NT', 0, 0], ['RT', 'DT', 1.3, 0], ['RE', 'EDGE', 3, 0],
     ['WLB', 'WLB', -1.6, 3], ['MLB', 'MLB', 0, 3], ['SAM', 'SAM', 2.4, 3], ['CB1', 'CB', -4, 5], ['CB2', 'CB', 4, 5], ['SS', 'SS', 1, 6]];
+  // Bear: all three interior linemen covered, edges tight outside them, two linebackers stacked behind
+  if (pkg === 'BASE' && front === 'Bear') return [['LE', 'EDGE', -3.2, 0], ['LT', 'DT', -1.3, 0], ['NT', 'NT', 0, 0], ['RT', 'DT', 1.3, 0], ['RE', 'EDGE', 3.2, 0],
+    ['WLB', 'WLB', -0.8, 4.5], ['MLB', 'MLB', 0.8, 4.5], ...DB2];
+  // Under: the line shifts to the weak side, the nose shades the center, the strong-side linebacker walks up over the tight end
+  if (pkg === 'BASE' && front === 'Under') return [['LE', 'EDGE', -2.4, 0], ['DT', 'DT', -1.3, 0], ['NT', 'NT', 0.5, 0], ['RE', 'EDGE', 2.3, 0],
+    ['WLB', 'WLB', -1.6, 5], ['MLB', 'MLB', 0.2, 5], ['SAM', 'SAM', 3.4, 1.5], ...DB2];
+  if (front === 'Bear' || front === 'Under') front = '4-3';
   if (pkg === 'BASE' && odd) {
     const de = front === 'Tite' ? 1.6 : 2.2;
     return [['LOLB', 'EDGE', -3.2, 0], ['LDE', 'DE', -de, 0], ['NT', 'NT', 0, 0], ['RDE', 'DE', de, 0], ['ROLB', 'EDGE', 3.2, 0],
@@ -217,19 +225,22 @@ function chartFirst(g, s, key) {
 }
 function ea0(p, k) { return p.a && p.a[k] !== undefined ? p.a[k] : 25; }
 // Defensive eleven for a package; sub-rush puts the best four pass rushers on the line
-function defUnit(g, s, front, pkg, subRush) {
-  const layout = packageLayout(front, pkg);
+function defUnit(g, s, front, pkg, subRush, bign) {
+  let layout = packageLayout(front, pkg);
+  if (bign) layout = layout.map(l => l[0] === 'NCB' ? ['NCB', 'BIGN', l[2], l[3]] : l);
+  const fix = u => { for (const e of u) if (e.slot === 'BIGN') e.slot = 'NCB'; return u; }; // he plays the nickel's job
   // coaches keep players in their own rooms: a safety is not a linebacker just because he grades out close
   const DB_POS = { CB: 1, S: 1 };
   const score = (p, slot) => { const grp = DEF_SLOT[slot][1]; return (subRush && grp === 'DL' && p.a ? (ea0(p, 'prsh') - 60) * 0.35 : 0) - (grp === 'LB' && p.pos !== 'LB' ? 7 : grp === 'DB' && !DB_POS[p.pos] ? 7 : 0); };
   const chart = userChart(g, s, 'def');
-  if (!chart) return fillSlots(g, s, layout, DEF_SLOT, { score });
+  if (!chart) return fix(fillSlots(g, s, layout, DEF_SLOT, { score }));
   // passing downs: your rush specialists take over the edge and interior spots
   const EDGE_NAMES = new Set(['LE', 'RE', 'LOLB', 'ROLB']);
-  return fillSlots(g, s, layout, DEF_SLOT, { score, chart, keyOf: (name, slot) => {
+  return fix(fillSlots(g, s, layout, DEF_SLOT, { score, chart, keyOf: (name, slot) => {
+    if (slot === 'BIGN') return '__none';
     if (subRush && DEF_SLOT[slot][1] === 'DL') { const k = EDGE_NAMES.has(name) ? 'RUSHE' : 'RUSHI'; if (hasList(chart, k)) return k; }
     return DEF_CHART_KEY[name] || name;
-  } });
+  } }));
 }
 function kickUnitPlayer(g, s, spot) {
   const d = g.side[s].depth[spot], pick = chartFirst(g, s, spot);

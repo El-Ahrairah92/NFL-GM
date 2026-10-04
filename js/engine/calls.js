@@ -86,8 +86,8 @@ function offenseCall(g) {
   if (sit.passDown) uc -= 0.3;
   if (sit.hurry) uc = 0;
   uc = clamp(uc, 0, 0.92);
-  call.form = rand() < uc ? 'UC' : (ot.rpo + ot.qbRun > 0.25 && rand() < 0.35 ? 'PI' : 'SG');
-  if (!isRun && call.form === 'SG' && ['10', '11'].includes(call.pers) && (sit.b === 'D3L' || sit.b === 'D3M') && rand() < 0.12) call.form = 'EMP';
+  call.form = rand() < uc ? 'UC' : ((ot.rpo + ot.qbRun > 0.25 && rand() < 0.35) || rand() < (ot.pistol || 0) * 0.5 ? 'PI' : 'SG');
+  if (!isRun && call.form === 'SG' && ['10', '11'].includes(call.pers) && ((sit.b === 'D3L' || sit.b === 'D3M') && rand() < 0.12 || rand() < (ot.empty || 0) * 0.5)) call.form = 'EMP';
   // --- play type
   const qb = starterQB(g, g.poss);
   const qbMob = qb && qb.a ? (qb.a.spd + qb.a.agi + qb.a.elu) / 3 : 40;
@@ -107,7 +107,12 @@ function offenseCall(g) {
     call.type = t === 'RUN_QB' || t === 'RUN_FB' ? 'RUN' : t;
     call.carrier = t === 'RUN_QB' ? 'QB' : t === 'RUN_FB' ? 'FB' : 'RB';
     call.scheme = rand() < ot.zone ? 'ZONE' : 'GAP';
-    call.dir = call.type === 'JET' ? 'OUT' : call.carrier === 'FB' || call.type === 'SNEAK' ? 'IN' : rand() < (call.scheme === 'ZONE' ? 0.48 : 0.36) ? 'OUT' : 'IN';
+    // which zone, which gap play: wide zone stretches the edge; counter and duo are the gap team's changeups
+    const plain = call.type === 'RUN' && call.carrier === 'RB';
+    const wide = call.scheme === 'ZONE' && rand() < (ot.wz !== undefined ? ot.wz : 0.4);
+    if (plain && call.scheme === 'GAP') { if (rand() < (ot.counter || 0)) call.counter = true; else if (rand() < (ot.duo || 0)) call.duo = true; }
+    if (plain && call.scheme === 'ZONE') call.wide = wide;
+    call.dir = call.type === 'JET' ? 'OUT' : call.carrier === 'FB' || call.type === 'SNEAK' || call.duo ? 'IN' : rand() < (call.scheme === 'ZONE' ? (wide ? 0.72 : 0.32) : call.counter ? 0.5 : 0.36) ? 'OUT' : 'IN';
     call.side = rand() < 0.6 ? 1 : -1;
   } else {
     const fd = defFilm(g.tids[d]), blitzy = fd.n > 20 ? fd.blitz / fd.n : 0.25, manny = fd.n > 20 ? fd.man / fd.n : 0.35;
@@ -141,8 +146,17 @@ function offenseCall(g) {
   if (t.length > 1 && !(t.length === 2 && ((t.includes('PA') && t.includes('BOOT')) || (t.includes('RUB') && t.includes('SIDE'))))) {
     call.tags = new Set(call.tags.has('MOTION') ? ['MOTION', t[0]] : [t[0]]);
   }
+  // formation and concept packages (only if they are on the sheet)
+  const spreadSet = ['10', '11'].includes(call.pers) && call.form !== 'UC';
+  if (!isRun) {
+    if (spreadSet && rand() < (ot.trips || 0)) call.trips = true; else if (spreadSet && rand() < (ot.bunch || 0)) call.bunch = true;
+    if ((call.type === 'DROP' || call.type === 'QUICK') && rand() < (ot.optrt || 0)) call.optrt = true;
+    if ((call.type === 'DEEP' || (call.type === 'DROP' && call.tags.has('PA'))) && call.form !== 'EMP' && rand() < (ot.maxp || 0)) call.maxp = true;
+  }
+  if (!call.trips && !call.bunch && call.form !== 'EMP' && rand() < (ot.tight || 0)) call.tight = true;
+  if (!sit.milk && !(g.q >= 3 && sit.diff >= 9) && rand() < (ot.nohud || 0)) call.nohud = true;
   // a quarterback who is still learning the playbook gets a simpler menu
-  { const qbP = starterQB(g, o); if (qbP && qbP.a) { const k = pbOf(qbP), need = offNeed(call); if (k < need && rand() < clamp((need - k) / 35, 0, 1)) { call.tags = new Set(); if (call.type === 'DEEP' || call.type === 'GADGET') call.type = 'DROP'; else if (call.type === 'OPTION' || call.type === 'JET') call.type = 'RUN'; call.simple = true; } } }
+  { const qbP = starterQB(g, o); if (qbP && qbP.a) { const k = pbOf(qbP), need = offNeed(call); if (k < need && rand() < clamp((need - k) / 35, 0, 1)) { call.tags = new Set(); if (call.type === 'DEEP' || call.type === 'GADGET') call.type = 'DROP'; else if (call.type === 'OPTION' || call.type === 'JET') call.type = 'RUN'; call.simple = true; for (const f of ['trips', 'bunch', 'tight', 'optrt', 'maxp', 'nohud', 'counter', 'duo']) delete call[f]; } } }
   call.isRun = RUN_TYPES.has(call.type);
   return call;
 }
@@ -163,6 +177,9 @@ function defenseCall(g, oc) {
   else if (p === 'JUMBO' || ((p === '22' || p === '13') && (sit.gl || sit.short))) pkg = sit.gl || g.togo <= 1 ? 'GL' : 'BASE';
   else pkg = 'BASE';
   call.pkg = pkg;
+  if (dt.pk && dt.pk.fr) { const fr = dt.pk.fr, heavy = ['12', '13', '21', '22', 'JUMBO'].includes(p);
+    if (pkg === 'BASE') { if (rand() < fr.BEAR * (sit.short || sit.gl ? 2.5 : heavy ? 1.6 : runEst > 0.55 ? 1.2 : 0.5)) call.front = 'Bear'; else if (rand() < fr.UNDER) call.front = 'Under'; }
+    if (pkg === 'NICKEL' && rand() < fr.BIGN * (p === '12' ? 1.7 : runEst > 0.5 ? 1.2 : 0.8)) call.bign = true; }
   // coverage
   let man = dt.man, high = dt.high + 0.08, blitz = dt.blitz;
   if (sit.b === 'D3L') { high += 0.2; man -= 0.08; }

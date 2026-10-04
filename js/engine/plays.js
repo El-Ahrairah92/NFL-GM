@@ -116,6 +116,10 @@ function resolveRun(g, off, def, oc, dc) {
     const relevant = lane === 'cutback' ? Math.sign(r.e.x) === -Math.sign(target) && Math.abs(r.e.x) < 3 : nearPOA(r);
     if (!relevant) continue;
     let w = r.win;
+    if (oc.duo && Math.abs(r.e.x) < 2) w *= 0.97;  // double teams at the point of attack
+    if (oc.scheme === 'GAP' && !oc.counter) w *= 0.94; // a hat on a hat at the point of attack
+    if (oc.wide) w *= 0.88;                          // the stretch gets the line moving and cuts off pursuit
+    if (oc.tight && outside) w *= 0.92;              // receivers in close seal the edge
     if (draw && r.state !== 'free') w *= bites(g, r.e, 0.6) ? 0.35 : 1.1;
     if (r.state === 'free' && r.backside && lane === 'designed') continue;
     if (rand() < w) {
@@ -127,20 +131,20 @@ function resolveRun(g, off, def, oc, dc) {
   // outside runs: the edge must be set by someone
   if (outside && trickHit !== 'fooled') {
     const edgeR = fronts.filter(r => Math.sign(r.e.x) === Math.sign(target)).sort((a, b) => Math.abs(b.e.x) - Math.abs(a.e.x))[0];
-    const lost = edgeR && rand() > edgeR.win;
+    const lost = edgeR && rand() > edgeR.win * (oc.wide ? 0.82 : 1);
     if (edgeR) edgeR.won = !lost;
     if (!lost && edgeR && !levels.some(l => l.e === edgeR.e)) levels.push({ e: edgeR.e, at: randInt(0, 3) });
     // corner / force player
     const force = def.filter(e => e.slot.startsWith('CB') || e.slot === 'CB' || e.slot === 'NCB').sort((a, b) => Math.abs(a.x - target * 1.4) - Math.abs(b.x - target * 1.4))[0];
-    if (force) levels.push({ e: force, at: lost ? randInt(4, 8) : randInt(3, 6), bonus: lost ? -0.3 : 0 });
+    if (force && rand() < (oc.wide || oc.tight ? 0.5 : 0.62)) levels.push({ e: force, at: lost ? randInt(4, 8) : randInt(3, 6), bonus: lost ? -0.3 : 0 }); // the corner has a receiver's block to beat first
   }
   // linebackers: blocked, or free to fill (if they read it)
   for (const r of seconds) {
     if (r.state === 'blocked' && rand() > r.win) { r.won = false; continue; }
     r.won = true;
-    let readOK = rand() < lgt(0.9 + (ea(g, r.e, 'prec') - 65) * 0.05 + g.key * 0.8 - (motion ? 0.3 : 0) - (draw ? 0.5 : 0) - (trickHit === 'fooled' ? 2 : 0));
+    let readOK = rand() < lgt(0.9 + (ea(g, r.e, 'prec') - 65) * 0.05 + g.key * 0.8 - (motion ? 0.3 : 0) - (draw ? 0.5 : 0) - (oc.counter ? 0.6 : 0) - (trickHit === 'fooled' ? 2 : 0));
     const depthAt = (r.rotated ? 4 : 3) + (readOK ? randInt(0, 2) : randInt(3, 6)) + (draw ? 1 : 0) + (dc.cov === 'T2' && r.e.slot === 'MLB' ? 1 : 0);
-    levels.push({ e: r.e, at: depthAt, bonus: readOK ? 0 : -0.4 });
+    levels.push({ e: r.e, at: depthAt, bonus: readOK ? (oc.duo ? 0.45 : 0) : -0.4 }); // duo leaves the linebackers for the back
   }
   // deep help: safeties
   const deepS = def.filter(e => (e.slot === 'FS' || e.slot === 'SS') && !blk.some(b => b.e === e));
@@ -285,6 +289,7 @@ function resolvePass(g, off, def, oc, dc) {
     if (fb && rand() < 0.6) keep.push(fb);
     if (y && (oc.type === 'DEEP' ? rand() < 0.55 : oc.type === 'DROP' ? rand() < 0.2 : false)) keep.push(y);
   }
+  if (oc.maxp) { if (rb && !keep.includes(rb)) keep.push(rb); if (y && !keep.includes(y)) keep.push(y); } // seven stay in: time for the shot, fewer places to go with it
   for (const e of off) if (e.slot === 'OL6') keep.push(e);
   const receivers = off.filter(e => !OL_SLOTS.includes(e.slot) && e.slot !== 'QB' && !keep.includes(e));
   if (oc.form === 'EMP' && rb) { rb.x = -1.6; }
@@ -299,6 +304,7 @@ function resolvePass(g, off, def, oc, dc) {
     const back = prot.rushers.filter(a => Math.sign(a.e.x) === -oc.side && Math.abs(a.e.x) >= 2.4)[0];
     if (back && !bites(g, back.e, 0.2)) back.t = Math.min(back.t, 1.55 + gauss(0, 0.15));
   }
+  if (oc.maxp) for (const a of prot.rushers) a.t += 0.4; // seven men in protection
   prot.rushers.sort((a, b) => a.t - b.t);
   tPress = prot.rushers.length ? prot.rushers[0].t : 9;
   const rusher = prot.rushers[0];
@@ -348,7 +354,7 @@ function resolvePass(g, off, def, oc, dc) {
       if (oc.tags.has('RUB') && r.dir === 'IN' && r.band !== 'D') w += 0.55;
       if (oc.tags.has('MOTION') && rand() < 0.4) w += 0.15;
       // press at the line
-      if (defE && (e.slot === 'X' || e.slot === 'Z' || e.slot === 'SLOT') && rand() < pressRate) {
+      if (defE && (e.slot === 'X' || e.slot === 'Z' || e.slot === 'SLOT') && !(oc.bunch && e.slot !== 'X') && rand() < pressRate) {
         const winRel = rand() < lgt((ea(g, e, 'rel') - ea(g, defE, 'prs')) * 0.06);
         w += winRel ? 0.25 : -0.65; r.pressed = !winRel; r.pressAtt = true; if (!winRel) r.tb += 0.25;
       }
@@ -364,10 +370,15 @@ function resolvePass(g, off, def, oc, dc) {
       if (dc.pres === 'FZ' && defE && defE.depth === 0) w -= 0.25; // the quarterback throws hot into a lineman he never expected to be there
     }
     if (bit.size && r.band !== 'S') w += TUNE.paOpen;
+    // formation and concept packages
+    if (oc.trips) w += e.slot === 'X' ? 0.2 : -0.1;                 // the back-side receiver is alone; the trips side draws a crowd
+    if (oc.bunch && e.slot !== 'X' && e.slot !== 'RB' && e.slot !== 'FB') w += man ? 0.25 : 0.04; // traffic at the snap beats man coverage
+    if (oc.tight) w += r.dir === 'IN' ? 0.12 : r.band === 'D' ? -0.1 : -0.04;      // crossers get a free run; the sideline is a long throw
+    if (oc.optrt && r.band !== 'D') w += 0.25 * clamp((ea(g, qb, 'proc') + rte - 130) / 40, -0.6, 1); // right when both read it right, wrong when they do not
     // the field shrinks near the goal line: no room behind the defense, tighter windows
     const toGoal = 100 - g.ydl;
     if (toGoal <= 20) w -= toGoal <= 10 ? 0.65 : 0.3;
-    w += (r.band === 'S' ? 0.3 : r.band === 'D' ? TUNE.deepCov : TUNE.midCov) + (r.role === 3 ? (e.slot === 'RB' || e.slot === 'FB' ? 0.05 : 0.3) : 0); // defenses give up the underneath (checkdowns most of all), protect deep
+    w += (r.band === 'S' ? TUNE.shortOpen : r.band === 'D' ? TUNE.deepCov : TUNE.midCov) + (r.role === 3 ? (e.slot === 'RB' || e.slot === 'FB' ? 0.05 : 0.3) : 0); // defenses give up the underneath (checkdowns most of all), protect deep
     if (e.slot === 'Y' || e.slot === 'H') w += 0.13; // tight ends work the seams and the soft middle
     if (dc.soft) w += r.band === 'S' ? 0.35 : r.band === 'D' ? -0.35 : 0.12; // prevent: everything underneath is there
     w += help + sepNet - g.key * 0.35 + gauss(0, 0.55);

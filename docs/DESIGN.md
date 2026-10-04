@@ -379,7 +379,11 @@ Games were decided by 16.9 on average (NFL 11.3) with 21% decided by 28+. Talent
 - Man rate, two-high rate, blitz rate and the rest are now **read off the sheet** (`blendedTend`), so scheme fit and the Staff and Playbook pages follow automatically. The call picks a shell and a pressure by share, bent by the situation.
 - New on the field: **fire zone** (five rush, a lineman drops, three under and three deep; the quarterback's hot throw can find the dropper), **Tampa 2** (middle linebacker runs the deep middle; softer against the run), **Cover 6** (quarters to the passing strength, Cover 2 away; harder to read), **disguise** (the pre-snap picture lies; costs playbook complexity).
 - A promoted specialist keeps his packages as part of his own sheet.
-- Still to do: offensive packages, fronts and sub packages as packages, install cost by how many packages changed, and the remaining new looks.
+- **Offense** (`OFF_PK`): the caller's sheet is still a set of rates, and a package is a named piece of it. The pass game and run game coordinators install three each. New looks exist only if someone brought them: **trips** (isolates the back-side receiver), **bunch** (beats press and man), **tight splits** (crossers and edge blocking, at the cost of outside throws), **wide zone** vs inside zone, **counter** (fools linebackers), **duo** (double teams, linebackers left for the back), **option routes** (as good as the quarterback and receiver are smart), **max protect** (time for the shot, fewer routes), **no-huddle** (faster clock, the defense tires).
+- **Fronts and sub packages:** an **Under** or **Bear** front as a base changeup and a **big nickel** (third safety in the slot), each with a share; the run defense coordinator can bring them.
+- **Install cost** is by overlap: the old and new sheets are compared package by package and players keep that share of what they knew. Under 60% overlap counts as a new system.
+- **The system name is read off the sheet** (`offSheetLabel`, `defSheetLabel`): Shanahan Wide Zone, West Coast, Air Coryell, Erhardt-Perkins, Air Raid, Spread, Power / Gap, RPO / QB Run, Pro-Style; Fangio Two-High, Cover 3, Tampa 2, Quarters / Match, Wide-9 Attack, Man-Pressure, 3-4 Zone Blitz, 3-4 Two-Gap, Multiple. The stored archetype is now only the school a coach was generated from.
+- Outside runs were about a yard worse than inside runs; the force corner no longer makes every outside run, which brought wide zone level with the rest.
 
 ## Deferred
 - Penalties / Discipline attribute

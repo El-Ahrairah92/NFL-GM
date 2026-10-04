@@ -47,7 +47,7 @@ function newLeague(userTid) {
   computeThresholds(); seasonStartSnapshot();
   for (const t of shuffle(state.teams.slice())) fillPS(t.id); // every club starts with a practice squad in place, yours included
   for (const p of Object.values(state.players)) if (p.tid >= 0 || p.tid === -3) { const tid = p.tid >= 0 ? p.tid : p.psTid; p.pbTid = tid; p.pb = p.exp === 0 ? 82 : 96 + Math.round(rand() * 4); if (tid === userTid) p.seenW = p.exp === 0 ? 4 : 16; }
-  ensureCoachContracts(); seedWeb();
+  ensureCoachContracts(); seedWeb(); snapPlaybooks();
   practiceWeekAll();
   addNews(`Welcome to the ${START_SEASON} season. You are the GM of the ${teamName(userTid)}.`, [userTid]);
   return state;
@@ -88,6 +88,7 @@ function migrateState(st) {
   syncEconomy();
   if (st._needWeb) { ensureCoachContracts(); seedWeb(); } delete st._needWeb;
   if (st.phase === 'COACHES' && !st.car) startCarousel();
+  if (st.teams.some(t => !t.pkSnap)) snapPlaybooks();
   if (st.version === SAVE_VERSION && (st.phase === 'REG' || st.phase === 'PLAYOFFS' || st.phase === 'RECAP')) ensureDraftClass(st.season + 1);
   // positional comfort & adaptability for saves that predate them
   if (st.version === SAVE_VERSION) for (const id in st.players) { const p = st.players[id]; if (!p.a) continue; if (p.h && p.h.adapt === undefined) p.h.adapt = Math.round(clamp(gauss(55, 18), 5, 99)); if (!p.cf) { genComfort(p); updateRatings(p); } }

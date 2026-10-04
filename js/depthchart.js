@@ -143,11 +143,16 @@ function systemChangeKnowledge() {
   for (const t of state.teams) {
     if (!t.sys) continue;
     for (const [side, fn] of [['O', offArch], ['D', defArch]]) {
-      const a = fn(t);
-      if (!a || !t.sys[side].arch || a === t.sys[side].arch) continue;
-      for (const p of [...rosterOf(t.id), ...psOf(t.id)]) if (PRAC_SIDE[p.pos] === side) { p.pb = Math.round(pbOf(p) * 0.45 + 10); p.pbArch = a; }
-      t.sys[side].arch = a; t.sys[side].yrs = -1; // counted as year 0 when the season starts
-      if (t.id === state.userTid) addNews(`New ${side === 'O' ? 'offensive' : 'defensive'} system in ${t.region}: the playbook has to be installed from scratch.`, [t.id]);
+      const a = fn(t), cur = pkVector(t, side), prev = t.pkSnap && t.pkSnap[side];
+      (t.pkSnap = t.pkSnap || {})[side] = cur;
+      if (!prev) continue;
+      const ov = pkOverlap(prev, cur);
+      if (ov >= 0.97) continue; // same book
+      // players keep what carries over and relearn the rest
+      for (const p of [...rosterOf(t.id), ...psOf(t.id)]) if (PRAC_SIDE[p.pos] === side) { p.pb = Math.round(clamp(pbOf(p) * (0.45 + 0.55 * ov) + 10 * (1 - ov), 10, 100)); p.pbArch = a; }
+      const added = Object.keys(cur).filter(k => !prev[k] && PK_NAME[k]).map(k => PK_NAME[k]);
+      if (ov < 0.6) { t.sys[side].arch = a; t.sys[side].yrs = -1; }
+      if (t.id === state.userTid) addNews(ov < 0.6 ? `A new ${side === 'O' ? 'offense' : 'defense'} in ${t.region}: only about ${Math.round(ov * 100)}% of the old playbook carries over.` : `${t.region}'s ${side === 'O' ? 'offensive' : 'defensive'} playbook changed (${Math.round(ov * 100)}% carries over)${added.length ? ': new this year: ' + added.slice(0, 4).join(', ') : ''}.`, [t.id]);
     }
   }
 }
@@ -230,11 +235,12 @@ function offNeed(oc) {
   for (const t of ['PA', 'BOOT', 'RPO', 'RUB', 'MOTION']) if (oc.tags && oc.tags.has(t)) n += 10;
   n = Math.min(n, 60);
   n += { DEEP: 8, OPTION: 15, GADGET: 30, JET: 10, RBSCR: 10, WRSCR: 10, DRAW: 5 }[oc.type] || 0;
+  n += (oc.trips ? 4 : 0) + (oc.bunch ? 8 : 0) + (oc.tight ? 3 : 0) + (oc.counter ? 8 : 0) + (oc.duo ? 4 : 0) + (oc.optrt ? 15 : 0) + (oc.maxp ? 4 : 0) + (oc.nohud ? 6 : 0);
   if (oc.tags && oc.tags.has('TRICK')) n += 20;
   return Math.min(80, n);
 }
 function defNeed(dc) {
-  let n = 35 + ({ BLITZ: 12, SIM: 25, THREE: 8, FZ: 22 }[dc.pres] || 0) + (dc.stunt ? 10 : 0) + ({ C2M: 10, C4: 10, C0: 5, T2: 12, C6: 18 }[dc.cov] || 0) + (dc.subRush ? 5 : 0) + (dc.disg ? 8 : 0);
+  let n = 35 + ({ BLITZ: 12, SIM: 25, THREE: 8, FZ: 22 }[dc.pres] || 0) + (dc.stunt ? 10 : 0) + ({ C2M: 10, C4: 10, C0: 5, T2: 12, C6: 18 }[dc.cov] || 0) + (dc.subRush ? 5 : 0) + (dc.disg ? 8 : 0) + (dc.front === 'Bear' ? 10 : dc.front === 'Under' ? 4 : 0) + (dc.bign ? 5 : 0);
   return Math.min(80, n);
 }
 // after the huddle breaks: anyone on the field who does not know this call may blow his assignment
