@@ -132,7 +132,8 @@ function pbArrive(p, tid) {
 function pbLearn(p, reps, room, weeks) {
   if (!PB_RATE[p.pos] || pbOf(p) >= 100) return;
   ensureCharacter(p);
-  const f = (0.72 + p.h.work / 200 + (learnRate(p) - 1) * 0.4) * reps * (1 + room * 0.08);
+  const tid = p.tid >= 0 ? p.tid : p.psTid;
+  const f = (0.72 + p.h.work / 200 + (learnRate(p) - 1) * 0.4) * reps * (1 + room * 0.08) * (tid >= 0 && tid !== undefined ? teachMult(tid, p.pos) : 1);
   let k = pbOf(p);
   for (let i = 0; i < (weeks || 1); i++) k += PB_RATE[p.pos] * Math.max(0.2, f) * (104 - k);
   p.pb = Math.min(100, Math.round(k * 10) / 10);
@@ -191,7 +192,7 @@ function crossTrainWeek(p, weeks) {
   if (!p.xt || !p.a || p.injury) return;
   if (comfortOf(p, p.xt) >= 100) { delete p.xt; return; }
   ensureCharacter(p);
-  const pts = 2.4 * learnRate(p) * (0.75 + p.h.work / 200) * crossTrainRate(p, p.xt) * (weeks || 1);
+  const pts = 2.4 * learnRate(p) * (0.75 + p.h.work / 200) * crossTrainRate(p, p.xt) * (weeks || 1) * (p.tid >= 0 ? teachMult(p.tid, p.pos) : 1);
   if (learnSpot(p, p.xt, pts)) {
     updateRatings(p);
     if (p.tid === state.userTid) addNews(`${pname(p)} is now ${comfortLabel(comfortOf(p, p.xt)).toLowerCase()} at ${SPOTS[p.xt].l} after cross-training.`, [p.tid], 'prog');
@@ -201,16 +202,16 @@ function crossTrainWeek(p, weeks) {
 function practiceTeam(tid) {
   const cul = knob(C(T(tid).hc), 'cul'), wk = state.season * 100 + (state.phase === 'REG' ? state.week : 0);
   for (const pos in PRAC_SIDE) {
-    const rs = roomState(tid, pos), order = repsOrder(tid, pos);
+    const rs = roomState(tid, pos), order = repsOrder(tid, pos), cd = roomDisc(tid, pos); // the position coach runs this room
     const squad = psOf(tid).filter(p => p.pos === pos);
     for (const p of [...rs.room, ...squad]) {
       ensureCharacter(p);
-      const onPS = p.tid === -3, i = order.indexOf(p), tier = onPS || i < 0 ? 2 : repsTier(i, pos), eff = roomEffectOn(p, rs);
+      const onPS = p.tid === -3, i = order.indexOf(p), tier = onPS || i < 0 ? 2 : repsTier(i, pos), raw = roomEffectOn(p, rs), eff = raw < 0 ? raw * clamp(1.25 - cd / 110, 0.4, 1.1) : raw; // a firm coach keeps a bad example from spreading
       if (p.injury) { p.prac = { g: null, t: tier, wk, dnp: 1 }; pbLearn(p, 0.35, eff); continue; } // meetings only
       let noise = gauss(0, 10);
       if (noise < 0) noise *= clamp(1.3 - p.h.cons / 90, 0.3, 1.25); // steady players rarely have a bad week
       const xt = p.xt && p.tid === tid ? 1 : 0; // splitting his week between two jobs
-      const g = clamp(46 - xt * 3 + (p.h.work - 55) * 0.42 + (p.h.disc - 55) * 0.28 + eff * 9 + (pbOf(p) - 75) * 0.14 + (cul - 50) * 0.08 + noise, 5, 99);
+      const g = clamp(46 + (cd - 52) * 0.12 - xt * 3 + (p.h.work - 55) * 0.42 + (p.h.disc - 55) * 0.28 + eff * 9 + (pbOf(p) - 75) * 0.14 + (cul - 50) * 0.08 + noise, 5, 99);
       p.prac = { g: Math.round(g), t: tier, wk };
       (p.pracH = p.pracH || []).push(Math.round(g)); if (p.pracH.length > 6) p.pracH.shift();
       pbLearn(p, REPS_MULT[tier] * (xt ? 0.85 : 1), eff);
@@ -242,7 +243,7 @@ function playbookBusts(g, units) {
     if (!e.p.a || !PRAC_SIDE[e.p.pos]) continue;
     const need = g.pbNeed[e.s], k = pbOf(e.p);
     if (k >= need) continue;
-    if (rand() < (need - k) / 100 * 0.55 * (1.35 - (e.p.h && e.p.h.disc !== undefined ? e.p.h.disc : 55) / 100)) { e.bust = true; if (typeof avInc === 'function') avInc(g, e.p, 'bust'); }
+    if (rand() < (need - k) / 100 * 0.55 * (1.35 - (e.p.h && e.p.h.disc !== undefined ? e.p.h.disc : 55) / 100) * (e.p.tid >= 0 ? 1.2 - roomDisc(e.p.tid, e.p.pos) / 260 : 1)) { e.bust = true; if (typeof avInc === 'function') avInc(g, e.p, 'bust'); }
   }
 }
 // your staff's read on a player's character: vague at first, sharper the longer he is in the building

@@ -310,7 +310,7 @@ function resolvePass(g, off, def, oc, dc) {
   const mm = man ? manMatch(off, droppers, rlist.map(r => r.e)) : null;
   const zown = man ? null : zoneOwners(dc.cov, droppers);
   const pNet = cx.pb * 0; // protection already used the coach net; separation uses Pass Design vs Coverage Design:
-  const sepNet = clamp(knob(C(T(g.tids[o]).oc), 'passD') - knob(C(T(g.tids[d]).dc), 'covD'), -35, 35) * 0.0012;
+  const sepNet = clamp(designKnob(T(g.tids[o]), 'passD') - designKnob(T(g.tids[d]), 'covD'), -35, 35) * 0.0012;
   // PA / RPO: underneath defenders who bite leave windows behind them
   const bit = new Set();
   if (pa) for (const e of droppers) if (['MLB', 'WLB', 'SAM', 'SS'].includes(e.slot) && bites(g, e, TUNE.paBite + (g.runCred[o] - 4.2) * 0.25)) bit.add(e);
@@ -366,7 +366,7 @@ function resolvePass(g, off, def, oc, dc) {
   // ---- the QB's read ----
   const proc = ea(g, qb, 'proc'), dec = ea(g, qb, 'dec'), pkt = ea(g, qb, 'pkt');
   // pre-snap coverage read: the QB's processing vs. the coordinator's disguise
-  const covID = rand() < lgt(0.6 + soft(proc - 70, 18) * 0.04 - clamp(knob(defCallerOrDC(g, d), 'covD') - 55, -35, 35) * 0.0045 + (oc.tags.has('MOTION') ? 0.5 : 0));
+  const covID = rand() < lgt(0.6 + soft(proc - 70, 18) * 0.04 - clamp(designKnob(T(g.tids[d]), 'covD') - 55, -35, 35) * 0.0045 + (oc.tags.has('MOTION') ? 0.5 : 0));
   const drop = (oc.type === 'QUICK' || oc.rpoThrow ? 1.05 : oc.type === 'DEEP' ? 2.25 : 1.75) + (pa ? 0.45 : 0) + (oc.form === 'UC' ? 0.15 : 0) + (oc.type === 'GADGET' ? 0.7 : 0);
   let order = rlist.slice().sort((a, b) => a.role - b.role || a.tb - b.tb);
   if (oc.rpoThrow && oc.rpoVacated) order.sort((a, b) => b.w - a.w);

@@ -11,8 +11,8 @@ function coachCtx(tid, oppTid) {
   const ooc = C(opp.oc), odc = C(opp.dc), ostc = C(opp.stc);
   const net = (a, b) => clamp(a - b, -35, 35) * 0.025;
   return {
-    pb: net(knob(oc, 'passD'), knob(odc, 'presD')) * 0.3,
-    rb: net(knob(oc, 'runD'), knob(odc, 'frontD')) * 2.2,
+    pb: net(designKnob(t, 'passD'), designKnob(opp, 'presD')) * 0.3,
+    rb: net(designKnob(t, 'runD'), designKnob(opp, 'frontD')) * 2.2,
     ot: offTend(t), dt: defTend(t),
     pc: knob(offCaller(t), 'pc'), adp: knob(offCaller(t), 'adp'), dpc: knob(defCaller(t), 'pc'),
     gm: knob(hc, 'gm'), aggr: hc ? hc.t.aggr : 0.5, clock: hc ? hc.t.clock : 0.5,

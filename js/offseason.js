@@ -103,7 +103,7 @@ function startOffseason() {
     if (p.tid === -2) continue;
     offseasonExpectation(p);
     comfortOffseason(p);
-    progressPlayer(p, teamDev(p.tid >= 0 ? p.tid : p.psTid != null ? p.psTid : -1)); // the real change stays hidden; camp reports and film reveal it
+    progressPlayer(p, teamDev(p.tid >= 0 ? p.tid : p.psTid != null ? p.psTid : -1, p.pos)); // the real change stays hidden; camp reports and film reveal it
     offseasonApply(p);
     p.wear = 0;
     if (p.injury) { p.injury.weeks -= 20; if (p.injury.weeks <= 0) p.injury = null; else p.injury.fresh = false; }
@@ -541,6 +541,8 @@ function logDevelopment(before) {
     const side = SPOTS[p.spot].side === 'off' ? 'O' : SPOTS[p.spot].side === 'def' ? 'D' : 'S';
     const k = p.tid + side, a = acc[k] || (acc[k] = { n: 0, sum: 0, jumps: 0 });
     const d = p.ovr - before[id]; a.n++; a.sum += d; if (d >= 5) a.jumps++;
+    const pc = posCoach(p.tid, p.pos); // the position coach's own track record
+    if (pc) { const tr = pc.tr || (pc.tr = { n: 0, sum: 0, jumps: 0 }); tr.n++; tr.sum = round2(tr.sum + d); if (d >= 5) tr.jumps++; }
   }
   for (const t of state.teams) {
     const log = (c, side) => { if (!c) return; const a = side === 'ALL' ? ['O', 'D', 'S'].reduce((x, s) => { const v = acc[t.id + s]; return v ? { n: x.n + v.n, sum: x.sum + v.sum, jumps: x.jumps + v.jumps } : x; }, { n: 0, sum: 0, jumps: 0 }) : acc[t.id + side]; if (!a || !a.n) return; c.dev = [...(c.dev || []).slice(-9), { s: state.season, tid: t.id, n: a.n, avg: Math.round(a.sum / a.n * 10) / 10, jumps: a.jumps }]; };

@@ -86,7 +86,7 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
     if (edge) edge.chip = h;
   }
   // pickup checks: blitzers, simulated pressure and stunts test the protection's awareness
-  const design = clamp(knob(defCallerOrDC(g, d), 'presD') - knob(C(T(g.tids[o]).oc), 'passD'), -35, 35) * 0.0022;
+  const design = clamp(designKnob(T(g.tids[d]), 'presD') - designKnob(T(g.tids[o]), 'passD'), -35, 35) * 0.0022;
   for (const a of assign) {
     if (!a.blockers.length) { a.free = true; continue; }
     if (a.e.blitz) {

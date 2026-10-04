@@ -8,8 +8,8 @@ const ROLE_LABEL = { HC: 'Head Coach', OC: 'Offensive Coordinator', DC: 'Defensi
 const ROLE_SHORT = { HC: 'HC', OC: 'OC', DC: 'DC', STC: 'ST', SC: 'S&C' };
 const KNOBS = {
   HC: ['gm', 'cul', 'pc', 'adp'],
-  OC: ['pc', 'adp', 'runD', 'passD', 'dcp', 'dQB', 'dBC', 'dREC', 'dOL'],
-  DC: ['pc', 'adp', 'frontD', 'covD', 'presD', 'dPR', 'dRD', 'dCOV'],
+  OC: ['pc', 'adp', 'runD', 'passD', 'dcp'],          // player development now belongs to the position coaches
+  DC: ['pc', 'adp', 'frontD', 'covD', 'presD'],
   STC: ['units', 'dSPEC'],
   SC: ['prev', 'recov', 'dPOW', 'dSPD'],
 };
@@ -101,9 +101,10 @@ function devAvg(c) { const ks = KNOBS[c.role].filter(k => DEV_OWNER[k]); return 
 function updateCoachOvr(c) {
   const k = c.k;
   let v;
+  if (c.tier >= 3) { c.ovr = Math.round(c.exp !== undefined ? c.exp : (c.dev + c.disc) / 2); return; }
   if (c.role === 'HC') v = k.gm * 0.3 + k.cul * 0.3 + (c.t.caller ? k.pc * 0.25 + k.adp * 0.15 : k.pc * 0.2 + k.adp * 0.2);
-  else if (c.role === 'OC') v = k.pc * 0.25 + k.adp * 0.1 + k.runD * 0.15 + k.passD * 0.2 + k.dcp * 0.1 + devAvg(c) * 0.2;
-  else if (c.role === 'DC') v = k.pc * 0.2 + k.adp * 0.1 + k.frontD * 0.2 + k.covD * 0.2 + k.presD * 0.15 + devAvg(c) * 0.15;
+  else if (c.role === 'OC') v = k.pc * 0.3 + k.adp * 0.12 + k.runD * 0.19 + k.passD * 0.25 + k.dcp * 0.14;
+  else if (c.role === 'DC') v = k.pc * 0.25 + k.adp * 0.12 + k.frontD * 0.22 + k.covD * 0.22 + k.presD * 0.19;
   else if (c.role === 'STC') v = k.units * 0.6 + k.dSPEC * 0.4;
   else v = k.prev * 0.35 + k.recov * 0.35 + k.dPOW * 0.15 + k.dSPD * 0.15;
   c.ovr = Math.round(clamp(v, 1, 99));
@@ -125,6 +126,8 @@ function genStaff(t) {
     c.rec.w = 0;
   }
   hc.rec.w = randInt(0, 80); hc.rec.l = randInt(0, 80);
+  ensureAssistants(t);
+  for (const r of ASST_ROLES) asst(t, r).yrs = randInt(0, 6);
 }
 function fillCoachPool(n = 9) {
   for (const role of COACH_ROLES) {
@@ -136,20 +139,23 @@ function fillCoachPool(n = 9) {
 // ---------- who calls plays / whose scheme ----------
 function offCaller(t) { const hc = C(t.hc); return hc && hc.t.caller === 'O' ? hc : C(t.oc); }
 function defCaller(t) { const hc = C(t.hc); return hc && hc.t.caller === 'D' ? hc : C(t.dc); }
-function offTend(t) { const c = offCaller(t); return c ? (c.role === 'HC' ? c.ct : c.t) : OFF_ARCH.WCO.t; }
-function defTend(t) { const c = defCaller(t); return c ? (c.role === 'HC' ? c.ct : c.t) : DEF_ARCH.C3.t; }
+function offTend(t) { return blendedTend(t, 'O'); }
+function defTend(t) { return blendedTend(t, 'D'); }
 function offArch(t) { const c = offCaller(t); return c ? c.arch : null; }
 function defArch(t) { const c = defCaller(t); return c ? c.arch : null; }
 
 // ---------- development (offseason) ----------
 // Returns per-attribute multipliers: grow (how much of a player's growth is realized) and decl (how fast decline hits)
-function teamDev(tid) {
+function teamDev(tid, pos) {
   if (tid < 0) return null;
   const t = T(tid), staff = {};
   for (const r of COACH_ROLES) staff[r] = C(t[r.toLowerCase()]);
-  const val = k => knob(staff[DEV_OWNER[k]], k);
+  const room = pos && ROOM_COACH[pos] ? roomDevVal(tid, pos) : null;
+  // football skills: the position coach's room. Physical traits stay with strength & conditioning, kicking with special teams.
+  const val = k => DEV_OWNER[k] === 'OC' || DEV_OWNER[k] === 'DC' ? (room !== null ? room : 0.5 * knob(staff.HC, 'cul') + 25) : knob(staff[DEV_OWNER[k]], k);
   return {
-    grow: a => { const k = ATTR_DEV[a]; return k ? 0.7 + val(k) * 0.006 : 1; },
+    // a position coach's room swings more than the old coordinator-wide effect did: roughly ±25% of a young player's growth
+    grow: a => { const k = ATTR_DEV[a]; return !k ? 1 : (DEV_OWNER[k] === 'OC' || DEV_OWNER[k] === 'DC') && room !== null ? 0.55 + val(k) * 0.009 : 0.7 + val(k) * 0.006; },
     decl: a => { const k = ATTR_DEV[a]; return k ? 1.25 - val(k) * 0.005 : 1; },
   };
 }
@@ -193,7 +199,7 @@ function familiarityPenalty(t, side) {
 function fireCoach(tid, role) {
   const t = T(tid), c = C(t[role.toLowerCase()]);
   if (!c) return;
-  c.tid = -1; t[role.toLowerCase()] = null;
+  c.tid = -1; t[role.toLowerCase()] = null; TEND_VER++;
   addNews(`${t.abbr} fired ${role === 'SC' ? 'S&C coach' : role} ${cname(c)}.`, [tid], 'coach');
 }
 function hireCoach(tid, cid, quiet) {
@@ -204,6 +210,8 @@ function hireCoach(tid, cid, quiet) {
   const hc = C(t.hc);
   if (hc && c.role !== 'HC' && !c.mentors.includes(hc.id)) c.mentors.push(hc.id);
   if (c.role === 'HC') for (const r of ['oc', 'dc', 'stc', 'sc']) { const a = C(t[r]); if (a && !a.mentors.includes(c.id)) a.mentors.push(c.id); }
+  TEND_VER++;
+  if (!quiet && (c.role === 'OC' || c.role === 'DC')) bringStaff(t, c.role === 'OC' ? 'O' : 'D', c);
   if (!quiet) addNews(`${t.abbr} hired ${ROLE_LABEL[c.role]} ${cname(c)}${schemeLabel(c) ? ' (' + schemeLabel(c) + ')' : ''}.`, [tid], 'coach');
   return true;
 }
@@ -229,6 +237,7 @@ function fillCoachVacancies() {
     pool.sort((a, b) => hireScore(t, b) - hireScore(t, a));
     hireCoach(t.id, pool[0].id);
   }
+  fillAsstVacancies();
 }
 function coachOffseason() {
   const recs = standings();
@@ -244,6 +253,7 @@ function coachOffseason() {
       if (c.hist.length > 25) c.hist.shift();
     }
   }
+  asstOffseason(recs, rank, pf, pa);
   // aging, growth, retirement
   for (const id in state.coaches) {
     const c = state.coaches[id];
@@ -252,7 +262,7 @@ function coachOffseason() {
     for (const k in c.k) c.k[k] = Math.round(clamp(c.k[k] + gauss(drift, 1.4), 15, 97));
     updateCoachOvr(c);
     if (c.age >= 72 || (c.age >= 64 && rand() < 0.15) || (c.tid < 0 && rand() < 0.2)) {
-      if (c.tid >= 0) { T(c.tid)[c.role.toLowerCase()] = null; if (c.tid === state.userTid || c.ovr >= 75) addNews(`${c.role} ${cname(c)} (${T(c.tid).abbr}) retired.`, [c.tid]); }
+      if (c.tid >= 0) { const tid = c.tid; if (tid === state.userTid || (c.ovr >= 75 && !isAsst(c))) addNews(`${ROLE_SHORT[c.role] || c.role} ${cname(c)} (${T(tid).abbr}) retired.`, [tid]); vacateCoach(c); }
       delete state.coaches[id];
     }
   }
@@ -279,7 +289,7 @@ function coachOffseason() {
       updateCoachOvr(c);
     }
   }
-  fillCoachPool(9);
+  fillCoachPool(9); fillAsstPool(3); TEND_VER++;
 }
 
 // ---------- scheme fit (DESIGN §6f): the same player is worth more in some systems ----------
@@ -326,3 +336,214 @@ function schemeFit(p, tid) {
   return Math.round((schemeSpotRating(p, p.spot, mg) - spotRating(p, p.spot)) * 10) / 10;
 }
 function fitLabel(f) { return f >= 2.5 ? 'Ideal fit' : f >= 1 ? 'Good fit' : f > -1 ? 'Neutral fit' : f > -2.5 ? 'Poor fit' : 'Bad fit'; }
+
+// =====================================================================
+//  STAFF HIERARCHY
+//  Tier 1-2: head coach and coordinators (full cards, above).
+//  Tier 3: four specialists who bend their coordinator's playbook: pass game and run game coordinators on offense,
+//          pass defense and run defense coordinators on defense. One lean, one expertise rating, a personality.
+//  Tier 4: eight position coaches. Two ratings (Development, Discipline), a personality and keywords that say where
+//          they come from. They run their room; on promotion the keywords become a real system and tendencies.
+// =====================================================================
+const SPEC_ROLES = ['PGC', 'RGC', 'DPC', 'DRC'];
+const POS_ROLES = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'DB'];
+const ASST_ROLES = [...SPEC_ROLES, ...POS_ROLES];
+const ASST_LABEL = { PGC: 'Pass Game Coordinator', RGC: 'Run Game Coordinator', DPC: 'Pass Defense Coordinator', DRC: 'Run Defense Coordinator',
+  QB: 'Quarterbacks Coach', RB: 'Running Backs Coach', WR: 'Receivers Coach', TE: 'Tight Ends Coach', OL: 'Offensive Line Coach', DL: 'Defensive Line Coach', LB: 'Linebackers Coach', DB: 'Defensive Backs Coach' };
+const ASST_SIDE = { PGC: 'O', RGC: 'O', DPC: 'D', DRC: 'D', QB: 'O', RB: 'O', WR: 'O', TE: 'O', OL: 'O', DL: 'D', LB: 'D', DB: 'D' };
+const ROOM_COACH = { QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', OL: 'OL', DL: 'DL', LB: 'LB', CB: 'DB', S: 'DB' }; // player position → his position coach
+const SPEC_OVER = { QB: 'PGC', WR: 'PGC', TE: 'PGC', RB: 'RGC', OL: 'RGC', DL: 'DRC', LB: 'DRC', DB: 'DPC' };      // which specialist a room answers to
+for (const r of ASST_ROLES) { ROLE_LABEL[r] = ASST_LABEL[r]; ROLE_SHORT[r] = SPEC_ROLES.includes(r) ? r : r + ' coach'; }
+// leans: what a specialist adds to (or takes from) his coordinator's call sheet. Values scale with his expertise.
+const LEANS = {
+  PGC: { VERT: ['Vertical', { deep: 1.5, pa: 0.6 }], TIMING: ['Timing', { quick: 1.2, deep: -0.8 }], PA: ['Play-action', { pa: 1.6, boot: 1.6 }], QUICK: ['Quick game', { quick: 0.9, screen: 1.6 }] },
+  RGC: { ZONE: ['Zone', { zone: 0.8 }], GAP: ['Gap / power', { zone: -0.8 }], OPTION: ['Option', { qbRun: 2.5, rpo: 1.6 }] },
+  DPC: { PRESSURE: ['Pressure', { blitz: 1.6, sim: 1.6 }], MAN: ['Man-match', { man: 1.3 }], SHELL: ['Zone shell', { high: 0.9, blitz: -0.8 }] },
+  DRC: { PENETRATE: ['Penetrating', { stunt: 1.6, base: -0.4 }], TWOGAP: ['Two-gap', { base: 0.8, stunt: -0.8 }] },
+};
+const COACH_STYLES = ['Demanding', "Players' coach", 'Teacher', 'Old school', 'Innovator', 'Motivator'];
+function leanLabel(c) { const r = SPEC_ROLES.includes(c.role) ? c.role : SPEC_OVER[c.role]; return c.lean && LEANS[r] && LEANS[r][c.lean] ? LEANS[r][c.lean][0] : ''; }
+function bgLabel(c) { const a = ASST_SIDE[c.role] === 'O' ? OFF_ARCH[c.bg] : DEF_ARCH[c.bg]; return a ? a.l.replace(/ \(.*\)/, '') : ''; }
+function isAsst(c) { return !!c && ASST_ROLES.includes(c.role); }
+function genAssistant(role, opts = {}) {
+  const [first, last] = randomName(), spec = SPEC_ROLES.includes(role), side = ASST_SIDE[role];
+  const q = opts.q !== undefined ? opts.q : gauss(0, 1), r = () => Math.round(clamp(gauss(54 + q * 8, 11), 15, 97));
+  const archs = Object.keys(side === 'O' ? OFF_ARCH : DEF_ARCH);
+  const c = { id: state.nextCid++, first, last, role, tid: -1, tier: spec ? 3 : 4, age: clamp(Math.round(gauss(spec ? 45 : 40, 7)), 27, 68),
+    k: {}, t: {}, arch: null, rec: { w: 0, l: 0, t: 0, titles: 0 }, mentors: [], hist: [], yrs: 0,
+    style: pick(COACH_STYLES), bg: opts.bg && archs.includes(opts.bg) ? opts.bg : pick(archs), lean: pick(Object.keys(LEANS[spec ? role : SPEC_OVER[role]])) };
+  if (spec) c.exp = r(); else { c.dev = opts.dev !== undefined ? Math.round(clamp(opts.dev, 15, 97)) : r(); c.disc = r(); }
+  updateCoachOvr(c);
+  state.coaches[c.id] = c;
+  return c;
+}
+function asst(t, role) { return t && t.asst ? C(t.asst[role]) : null; }
+function posCoach(tid, pos) { return tid >= 0 && ROOM_COACH[pos] ? asst(T(tid), ROOM_COACH[pos]) : null; }
+function specOver(tid, pos) { return tid >= 0 && ROOM_COACH[pos] ? asst(T(tid), SPEC_OVER[ROOM_COACH[pos]]) : null; }
+let TEND_VER = 1; // bumped on any staff change: blended tendencies are cached per team
+function setAsst(t, role, c, quiet) {
+  t.asst = t.asst || {};
+  const old = C(t.asst[role]);
+  if (old) old.tid = -1;
+  t.asst[role] = c ? c.id : null;
+  if (c) { c.tid = t.id; c.yrs = 0; const boss = C(ASST_SIDE[role] === 'O' ? t.oc : t.dc) || C(t.hc); if (boss && !c.mentors.includes(boss.id)) c.mentors.push(boss.id);
+    if (!quiet && t.id === state.userTid) addNews(`${t.abbr} hired ${ASST_LABEL[role].toLowerCase()} ${cname(c)}.`, [t.id], 'coach'); }
+  TEND_VER++;
+}
+function vacateCoach(c) { // he leaves his club, whatever his job was
+  if (!c || c.tid < 0) return;
+  const t = T(c.tid);
+  if (isAsst(c)) { if (t.asst && t.asst[c.role] === c.id) t.asst[c.role] = null; } else if (t[c.role.toLowerCase()] === c.id) t[c.role.toLowerCase()] = null;
+  c.tid = -1; TEND_VER++;
+}
+const DEV_HANDOFF = { QB: 'dQB', RB: 'dBC', WR: 'dREC', TE: 'dREC', OL: 'dOL', DL: 'dPR', LB: 'dRD', DB: 'dCOV' }; // old coordinator ratings seed the first position coaches
+function ensureAssistants(t, seed) {
+  t.asst = t.asst || {};
+  for (const role of ASST_ROLES) {
+    if (asst(t, role)) continue;
+    const side = ASST_SIDE[role], coord = C(side === 'O' ? t.oc : t.dc), bg = side === 'O' ? offArch(t) : defArch(t);
+    const old = seed && coord && coord.k[DEV_HANDOFF[role]] !== undefined ? coord.k[DEV_HANDOFF[role]] + gauss(0, 6) : undefined;
+    setAsst(t, role, genAssistant(role, { bg: rand() < 0.75 ? bg : undefined, dev: old }), true);
+    asst(t, role).yrs = seed ? randInt(1, 5) : 0;
+  }
+}
+function fillAsstPool(n = 3) {
+  for (const role of ASST_ROLES) { const have = Object.values(state.coaches).filter(c => c.tid < 0 && c.role === role).length; for (let i = have; i < n; i++) genAssistant(role, { q: gauss(-0.2, 1) }); }
+}
+function fillAsstVacancies() {
+  fillAsstPool(3);
+  for (const t of shuffle([...state.teams])) for (const role of ASST_ROLES) {
+    if (asst(t, role)) continue;
+    const side = ASST_SIDE[role], bg = side === 'O' ? offArch(t) : defArch(t);
+    const pool = Object.values(state.coaches).filter(c => c.tid < 0 && c.role === role).sort((a, b) => b.ovr + (b.bg === bg ? 4 : 0) + gauss(0, 4) - a.ovr - (a.bg === bg ? 4 : 0));
+    setAsst(t, role, pool[0] || genAssistant(role, { bg }), true);
+  }
+}
+// a new coordinator brings some of his own people: about half the assistants on his side turn over
+function bringStaff(t, side, coord) {
+  if (!t.asst) return;
+  let n = 0;
+  for (const role of ASST_ROLES) {
+    if (ASST_SIDE[role] !== side) continue;
+    const cur = asst(t, role);
+    if (cur && cur.bg === coord.arch && rand() < 0.8) continue; // already speaks his language
+    if (cur && rand() < 0.5) continue;
+    setAsst(t, role, genAssistant(role, { bg: coord.arch, q: gauss((coord.ovr - 55) / 25, 0.9) }), true); n++;
+  }
+  if (n && t.id === state.userTid) addNews(`${cname(coord)} brought ${n} of his own assistant${n === 1 ? '' : 's'} with him. You can replace any of them on the Staff page.`, [t.id], 'coach');
+}
+// ---- what the lower tiers do ----
+// development: mostly the position coach, with the head coach's culture and the specialist over the room
+function roomDevVal(tid, pos) {
+  const t = T(tid), pc = posCoach(tid, pos), sp = specOver(tid, pos);
+  return 0.7 * (pc ? pc.dev : 38) + 0.15 * knob(C(t.hc), 'cul') + 0.15 * (sp ? sp.exp : 38);
+}
+function roomDisc(tid, pos) { const pc = posCoach(tid, pos); return pc ? pc.disc : 38; }
+function teachMult(tid, pos) { const pc = posCoach(tid, pos), sp = specOver(tid, pos); return (0.9 + (pc ? pc.dev : 38) / 500) * (0.88 + (sp ? sp.exp : 38) / 450); } // ~0.95-1.2
+// design ratings: the coordinator's plan, sharpened or dulled by the specialist for that area
+const DESIGN_SPEC = { passD: ['oc', 'PGC'], runD: ['oc', 'RGC'], covD: ['dc', 'DPC'], presD: ['dc', 'DPC'], frontD: ['dc', 'DRC'] };
+function designKnob(t, k) { const [ck, sr] = DESIGN_SPEC[k], sp = asst(t, sr); return 0.75 * knob(C(t[ck]), k) + 0.25 * (sp ? sp.exp : 38); }
+// tendencies: the play-caller's sheet, a share of the coordinator's when the head coach calls it, bent by each specialist
+function applyLean(tn, role, lean, s) {
+  const L = LEANS[role] && LEANS[role][lean];
+  if (!L) return;
+  for (const k in L[1]) { if (typeof tn[k] !== 'number') continue; tn[k] = k === 'zone' ? round2(clamp(tn[k] + L[1][k] * s, 0.05, 0.95)) : round2(clamp(tn[k] * (1 + L[1][k] * s), 0, 0.95)); }
+}
+function leanStrength(t, sp) { // 8-18% from the specialist, a touch more when his position coaches think the same way
+  const echo = POS_ROLES.filter(r => SPEC_OVER[r] === sp.role).map(r => asst(t, r)).filter(c => c && c.lean === sp.lean).length;
+  return (0.08 + sp.exp / 1000) * (1 + 0.15 * echo);
+}
+const TEND_CACHE = {};
+function blendedTend(t, side) {
+  const key = t.id + side, hit = TEND_CACHE[key];
+  if (hit && hit.ver === TEND_VER && hit.st === state) return hit.t;
+  const caller = side === 'O' ? offCaller(t) : defCaller(t), coord = C(side === 'O' ? t.oc : t.dc);
+  let tn;
+  if (!caller) tn = Object.assign({}, side === 'O' ? OFF_ARCH.WCO.t : DEF_ARCH.C3.t);
+  else if (caller.role === 'HC') { tn = Object.assign({}, caller.ct); if (coord && coord.t) for (const k in tn) if (typeof tn[k] === 'number' && typeof coord.t[k] === 'number') tn[k] = round2(tn[k] * 0.7 + coord.t[k] * 0.3); }
+  else tn = Object.assign({}, caller.t);
+  for (const r of SPEC_ROLES) { if (ASST_SIDE[r] !== side) continue; const sp = asst(t, r); if (sp) applyLean(tn, r, sp.lean, leanStrength(t, sp)); }
+  TEND_CACHE[key] = { ver: TEND_VER, st: state, t: tn };
+  return tn;
+}
+// where the call sheet's flavour comes from, for the Staff page
+function tendInfluences(t, side) {
+  const out = [], caller = side === 'O' ? offCaller(t) : defCaller(t), coord = C(side === 'O' ? t.oc : t.dc);
+  if (caller && caller.role === 'HC' && coord) out.push(`${cname(coord)} (coordinator) shapes about 30% of the head coach's call sheet`);
+  for (const r of SPEC_ROLES) { if (ASST_SIDE[r] !== side) continue; const sp = asst(t, r); if (!sp) continue; const s = leanStrength(t, sp), L = LEANS[r][sp.lean];
+    out.push(`${cname(sp)} (${r}): ${Object.entries(L[1]).map(([k, v]) => `${{ deep: 'deep shots', pa: 'play-action', quick: 'quick game', boot: 'bootlegs', screen: 'screens', zone: 'zone runs', qbRun: 'QB runs', rpo: 'RPOs', blitz: 'blitzes', sim: 'simulated pressure', man: 'man coverage', high: 'two-high shells', stunt: 'stunts', base: 'base personnel' }[k] || k} ${v > 0 ? '+' : '−'}${Math.round(Math.abs(v) * s * 100)}%`).join(', ')}`); }
+  return out;
+}
+// ---- the ladder ----
+function promoteToSpecialist(c) {
+  const role = SPEC_OVER[c.role];
+  c.role = role; c.tier = 3; c.exp = Math.round(clamp(gauss((c.dev + c.disc) / 2, 8), 20, 95));
+  if (!LEANS[role][c.lean]) c.lean = pick(Object.keys(LEANS[role]));
+  c.yrs = 0; updateCoachOvr(c); TEND_VER++;
+  return c;
+}
+// the keywords become a system: his background is the scheme, his lean is baked into the tendencies
+function promoteToCoordinator(c) {
+  const side = ASST_SIDE[c.role], from = c.role, role = side === 'O' ? 'OC' : 'DC', A = side === 'O' ? OFF_ARCH : DEF_ARCH;
+  const base = c.exp !== undefined ? c.exp : (c.dev + c.disc) / 2;
+  c.arch = A[c.bg] ? c.bg : pick(Object.keys(A));
+  c.t = jitterTend(A[c.arch].t);
+  if (LEANS[from]) applyLean(c.t, from, c.lean, 0.22);
+  c.k = {}; for (const k of KNOBS[role]) c.k[k] = Math.round(clamp(gauss(base - 3, 9), 15, 95)); // a good assistant is a good bet, not a sure thing
+  const boost = { PGC: ['passD'], RGC: ['runD'], DPC: ['covD', 'presD'], DRC: ['frontD'] }[from] || [];
+  for (const k of boost) c.k[k] = Math.round(clamp(c.k[k] + 7, 15, 97));
+  c.role = role; c.tier = 2; delete c.exp; delete c.dev; delete c.disc; c.promoted = state.season;
+  updateCoachOvr(c); TEND_VER++;
+  return c;
+}
+function userPromote(cid) { // from the Staff page: move one of your own assistants up into an open job above him
+  const c = C(cid), t = T(state.userTid);
+  if (!c || c.tid !== t.id || !isAsst(c)) return 'He is not on your staff';
+  if (SPEC_ROLES.includes(c.role)) {
+    const key = ASST_SIDE[c.role] === 'O' ? 'oc' : 'dc';
+    if (t[key]) return 'Fire your coordinator first';
+    const name = cname(c); t.asst[c.role] = null; c.tid = -1; promoteToCoordinator(c); hireCoach(t.id, c.id, true);
+    addNews(`${t.abbr} promoted ${name} to ${ROLE_LABEL[c.role].toLowerCase()} (${schemeLabel(c)}).`, [t.id], 'coach');
+  } else {
+    const up = SPEC_OVER[c.role];
+    if (asst(t, up)) return 'That job is not open';
+    t.asst[c.role] = null; promoteToSpecialist(c); setAsst(t, up, c, true);
+    addNews(`${t.abbr} promoted ${cname(c)} to ${ASST_LABEL[up].toLowerCase()}.`, [t.id], 'coach');
+  }
+  return null;
+}
+function asstOffseason(recs, rank, pf, pa) {
+  for (const t of state.teams) {
+    if (!t.asst) continue;
+    const r = recs[t.id];
+    for (const role of ASST_ROLES) { const c = asst(t, role); if (!c) continue; c.yrs = (c.yrs || 0) + 1; c.hist.push({ s: state.season, tid: t.id, role, w: r.w, l: r.l, off: rank(pf, r.pf, true), def: rank(pa, r.pa, false) }); if (c.hist.length > 25) c.hist.shift(); }
+  }
+  for (const c of Object.values(state.coaches)) {
+    if (!isAsst(c)) continue;
+    const drift = c.age < 42 ? 0.9 : c.age < 58 ? 0.1 : -0.9;
+    for (const k of ['exp', 'dev', 'disc']) if (c[k] !== undefined) c[k] = Math.round(clamp(c[k] + gauss(drift, 1.5), 15, 97));
+    updateCoachOvr(c);
+  }
+  // the ladder: good position coaches get specialist jobs, good specialists get coordinator interviews
+  for (const c of Object.values(state.coaches)) {
+    if (!isAsst(c) || c.age >= 62) continue;
+    const mine = c.tid === state.userTid && !isAI(state.userTid);
+    if (SPEC_ROLES.includes(c.role) && c.exp >= 66 && (c.yrs || 0) >= 2 && rand() < 0.14) {
+      if (c.tid >= 0) { if (mine) addNews(`${ASST_LABEL[c.role]} ${cname(c)} is leaving to interview for coordinator jobs.`, [c.tid], 'coach'); vacateCoach(c); }
+      promoteToCoordinator(c);
+    } else if (POS_ROLES.includes(c.role) && (c.dev + c.disc) / 2 >= 64 && (c.yrs || 0) >= 2 && rand() < 0.1) {
+      if (c.tid >= 0) { if (mine) addNews(`${ASST_LABEL[c.role]} ${cname(c)} is leaving for a bigger job elsewhere.`, [c.tid], 'coach'); vacateCoach(c); }
+      promoteToSpecialist(c);
+    }
+  }
+  // other clubs turn over a few assistants every year
+  for (const t of state.teams) { if (!isAI(t.id) || !t.asst) continue; for (const role of ASST_ROLES) { const c = asst(t, role); if (c && rand() < (c.ovr < 42 ? 0.3 : 0.05)) vacateCoach(c); } }
+  TEND_VER++;
+}
+// ---- how you see them: words, and a little unsure until you have worked with a man ----
+function asstWord(c, key) {
+  const mine = c.tid === state.userTid, sd = mine ? ((c.yrs || 0) >= 3 ? 2 : (c.yrs || 0) >= 1 ? 6 : 10) : 12;
+  const v = c[key] + hashGauss(c.id, 700 + key.charCodeAt(1), 5) * sd;
+  return v >= 78 ? 'Excellent' : v >= 64 ? 'Good' : v >= 46 ? 'Average' : v >= 34 ? 'Below average' : 'Poor';
+}
+function asstWordCls(w) { return w === 'Excellent' || w === 'Good' ? 'good' : w === 'Poor' || w === 'Below average' ? 'bad' : ''; }

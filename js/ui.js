@@ -925,6 +925,7 @@ function practiceHTML() {
       const known = v => (v.p.seenW || 0) >= 2;
       const tone = rs.tone > 0.3 ? ['Strong room', 'good'] : rs.tone < -0.2 ? ['Bad habits spreading', 'bad'] : ['Neutral', ''];
       html += `<div class="card" style="margin-bottom:12px"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">${ROOM_NAME[pos]}</h3>
+        <span class="small muted">${posCoach(u, pos) ? `Coach: ${coachNameLink(posCoach(u, pos))} · ${esc(posCoach(u, pos).style)}` : 'No position coach'}</span>
         <span class="pill ${tone[1]}">${tone[0]}</span>${avg !== null ? `<span class="small muted">room average: ${pracGradeLabel(avg).toLowerCase()}</span>` : ''}
         <span class="spacer"></span><span class="small muted">${lead && known(lead) ? `Sets the tone: ${playerLink(lead.p, true)}${lead.a < -0.15 ? ' <span class="bad">(not a good example)</span>' : ''}` : rs.voices.length ? 'Your staff is still learning who runs this room' : 'No veteran voice in this room'}${drag && lead && drag.p !== lead.p && known(drag) ? ` · dragging it down: ${playerLink(drag.p, true)}` : ''}</span></div>` +
         table('prac' + pos, [
@@ -955,9 +956,12 @@ function waiversHTML() {
   const RISK = { 'Will be claimed': 'bad', 'Could be claimed': 'warn', 'Should clear': 'good' };
   let html = `<div class="card" style="margin-bottom:14px"><div class="row"><div><div class="big">#${wv.prio.indexOf(u) + 1}</div><div class="small muted">your claim priority (worst record goes first)</div></div>
     <div style="margin-left:28px"><div class="big">${active} / ${ROSTER_MAX}</div><div class="small muted">active roster · ${claims} claim${claims === 1 ? '' : 's'} in</div></div>
-    <div style="margin-left:28px"><div class="big">${psCount} / ${PS_MAX}</div><div class="small muted">practice squad targets</div></div></div>
+    <div style="margin-left:28px"><div class="big">${psOf(u).length} / ${PS_MAX}</div><div class="small muted">on your practice squad now</div></div>
+    <div style="margin-left:28px"><div class="big">${psCount}</div><div class="small muted">lined up for it, not signed yet<br>(${wv.ps.length} of your cuts · ${Object.keys(wv.want).length} from other teams)</div></div></div>
     <p class="small muted" style="margin:10px 0 0"><b>Claim</b> a player to add him to your 53 on his current contract; if two teams claim him, the one higher in the order gets him. Mark <b>PS target</b> to try to sign him to your practice squad if nobody claims him (he may prefer to return to his old club). Your own cuts marked for the practice squad come back automatically if they clear.</p></div>`;
-  if (mineOut.length || cleared.length) html += '<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Your cuts</h3>' + table('wvmine', [
+  html += `<div class="card" style="margin-bottom:14px"><h3 style="margin-top:0">Your cuts (${mineOut.length + cleared.length + Object.values(state.players).filter(p => p.tid === -1 && !p.waiver && p.lastTid === u && !wv.ps.includes(p.id) && wv.cutIds && wv.cutIds.includes(p.id)).length})</h3><p class="small muted" style="margin:0 0 8px">Nobody here is on your practice squad yet. Players on waivers can be claimed by other teams when you press <b>Process Claims</b>; the ones you marked for the practice squad sign with you then, if they are still unclaimed.</p>`;
+  if (!mineOut.length && !cleared.length) html += '<p class="small">You did not cut anyone, or none of your cuts are on waivers or marked for the practice squad.</p></div>';
+  else html += table('wvmine', [
     { k: 'pos', l: 'Pos', f: p => esc(p.lbl) }, { k: 'n', l: 'Name', f: p => playerLink(p) }, { k: 'age', l: 'Age', f: p => p.age, num: 1 }, { k: 'exp', l: 'YOE', f: p => p.exp, num: 1 },
     { k: 'tier', l: 'Tier', f: p => tierPill(p) }, { k: 'up', l: 'Upside', f: p => upsidePill(p) },
     { k: 'plan', l: 'Your plan', f: p => wv.ps.includes(p.id) ? '<span class="pill on">Practice squad</span>' : '<span class="muted">Released</span>' },
@@ -1134,7 +1138,7 @@ function cutdownHTML() {
   const keeps = on.filter(p => !gone(plan[p.id])), need = keeps.length - ROSTER_MAX;
   const psN = on.filter(p => plan[p.id] === 'ps').length, psVets = on.filter(p => plan[p.id] === 'ps' && psVet(p)).length;
   const fam = ui.cutFam || 'ALL';
-  const coachFor = p => { const t = T(u), side = SPOTS[p.spot].side; return C(side === 'off' ? t.oc : side === 'def' ? t.dc : t.stc) || C(t.hc); };
+  const coachFor = p => { const t = T(u), side = SPOTS[p.spot].side; return posCoach(u, p.pos) || C(side === 'off' ? t.oc : side === 'def' ? t.dc : t.stc) || C(t.hc); };
   let html = `<div class="card" style="margin-bottom:14px"><div class="row"><div><div class="big ${need > 0 ? 'bad' : 'good'}">${keeps.length} / ${ROSTER_MAX}</div><div class="small muted">${need > 0 ? `Cut ${need} more to get to ${ROSTER_MAX}` : need < 0 ? `${-need} open spot${need === -1 ? '' : 's'}: nobody will be signed for you` : 'Roster is set'} · practice squad ${psN}/${PS_MAX} marked (${psVets}/${PS_VETS} veterans) · ${ro.length - on.length} heading to IR (not counted) · dead money so far ${fmtMoney(on.filter(p => plan[p.id] === 'cut').reduce((s, p) => { const d = deadIfCut(p); return s + d.now + d.next; }, 0))}</div></div>
     <span class="spacer"></span><button data-action="cutStaff">Use the staff's recommendations</button><button data-action="cutClear">Clear my cuts</button></div>
     <p class="small muted" style="margin:10px 0 0">Go group by group. Each player has the staff's call and their reasoning; <b>Keep</b>, <b>Cut</b> or <b>Practice squad</b> is yours. Players with fewer than ${WAIVER_EXP} seasons must clear waivers before they can come back to your practice squad: the "If waived" column shows who is likely to be claimed. Veterans are free agents and can go straight to it. When you're done, press <b>Finalize Roster</b> at the top.</p></div>`;
@@ -1308,6 +1312,87 @@ function knobRow(c, k) {
   return `<div class="glance knob" title="${KNOB_LABEL[k]}"><span class="gl-l">${KNOB_LABEL[k]}</span><span class="gl-bar"><i style="width:${v}%;background:${gradeColor(v)}"></i></span><span class="gl-v small">${coachTier(v)}${trueOn() ? ' ' + v : ''}</span></div>`;
 }
 function coachStrengths(c) { return KNOBS[c.role].slice().sort((a, b) => c.k[b] - c.k[a]).slice(0, 2).map(k => KNOB_LABEL[k]).join(', '); }
+function wordPill(w) { return `<span class="pill ${asstWordCls(w)}">${w}</span>`; }
+function kwPills(c) { return [bgLabel(c), leanLabel(c), c.style].filter(Boolean).map(k => `<span class="pill">${esc(k)}</span>`).join(' '); }
+function asstTrack(c) {
+  const bits = [];
+  if (c.tid >= 0) bits.push(`${c.yrs || 0} yr${c.yrs === 1 ? '' : 's'} on this staff`);
+  if (c.tr && c.tr.n >= 3) bits.push(`young players ${c.tr.sum / c.tr.n >= 0 ? '+' : ''}${(c.tr.sum / c.tr.n).toFixed(1)}/yr${c.tr.jumps ? ', ' + c.tr.jumps + ' big jump' + (c.tr.jumps === 1 ? '' : 's') : ''}`);
+  return bits.join(' · ') || '—';
+}
+// the two tiers below the coordinators, grouped by side of the ball
+function assistantsHTML(t, mine, canHire) {
+  if (!t.asst) return '';
+  let html = '';
+  for (const [side, name, coordKey] of [['O', 'Offense', 'oc'], ['D', 'Defense', 'dc']]) {
+    const coord = C(t[coordKey]), infl = tendInfluences(t, side);
+    const act = (role, c) => {
+      if (!canHire) return '';
+      if (!c) return `<button class="sm primary" data-action="asstPool" data-role="${role}">Hire</button>`;
+      const up = SPEC_ROLES.includes(role) ? !coord : !asst(t, SPEC_OVER[role]);
+      return `${up ? `<button class="sm primary" data-action="asstPromote" data-cid="${c.id}" title="Move him up into the open job above him">Promote</button> ` : ''}<button class="sm" data-action="asstPool" data-role="${role}">Replace</button>`;
+    };
+    const spec = SPEC_ROLES.filter(r => ASST_SIDE[r] === side).map(role => ({ role, c: asst(t, role) }));
+    const pos = POS_ROLES.filter(r => ASST_SIDE[r] === side).map(role => ({ role, c: asst(t, role) }));
+    html += `<div class="card" style="margin-top:16px"><h3 style="margin-top:0">${name} staff <span class="small muted" style="font-weight:400">· under ${coord ? esc(cname(coord)) : 'a vacant coordinator job'}</span></h3>
+      ${infl.length ? `<div class="small muted" style="margin-bottom:8px">How the call sheet is shaped: ${infl.map(esc).join(' · ')}</div>` : ''}` +
+      table('spec' + side, [
+        { k: 'r', l: 'Specialist', f: r => `<b>${ASST_LABEL[r.role]}</b>` },
+        { k: 'n', l: 'Coach', f: r => coachNameLink(r.c) },
+        { k: 'a', l: 'Age', f: r => r.c ? r.c.age : '', num: 1 },
+        { k: 'l', l: 'Leans', f: r => r.c ? `<span class="pill on">${esc(leanLabel(r.c))}</span>` : '' },
+        { k: 'e', l: 'Expertise', f: r => r.c ? wordPill(asstWord(r.c, 'exp')) : '' },
+        { k: 'k', l: 'Background', f: r => r.c ? `<span class="small muted">${esc(bgLabel(r.c))} · ${esc(r.c.style)}</span>` : '' },
+        { k: 't', l: 'Track record', f: r => r.c ? `<span class="small muted">${asstTrack(r.c)}</span>` : '' },
+        { k: 'x', l: '', f: r => act(r.role, r.c) },
+      ], spec, { nosort: 1 }) + '<div style="height:10px"></div>' +
+      table('pos' + side, [
+        { k: 'r', l: 'Position coach', f: r => `<b>${ASST_LABEL[r.role].replace(' Coach', '')}</b>` },
+        { k: 'n', l: 'Coach', f: r => coachNameLink(r.c) },
+        { k: 'a', l: 'Age', f: r => r.c ? r.c.age : '', num: 1 },
+        { k: 'd', l: 'Development', f: r => r.c ? wordPill(asstWord(r.c, 'dev')) : '' },
+        { k: 'i', l: 'Discipline', f: r => r.c ? wordPill(asstWord(r.c, 'disc')) : '' },
+        { k: 'k', l: 'Keywords', f: r => r.c ? kwPills(r.c) : '' },
+        { k: 't', l: 'Track record', f: r => r.c ? `<span class="small muted">${asstTrack(r.c)}</span>` : '' },
+        { k: 'x', l: '', f: r => act(r.role, r.c) },
+      ], pos, { nosort: 1 }) + '</div>';
+  }
+  return html;
+}
+function asstPoolModal(role) {
+  const t = T(state.userTid), cur = asst(t, role), spec = SPEC_ROLES.includes(role);
+  const pool = Object.values(state.coaches).filter(c => c.tid < 0 && c.role === role).sort((a, b) => b.ovr - a.ovr);
+  let h = `<h2 style="margin-top:0">${ASST_LABEL[role]}</h2><p class="small muted">${cur ? `Currently ${esc(cname(cur))}. Hiring someone else lets him go.` : 'The job is open. If you leave it empty, your coordinator fills it when you continue.'} Ratings on men you have not worked with are rougher guesses.</p>`;
+  h += pool.length ? table('apool', [
+    { k: 'n', l: 'Name', f: c => coachNameLink(c) }, { k: 'a', l: 'Age', f: c => c.age, num: 1 },
+    ...(spec ? [{ k: 'l', l: 'Leans', f: c => `<span class="pill on">${esc(leanLabel(c))}</span>` }, { k: 'e', l: 'Expertise', f: c => wordPill(asstWord(c, 'exp')) }]
+      : [{ k: 'd', l: 'Development', f: c => wordPill(asstWord(c, 'dev')) }, { k: 'i', l: 'Discipline', f: c => wordPill(asstWord(c, 'disc')) }]),
+    { k: 'k', l: 'Keywords', f: c => kwPills(c) },
+    { k: 'h', l: '', f: c => `<button class="sm primary" data-action="asstHire" data-cid="${c.id}">Hire</button>` },
+  ], pool, { nosort: 1 }) : '<p class="muted">Nobody is available for this job right now.</p>';
+  openModal(h);
+}
+function asstModal(c) {
+  const spec = SPEC_ROLES.includes(c.role), t = c.tid >= 0 ? T(c.tid) : null;
+  let h = `<div class="row"><h2 style="margin:0">${esc(cname(c))}</h2><span class="pill">${ASST_LABEL[c.role]}</span></div>
+    <div class="muted" style="margin:4px 0 12px">${t ? teamLink(c.tid, true) : 'Available'} · Age ${c.age} · ${asstTrack(c)}</div>
+    <div class="row" style="gap:6px;margin-bottom:12px">${kwPills(c)}</div>`;
+  if (spec) {
+    const L = LEANS[c.role][c.lean];
+    h += `<div class="stat-tiles" style="margin-bottom:12px"><div class="tile"><div class="v" style="font-size:15px">${esc(L[0])}</div><div class="l">Leans</div></div><div class="tile"><div class="v" style="font-size:15px">${asstWord(c, 'exp')}</div><div class="l">Expertise</div></div></div>
+      <p class="small">He bends his coordinator's playbook toward what he believes in, and sharpens (or dulls) the design in his area. ${t ? tendInfluences(t, ASST_SIDE[c.role]).filter(x => x.includes(cname(c))).map(esc).join(' ') : ''}</p>`;
+  } else {
+    h += `<div class="stat-tiles" style="margin-bottom:12px"><div class="tile"><div class="v" style="font-size:15px">${asstWord(c, 'dev')}</div><div class="l">Development</div></div><div class="tile"><div class="v" style="font-size:15px">${asstWord(c, 'disc')}</div><div class="l">Discipline</div></div></div>
+      <p class="small"><b>Development</b> is how fast the players in his room improve and how well they hold up with age. <b>Discipline</b> is how his room practices and how few assignments it blows. His keywords say where he comes from: if he is ever promoted, they become his system and tendencies.</p>`;
+  }
+  h += `<p class="small muted">${c.tid === state.userTid ? ((c.yrs || 0) >= 3 ? 'Your staff knows him well: these reads are reliable.' : 'He is still new to your staff: these reads will firm up over a couple of seasons.') : 'You have not worked with him: treat these reads as rough.'}</p>`;
+  const mentors = c.mentors.map(id => C(id)).filter(Boolean);
+  if (mentors.length) h += `<div class="section-title">Coaching Tree</div><div class="small">Worked under: ${mentors.map(m => coachNameLink(m)).join(', ')}</div>`;
+  if (c.hist.length) h += `<div class="section-title">Career</div>` + table('ahist', [
+    { k: 's', l: 'Season', f: x => x.s }, { k: 't', l: 'Team', f: x => T(x.tid).abbr }, { k: 'r', l: 'Role', f: x => ROLE_SHORT[x.role] || x.role }, { k: 'w', l: 'Record', f: x => `${x.w}-${x.l}` },
+  ], c.hist.slice().reverse(), { nosort: 1 });
+  openModal(h);
+}
 function coachesHTML() {
   const tid = ui.staffTid == null ? state.userTid : ui.staffTid, t = T(tid), mine = tid === state.userTid, canHire = state.phase === 'COACHES' && mine;
   const opts = state.teams.map(x => `<option value="${x.id}" ${x.id === tid ? 'selected' : ''}>${x.region} ${x.name}</option>`).join('');
@@ -1323,7 +1408,8 @@ function coachesHTML() {
     { k: 'b', l: 'Best at', f: r => r.c ? `<span class="small muted">${coachStrengths(r.c)}</span>` : '' },
     { k: 'l', l: 'Last season', f: r => r.c ? `<span class="small">${lastUnitLine(r.c) || '—'}</span>` : '' },
     { k: 'x', l: '', f: r => canHire && r.c ? `<button class="sm danger" data-action="fireCoach" data-role="${r.role}">Fire</button>` : '' },
-  ], rows, { sort: 'r', dir: 1 }) + `<div class="muted small" style="margin-top:6px">Click a coach for his card: game-day knobs on one side, development on the other.</div></div>`;
+  ], rows, { sort: 'r', dir: 1 }) + `<div class="muted small" style="margin-top:6px">Click a coach for his card. Coordinators set the system and call the game; their specialists bend it, and the position coaches below develop the players.</div></div>`;
+  html += assistantsHTML(t, mine, canHire);
   if (state.phase === 'COACHES') {
     const role = ui.coachRole || 'HC';
     const pool = Object.values(state.coaches).filter(c => c.tid < 0 && c.role === role);
@@ -1345,6 +1431,7 @@ function coachesHTML() {
 function coachModal(cid) {
   const c = C(cid);
   if (!c) return;
+  if (isAsst(c)) return asstModal(c);
   const t = c.tid >= 0 ? T(c.tid) : null;
   const callsFor = (c.role === 'OC' || c.role === 'DC') && t && C(t.hc) && C(t.hc).t.caller === (c.role === 'OC' ? 'O' : 'D');
   let html = `<div class="row"><h2 style="margin:0">${esc(cname(c))}</h2><span class="pill">${ROLE_LABEL[c.role]}</span> ${tierChip(c.ovr)}</div>
@@ -1358,7 +1445,7 @@ function coachModal(cid) {
   const lu = lastUnitLine(c);
   if (lu) left += `<div class="small muted" style="margin-top:6px">${lu}</div>`;
   let right = `<div class="section-title" style="margin-top:0">Development</div>`;
-  right += dv.length ? dv.map(k => knobRow(c, k)).join('') : '<div class="muted small">No position development duties (his staff handles it).</div>';
+  right += dv.length ? dv.map(k => knobRow(c, k)).join('') : (c.role === 'OC' || c.role === 'DC') && c.tid >= 0 && T(c.tid).asst ? `<div class="small muted" style="margin-bottom:6px">Player development belongs to his position coaches:</div>` + POS_ROLES.filter(r => ASST_SIDE[r] === (c.role === 'OC' ? 'O' : 'D')).map(r => { const a = asst(T(c.tid), r); return `<div class="row small" style="margin:3px 0"><span style="min-width:120px">${ASST_LABEL[r].replace(' Coach', '')}</span>${coachNameLink(a)}${a ? ' ' + wordPill(asstWord(a, 'dev')) : ''}</div>`; }).join('') : '<div class="muted small">No position development duties.</div>';
   if (c.dev && c.dev.length) right += `<div class="section-title">Player Development</div>` + table('cdev', [
     { k: 's', l: 'Offseason', f: d => d.s }, { k: 't', l: 'Team', f: d => T(d.tid).abbr }, { k: 'n', l: 'Young players', f: d => d.n, num: 1 },
     { k: 'a', l: 'Avg change', f: d => `<span class="${d.avg >= 2.5 ? 'good' : d.avg < 1 ? 'bad' : ''}">${d.avg > 0 ? '+' : ''}${d.avg}</span>`, num: 1 },
@@ -1699,7 +1786,7 @@ function boxModal(gid) {
     ['Passing', l => l.passA, [['C/Att', l => `${l.passC || 0}/${l.passA}`], ['Yds', l => l.passY || 0], ['TD', l => l.passTD || 0], ['Int', l => l.passInt || 0], ['Sck', l => l.sacked || 0], ['Rtg', l => round1(passerRating(l.passC || 0, l.passA, l.passY || 0, l.passTD || 0, l.passInt || 0))]], l => l.passY || 0],
     ['Rushing', l => l.rushA, [['Car', l => l.rushA], ['Yds', l => l.rushY || 0], ['Avg', l => round1((l.rushY || 0) / l.rushA)], ['TD', l => l.rushTD || 0], ['Lng', l => l.rushLng || 0]], l => l.rushY || 0],
     ['Receiving', l => l.tgt, [['Rec', l => l.rec || 0], ['Tgt', l => l.tgt], ['Yds', l => l.recY || 0], ['YAC', l => l.yac || 0], ['TD', l => l.recTD || 0], ['Lng', l => l.recLng || 0], ['Drp', l => l.drp || 0]], l => l.recY || 0],
-    ['Defense', l => (l.tkl || 0) + (l.pd || 0) + (l.dint || 0) + (l.prs || 0), [['Tkl', l => l.tkl || 0], ['TFL', l => l.tfl || 0], ['Sck', l => l.sck || 0], ['Prs', l => l.prs || 0], ['Int', l => l.dint || 0], ['PD', l => l.pd || 0], ['FF', l => l.ff || 0]], l => (l.tkl || 0) + (l.sck || 0) * 3 + (l.dint || 0) * 4 + (l.prs || 0)],
+    ['Defense', l => (l.tkl || 0) + (l.pd || 0) + (l.dint || 0) + (l.prs || 0), [['Snaps', l => l.snp || 0], ['Tkl', l => l.tkl || 0], ['TFL', l => l.tfl || 0], ['Sck', l => l.sck || 0], ['Prs', l => l.prs || 0], ['Int', l => l.dint || 0], ['PD', l => l.pd || 0], ['FF', l => l.ff || 0]], l => (l.tkl || 0) + (l.sck || 0) * 3 + (l.dint || 0) * 4 + (l.prs || 0)],
     ['Kicking', l => (l.fga || 0) + (l.xpa || 0), [['FG', l => `${l.fgm || 0}/${l.fga || 0}`], ['Lng', l => l.fgLng || 0], ['XP', l => `${l.xpm || 0}/${l.xpa || 0}`]], l => l.fga || 0],
     ['Punting', l => l.pnt, [['No', l => l.pnt], ['Yds', l => l.pntY], ['Avg', l => round1(l.pntY / l.pnt)], ['In 20', l => l.pi20 || 0], ['TB', l => l.ptb || 0]], l => l.pnt],
     ['Returns', l => (l.krA || 0) + (l.prA || 0), [['KR', l => l.krA || 0], ['KR Yds', l => l.krY || 0], ['PR', l => l.prA || 0], ['PR Yds', l => l.prY || 0]], l => (l.krY || 0) + (l.prY || 0)],
@@ -1707,7 +1794,7 @@ function boxModal(gid) {
   for (const [name, has, cols, sortv] of cats) {
     html += `<div class="section-title">${name}</div><div class="grid g2">`;
     for (const tid of [a, h]) {
-      const rows = lines.filter(x => x.l.tid === tid && has(x.l)).sort((x, y) => sortv(y.l) - sortv(x.l)).slice(0, name === 'Defense' ? 8 : 6);
+      const rows = lines.filter(x => x.l.tid === tid && has(x.l)).sort((x, y) => sortv(y.l) - sortv(x.l)).slice(0, name === 'Defense' ? 30 : 12); // everyone who recorded a stat
       html += `<div>` + table('bx', [{ k: 'n', l: T(tid).abbr, f: x => playerLink(x.p, true) + ` <span class="muted small">${esc(x.p.lbl)}</span>` }, ...cols.map(([l, f]) => ({ k: l, l, num: 1, f: x => f(x.l) }))], rows, { nosort: 1 }) + '</div>';
     }
     html += '</div>';
@@ -2093,6 +2180,9 @@ const actions = {
   advGrp: d => { ui.advGrp = d.g; render(); },
   coachRole: d => { ui.coachRole = d.role; render(); },
   hireCoach: d => { hireCoach(state.userTid, +d.cid); closeModal(); save(); render(); },
+  asstPool: d => asstPoolModal(d.role),
+  asstHire: d => { const c = C(+d.cid); if (c && c.tid < 0 && isAsst(c)) setAsst(T(state.userTid), c.role, c); closeModal(true); save(); render(); },
+  asstPromote: d => { const err = userPromote(+d.cid); if (err) toast(err); save(); render(); },
   tradeToggle: (d) => {
     const assets = d.side === 'give' ? ui.give : ui.get;
     const arr = assets[d.type], id = +d.id, i = arr.indexOf(id);

@@ -203,7 +203,7 @@ function genComfort(p) {
 // how fast he picks up a new spot: hidden Adaptability, football IQ, youth, and his coaches
 function learnRate(p) {
   const iq = Math.max(p.a.proc || 0, p.a.prec || 0, p.a.bawr || 0, 50);
-  const dev = p.tid >= 0 && typeof teamDev === 'function' ? teamDev(p.tid) : null;
+  const dev = p.tid >= 0 && typeof teamDev === 'function' ? teamDev(p.tid, p.pos) : null;
   return clamp((0.55 + ((p.h && p.h.adapt) || 55) / 100) * (1 + (iq - 60) * 0.006) * (p.age <= 24 ? 1.1 : p.age >= 31 ? 0.75 : 1) * (dev ? dev.grow('prec') : 1), 0.35, 1.9);
 }
 // add comfort points (slower as he nears Natural); returns true if his level changed

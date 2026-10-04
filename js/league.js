@@ -57,6 +57,7 @@ const SAVE_VERSION = 3;
 function migrateState(st) {
   state = st;
   if (!st.prePlan) st.prePlan = { starters: 'auto', feat: {}, hold: {} }; // saves from before the preseason plan
+  if (st.teams.some(t => !t.asst) && st.coaches && Object.keys(st.coaches).length) { for (const t of st.teams) ensureAssistants(t, true); fillAsstPool(3); for (const c of Object.values(st.coaches)) updateCoachOvr(c); addNews('League updated: every staff now has specialists and position coaches. Player development has moved from the coordinators to the position coaches.'); }
   for (const id in st.players) { const p = st.players[id]; if (p.h && p.h.work === undefined) { ensureCharacter(p); if (p.tid >= 0) { p.pbTid = p.tid; p.pb = p.exp === 0 ? 80 : 96; p.seenW = p.tid === st.userTid ? 16 : 0; } } }
   if (st.version === 2) {
     // v3: five-coach staffs with knobs & tendencies — regenerate all coaches
