@@ -49,7 +49,7 @@ const LBS = new Set(['MLB', 'WLB', 'SAM']);
 
 function chartPlay(g, oc, dc, res, before, off, def) {
   const o = before.poss, d = 1 - o;
-  g.gx = { man: ['C0', 'C1', 'C2M'].includes(dc.cov), blz: dc.pres === 'BLITZ' || dc.pres === 'SIM', pa: oc.tags && oc.tags.has('PA'), zone: oc.scheme === 'ZONE', run: !!oc.isRun,
+  g.gx = { man: ['C0', 'C1', 'C2M'].includes(dc.cov), blz: dc.pres === 'BLITZ' || dc.pres === 'SIM' || dc.pres === 'FZ', pa: oc.tags && oc.tags.has('PA'), zone: oc.scheme === 'ZONE', run: !!oc.isRun,
     prs: !!res.pressure, air: res.kind === 'comp' || res.kind === 'inc' || res.kind === 'int' ? res.air : undefined };
   const epB = epState(before.down, before.togo, before.ydl);
   const sd = g.score[o] - before.score[o], od = g.score[d] - before.score[d];

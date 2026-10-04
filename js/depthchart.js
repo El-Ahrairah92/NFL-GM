@@ -234,7 +234,7 @@ function offNeed(oc) {
   return Math.min(80, n);
 }
 function defNeed(dc) {
-  let n = 35 + ({ BLITZ: 12, SIM: 25, THREE: 8 }[dc.pres] || 0) + (dc.stunt ? 10 : 0) + ({ C2M: 10, C4: 10, C0: 5 }[dc.cov] || 0) + (dc.subRush ? 5 : 0);
+  let n = 35 + ({ BLITZ: 12, SIM: 25, THREE: 8, FZ: 22 }[dc.pres] || 0) + (dc.stunt ? 10 : 0) + ({ C2M: 10, C4: 10, C0: 5, T2: 12, C6: 18 }[dc.cov] || 0) + (dc.subRush ? 5 : 0) + (dc.disg ? 8 : 0);
   return Math.min(80, n);
 }
 // after the huddle breaks: anyone on the field who does not know this call may blow his assignment

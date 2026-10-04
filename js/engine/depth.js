@@ -12,18 +12,18 @@ const TUNE = {
   teamForm: 0.4,       // sd of team game-day form
   fatFree: 3.0,        // fatigue tolerated before it costs anything
   // trenches
-  passProMedian: 5.62, // seconds for an average rusher to beat an average blocker 1v1
+  passProMedian: 5.85, // seconds for an average rusher to beat an average blocker 1v1
   rushScale: 0.036,
   insideRush: 1.18,    // interior rushers take longer to get home than edges (crowded path, more double teams)    // how strongly the rush/block gap moves win time
   doubleBonus: 17,     // pass-block points added by a second blocker
   chipBonus: 7,
   pickupMiss: 0.13,    // blitz/sim pickup failure for an average protection
   stuntMiss: 0.22,
-  runWin: 0.06,       // logit: front defender beats his run block (average vs average)
+  runWin: 0.03,       // logit: front defender beats his run block (average vs average)
   runScale: 0.12,
   comboBonus: 16,
   // coverage / passing
-  openBase: -0.47,
+  openBase: -0.52,
   openScale: 0.034,
   covWeight: 1.7,      // a defender's coverage skill counts this much more than the receiver's route skill
   holeBonus: 0.9,

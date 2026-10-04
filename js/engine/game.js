@@ -231,8 +231,8 @@ function runPlay(g, oc, dc) {
 function playText(oc, dc, res) {
   const form = { UC: 'Under center', SG: 'Shotgun', PI: 'Pistol', EMP: 'Empty' }[oc.form];
   const tags = [...oc.tags].map(t => ({ MOTION: 'motion', PA: 'play-action', BOOT: 'boot', RUB: 'rub', RPO: 'RPO', SIDE: 'sideline', TRICK: 'trick' }[t])).join(', ');
-  const cov = { C0: 'Cover 0', C1: 'Cover 1', C2: 'Cover 2', C2M: '2-Man', C3: 'Cover 3', C4: 'Quarters' }[dc.cov];
-  const pres = { FOUR: '4-man rush', THREE: '3-man rush', BLITZ: 'blitz', SIM: 'sim pressure' }[dc.pres] + (dc.stunt ? ' + stunt' : '');
+  const cov = { C0: 'Cover 0', C1: 'Cover 1', C2: 'Cover 2', C2M: '2-Man', C3: 'Cover 3', C4: 'Quarters', T2: 'Tampa 2', C6: 'Cover 6' }[dc.cov] + (dc.disg ? ' (disguised)' : '');
+  const pres = { FOUR: '4-man rush', THREE: '3-man rush', BLITZ: 'blitz', SIM: 'sim pressure', FZ: 'fire zone' }[dc.pres] + (dc.stunt ? ' + stunt' : '');
   return { pre: `(${form}, ${oc.pers}${tags ? ', ' + tags : ''})`, post: `[${dc.pkg.toLowerCase()}, ${cov}, ${pres}]` };
 }
 

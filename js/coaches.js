@@ -463,7 +463,8 @@ function blendedTend(t, side) {
   if (!caller) tn = Object.assign({}, side === 'O' ? OFF_ARCH.WCO.t : DEF_ARCH.C3.t);
   else if (caller.role === 'HC') { tn = Object.assign({}, caller.ct); if (coord && coord.t) for (const k in tn) if (typeof tn[k] === 'number' && typeof coord.t[k] === 'number') tn[k] = round2(tn[k] * 0.7 + coord.t[k] * 0.3); }
   else tn = Object.assign({}, caller.t);
-  for (const r of SPEC_ROLES) { if (ASST_SIDE[r] !== side) continue; const sp = asst(t, r); if (sp) applyLean(tn, r, sp.lean, leanStrength(t, sp)); }
+  for (const r of SPEC_ROLES) { if (ASST_SIDE[r] !== side || r === 'DPC') continue; const sp = asst(t, r); if (sp) applyLean(tn, r, sp.lean, leanStrength(t, sp)); }
+  if (side === 'D') { const pk = teamDefPk(t); tn.pk = pk; tn.man = pkShare(pk.sh, MAN_SHELLS); tn.high = pkShare(pk.sh, HIGH_SHELLS); tn.blitz = pkShare(pk.pr, ['BLITZ', 'FZ']); tn.sim = pk.pr.SIM || 0; tn.stunt = pk.stunt; }
   TEND_CACHE[key] = { ver: TEND_VER, st: state, t: tn };
   return tn;
 }
@@ -471,7 +472,8 @@ function blendedTend(t, side) {
 function tendInfluences(t, side) {
   const out = [], caller = side === 'O' ? offCaller(t) : defCaller(t), coord = C(side === 'O' ? t.oc : t.dc);
   if (caller && caller.role === 'HC' && coord) out.push(`${cname(coord)} (coordinator) shapes about 30% of the head coach's call sheet`);
-  for (const r of SPEC_ROLES) { if (ASST_SIDE[r] !== side) continue; const sp = asst(t, r); if (!sp) continue; const s = leanStrength(t, sp), L = LEANS[r][sp.lean];
+  if (side === 'D') { const sp = asst(t, 'DPC'); if (sp) { ensureDefPk(sp); out.push(`${cname(sp)} (DPC) installed: ${sp.pks.map(id => PK_NAME[id]).join(', ') || 'nothing of his own'}`); } }
+  for (const r of SPEC_ROLES) { if (ASST_SIDE[r] !== side || r === 'DPC') continue; const sp = asst(t, r); if (!sp) continue; const s = leanStrength(t, sp), L = LEANS[r][sp.lean];
     out.push(`${cname(sp)} (${r}): ${Object.entries(L[1]).map(([k, v]) => `${{ deep: 'deep shots', pa: 'play-action', quick: 'quick game', boot: 'bootlegs', screen: 'screens', zone: 'zone runs', qbRun: 'QB runs', rpo: 'RPOs', blitz: 'blitzes', sim: 'simulated pressure', man: 'man coverage', high: 'two-high shells', stunt: 'stunts', base: 'base personnel' }[k] || k} ${v > 0 ? '+' : '−'}${Math.round(Math.abs(v) * s * 100)}%`).join(', ')}`); }
   return out;
 }
@@ -480,6 +482,7 @@ function promoteToSpecialist(c) {
   const role = SPEC_OVER[c.role];
   c.role = role; c.tier = 3; c.exp = Math.round(clamp(gauss((c.dev + c.disc) / 2, 8), 20, 95));
   if (!LEANS[role][c.lean]) c.lean = pick(Object.keys(LEANS[role]));
+  delete c.pks; ensureDefPk(c);
   c.yrs = 0; updateCoachOvr(c); TEND_VER++;
   return c;
 }
@@ -493,6 +496,8 @@ function promoteToCoordinator(c) {
   c.k = {}; for (const k of KNOBS[role]) c.k[k] = Math.round(clamp(gauss(base - 3, 9), 15, 95)); // a good assistant is a good bet, not a sure thing
   const boost = { PGC: ['passD'], RGC: ['runD'], DPC: ['covD', 'presD'], DRC: ['frontD'] }[from] || [];
   for (const k of boost) c.k[k] = Math.round(clamp(c.k[k] + 7, 15, 97));
+  if (role === 'DC') { c.pk = genDefPk(c.arch); for (const id of c.pks || []) { if (SHELLS[id]) c.pk.sh[id] = (c.pk.sh[id] || 0) + 0.15; else if (PRESSURES[id]) c.pk.pr[id] = (c.pk.pr[id] || 0) + 0.12; else if (id === 'DISG') c.pk.disg = Math.min(0.6, c.pk.disg + 0.25); else if (id === 'STUNT') c.pk.stunt = Math.min(0.5, c.pk.stunt + 0.1); } normShares(c.pk.sh); normShares(c.pk.pr); }
+  delete c.pks;
   c.role = role; c.tier = 2; delete c.exp; delete c.dev; delete c.disc; c.promoted = state.season;
   updateCoachOvr(c); TEND_VER++;
   return c;
@@ -803,3 +808,52 @@ function promisedResigns(tid) { const t = T(tid), out = []; for (const r of ALL_
 function keepResignPromises(tid) {
   for (const { c, p } of promisedResigns(tid)) { const err = resignPlayer(p.id); addNews(err ? `You promised ${cname(c)} that ${pname(p)} would be re-signed, but there was no cap room to make the offer.` : `${T(tid).abbr} re-signed ${p.lbl} ${pname(p)}, as promised to ${cname(c)}.`, [tid], 'sign'); delete c.prom.resign; }
 }
+
+// =====================================================================
+//  DEFENSIVE PACKAGES
+//  A play-caller no longer has "a tendency to play man 35% of the time". He carries packages: coverage shells and
+//  pressures, each with a share of his call sheet. His pass defense coordinator brings a few of his own. The
+//  familiar numbers (man rate, two-high rate, blitz rate) are read off the result.
+// =====================================================================
+const SHELLS = { C3: 'Cover 3', C1: 'Cover 1', C2: 'Cover 2', C4: 'Quarters', C2M: '2-Man', C0: 'Cover 0', T2: 'Tampa 2', C6: 'Cover 6' };
+const PRESSURES = { FOUR: 'Four-man rush', BLITZ: 'Man blitz', FZ: 'Fire zone', SIM: 'Simulated pressure', THREE: 'Three-man rush' };
+const EXTRAS = { STUNT: 'Stunts and twists', DISG: 'Disguise and rotation' };
+const PK_NAME = Object.assign({}, SHELLS, PRESSURES, EXTRAS);
+const MAN_SHELLS = ['C1', 'C2M', 'C0'], HIGH_SHELLS = ['C2', 'C2M', 'C4', 'T2', 'C6'];
+// what each school of defense is built from
+const DEF_PK_TEMPLATE = {
+  TWOHIGH: { sh: { C4: 0.3, C6: 0.2, C2: 0.2, C3: 0.15, C1: 0.1, C2M: 0.05 }, pr: { FOUR: 0.62, SIM: 0.2, BLITZ: 0.08, FZ: 0.07, THREE: 0.03 }, disg: 0.35 },
+  C3: { sh: { C3: 0.55, C1: 0.2, C2: 0.1, C4: 0.1, C0: 0.05 }, pr: { FOUR: 0.72, BLITZ: 0.15, FZ: 0.08, SIM: 0.05 }, disg: 0 },
+  WIDE9: { sh: { C1: 0.27, C3: 0.33, C2: 0.15, C4: 0.17, C2M: 0.08 }, pr: { FOUR: 0.75, BLITZ: 0.13, SIM: 0.05, FZ: 0.04, THREE: 0.03 }, disg: 0 },
+  MANBLITZ: { sh: { C1: 0.42, C0: 0.08, C2M: 0.14, C3: 0.2, C4: 0.16 }, pr: { FOUR: 0.42, BLITZ: 0.36, SIM: 0.14, FZ: 0.08 }, disg: 0 },
+  TWOGAP: { sh: { C3: 0.28, C2: 0.2, C4: 0.17, C1: 0.22, C2M: 0.08, T2: 0.05 }, pr: { FOUR: 0.56, FZ: 0.18, BLITZ: 0.13, SIM: 0.1, THREE: 0.03 }, disg: 0 },
+};
+function normShares(o) { const s = Object.values(o).reduce((a, b) => a + b, 0) || 1; for (const k in o) o[k] = round2(o[k] / s); return o; }
+function genDefPk(arch) {
+  const T_ = DEF_PK_TEMPLATE[arch] || DEF_PK_TEMPLATE.C3, jit = o => { const r = {}; for (const k in o) r[k] = o[k] * Math.exp(gauss(0, 0.25)); return r; };
+  const top = (o, n, keep) => { const e = Object.entries(o).sort((a, b) => b[1] - a[1]); const r = {}; e.forEach(([k, v], i) => { if (i < n || k === keep) r[k] = v; }); return normShares(r); };
+  return { sh: top(jit(T_.sh), 4), pr: top(jit(T_.pr), 3, 'FOUR'), stunt: round2(clamp((DEF_ARCH[arch] ? DEF_ARCH[arch].t.stunt : 0.15) * Math.exp(gauss(0, 0.2)), 0, 0.5)), disg: round2(T_.disg ? clamp(T_.disg * Math.exp(gauss(0, 0.2)), 0, 0.6) : rand() < 0.15 ? 0.2 : 0) };
+}
+// a pass defense coordinator's own packages, by what he believes in
+const SPEC_PK_POOL = { PRESSURE: ['FZ', 'BLITZ', 'SIM', 'C0', 'STUNT'], MAN: ['C1', 'C2M', 'C0', 'BLITZ'], SHELL: ['T2', 'C6', 'C4', 'C2', 'DISG'], PENETRATE: ['STUNT'], TWOGAP: [] };
+function genSpecPk(c) { const pool = (SPEC_PK_POOL[c.lean] || []).slice(); shuffle(pool); return pool.slice(0, c.role === 'DPC' ? 3 : 1); }
+function ensureDefPk(c) {
+  if (!c) return;
+  if ((c.role === 'DC' || (c.role === 'HC' && c.t && c.t.caller === 'D')) && !c.pk) c.pk = genDefPk(c.arch);
+  if ((c.role === 'DPC' || c.role === 'DRC') && !c.pks) c.pks = genSpecPk(c);
+}
+// the call sheet a team actually carries: the caller's packages (with the coordinator's when the head coach calls it),
+// plus whatever the specialists installed
+function teamDefPk(t) {
+  const caller = defCaller(t), coord = C(t.dc);
+  [caller, coord, asst(t, 'DPC'), asst(t, 'DRC')].forEach(ensureDefPk);
+  const src = caller && caller.pk ? caller.pk : genDefPk('C3');
+  const pk = { sh: Object.assign({}, src.sh), pr: Object.assign({}, src.pr), stunt: src.stunt, disg: src.disg, by: {} };
+  if (caller && caller.role === 'HC' && coord && coord.pk) { for (const cat of ['sh', 'pr']) { for (const k in pk[cat]) pk[cat][k] *= 0.7; for (const k in coord.pk[cat]) pk[cat][k] = (pk[cat][k] || 0) + coord.pk[cat][k] * 0.3; } pk.stunt = pk.stunt * 0.7 + coord.pk.stunt * 0.3; pk.disg = pk.disg * 0.7 + coord.pk.disg * 0.3; }
+  for (const r of ['DPC', 'DRC']) { const sp = asst(t, r); if (!sp || !sp.pks) continue; const b = 0.06 + sp.exp / 1000;
+    for (const id of sp.pks) { if (SHELLS[id]) pk.sh[id] = (pk.sh[id] || 0) + b; else if (PRESSURES[id]) pk.pr[id] = (pk.pr[id] || 0) + b; else if (id === 'STUNT') pk.stunt = Math.min(0.6, pk.stunt + b); else if (id === 'DISG') pk.disg = Math.min(0.7, pk.disg + b * 2); pk.by[id] = sp.id; } }
+  normShares(pk.sh); normShares(pk.pr); pk.stunt = round2(pk.stunt); pk.disg = round2(pk.disg);
+  return pk;
+}
+function pkShare(o, ids) { return round2(ids.reduce((s, k) => s + (o[k] || 0), 0)); }
+function pkList(o, names) { return Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${names[k]} ${Math.round(v * 100)}%`).join(' · '); }

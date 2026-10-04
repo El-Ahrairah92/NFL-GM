@@ -373,6 +373,14 @@ Games were decided by 16.9 on average (NFL 11.3) with 21% decided by 28+. Talent
 - **College class:** each offseason adds candidates with no ties, cheap asks and wide uncertainty.
 - Later pass: consequences for breaking promises by other means, coach morale, renegotiation at contract expiry (deals currently roll over for two years at market).
 
+## 21. Packages (defense first)
+- A defensive play-caller carries **packages** with a share of his call sheet (`c.pk`): coverage shells (Cover 0, 1, 2, 3, 2-Man, Quarters, **Tampa 2**, **Cover 6**), pressures (four-man, man blitz, **fire zone**, simulated, three-man), a stunt rate and a **disguise** rate. Each school of defense is a template; a coach keeps his top four shells and three pressures.
+- The pass defense coordinator brings three packages of his own (`c.pks`, drawn from his lean) and the run defense coordinator one; each adds 6-16% of the sheet by expertise. `teamDefPk` assembles the team's sheet and records who installed what.
+- Man rate, two-high rate, blitz rate and the rest are now **read off the sheet** (`blendedTend`), so scheme fit and the Staff and Playbook pages follow automatically. The call picks a shell and a pressure by share, bent by the situation.
+- New on the field: **fire zone** (five rush, a lineman drops, three under and three deep; the quarterback's hot throw can find the dropper), **Tampa 2** (middle linebacker runs the deep middle; softer against the run), **Cover 6** (quarters to the passing strength, Cover 2 away; harder to read), **disguise** (the pre-snap picture lies; costs playbook complexity).
+- A promoted specialist keeps his packages as part of his own sheet.
+- Still to do: offensive packages, fronts and sub packages as packages, install cost by how many packages changed, and the remaining new looks.
+
 ## Deferred
 - Penalties / Discipline attribute
 - Leadership / intangibles

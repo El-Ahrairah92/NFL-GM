@@ -22,8 +22,8 @@ function chooseRushers(g, def, dc) {
   };
   while (rush.length > 4) dropWeakEdge();
   if (dc.pres === 'THREE') dropWeakEdge();
-  if (dc.pres === 'SIM') dropWeakEdge();
-  const nBlitz = dc.pres === 'BLITZ' ? (dc.cov === 'C0' ? 2 : 1) : dc.pres === 'SIM' ? 1 : 0;
+  if (dc.pres === 'SIM' || dc.pres === 'FZ') dropWeakEdge(); // a lineman drops out: he is in coverage now
+  const nBlitz = dc.pres === 'BLITZ' ? (dc.cov === 'C0' ? 2 : 1) : dc.pres === 'FZ' ? 2 : dc.pres === 'SIM' ? 1 : 0;
   const cands = others.filter(e => ['MLB', 'WLB', 'SAM', 'NCB', 'SS', 'DIME'].includes(e.slot));
   for (let i = 0; i < nBlitz && cands.length; i++) {
     const w = cands.map(e => Math.max(5, prRate(e) - 30) * (e.slot === 'MLB' || e.slot === 'WLB' || e.slot === 'SAM' ? (dc.runBlitz ? 2.5 : 1.6) : 1));
@@ -91,7 +91,7 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
     if (!a.blockers.length) { a.free = true; continue; }
     if (a.e.blitz) {
       const b = a.blockers[0];
-      const p = lgt(lgtP(TUNE.pickupMiss) + design + (dc.pres === 'SIM' ? 0.45 : 0) - (ea(g, b, 'bawr') - 65) * 0.03 - (ea(g, qbE, 'proc') - 70) * 0.015);
+      const p = lgt(lgtP(TUNE.pickupMiss) + design + (dc.pres === 'SIM' ? 0.45 : dc.pres === 'FZ' ? 0.12 : 0) - (ea(g, b, 'bawr') - 65) * 0.03 - (ea(g, qbE, 'proc') - 70) * 0.015);
       if (rand() < p) { a.free = true; a.missed = true; }
     }
   }

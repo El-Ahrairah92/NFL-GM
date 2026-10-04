@@ -139,7 +139,7 @@ function resolveRun(g, off, def, oc, dc) {
     if (r.state === 'blocked' && rand() > r.win) { r.won = false; continue; }
     r.won = true;
     let readOK = rand() < lgt(0.9 + (ea(g, r.e, 'prec') - 65) * 0.05 + g.key * 0.8 - (motion ? 0.3 : 0) - (draw ? 0.5 : 0) - (trickHit === 'fooled' ? 2 : 0));
-    const depthAt = (r.rotated ? 4 : 3) + (readOK ? randInt(0, 2) : randInt(3, 6)) + (draw ? 1 : 0);
+    const depthAt = (r.rotated ? 4 : 3) + (readOK ? randInt(0, 2) : randInt(3, 6)) + (draw ? 1 : 0) + (dc.cov === 'T2' && r.e.slot === 'MLB' ? 1 : 0);
     levels.push({ e: r.e, at: depthAt, bonus: readOK ? 0 : -0.4 });
   }
   // deep help: safeties
@@ -203,9 +203,19 @@ function zoneOwners(cov, droppers) {
     add('IL', cbs[0], 0.5); add('IR', cbs[1], 0.5);
     add('SR', ss); add('IR', ss, 0.8);
     under.push(...rest);
-  } else if (cov === 'C2') {
+  } else if (cov === 'C2' || cov === 'T2') {
     add('DL', fs); add('DR', ss); add('DM', fs, 0.45); add('DM', ss, 0.45);
     add('SL', cbs[0]); add('SR', cbs[1]); add('IL', fs, 0.45); add('IR', ss, 0.45);
+    // Tampa 2: the middle linebacker runs the deep middle and closes the hole between the safeties, leaving the short middle to others
+    const mike = cov === 'T2' ? rest.find(e => e.slot === 'MLB') || rest.find(e => e.slot === 'WLB') : null;
+    if (mike) { add('DM', mike, 0.9); add('IM', mike, 0.8); }
+    under.push(...rest.filter(e => e !== mike));
+  } else if (cov === 'C6') {
+    // quarter-quarter-half: quarters to the passing strength, a squat corner and a deep-half safety away from it
+    const q = droppers.filter(e => e.slot === 'NCB' || e.slot === 'DIME').reduce((s, e) => s + Math.sign(e.x), 0) >= 0 ? 'R' : 'L', h = q === 'R' ? 'L' : 'R';
+    const cq = q === 'R' ? cbs[1] : cbs[0], ch = q === 'R' ? cbs[0] : cbs[1];
+    add('D' + q, cq); add('I' + q, cq, 0.6); add('DM', fs, 0.8); add('IM', fs, 0.5); add('D' + q, fs, 0.4);
+    add('D' + h, ss); add('I' + h, ss, 0.45); add('DM', ss, 0.3); add('S' + h, ch);
     under.push(...rest);
   } else { // C4 quarters
     add('DL', cbs[0]); add('DR', cbs[1]); add('DM', fs, 0.8); add('DM', ss, 0.8); add('IL', cbs[0], 0.6); add('IR', cbs[1], 0.6);
@@ -269,7 +279,7 @@ function resolvePass(g, off, def, oc, dc) {
   // who blocks, who runs routes
   const keep = [];
   const rb = off.find(e => e.slot === 'RB'), fb = off.find(e => e.slot === 'FB'), y = off.find(e => e.slot === 'Y');
-  const blitzKnown = dc.pres === 'BLITZ' && rand() < lgt((ea(g, qb, 'proc') - 60) * 0.06);
+  const blitzKnown = (dc.pres === 'BLITZ' || dc.pres === 'FZ') && rand() < lgt((ea(g, qb, 'proc') - 60) * 0.06);
   if (oc.form !== 'EMP') {
     if (rb && (oc.type === 'DEEP' || oc.type === 'GADGET' || (oc.type === 'DROP' && (blitzKnown || rand() < 0.35)))) keep.push(rb);
     if (fb && rand() < 0.6) keep.push(fb);
@@ -315,11 +325,11 @@ function resolvePass(g, off, def, oc, dc) {
   const bit = new Set();
   if (pa) for (const e of droppers) if (['MLB', 'WLB', 'SAM', 'SS'].includes(e.slot) && bites(g, e, TUNE.paBite + (g.runCred[o] - 4.2) * 0.25)) bit.add(e);
   if (oc.rpoVacated) bit.add(oc.rpoVacated);
-  const pressRate = man ? 0.35 + (dcx.dt.man - 0.35) * 0.6 : dc.cov === 'C2' ? 0.4 : 0.12;
+  const pressRate = man ? 0.35 + (dcx.dt.man - 0.35) * 0.6 : dc.cov === 'C2' || dc.cov === 'T2' ? 0.4 : dc.cov === 'C6' ? 0.25 : 0.12;
   // the coordinator shades coverage toward the opponent's best receiver (safety rolled over, bracket, robber)
   const pass = receivers.filter(e => e.slot !== 'RB' && e.slot !== 'FB').map(e => [e, slotRating(e.p, e.spot)]).sort((x, y) => y[1] - x[1]);
   const star = pass.length > 1 ? pass[0][0] : null;
-  const shade = star ? TUNE.shade * (dc.cov === 'C0' ? 0 : ['C2', 'C4', 'C2M'].includes(dc.cov) ? 0.34 : 0.2) * clamp((pass[0][1] - 70) / 14, 0, 1) * clamp(0.5 + (pass[0][1] - pass[1][1]) / 12, 0.5, 1.2) : 0;
+  const shade = star ? TUNE.shade * (dc.cov === 'C0' ? 0 : ['C2', 'C4', 'C2M', 'T2', 'C6'].includes(dc.cov) ? 0.34 : 0.2) * clamp((pass[0][1] - 70) / 14, 0, 1) * clamp(0.5 + (pass[0][1] - pass[1][1]) / 12, 0.5, 1.2) : 0;
   for (const r of rlist) {
     const e = r.e, deep = r.band === 'D';
     let defE = null, help = e === star ? -shade : 0, hole = false, w;
@@ -349,8 +359,9 @@ function resolvePass(g, off, def, oc, dc) {
       const offC = rte * 0.55 + agi * 0.15 + (deep ? spd : bur) * 0.3;
       const own = owners.length ? owners[0][1] : 0.6;
       const defC = defE ? ea(g, defE, 'zone') * 0.5 + ea(g, defE, 'prec') * 0.25 + ea(g, defE, 'spd') * 0.25 : 30;
-      w = TUNE.openBase + (soft(offC - 70, 14) - soft(defC - 70, 14) * TUNE.covWeight * own) * TUNE.openScale + (1 - own) * 0.5 + (hole ? TUNE.holeBonus : 0);
-      if (dc.cov === 'C2' && (e.slot === 'X' || e.slot === 'Z') && r.band === 'S' && defE && defE.slot === 'CB') w -= 0.35; // squat corners
+      w = TUNE.openBase + (soft(offC - 70, 14) - soft(defC - 70, 14) * TUNE.covWeight * own) * TUNE.openScale + (1 - own) * 0.5 + (hole ? TUNE.holeBonus * (dc.pres === 'FZ' ? 0.35 : 1) : 0); // fire-zone droppers pattern-read: the voids are smaller than they look
+      if ((dc.cov === 'C2' || dc.cov === 'T2') && (e.slot === 'X' || e.slot === 'Z') && r.band === 'S' && defE && defE.slot === 'CB') w -= 0.35; // squat corners
+      if (dc.pres === 'FZ' && defE && defE.depth === 0) w -= 0.25; // the quarterback throws hot into a lineman he never expected to be there
     }
     if (bit.size && r.band !== 'S') w += TUNE.paOpen;
     // the field shrinks near the goal line: no room behind the defense, tighter windows
@@ -366,7 +377,7 @@ function resolvePass(g, off, def, oc, dc) {
   // ---- the QB's read ----
   const proc = ea(g, qb, 'proc'), dec = ea(g, qb, 'dec'), pkt = ea(g, qb, 'pkt');
   // pre-snap coverage read: the QB's processing vs. the coordinator's disguise
-  const covID = rand() < lgt(0.6 + soft(proc - 70, 18) * 0.04 - clamp(designKnob(T(g.tids[d]), 'covD') - 55, -35, 35) * 0.0045 + (oc.tags.has('MOTION') ? 0.5 : 0));
+  const covID = rand() < lgt(0.6 + soft(proc - 70, 18) * 0.04 - clamp(designKnob(T(g.tids[d]), 'covD') - 55, -35, 35) * 0.0045 - (dc.disg ? 0.5 : 0) - (dc.cov === 'C6' ? 0.25 : 0) + (oc.tags.has('MOTION') ? 0.5 : 0));
   const drop = (oc.type === 'QUICK' || oc.rpoThrow ? 1.05 : oc.type === 'DEEP' ? 2.25 : 1.75) + (pa ? 0.45 : 0) + (oc.form === 'UC' ? 0.15 : 0) + (oc.type === 'GADGET' ? 0.7 : 0);
   let order = rlist.slice().sort((a, b) => a.role - b.role || a.tb - b.tb);
   if (oc.rpoThrow && oc.rpoVacated) order.sort((a, b) => b.w - a.w);

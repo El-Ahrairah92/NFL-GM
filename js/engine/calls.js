@@ -173,20 +173,34 @@ function defenseCall(g, oc) {
   // play caller: expecting run -> load the box (single-high) and run-blitz; expecting pass -> rush/cover
   high += (0.5 - runEst) * 0.25 * pcF;
   blitz += (runEst - 0.5) * 0.12 * pcF;
-  const isMan = rand() < clamp(man, 0.05, 0.9), twoHigh = rand() < clamp(high, 0.05, 0.95);
-  if (isMan) call.cov = twoHigh ? 'C2M' : 'C1';
-  else call.cov = twoHigh ? (rand() < 0.5 ? 'C2' : 'C4') : 'C3';
+  let twoHigh;
+  if (dt.pk) {
+    // weight every installed shell by its share of the sheet, bent by the situation
+    const base = dt.pk.sh, w = {}, m0 = pkShare(base, MAN_SHELLS) || 0.01, h0 = pkShare(base, HIGH_SHELLS) || 0.01;
+    const manK = clamp(man, 0.05, 0.9) / clamp(dt.man, 0.05, 0.9), highK = clamp(high, 0.05, 0.95) / clamp(dt.high + 0.08, 0.05, 0.95);
+    for (const k in base) { let v = base[k]; if (MAN_SHELLS.includes(k)) v *= manK; else v *= (1 - m0 * manK) / Math.max(0.05, 1 - m0); v *= HIGH_SHELLS.includes(k) ? highK * 1.12 : (1 - h0 * highK) / Math.max(0.05, 1 - h0);
+      if (k === 'T2' && (sit.gl || sit.red)) v *= 0.4; if (k === 'C0' && !(sit.red || g.down >= 3)) v *= 0.3; w[k] = Math.max(0.001, v); }
+    call.cov = wpick(w) || 'C3';
+    twoHigh = HIGH_SHELLS.includes(call.cov);
+    call.disg = rand() < (dt.pk.disg || 0);
+  } else {
+    const isMan = rand() < clamp(man, 0.05, 0.9); twoHigh = rand() < clamp(high, 0.05, 0.95);
+    if (isMan) call.cov = twoHigh ? 'C2M' : 'C1';
+    else call.cov = twoHigh ? (rand() < 0.5 ? 'C2' : 'C4') : 'C3';
+  }
   // pressure
   const r = rand();
-  if (r < clamp(blitz, 0.03, 0.6)) call.pres = 'BLITZ';
+  if (r < clamp(blitz, 0.03, 0.6)) call.pres = dt.pk && rand() < (dt.pk.pr.FZ || 0) / Math.max(0.01, (dt.pk.pr.FZ || 0) + (dt.pk.pr.BLITZ || 0)) ? 'FZ' : 'BLITZ';
   else if (r < clamp(blitz, 0.03, 0.6) + dt.sim) call.pres = 'SIM';
   else if (sit.b === 'D3L' && twoHigh && rand() < Math.max(0, high - 0.35) * 0.35) call.pres = 'THREE';
   else call.pres = 'FOUR';
   if (call.cov === 'C1' && call.pres === 'BLITZ' && (sit.red || g.down >= 3) && rand() < 0.3) call.cov = 'C0';
   if (call.cov === 'C0') call.pres = 'BLITZ';
+  // a fire zone is five rushers with three under and three deep behind them, whatever the sheet said
+  if (call.pres === 'FZ') call.cov = 'C3';
   call.stunt = call.pres !== 'BLITZ' && rand() < dt.stunt;
   call.subRush = (pkg === 'NICKEL' || pkg === 'DIME') && sit.passDown && rand() < 0.6;
-  call.runBlitz = call.pres === 'BLITZ' && runEst > 0.55;
+  call.runBlitz = (call.pres === 'BLITZ' || call.pres === 'FZ') && runEst > 0.55;
   return call;
 }
 
