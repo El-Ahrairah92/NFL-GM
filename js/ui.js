@@ -489,57 +489,75 @@ function termButtons(p, kind) {
 // how your staff sees him at a spot: perceived level, adjusted for how well he knows that spot
 function chartValue(p, spot) { return uOvr(p) + (slotRating(p, spot) - p.ovr); }
 const CF_CLS = { Natural: 'good', Comfortable: '', Decent: 'warn', Raw: 'bad', Unfamiliar: 'bad' };
+// special teams and situational roles keep a simple board
+const DC_PKG_BOARD = [['RB3D', 1, 1], ['RBSY', 3, 1], ['RUSHE', 5, 1], ['RUSHI', 7, 1], ['K', 1, 2], ['P', 3, 2], ['KR', 5, 2]];
 function dcPlayerMeta(p, key, spot) {
   const cf = comfortLabel(comfortOf(p, spot));
   return `<span class="dc-meta">${['K', 'P', 'KR'].includes(key) ? '' : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p)}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
 }
-// formation boards: [key, grid column, grid row]
-const DC_BOARD = {
-  off: [['X', 1, 1], ['LT', 3, 1], ['LG', 4, 1], ['C', 5, 1], ['RG', 6, 1], ['RT', 7, 1], ['Y', 8, 1], ['Z', 9, 1],
-    ['SLOT', 2, 2], ['QB', 5, 2], ['H', 8, 2], ['FB', 5, 3], ['RB', 5, 4], ['SLOT2', 1, 4], ['Y2', 8, 4], ['OL6', 9, 4]],
-  def: [['FS', 4, 1], ['SS', 6, 1], ['CB1', 1, 2], ['NCB', 3, 2], ['DIME', 7, 2], ['CB2', 9, 2], ['WLB', 3, 3], ['MLB', 5, 3], ['SAM', 7, 3],
-    ['EDGE1', 2, 4], ['IDL1', 4, 4], ['NT', 5, 4], ['IDL2', 6, 4], ['EDGE2', 8, 4]],
-  pkg: [['RB3D', 1, 1], ['RBSY', 3, 1], ['RUSHE', 5, 1], ['RUSHI', 7, 1], ['K', 1, 2], ['P', 3, 2], ['KR', 5, 2]],
-};
-function dcPlayerMeta(p, key, spot) {
-  const cf = comfortLabel(comfortOf(p, spot));
-  return `<span class="dc-meta">${['K', 'P', 'KR'].includes(key) ? '' : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p)}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
-}
-function dcBox(c, key, cur, u) {
-  const ids = (c.lists[key] || []).filter(id => P(id) && P(id).tid === u), spot = CHART_SPOT[key];
-  const row = (id, i) => { const p = P(id), cf = ['K', 'P', 'KR'].includes(key) ? null : comfortLabel(comfortOf(p, spot));
-    return `<div class="${i ? 'b2' : 'b1'}" title="${esc(pname(p))}">${esc(p.last)}${cf && cf !== 'Natural' && cf !== 'Comfortable' ? ` <span class="cfdot ${CF_CLS[cf]}" title="${cf} at ${SPOTS[spot].l}">●</span>` : ''}${p.injury ? ' <span class="cfdot bad" title="Injured">✚</span>' : ''}</div>`; };
-  return `<div class="dc-box ${key === cur ? 'on' : ''}" data-action="dchPick" data-key="${key}"><div class="hd">${chartName(key)}</div>${ids.slice(0, 3).map(row).join('') || '<div class="b2 muted">—</div>'}</div>`;
+const THIN_TIERS = new Set(['Depth', 'Project', 'Fringe', 'Washed']), OK_TIERS = new Set(['Rotation', 'Backup']);
+// how he grades at this job in this package (his level, his comfort at the spot, and what the package asks of it)
+function roleValue(p, b, vid) { return chartValue(p, b.spot) + (b.type && DEF_SLOT[b.type] ? pkgRoleBias(p, b.type, vid === 'BIGN' ? 'NICKEL' : ['BEAR', 'UNDER'].includes(vid) ? 'BASE' : vid) : 0); }
+function dcBox2(b, order, starter, cur, vid, over) {
+  const names = [starter, ...order.filter(p => p !== starter)].filter(Boolean).slice(0, 3);
+  const tr = starter && starter.a ? tierOf(starter, roleValue(starter, b, vid)) : null, cls = !starter ? 'thin' : THIN_TIERS.has(tr) ? 'thin' : OK_TIERS.has(tr) ? 'soft' : '';
+  const row = (p, i) => { const cf = comfortLabel(comfortOf(p, b.spot)); return `<div class="${i ? 'b2' : 'b1'}" title="${esc(pname(p))}${i ? '' : ' · ' + tr + ' at this job'}">${esc(p.last)}${cf !== 'Natural' && cf !== 'Comfortable' ? ` <span class="cfdot ${CF_CLS[cf]}" title="${cf} at ${SPOTS[b.spot].l}">●</span>` : ''}${p.injury ? ' <span class="cfdot bad" title="Injured">✚</span>' : ''}</div>`; };
+  return `<div class="dc-box ${cls} ${b.key === cur ? 'on' : ''}" data-action="dchPick" data-key="${b.key}"><div class="hd">${b.label}${over ? ' <span title="This package has its own order here">★</span>' : ''}</div>${names.map(row).join('') || '<div class="b2 muted">—</div>'}</div>`;
 }
 function depthChartHTML() {
-  const u = state.userTid, c = ensureChart(u);
+  const u = state.userTid, t = T(u), c = ensureChart(u);
   refreshChart(u);
   const ro = rosterOf(u).filter(p => p.a);
   const tab = ui.dchTab || 'off';
-  let key = ui.dchKey && DC_BOARD[tab].some(x => x[0] === ui.dchKey) ? ui.dchKey : DC_BOARD[tab][0][0];
-  const sec = CHART_SECTIONS.find(x => x.rows.some(r => r[0] === key));
-  const label = sec.rows.find(r => r[0] === key)[1], spot = CHART_SPOT[key], n = Math.max(CHART_DEPTH[key] || 3, 1);
-  const list = (c.lists[key] || []).filter(id => P(id) && P(id).tid === u);
+  const tabs = `<div class="subtabs" style="margin:0">${[['off', 'Offense'], ['def', 'Defense'], ['pkg', 'Situational & Special Teams']].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="dchTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
   const unitOf = { off: 'off', def: 'def' }[tab];
-  let html = `<div class="row" style="margin-bottom:10px"><div class="subtabs" style="margin:0">${[['off', 'Offense'], ['def', 'Defense'], ['pkg', 'Packages & Special Teams']].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="dchTab" data-tab="${k}">${l}</button>`).join('')}</div><span class="spacer"></span>
-    ${unitOf ? (c.auto[unitOf] ? `<span class="small muted">The staff is setting the ${tab === 'off' ? 'offense' : 'defense'}.</span> <button class="sm primary" data-action="dchAuto" data-unit="${unitOf}" data-on="0">Take control</button>` : `<span class="small muted">You're setting the ${tab === 'off' ? 'offense' : 'defense'}.</span> <button class="sm" data-action="dchAuto" data-unit="${unitOf}" data-on="1">Hand to staff</button>`) : `<span class="small muted">Special teams: ${c.auto.st ? 'staff' : 'you'}</span> <button class="sm" data-action="dchAuto" data-unit="st" data-on="${c.auto.st ? 0 : 1}">${c.auto.st ? 'Take control' : 'Hand to staff'}</button>`}</div>
-    ${state.settings.autoUser ? '<div class="callout"><b>Auto-manage is on</b>: the staff sets the depth chart until you turn it off in Settings.</div>' : ''}
-    <div class="dc-wrap"><div class="card"><div class="dc-board ${tab}">${DC_BOARD[tab].map(([k, col, row]) => `<div style="grid-column:${col};grid-row:${row}">${dcBox(c, k, key, u)}</div>`).join('')}</div>
-    <div class="small muted" style="margin-top:10px">Click a position to set its order. <span class="cfdot warn">●</span> Decent / <span class="cfdot bad">●</span> Raw or unfamiliar at the spot · <span class="cfdot bad">✚</span> injured.${tab === 'off' ? ' Bottom row: sub-package spots (4th WR, 3rd TE, 6th OL).' : ''}</div></div><div class="dc-side">`;
-  // ---- right: the selected slot ----
+  const ctl = unitOf ? (c.auto[unitOf] ? `<span class="small muted">The staff is setting the ${tab === 'off' ? 'offense' : 'defense'}.</span> <button class="sm primary" data-action="dchAuto" data-unit="${unitOf}" data-on="0">Take control</button>` : `<span class="small muted">You're setting the ${tab === 'off' ? 'offense' : 'defense'}.</span> <button class="sm" data-action="dchAuto" data-unit="${unitOf}" data-on="1">Hand to the staff</button>`) : '<span class="small muted">Situational roles and special teams are always yours to set.</span>';
+  let html = `<div class="row" style="margin-bottom:10px">${tabs}<span class="spacer"></span>${ctl}</div>${state.settings.autoUser ? '<div class="callout"><b>Auto-manage is on</b>: the staff sets the depth chart until you turn it off in Settings.</div>' : ''}`;
+  let boxes, key, editKey, spot, label, vid = null, view = null, sel = null, over = false;
+  if (tab === 'pkg') {
+    key = ui.dchKey && DC_PKG_BOARD.some(x => x[0] === ui.dchKey) ? ui.dchKey : 'RB3D'; editKey = key; spot = CHART_SPOT[key];
+    label = CHART_SECTIONS.map(x => x.rows.find(r => r[0] === key)).find(Boolean)[1];
+    boxes = DC_PKG_BOARD.map(([k, col, row]) => { const ids = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === u); return `<div style="grid-column:${col};grid-row:${row}">${dcBox2({ key: k, spot: CHART_SPOT[k], label: chartName(k) }, ids, ids[0], key, null, false)}</div>`; }).join('');
+    html += `<div class="dc-wrap"><div class="card"><div class="dc-board pkg">${boxes}</div><div class="small muted" style="margin-top:10px">Click a role to set its order.</div></div><div class="dc-side">`;
+  } else {
+    const views = dcViews(t, tab); ui.dchView = ui.dchView || {};
+    vid = views.some(v => v.id === ui.dchView[tab]) ? ui.dchView[tab] : views[0].id; view = views.find(v => v.id === vid);
+    const lay = dcLayout(t, tab, vid), lineup = dcLineup(u, tab, vid);
+    key = ui.dchKey && lay.some(b => b.key === ui.dchKey) ? ui.dchKey : lay[0].key; sel = lay.find(b => b.key === key);
+    const home = homeView(tab, key) === vid; editKey = home ? key : vid + ':' + key; over = !home && !!(c.lists[editKey] && c.lists[editKey].length);
+    spot = sel.spot; label = sel.label;
+    const listFor = b => { const ek = homeView(tab, b.key) === vid ? b.key : vid + ':' + b.key; const ids = c.lists[ek] && c.lists[ek].length ? c.lists[ek] : c.lists[b.key] || []; return ids.map(id => P(id)).filter(p => p && p.tid === u); };
+    const thin = [];
+    boxes = lay.map(b => { const st = lineup[b.name], ov = homeView(tab, b.key) !== vid && !!(c.lists[vid + ':' + b.key] && c.lists[vid + ':' + b.key].length);
+      if (st && st.a) { const tr = tierOf(st, roleValue(st, b, vid)); if (THIN_TIERS.has(tr)) thin.push(`${b.label} (${esc(st.last)}: ${tr.toLowerCase()})`); } else if (!st || !st.a) thin.push(b.label + ' (nobody)');
+      return `<div style="grid-column:${b.col};grid-row:${b.row}">${dcBox2(b, listFor(b), st && st.a ? st : null, key, vid, ov)}</div>`; }).join('');
+    html += `<div class="subtabs" style="margin:0 0 10px">${views.map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dchView" data-v="${v.id}">${esc(v.label)}${v.share ? ` <span class="small" style="opacity:.7">${Math.round(v.share * 100)}%</span>` : ''}</button>`).join('')}</div>
+      <div class="dc-wrap"><div class="card"><div class="dc-board ${tab}">${boxes}</div>
+      <div class="small muted" style="margin-top:10px">This is who lines up in <b>${esc(view.label)}</b> right now. Click a position to set its order${tab === 'def' ? '; an order you set here applies to this package only (★), so your sub-package linebacker can be a different man from your base one' : '; an order you set in another grouping applies to that grouping only (★)'}. <span class="cfdot warn">●</span> Decent / <span class="cfdot bad">●</span> Raw at the spot · <span class="cfdot bad">✚</span> injured. Amber and red boxes are jobs filled below starting level.</div>
+      ${thin.length ? `<div class="small" style="margin-top:8px"><b class="bad">Thin in this look:</b> ${thin.join(' · ')}</div>` : '<div class="small good" style="margin-top:8px">No weak spots in this look.</div>'}</div><div class="dc-side">`;
+  }
+  ui.dchEdit = editKey;
+  // ---- right: the selected job ----
+  const n = Math.max(CHART_DEPTH[key] || 3, 1);
+  const ownList = c.lists[editKey] && c.lists[editKey].length ? c.lists[editKey] : null;
+  const list = (ownList || c.lists[key] || []).filter(id => P(id) && P(id).tid === u);
   const lvl = p => { const cc = comfortOf(p, spot); return cc >= 85 ? 4 : cc >= 60 ? 3 : cc >= 30 ? 2 : cc > 0 ? 1 : 0; };
+  const val = p => sel ? roleValue(p, sel, vid) : chartValue(p, spot);
   const fam = (FAMILIES.find(f => f[1].includes(spot)) || [null, []])[1];
   const all = ro.filter(p => (key === 'KR' ? returnScore(p) > -1e8 : SPOTS[p.spot].side === SPOTS[spot].side) && !list.includes(p.id));
   const related = all.filter(p => key === 'KR' || ['K', 'P'].includes(key) || lvl(p) > 0 || fam.includes(p.spot));
-  const cands = (ui.dchAll ? all : related).sort((x, y) => key === 'KR' ? returnScore(y) - returnScore(x) : lvl(y) - lvl(x) || chartValue(y, spot) - chartValue(x, spot));
+  const cands = (ui.dchAll ? all : related).sort((x, y) => key === 'KR' ? returnScore(y) - returnScore(x) : lvl(y) - lvl(x) || val(y) - val(x));
   const rot = ROT_KEYS.has(key) ? `<label class="small muted">No. 2 snaps</label> <select data-change="dchRot" data-key="${key}">${ROT_OPTS.map(([v, l]) => `<option value="${v}" ${(c.rot[key] || 0) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>` : '';
-  html += `<div class="card"><div class="row" style="margin-bottom:6px"><h3 style="margin:0">${chartName(key)} · ${esc(label)}</h3><span class="spacer"></span>${rot}</div>
-    <div class="section-title" style="margin-top:6px">Depth order <span class="small muted">· drag to reorder</span></div><div class="dc-order">
-    ${list.map((id, i) => { const p = P(id); return `<div class="dc-row" draggable="true" data-dcpid="${id}" data-dcfrom="${i}" data-dcdrop="${i}"><span class="n">${i + 1}</span><span>${esc(p.lbl)} ${playerLink(p)}</span><span class="dc-meta">${dcPlayerMeta(p, key, spot)}<button class="sm" data-action="dchRemove" data-key="${key}" data-i="${i}" title="Remove">✕</button></span></div>`; }).join('')}
+  const roleNote = sel && sel.type && DEF_SLOT[sel.type] && DEF_SLOT[sel.type][1] === 'LB' ? (['NICKEL', 'DIME', 'BIGN'].includes(vid) ? 'In sub packages this job is mostly coverage: range and zone or man skills matter more than taking on blocks.' : 'In base and heavy looks this job is mostly run defense: tackling, shedding blocks and strength matter more than coverage.') : '';
+  const scope = tab === 'pkg' ? '' : editKey === key ? `<div class="small muted" style="margin:2px 0 8px">This is the base order for the position. Other ${tab === 'def' ? 'packages' : 'groupings'} use it unless you give them their own.</div>` : over ? `<div class="small" style="margin:2px 0 8px">★ <b>${esc(view.label)}</b> has its own order here. <button class="sm" data-action="dchReset" data-key="${editKey}">Use the base order</button></div>` : `<div class="small muted" style="margin:2px 0 8px">Using the base order. Change it here and <b>${esc(view.label)}</b> gets its own.</div>`;
+  const rowTxt = p => `<span class="small muted" style="margin-left:6px">${esc(scoutProfile(p, true))}</span>`;
+  html += `<div class="card"><div class="row" style="margin-bottom:2px"><h3 style="margin:0">${esc(label)} <span class="small muted" style="font-weight:400">· ${SPOTS[spot].l}${view ? ' · ' + esc(view.label) : ''}</span></h3><span class="spacer"></span>${rot}</div>${scope}${roleNote ? `<div class="small muted" style="margin-bottom:8px">${roleNote}</div>` : ''}
+    <div class="section-title" style="margin-top:6px">Depth order <span class="small muted">· drag to reorder</span></div><div class="dc-order" data-dckey="${editKey}">
+    ${list.map((id, i) => { const p = P(id); return `<div class="dc-row" draggable="true" data-dcpid="${id}" data-dcfrom="${i}" data-dcdrop="${i}"><span class="n">${i + 1}</span><span>${esc(p.lbl)} ${playerLink(p)}${rowTxt(p)}</span><span class="dc-meta">${dcPlayerMeta(p, key, spot)}<button class="sm" data-action="dchRemove" data-key="${editKey}" data-i="${i}" title="Remove">✕</button></span></div>`; }).join('')}
     <div class="dc-drop" data-dcdrop="${list.length}">${list.length < n ? `Drop a player here for No. ${list.length + 1}` : `Drop here to make him No. ${n} (bumps the last man)`}</div></div>
-    <div class="row" style="margin:16px 0 8px"><span class="section-title" style="margin:0">Available · by comfort at ${SPOTS[spot].l}, then ability</span><span class="spacer"></span>
+    <div class="row" style="margin:16px 0 8px"><span class="section-title" style="margin:0">Available · by comfort at ${SPOTS[spot].l}, then fit for this job</span><span class="spacer"></span>
       <label class="small muted"><input type="checkbox" data-change="dchAll" ${ui.dchAll ? 'checked' : ''}> Show everyone (+${all.length - related.length})</label></div>
-    <div class="dc-cands">${cands.map(p => `<div class="dc-row cand" draggable="true" data-dcpid="${p.id}"><span>${esc(p.lbl)} ${playerLink(p)} <span class="muted small">${p.age}y</span></span><span class="dc-meta">${dcPlayerMeta(p, key, spot)}<button class="sm primary" data-action="dchAdd" data-key="${key}" data-pid="${p.id}" title="Add to the depth order">+</button></span></div>`).join('') || '<div class="muted small" style="padding:10px">Nobody else available.</div>'}</div></div>`;
+    <div class="dc-cands">${cands.map(p => `<div class="dc-row cand" draggable="true" data-dcpid="${p.id}"><span>${esc(p.lbl)} ${playerLink(p)} <span class="muted small">${p.age}y</span>${rowTxt(p)}</span><span class="dc-meta">${dcPlayerMeta(p, key, spot)}<button class="sm primary" data-action="dchAdd" data-key="${editKey}" data-pid="${p.id}" title="Add to the depth order">+</button></span></div>`).join('') || '<div class="muted small">Nobody else can play here.</div>'}</div></div>`;
   return html + '</div></div>';
 }
 // ---------- playbook (view only) ----------
@@ -2227,9 +2245,11 @@ const actions = {
   pbForm: d => { ui.pbForm = d.v; render(); },
   pbPkg: d => { ui.pbPkg = d.v; render(); },
   dchPick: d => { ui.dchKey = d.key; render(); },
+  dchView: d => { (ui.dchView = ui.dchView || {})[ui.dchTab || 'off'] = d.v; render(); },
+  dchReset: d => { delete ensureChart(state.userTid).lists[d.key]; save(); render(); },
   dchTab: d => { ui.dchTab = d.tab; ui.dchKey = null; render(); },
   dchRemove: d => { setChart(state.userTid, d.key, +d.i, 0); save(); render(); },
-  dchAdd: d => { const l = ensureChart(state.userTid).lists[d.key] || []; setChart(state.userTid, d.key, l.length, +d.pid); save(); render(); },
+  dchAdd: d => { const blocked = !ui.dchAll && chartBlocked(state.userTid, d.key, +d.pid); if (blocked) { toast(blocked); return; } const cc = ensureChart(state.userTid), l = cc.lists[d.key] || cc.lists[baseKey(d.key)] || []; setChart(state.userTid, d.key, l.length, +d.pid); save(); render(); },
   dchAuto: d => { setChartAuto(state.userTid, d.unit, d.on === '1'); save(); render(); },
   autoCut: () => { const c = autoCut(state.userTid, ROSTER_MAX, false); toast(`Released ${c.length} player(s).`); save(); render(); },
   sign: d => { const err = signFA(+d.pid, state.userTid); if (err) toast(err); else toast('Signed!'); closeModal(); save(); render(); },
@@ -2339,10 +2359,10 @@ let dcDrag = null;
 document.addEventListener('dragstart', e => {
   const el = e.target.closest && e.target.closest('[data-dcpid]');
   if (!el) return;
-  dcDrag = { pid: +el.dataset.dcpid, from: el.dataset.dcfrom !== undefined ? +el.dataset.dcfrom : null };
+  dcDrag = { pid: +el.dataset.dcpid, from: el.dataset.dcfrom !== undefined ? +el.dataset.dcfrom : null, key: ui.dchEdit }; // remember which position he was picked up for
   el.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dcDrag.pid));
 });
-document.addEventListener('dragend', e => { const el = e.target.closest && e.target.closest('[data-dcpid]'); if (el) el.classList.remove('drag'); document.querySelectorAll('.dc-over').forEach(x => x.classList.remove('dc-over')); });
+document.addEventListener('dragend', e => { const el = e.target.closest && e.target.closest('[data-dcpid]'); if (el) el.classList.remove('drag'); document.querySelectorAll('.dc-over').forEach(x => x.classList.remove('dc-over')); dcDrag = null; });
 document.addEventListener('dragover', e => {
   const t = e.target.closest && e.target.closest('[data-dcdrop]');
   if (!t || !dcDrag) return;
@@ -2354,11 +2374,14 @@ document.addEventListener('drop', e => {
   const t = e.target.closest && e.target.closest('[data-dcdrop]');
   if (!t || !dcDrag) return;
   e.preventDefault();
-  const key = ui.dchKey || 'QB';
-  let at = +t.dataset.dcdrop;
-  if (dcDrag.from !== null && dcDrag.from < at) at -= 0; // dropping onto a later row puts him in that row's spot
-  setChart(state.userTid, key, at, dcDrag.pid);
-  dcDrag = null; save(); render();
+  const key = t.dataset.dckey || t.closest('[data-dckey]') && t.closest('[data-dckey]').dataset.dckey;
+  const d = dcDrag; dcDrag = null;
+  // only the position the drag started on can receive it: a drop after the panel changed is ignored
+  if (!key || key !== d.key || key !== ui.dchEdit) { render(); return; }
+  const blocked = !ui.dchAll && chartBlocked(state.userTid, key, d.pid);
+  if (blocked) { toast(blocked); render(); return; }
+  setChart(state.userTid, key, +t.dataset.dcdrop, d.pid);
+  save(); render();
 });
 // navigation fires on press, so a slight mouse movement or a redraw mid-click can't swallow it
 let navPressed = null;

@@ -16,7 +16,7 @@ const CHART_SECTIONS = [
     ['MLB', 'Middle LB'], ['WLB', 'Weak-side LB'], ['SAM', 'Strong-side LB (base)'], ['CB1', 'Corner'], ['CB2', 'Corner'], ['NCB', 'Slot corner (nickel)'], ['DIME', 'Second slot corner (dime)'], ['FS', 'Free safety'], ['SS', 'Strong safety'],
   ] },
   { unit: 'off', title: 'Offensive packages', pkg: true, rows: [['RB3D', 'Passing-down back (3rd & long, 2-minute)'], ['RBSY', 'Short-yardage / goal-line back']] },
-  { unit: 'def', title: 'Defensive packages', pkg: true, rows: [['RUSHE', 'Rush specialists · edge (passing downs)'], ['RUSHI', 'Rush specialists · interior (passing downs)']] },
+  { unit: 'def', title: 'Defensive packages', pkg: true, rows: [['RUSHE', 'Rush specialists · edge (passing downs)'], ['RUSHI', 'Rush specialists · interior (passing downs)'], ['BIGN', 'Big nickel safety (third safety in the slot)']] },
   { unit: 'st', title: 'Special teams', rows: [['K', 'Kicker'], ['P', 'Punter'], ['KR', 'Returner']] },
 ];
 const CHART_DEPTH = { RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, K: 1, P: 1, KR: 2 };
@@ -28,7 +28,7 @@ function defaultChart(tid) {
   const ro = rosterOf(tid).filter(p => p.a && !onIR(p));
   const lists = {}, starters = { off: new Set(), def: new Set(), st: new Set() };
   for (const sec of CHART_SECTIONS) for (const [key] of sec.rows) {
-    const spot = CHART_SPOT[key], n = CHART_DEPTH[key] || 3;
+    const spot = chartSpotFor(tid, key), n = CHART_DEPTH[key] || 3;
     const ranked = ro.filter(p => SPOTS[p.spot].side === SPOTS[spot].side || key === 'KR').map(p => [p, key === 'KR' ? returnScore(p) : slotRating(p, spot)])
       .sort((a, b) => b[1] - a[1]).map(x => x[0]);
     if (!ranked.length) { lists[key] = []; continue; }
@@ -42,7 +42,48 @@ function defaultChart(tid) {
 function returnScore(p) { if (!['RB', 'WRX', 'WRZ', 'SLOT', 'CB', 'NCB', 'FS', 'SS'].includes(p.spot)) return -1e9; return p.a.spd * 0.3 + p.a.bur * 0.2 + (p.a.elu || 30) * 0.25 + (p.a.vis || 30) * 0.15 + (p.a.bsec || 50) * 0.1 - (p.ovr >= 80 ? 6 : 0); }
 // display names (chart keys stay stable for saves)
 const CHART_NAME = { NCB: 'SLOT CB', DIME: 'SLOT CB2', RUSHE: 'EDGE RUSH', RUSHI: 'INT RUSH', IDL1: 'DT', IDL2: 'DT', EDGE1: 'EDGE', EDGE2: 'EDGE', CB1: 'CB', CB2: 'CB', RB3D: '3RD-DOWN RB', RBSY: 'SHORT-YD RB', OL6: '6TH OL', SLOT2: 'WR4', Y2: 'TE3' };
-const chartName = k => CHART_NAME[k] || k;
+const chartName = k => CHART_NAME[baseKey(k)] || baseKey(k);
+// ---- the chart follows the scheme: which position a slot really is depends on the front you run ----
+function teamFront(tid) { const t = T(tid); return t && typeof defTend === 'function' ? defTend(t).front : '4-3'; }
+function chartSpotFor(tid, key0) {
+  const key = baseKey(key0);
+  if (CHART_UNIT(key) !== 'def' || ['RUSHE', 'RUSHI', 'BIGN'].includes(key)) return CHART_SPOT[key];
+  const front = teamFront(tid);
+  for (const pkg of ['BASE', 'NICKEL', 'DIME', 'GL']) { const row = packageLayout(front, pkg).find(l => (DEF_CHART_KEY[l[0]] || l[0]) === key); if (row) return DEF_SLOT[row[1]][0]; }
+  return CHART_SPOT[key];
+}
+// the views of a depth chart: one per defensive package and per offensive personnel grouping your staff actually uses
+function dcViews(t, tab) {
+  if (tab === 'off') { const pers = offTend(t).pers, tot = Object.values(pers).reduce((a, b) => a + b, 0) || 1;
+    const ks = Object.keys(PERSONNEL).filter(k => (pers[k] || 0) > 0 || k === '11' || k === 'JUMBO').sort((a, b) => (pers[b] || 0) - (pers[a] || 0));
+    return ks.map(k => ({ id: k, label: k === 'JUMBO' ? 'Jumbo' : k + ' personnel', share: (pers[k] || 0) / tot })); }
+  const dt = defTend(t), fr = (dt.pk && dt.pk.fr) || {}, v = [{ id: 'BASE', label: dt.front + ' base', share: dt.base }, { id: 'NICKEL', label: 'Nickel' }, { id: 'DIME', label: 'Dime' }, { id: 'GL', label: 'Goal line' }];
+  if (fr.BIGN) v.splice(2, 0, { id: 'BIGN', label: 'Big nickel' });
+  if (fr.UNDER) v.push({ id: 'UNDER', label: 'Under front' });
+  if (fr.BEAR) v.push({ id: 'BEAR', label: 'Bear front' });
+  return v;
+}
+const OFF_BOX = { X: [1, 1], OL6: [2, 1], LT: [3, 1], LG: [4, 1], C: [5, 1], RG: [6, 1], RT: [7, 1], Y: [8, 1], Z: [9, 1], SLOT: [2, 2], H: [2, 2], QB: [5, 2], SLOT2: [8, 2], Y2: [8, 2], FB: [5, 3], RB: [5, 4] };
+const OFF_HOME = { H: '12', FB: '21', SLOT2: '10', Y2: '13', OL6: 'JUMBO' }, DEF_HOME = { NCB: 'NICKEL', DIME: 'DIME', BIGN: 'BIGN' };
+function homeView(tab, key) { return tab === 'off' ? OFF_HOME[key] || '11' : DEF_HOME[key] || 'BASE'; }
+function dcRawLayout(t, vid) { const front = defTend(t).front; return vid === 'BEAR' ? packageLayout('Bear', 'BASE') : vid === 'UNDER' ? packageLayout('Under', 'BASE') : vid === 'BIGN' ? packageLayout(front, 'NICKEL').map(l => l[0] === 'NCB' ? ['NCB', 'BIGN', l[2], l[3]] : l) : packageLayout(front, vid); }
+// where everyone lines up in a view: [{ key, name, spot, col, row, label }]
+function dcLayout(t, tab, vid) {
+  if (tab === 'off') return ['QB', ...OL_SLOTS, ...PERSONNEL[vid]].map(s => ({ key: s, name: s, spot: OFF_SLOT[s][0], type: s, col: OFF_BOX[s][0], row: OFF_BOX[s][1], label: chartName(s) }));
+  const front = defTend(t).front, odd = (front === '3-4' || front === 'Tite') && vid === 'BASE', sub = vid === 'NICKEL' || vid === 'DIME' || vid === 'BIGN';
+  const NAME = { EDGE: odd ? 'OLB' : 'EDGE', DE: 'DE', DT: 'DT', NT: 'NT', MLB: odd ? 'ILB' : sub ? 'SUB LB' : 'MLB', WLB: odd ? 'ILB' : sub ? 'SUB LB' : 'WLB', SAM: 'SAM', CB: 'CB', NCB: 'SLOT CB', DIME: 'DIME CB', BIGN: 'BIG NICKEL', FS: 'FS', SS: 'SS' };
+  const rows = dcRawLayout(t, vid).map(([name, type, x, depth]) => ({ name, type, x, key: type === 'BIGN' ? 'BIGN' : DEF_CHART_KEY[name] || name, spot: DEF_SLOT[type][0], label: NAME[type] || type,
+    row: depth === 0 ? 4 : DEF_SLOT[type][1] === 'LB' ? 3 : type === 'FS' || type === 'SS' ? 1 : 2 }));
+  for (const r of [1, 2, 3, 4]) { const used = new Set(); for (const b of rows.filter(x => x.row === r).sort((a, b) => a.x - b.x)) { let c = clamp(Math.round(5 + b.x * 1.05), 1, 9); while (used.has(c) && c < 9) c++; while (used.has(c) && c > 1) c--; used.add(c); b.col = c; } }
+  return rows;
+}
+// who the engine would actually put out there in this view right now (your chart if you set one, the staff's read if not)
+function dcLineup(tid, tab, vid) {
+  const g = { tids: [tid, tid], side: [null, null], ps: {}, famPen: [0, 0], down: 1, togo: 10, ydl: 30, preview: true }; initSide(g, 0);
+  const t = T(tid), front = defTend(t).front;
+  const u = tab === 'off' ? offUnit(g, 0, vid, null) : vid === 'BEAR' ? defUnit(g, 0, 'Bear', 'BASE', false) : vid === 'UNDER' ? defUnit(g, 0, 'Under', 'BASE', false) : vid === 'BIGN' ? defUnit(g, 0, front, 'NICKEL', false, true) : defUnit(g, 0, front, vid, false);
+  const m = {}; for (const e of u) m[e.name] = e.p; return m;
+}
 function ensureChart(tid) {
   const t = T(tid);
   if (!t.dch) t.dch = { auto: { off: true, def: true, st: true }, lists: defaultChart(tid), rot: { RB: 0.2 } };
@@ -63,14 +104,21 @@ function refreshChart(tid) {
     if (c.auto[sec.unit]) c.lists[key] = def[key] || [];
     else c.lists[key] = (c.lists[key] || []).filter(id => mine.has(id));
   }
+  for (const key in c.lists) if (key.includes(':')) { c.lists[key] = c.lists[key].filter(id => mine.has(id)); if (!c.lists[key].length) delete c.lists[key]; }
 }
 function setChart(tid, key, i, pid) {
   const c = ensureChart(tid), unit = CHART_UNIT(key);
   if (c.auto[unit]) { c.auto[unit] = false; }
-  const list = (c.lists[key] || []).slice();
+  const list = (c.lists[key] || c.lists[baseKey(key)] || []).slice(); // a package order starts as a copy of the base order
   if (pid) { const j = list.indexOf(pid); if (j >= 0) list.splice(j, 1); list.splice(Math.min(i, list.length), 0, pid); }
   else list.splice(i, 1);
-  c.lists[key] = list.slice(0, Math.max(CHART_DEPTH[key] || 3, 3));
+  c.lists[key] = list.slice(0, Math.max(CHART_DEPTH[baseKey(key)] || 3, 3));
+}
+// a position only a specialist can play: nobody lands there by accident
+function chartBlocked(tid, key, pid) {
+  const k = baseKey(key), p = P(pid);
+  if (!p || !['QB', 'K', 'P'].includes(k)) return null;
+  return comfortOf(p, CHART_SPOT[k]) > 0 ? null : `${pname(p)} has never played ${SPOTS[CHART_SPOT[k]].l}. Tick "Show everyone" if you really want him there.`;
 }
 function setChartAuto(tid, unit, on) {
   const c = ensureChart(tid);
@@ -82,7 +130,7 @@ function userDepthSpots(p) {
   const c = T(p.tid).dch;
   if (!c) return [];
   const out = new Set();
-  for (const key in c.lists) if (!c.auto[CHART_UNIT(key)] && c.lists[key].includes(p.id)) { const s = CHART_SPOT[key]; if (s !== p.spot && comfortOf(p, s) < 100) out.add(s); }
+  for (const key in c.lists) if (!c.auto[CHART_UNIT(key)] && c.lists[key].includes(p.id)) { const s = chartSpotFor(p.tid, key); if (s !== p.spot && comfortOf(p, s) < 100) out.add(s); }
   return [...out];
 }
 // weekly practice reps for players listed away from their natural spot

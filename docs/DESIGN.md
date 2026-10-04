@@ -385,6 +385,13 @@ Games were decided by 16.9 on average (NFL 11.3) with 21% decided by 28+. Talent
 - **The system name is read off the sheet** (`offSheetLabel`, `defSheetLabel`): Shanahan Wide Zone, West Coast, Air Coryell, Erhardt-Perkins, Air Raid, Spread, Power / Gap, RPO / QB Run, Pro-Style; Fangio Two-High, Cover 3, Tampa 2, Quarters / Match, Wide-9 Attack, Man-Pressure, 3-4 Zone Blitz, 3-4 Two-Gap, Multiple. The stored archetype is now only the school a coach was generated from.
 - Outside runs were about a yard worse than inside runs; the force corner no longer makes every outside run, which brought wide zone level with the rest.
 
+## 22. Depth chart by package
+- The board is built from the scheme, not a fixed picture: defensive views come from `packageLayout` for the team's front (base, nickel, big nickel, dime, goal line, plus Under and Bear if installed), offensive views from each personnel grouping the play-caller uses. A 3-4 base shows OLB / DE / NT / DE / OLB and two inside linebackers.
+- A slot's position is front-aware (`chartSpotFor`): the "interior line" slots of a 3-4 team are graded as ends, not tackles.
+- Each box shows who the engine would line up there right now (`dcLineup`), and is tinted when that job is filled below starting level; a "thin in this look" line lists them.
+- **Package-specific orders:** setting an order while viewing a package other than a slot's home view stores it as `lists['NICKEL:MLB']` (marked ★) and the engine uses it for that package only; otherwise the base order applies.
+- **Package roles:** in sub packages a linebacker spot leans toward coverage, in base and goal line toward run defense (`pkgRoleBias`), for the staff's picks, other teams, and the candidate ranking.
+
 ## Deferred
 - Penalties / Discipline attribute
 - Leadership / intangibles

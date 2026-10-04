@@ -256,3 +256,6 @@ button.on { background: var(--hover); border-color: var(--good-b); font-weight: 
 .pbbar { display: inline-block; width: 70px; height: 8px; border-radius: 4px; background: var(--hover); vertical-align: middle; overflow: hidden; }
 .pbbar i { display: block; height: 100%; }
 .pdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 3px; }
+
+.dc-box.soft .hd { background: var(--warn, #c9a227); }
+.dc-box.thin .hd { background: var(--bad, #c94a3a); }

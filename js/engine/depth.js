@@ -149,12 +149,14 @@ function fillSlots(g, s, slots, table, opts = {}) {
     let cands = T_.depth[spot].length ? T_.depth[spot] : T_.roster.map(p => ({ p, r: 30 }));
     // your depth chart: listed players come first (in order); fatigue can still force a sub, and #2 gets his rotation share
     const key = chart ? opts.keyOf(name, slot) : null;
-    const list = key && chart.lists[key] && chart.lists[key].length ? chart.lists[key] : null;
+    // a package can have its own order at a spot (your nickel linebacker need not be your base one); otherwise the base order
+    let list = null;
+    if (key) { for (const pk of opts.pkgKeys || []) { const l = chart.lists[pk + ':' + key]; if (l && l.length) { list = l; break; } } if (!list && chart.lists[key] && chart.lists[key].length) list = chart.lists[key]; }
     let rotHit = false;
     if (list) {
       const listed = list.map(id => T_.roster.find(p => p.id === id)).filter(Boolean).filter(p => !cands.some(c => c.p === p)).map(p => ({ p, r: slotRating(p, spot) }));
       if (listed.length) cands = [...listed, ...cands];
-      rotHit = opts.rot ? opts.rot(key) : rand() < (chart.rot[key] || 0);
+      rotHit = g.preview ? false : opts.rot ? opts.rot(key) : rand() < (chart.rot[key] || 0); // a preview shows the order as set, never a random rotation snap
     }
     for (const c of cands) {
       if (used.has(c.p.id)) continue;
@@ -197,7 +199,7 @@ function offUnit(g, s, pers, call) {
   const shortYd = g.togo <= 2 && (g.down >= 3 || g.ydl >= 98);
   const rbKey = call && call.passDown && hasList(chart, 'RB3D') ? 'RB3D' : shortYd && hasList(chart, 'RBSY') ? 'RBSY' : 'RB';
   return fillSlots(g, s, slots, OFF_SLOT, {
-    score: rbScore, chart, keyOf: name => name === 'RB' ? rbKey : name,
+    score: rbScore, chart, pkgKeys: [pers], keyOf: name => name === 'RB' ? rbKey : name,
     rot: key => key === 'RB' ? !!T_.rb2Turn : rand() < (chart.rot[key] || 0),
   });
 }
@@ -206,8 +208,9 @@ const DEF_CHART_KEY = { LE: 'EDGE1', LOLB: 'EDGE1', RE: 'EDGE2', ROLB: 'EDGE2', 
   NT: 'NT', WLB: 'WLB', MLB: 'MLB', SAM: 'SAM', CB1: 'CB1', CB2: 'CB2', NCB: 'NCB', DIME: 'DIME', FS: 'FS', SS: 'SS' };
 const CHART_SPOT = { QB: 'QB', RB: 'RB', RB3D: 'RB', RBSY: 'RB', FB: 'FB', X: 'WRX', Z: 'WRZ', SLOT: 'SLOT', SLOT2: 'SLOT', Y: 'TEY', H: 'TEH', Y2: 'TEY', OL6: 'RT',
   LT: 'LT', LG: 'LG', C: 'C', RG: 'RG', RT: 'RT', EDGE1: 'EDGE', EDGE2: 'EDGE', IDL1: 'DT', IDL2: 'DT', NT: 'NT', RUSH: 'EDGE', MLB: 'MLB', WLB: 'WLB', SAM: 'WLB',
-  CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', K: 'K', P: 'P', KR: 'RB', RUSHE: 'EDGE', RUSHI: 'DT' };
-const CHART_UNIT = k => ['K', 'P', 'KR'].includes(k) ? 'st' : ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'RUSH', 'RUSHE', 'RUSHI', 'MLB', 'WLB', 'SAM', 'CB1', 'CB2', 'NCB', 'DIME', 'FS', 'SS'].includes(k) ? 'def' : 'off';
+  CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', K: 'K', P: 'P', KR: 'RB', RUSHE: 'EDGE', RUSHI: 'DT', BIGN: 'SS' };
+const baseKey = k => { const i = k.indexOf(':'); return i < 0 ? k : k.slice(i + 1); }; // 'NICKEL:MLB' -> 'MLB'
+const CHART_UNIT = k0 => { const k = baseKey(k0); return ['K', 'P', 'KR'].includes(k) ? 'st' : ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'RUSH', 'RUSHE', 'RUSHI', 'MLB', 'WLB', 'SAM', 'CB1', 'CB2', 'NCB', 'DIME', 'FS', 'SS', 'BIGN'].includes(k) ? 'def' : 'off'; };
 // the QB the staff (or your chart) has under center
 function starterQB(g, s) {
   const p = chartFirst(g, s, 'QB') || (g.side[s].depth.QB[0] ? g.side[s].depth.QB[0].p : null);
@@ -224,6 +227,12 @@ function chartFirst(g, s, key) {
   return null;
 }
 function ea0(p, k) { return p.a && p.a[k] !== undefined ? p.a[k] : 25; }
+// what a package asks of a spot: sub packages want a linebacker who can cover, base and goal line want one who can stop the run
+function pkgRoleBias(p, slot, pkg) {
+  if (!p.a || !DEF_SLOT[slot] || DEF_SLOT[slot][1] !== 'LB') return 0;
+  const cov = (ea0(p, 'zone') + ea0(p, 'man') + ea0(p, 'spd')) / 3, run = (ea0(p, 'tkl') + ea0(p, 'shed') + ea0(p, 'str')) / 3;
+  return pkg === 'NICKEL' || pkg === 'DIME' ? (cov - run) * 0.3 : (run - cov) * 0.18;
+}
 // Defensive eleven for a package; sub-rush puts the best four pass rushers on the line
 function defUnit(g, s, front, pkg, subRush, bign) {
   let layout = packageLayout(front, pkg);
@@ -231,13 +240,14 @@ function defUnit(g, s, front, pkg, subRush, bign) {
   const fix = u => { for (const e of u) if (e.slot === 'BIGN') e.slot = 'NCB'; return u; }; // he plays the nickel's job
   // coaches keep players in their own rooms: a safety is not a linebacker just because he grades out close
   const DB_POS = { CB: 1, S: 1 };
-  const score = (p, slot) => { const grp = DEF_SLOT[slot][1]; return (subRush && grp === 'DL' && p.a ? (ea0(p, 'prsh') - 60) * 0.35 : 0) - (grp === 'LB' && p.pos !== 'LB' ? 7 : grp === 'DB' && !DB_POS[p.pos] ? 7 : 0); };
+  const score = (p, slot) => { const grp = DEF_SLOT[slot][1]; return pkgRoleBias(p, slot, pkg) + (subRush && grp === 'DL' && p.a ? (ea0(p, 'prsh') - 60) * 0.35 : 0) - (grp === 'LB' && p.pos !== 'LB' ? 7 : grp === 'DB' && !DB_POS[p.pos] ? 7 : 0); };
   const chart = userChart(g, s, 'def');
+  const pkgKeys = [bign ? 'BIGN' : null, front === 'Bear' ? 'BEAR' : front === 'Under' ? 'UNDER' : null, pkg].filter(Boolean);
   if (!chart) return fix(fillSlots(g, s, layout, DEF_SLOT, { score }));
   // passing downs: your rush specialists take over the edge and interior spots
   const EDGE_NAMES = new Set(['LE', 'RE', 'LOLB', 'ROLB']);
-  return fix(fillSlots(g, s, layout, DEF_SLOT, { score, chart, keyOf: (name, slot) => {
-    if (slot === 'BIGN') return '__none';
+  return fix(fillSlots(g, s, layout, DEF_SLOT, { score, chart, pkgKeys, keyOf: (name, slot) => {
+    if (slot === 'BIGN') return 'BIGN';
     if (subRush && DEF_SLOT[slot][1] === 'DL') { const k = EDGE_NAMES.has(name) ? 'RUSHE' : 'RUSHI'; if (hasList(chart, k)) return k; }
     return DEF_CHART_KEY[name] || name;
   } }));
@@ -308,7 +318,7 @@ function tickFatigue(g, units) {
 
 // Depth chart as the engine sees it right now (for roster screens): 11 personnel, nickel + base defense, specialists
 function depthView(tid) {
-  const g = { tids: [tid, tid], side: [null, null], ps: {}, famPen: [0, 0] };
+  const g = { tids: [tid, tid], side: [null, null], ps: {}, famPen: [0, 0], preview: true };
   initSide(g, 0);
   const front = defTend(T(tid)).front;
   return {
