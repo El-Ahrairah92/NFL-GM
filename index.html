@@ -3,7 +3,15 @@
 <head>
   <meta http-equiv="Cache-Control" content="no-cache">
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#121a2c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Gridiron GM">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.json">
   <title>Gridiron GM</title>
 </head>
 <body>
@@ -13,6 +21,10 @@
   <div id="busy"></div>
   <input type="file" id="importFile" accept=".json,application/json" hidden>
   <div id="errbar" class="hidden"></div>
+  <script>
+    // offline: keep the last copy that loaded (only when served over http; a local file needs none of this)
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  </script>
   <!-- every load pulls fresh code (no stale cached scripts after an update) -->
   <script>
     (function () {

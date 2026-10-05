@@ -167,9 +167,14 @@ function table(id, cols, rows, opts = {}) {
   const head = cols.map(c => `<th class="${c.num ? 'num' : ''} ${c.v && !opts.nosort ? 'sortable' : ''} ${ss && ss.k === c.k ? 'sorted' : ''}" ${c.v && !opts.nosort ? `data-action="sort" data-table="${id}" data-k="${c.k}"` : ''} title="${c.title || ''}">${c.l}${ss && ss.k === c.k ? (ss.dir < 0 ? ' ▾' : ' ▴') : ''}</th>`).join('');
   const body = rows.map((r, i) => {
     const cls = opts.rowClass ? opts.rowClass(r, i) : '';
-    return `<tr class="${cls}">` + cols.map(c => `<td class="${c.num ? 'num' : ''}">${c.f ? c.f(r, i) : (c.v ? c.v(r) : '')}</td>`).join('') + '</tr>';
+    return `<tr class="${cls}">` + cols.map(c => `<td class="${c.num ? 'num' : ''}${c.l ? '' : ' act'}" data-l="${esc(c.l)}">${c.f ? c.f(r, i) : (c.v ? c.v(r) : '')}</td>`).join('') + '</tr>';
   }).join('');
-  return `<div class="tbl-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length}" class="muted">Nothing here.</td></tr>`}</tbody></table></div>`;
+  const pn = cols.length > 2 && cols[0].k === 'pos' && ['n', 'name'].includes(cols[1].k); // position + name stay pinned on a phone
+  const rk = !pn && cols.length > 2 && cols[0].k === 'rk'; // a rank column, then the name
+  // phones: player lists read as cards (with their own sort control); a toggle brings the table back
+  const sortable = opts.nosort ? [] : cols.filter(c => c.v && c.l);
+  const mbar = pn ? `<div class="mbar">${sortable.length ? `<label class="small muted">Sort</label><select data-change="msort" data-table="${id}">${sortable.map(c => `<option value="${c.k}" ${ss && ss.k === c.k ? 'selected' : ''}>${c.l}</option>`).join('')}</select><button class="sm" data-action="msortDir" data-table="${id}" data-k="${ss ? ss.k : sortable[0].k}" title="Reverse the order">${ss && ss.dir > 0 ? '▴' : '▾'}</button>` : ''}<span class="spacer"></span><span class="seg"><button class="sm ${ui.mtable ? '' : 'on'}" data-action="mview" data-v="">Cards</button><button class="sm ${ui.mtable ? 'on' : ''}" data-action="mview" data-v="1">Table</button></span></div>` : '';
+  return mbar + `<div class="tbl-wrap"><table class="${pn ? 'pn' + (ui.mtable ? '' : ' cards') : rk ? 'rk' : ''}"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length}" class="muted">Nothing here.</td></tr>`}</tbody></table></div>`;
 }
 
 // ---------- top level ----------
@@ -181,7 +186,7 @@ function render() {
   document.documentElement.style.setProperty('--accent', T(state.userTid).color);
   let page;
   try { page = pageHTML(); } catch (e) { showError(e, `drawing the ${view} page`); page = `<div class="callout bad">This page hit an error (details at the bottom of the screen).</div>`; }
-  app.innerHTML = topbarHTML() + `<main>${page}</main>`;
+  app.innerHTML = topbarHTML() + `<main>${page}</main>` + mobileNavHTML();
 }
 // any error shows on screen instead of failing silently (so a "dead" click has an explanation)
 function showError(e, where) {
@@ -243,6 +248,17 @@ function topbarHTML() {
     ${sim2}
     <button data-action="simYear" title="Auto-manages your team through the rest of this season and the offseason">⏭ Sim to Next Season</button>
   </div><nav class="tabs">${(state.phase === 'CUTDOWN' ? [['cutdown', '✂ Cutdown Day'], ...PAGES] : state.phase === 'WAIVERS' ? [['waivers', '📋 Waiver Wire'], ...PAGES] : PAGES).map(([k, l]) => `<button class="${view === k ? 'on' : ''}" data-action="nav" data-view="${k}">${l}</button>`).join('')}</nav></div>`;
+}
+// phones: a bottom bar with the pages you live in, and a sheet with everything else
+const MNAV_ICON = { home: '⌂', roster: '☰', depth: '▦', practice: '◔', coaches: '♜', playbook: '✎', schedule: '▤', standings: '≡', stats: '∑', trade: '⇄', fa: '✚', search: '⌕', draft: '◆', news: '✉', history: '★', settings: '⚙', cutdown: '✂', waivers: '☑' };
+function mobileNavHTML() {
+  if (!state) return '';
+  const special = state.phase === 'CUTDOWN' ? [['cutdown', 'Cutdown']] : state.phase === 'WAIVERS' ? [['waivers', 'Waivers']] : state.phase === 'DRAFT' ? [['draft', 'Draft']] : state.phase === 'FA' || state.phase === 'UDFA' ? [['fa', 'Free agents']] : [];
+  const main = [['home', 'Home'], ['roster', 'Roster'], ['depth', 'Depth'], ...(special.length ? special : [['coaches', 'Staff']])];
+  const all = [...(state.phase === 'CUTDOWN' ? [['cutdown', 'Cutdown Day']] : state.phase === 'WAIVERS' ? [['waivers', 'Waiver Wire']] : []), ...PAGES];
+  const b = ([k, l]) => `<button class="${view === k && !ui.more ? 'on' : ''}" data-action="nav" data-view="${k}"><i>${MNAV_ICON[k] || '•'}</i><span>${l}</span></button>`;
+  const sheet = ui.more ? `<div class="msheet" data-action="more"><div class="msheet-card"><div class="msheet-h">All pages</div><div class="msheet-grid">${all.map(([k, l]) => `<button class="${view === k ? 'on' : ''}" data-action="nav" data-view="${k}"><i>${MNAV_ICON[k] || '•'}</i><span>${l.replace(/^[^A-Za-z]+/, '')}</span></button>`).join('')}</div></div></div>` : '';
+  return `${sheet}<nav class="mnav">${main.map(b).join('')}<button class="${ui.more || !main.some(m => m[0] === view) ? 'on' : ''}" data-action="more"><i>⋯</i><span>More</span></button></nav>`;
 }
 function pageHTML() {
   switch (view) {
@@ -599,7 +615,7 @@ function depthChartHTML() {
   const scope = tab === 'pkg' ? '' : auto ? '<div class="small muted" style="margin:2px 0 8px">The staff\'s order. Changing it takes control of this unit: every grouping starts as a copy of the staff\'s chart and is yours from then on.</div>' : `<div class="small muted" style="margin:2px 0 8px">This order is for <b>${esc(view.label)}</b> only.</div>`;
   html += `<div class="card"><div class="row" style="margin-bottom:2px"><h3 style="margin:0">${esc(label)} <span class="small muted" style="font-weight:400">· ${SPOTS[spot].l}${view ? ' · ' + esc(view.label) : ''}</span></h3><span class="spacer"></span>${rot}</div>${scope}${roleNote ? `<div class="small muted" style="margin-bottom:8px">${roleNote}</div>` : ''}
     <div class="section-title" style="margin-top:6px">Depth order <span class="small muted">· drag to reorder</span></div><div class="dc-order" data-dckey="${editKey}">
-    ${list.map((id, i) => { const p = P(id); return `<div class="dc-row" draggable="true" data-dcpid="${id}" data-dcfrom="${i}" data-dcdrop="${i}"><span class="n">${i + 1}</span><span>${esc(p.lbl)} ${playerLink(p)}${i === 0 ? elsewhere(p) : ''}${rowTxt(p)}</span><span class="dc-meta">${dcPlayerMeta(p, key, spot, sel ? tierOf(p, val(p)) : null)}<button class="sm" data-action="dchRemove" data-key="${editKey}" data-i="${i}" title="Remove">✕</button></span></div>`; }).join('')}
+    ${list.map((id, i) => { const p = P(id); return `<div class="dc-row" draggable="true" data-dcpid="${id}" data-dcfrom="${i}" data-dcdrop="${i}"><span class="n">${i + 1}</span><span>${esc(p.lbl)} ${playerLink(p)}${i === 0 ? elsewhere(p) : ''}${rowTxt(p)}</span><span class="dc-meta">${dcPlayerMeta(p, key, spot, sel ? tierOf(p, val(p)) : null)}${i > 0 ? `<button class="sm" data-action="dchUp" data-key="${editKey}" data-i="${i}" title="Move up one spot">▲</button>` : ''}<button class="sm" data-action="dchRemove" data-key="${editKey}" data-i="${i}" title="Remove">✕</button></span></div>`; }).join('')}
     <div class="dc-drop" data-dcdrop="${list.length}">${list.length < n ? `Drop a player here for No. ${list.length + 1}` : `Drop here to make him No. ${n} (bumps the last man)`}</div></div>
     <div class="row" style="margin:16px 0 8px"><span class="section-title" style="margin:0">Available · by comfort at ${SPOTS[spot].l}, then fit for this job</span><span class="spacer"></span>
       <label class="small muted"><input type="checkbox" data-change="dchAll" ${ui.dchAll ? 'checked' : ''}> Show everyone (+${all.length - related.length})</label></div>
@@ -2454,7 +2470,9 @@ function phaseLabel() {
 
 // ---------- actions ----------
 const actions = {
-  nav: d => { view = d.view; render(); window.scrollTo(0, 0); },
+  nav: d => { view = d.view; ui.more = false; render(); window.scrollTo(0, 0); },
+  more: () => { ui.more = !ui.more; render(); },
+  dchUp: d => { const k = d.key, i = +d.i, list = (ensureChart(state.userTid).lists[k] || []); if (i > 0 && list[i]) { setChart(state.userTid, k, i - 1, list[i]); save(); render(); } },
   newLeague: d => { busy('Building league…'); setTimeout(() => { newLeague(+d.tid); save(); view = 'home'; busy(null); render(); }, 10); },
   continueSave: () => { load().then(ok => { if (ok) render(); else toast('Could not read the saved league.'); }); },
   importClick: () => $('#importFile').click(),
@@ -2513,6 +2531,8 @@ const actions = {
     sortState[d.table] = cur && cur.k === d.k ? { k: d.k, dir: -cur.dir } : { k: d.k, dir: -1 };
     render();
   },
+  msortDir: d => { const cur = sortState[d.table]; sortState[d.table] = { k: cur ? cur.k : d.k, dir: cur ? -cur.dir : 1 }; render(); },
+  mview: d => { ui.mtable = !!d.v; render(); },
   player: d => playerModal(+d.pid),
   team: d => { ui.rosterTid = +d.tid; view = 'roster'; closeModal(); render(); window.scrollTo(0, 0); },
   box: d => boxModal(+d.gid),
@@ -2635,6 +2655,7 @@ const actions = {
 const changes = {
   rosterTeam: v => { ui.rosterTid = +v; },
   rosterView: v => { ui.rosterView = v; },
+  msort: (v, el) => { sortState[el.dataset.table] = { k: v, dir: -1 }; },
   negCall: (v, el) => { ui.neg.call = el.checked; negModal(); },
   negSlot: (v, el) => { if (el.checked) ui.neg.slots[el.dataset.role] = +el.dataset.g; else delete ui.neg.slots[el.dataset.role]; negModal(); },
   negResign: (v, el) => { ui.neg.resign = el.checked; negModal(); },
@@ -2704,6 +2725,7 @@ document.addEventListener('pointerdown', e => {
 });
 document.addEventListener('click', e => {
   if (e.target.id === 'modal') { closeModal(true); return; }
+  if (window.matchMedia && window.matchMedia('(hover: none)').matches && !e.target.closest('button, select, input, a, [data-action]')) { const tt = e.target.closest('[title]'); if (tt && tt.getAttribute('title')) toast(tt.getAttribute('title')); }
   if (navPressed && e.target.closest('[data-action="nav"]')) { navPressed = null; return; }
   navPressed = null;
   const el = e.target.closest('[data-action]');
