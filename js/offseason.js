@@ -103,7 +103,7 @@ function startOffseason() {
     if (p.tid === -2) continue;
     offseasonExpectation(p);
     comfortOffseason(p);
-    progressPlayer(p, teamDev(p.tid >= 0 ? p.tid : p.psTid != null ? p.psTid : -1, p.pos)); // the real change stays hidden; camp reports and film reveal it
+    progressPlayer(p); // the real change stays hidden; camp reports and film reveal it
     offseasonApply(p);
     p.wear = 0;
     if (p.injury) { p.injury.weeks -= 20; if (p.injury.weeks <= 0) p.injury = null; else p.injury.fresh = false; }
@@ -113,11 +113,13 @@ function startOffseason() {
   }
   logDevelopment(devBefore);
   for (const p of retired) {
+    archiveRetired(p); // the record book keeps everyone
     if (perOvr(p) >= 80 || p.tid === state.userTid || (p.awards && p.awards.length))
       addNews(`${p.lbl} ${pname(p)}${p.tid >= 0 ? ' (' + T(p.tid).abbr + ')' : ''} retired after ${p.exp} seasons.`, p.tid >= 0 ? [p.tid] : [], 'retire');
     delete state.players[p.id]; rostersDirty();
   }
   psOffseason();
+  devCheckpoint('off'); // the staff re-reads everyone after a winter of work
   ensureDraftClass(year);
   coachOffseason();
   state.phase = 'COACHES';
@@ -268,12 +270,15 @@ function draftPlayer(pid) {
   d.idx++;
   if (d.idx >= d.order.length) finishDraft();
 }
+function teamNeedsQB(tid) { const q = rosterOf(tid).filter(p => p.pos === 'QB').sort((a, b) => viewOvr(b, tid) - viewOvr(a, tid))[0]; return !q || viewOvr(q, tid) < th(q).mid || q.age >= 34; }
 function aiDraftChoice(tid) {
-  let best = null, bs = -1e9;
+  let best = null, bs = -1e9; const qbNeed = [];
   for (const p of prospects()) {
     const n = needAt(tid, p.pos);
     const v = viewOvr(p, tid);
-    let s = v + 0.55 * viewGrowth(p, tid) + schemeFit(p, tid) * 0.5 + ({ QB: 3, K: -10, P: -12, RB: -2 }[p.pos] || 0);
+    // judged against the starters at his own position (a quarterback is not graded on a guard's scale)
+    let s = v - th(p).starter + 74 + 0.55 * viewGrowth(p, tid) + schemeFit(p, tid) * 0.5 + ({ K: -10, P: -12, RB: -2 }[p.pos] || 0);
+    if (p.pos === 'QB') s += qbNeed[0] === undefined ? (qbNeed[0] = teamNeedsQB(tid) ? 8 : -4) : qbNeed[0];
     if (n.count < ROSTER_MIN[p.pos]) s += 4;
     if (v > n.floor) s += 2;
     s += spotNeedBonus(tid, p) * 1.5;
@@ -368,6 +373,7 @@ function beginWaivers() {
   const prio = standings().slice().sort((a, b) => (a.w + a.t * 0.5) - (b.w + b.t * 0.5) || a.pf - a.pa - (b.pf - b.pa)).map(r => r.tid);
   state.wv = { claims: {}, ai: {}, ps: [], want: {}, prio: prio.length === state.teams.length ? prio : state.teams.map(t => t.id) };
   trainingCamp();
+  devSummer('pre'); // camp and preseason development, if it has not been paid yet
   // anyone still hurt opens the season on IR (decided before cutdown so the 53 is real)
   for (const p of Object.values(state.players)) { if (p.tid >= 0 && p.injury && p.injury.weeks >= IR_WEEKS) p.ir = { wk: 1 }; else delete p.ir; }
   // your cuts first (practice-squad designations are remembered), then every other front office

@@ -216,14 +216,14 @@ function learnSpot(p, s, pts) {
 
 // Expected best rating over the rest of his career (no random shocks): the hidden Ceiling
 function projectCeiling(p) {
-  const q = { a: Object.assign({}, p.a), grow: Object.assign({}, p.grow), age: p.age, spot: p.spot, ag: p.ag, h: p.h, m: p.m };
+  const q = { a: Object.assign({}, p.a), grow: Object.assign({}, p.grow), age: p.age, spot: p.spot, ag: p.ag, h: p.h, m: p.m, dc: p.dc, lateTo: p.lateTo };
   let best = spotRating(q, p.spot);
   for (let i = 0; i < 12 && q.age < 36; i++) {
     for (const g of AGE_GROUPS) {
-      const pk = peakAge(q, g);
+      const pk = growPeak(q, g), ds = declStart(q, g);
       let d = 0;
-      if (q.age < pk - 0.5 && q.grow[g] > 0) { d = pk - q.age <= 1 ? q.grow[g] : q.grow[g] / Math.max(1, pk - q.age); q.grow[g] -= d; }
-      else if (q.age >= pk) d = -declineAt(g, Math.floor(q.age - pk) + 1) * q.ag[g][1];
+      if (q.age >= ds) d = -(declineAt(g, Math.floor(q.age - ds) + 1) * declRate(q) + (q.dc && q.dc.t === 'c' ? CLIFF_EXTRA[g] : 0));
+      else if (q.age < pk - 0.5 && q.grow[g] > 0) { const s = pk - q.age <= 1 ? q.grow[g] : q.grow[g] / Math.max(1, pk - q.age); q.grow[g] -= s; d = s * (g === 'E' || g === 'P' ? DEV.expectP : DEV.expect); } // the scouts assume a typical path
       if (d) for (const k in q.a) if (ATTRS[k] && ATTRS[k][2] === g) q.a[k] = clamp(q.a[k] + d, 10, 99);
     }
     q.age++;
@@ -250,10 +250,11 @@ function updateRatings(p) {
   p.pos = SPOTS[best].g; // legacy group used by the current engine/AI
   p.ovr = clamp(Math.round(top), 20, 99);
   p.pot = clamp(Math.round(projectCeiling(p)), p.ovr, 99);
+  if (typeof trackPeak === 'function' && typeof state !== 'undefined' && state) trackPeak(p);
 }
 
 // ---------- aging ----------
-const BASE_PEAK = { E: 25, P: 28, T: 27.5, M: 31 };
+const BASE_PEAK = { E: 25, P: 28, T: 27, M: 29.5 };
 const GROW_RATE = { E: 1.0, P: 1.8, T: 2.4, M: 2.0 }; // points per year still to grow before peak
 function peakAge(p, g) {
   let pk = BASE_PEAK[g] + p.ag[g][0];
@@ -278,33 +279,7 @@ function shiftGroup(p, g, delta, noise, mf) {
 }
 function fatTail(sd, p, mult) { return gauss(0, sd) * (rand() < p ? mult : 1); }
 
-// One offseason of development. dev = teamDev(tid): per-attribute coaching multipliers (or null). Returns ovr change.
-function progressPlayer(p, dev) {
-  const old = p.ovr, age = p.age;
-  for (const g of AGE_GROUPS) {
-    const pk = peakAge(p, g);
-    if (age < pk - 0.5 && p.grow[g] > 0) {
-      const yrsLeft = Math.max(1, pk - age);
-      let r = p.grow[g] / yrsLeft * Math.max(0, gauss(1, 0.35));
-      if (p.h.curve === 'early') r *= 1.3; else if (p.h.curve === 'late') r *= 0.8;
-      r = Math.min(p.grow[g], r);
-      if (pk - age <= 1) r = p.grow[g];
-      p.grow[g] = Math.max(0, p.grow[g] - r);
-      shiftGroup(p, g, r, 0.8, dev && dev.grow);
-    } else if (age >= pk) {
-      const y = Math.floor(age - pk) + 1;
-      shiftGroup(p, g, -declineAt(g, y) * p.ag[g][1], 0.7, dev && dev.decl);
-    }
-  }
-  // random shocks: breakouts, stalls, cliffs
-  if (age <= 26 && rand() < 0.06) { const g = pick(['T', 'M', 'T']); shiftGroup(p, g, gauss(6, 2), 1); p.grow[g] += randInt(0, 3); }
-  else if (age <= 26 && rand() < 0.07) { p.grow.T *= 0.4; p.grow.M *= 0.5; }
-  if (age >= 28 && rand() < (p.spot === 'RB' ? 0.1 : 0.05)) { shiftGroup(p, 'E', -gauss(6, 2), 1); shiftGroup(p, 'T', -gauss(2, 1), 0.5); }
-  p.age++;
-  p.exp++;
-  updateRatings(p);
-  return p.ovr - old;
-}
+// One offseason of development lives in develop.js (progressPlayer): growth is earned there.
 
 // ---------- generation ----------
 // character: how he works, how he follows his assignments, and whether a room follows him
@@ -381,7 +356,9 @@ function rasOf(p, peers) {
 }
 
 // Create a player at `spot` with peak talent q (0 = average starter, +1 ≈ +5 OVR) and current age.
-function genPlayer(spot, q, age) {
+// gf: hidden growth factor (prospects only): how much of the usual room is really there
+// raw: extra polish a prospect still lacks on draft day (he is further from his peak than his age alone says)
+function genPlayer(spot, q, age, gf, raw) {
   const S = SPOTS[spot];
   const [first, last] = randomName();
   const ht = Math.round(gauss(S.body[0], S.body[1]));
@@ -409,17 +386,17 @@ function genPlayer(spot, q, age) {
     ovr: 0, pot: 0, fit: {}, tid: -1, college: pick(COLLEGES),
     contract: { amt: MIN_SALARY, yrs: 1 }, injury: null, stats: {}, career: [], draft: null, exp: 0,
   };
+  genDecline(p);
   // age the peak profile back (still growing) or forward (declining) to the current age
   for (const g of AGE_GROUPS) {
     const pk = peakAge(p, g);
     if (age < pk) {
-      const gap = Math.max(0, (pk - age) * GROW_RATE[g] * Math.max(0.45, gauss(1, 0.3)));
-      p.grow[g] = round1(gap);
+      const gap = Math.max(0, (pk - age) * GROW_RATE[g] * Math.max(0.45, gauss(1, 0.3))) + (raw && (g === 'T' || g === 'M') ? raw : 0);
+      p.grow[g] = round1(gap * (g === 'E' || g === 'P' ? DEV.roomP : DEV.room * (gf || 1))); // more is on offer than a typical player keeps
       shiftGroup(p, g, -gap, 1);
     } else {
-      let d = 0;
-      for (let y = 1; y <= Math.floor(age - pk); y++) d += declineAt(g, y);
-      shiftGroup(p, g, -d * p.ag[g][1], 1);
+      const d = declineTotal(p, g, age); // a plateau between his peak and the age his decline starts
+      if (d) shiftGroup(p, g, -d, 1);
     }
   }
   state.players[p.id] = p; if (typeof rostersDirty === 'function') rostersDirty();

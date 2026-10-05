@@ -103,9 +103,22 @@ function genVeteran(spotOrGroup, tier) {
 // out-select the league's established talent level over a decade (measured in a 10-season drift test).
 const DRAFT_Q_ADJ = { QB: -1.3, RB: -0.5, FB: -0.3, WRX: -0.6, WRZ: -0.6, SLOT: -0.6, TEY: -0.95, TEH: -0.95, LT: 0.05, LG: 0.05, C: 0.05, RG: 0.05, RT: 0.05,
   NT: -0.1, DT: -0.1, DE: -0.1, EDGE: -0.15, MLB: -0.55, WLB: -0.55, CB: -0.3, NCB: -0.3, FS: -0.3, SS: -0.3, K: 0, P: 0 };
+const DRAFT_Q = { mean: -0.9, sd: 1.2, bust: 0.24, bustF: 0.3, boom: 0.09, boomF: 1.6, raw: 3.8, udfa: -2.1, udfaSd: 0.75, slope: 0.25 };
+// every rookie (drafted or not) is made the same way: raw on arrival, with a hidden amount of growth in him
+function rookiePlayer(spot, qMean, qSd, maxAge) {
+  const r = rand(), gf = r < DRAFT_Q.bust ? DRAFT_Q.bustF : r < DRAFT_Q.bust + DRAFT_Q.boom ? DRAFT_Q.boomF : 1;
+  const q = gauss(qMean + (DRAFT_Q_ADJ[spot] || 0), qSd);
+  // lesser prospects are closer to what they will ever be: below-average talent has less room to grow into
+  const room = clamp(1 + DRAFT_Q.slope * (q - DRAFT_Q.mean - (DRAFT_Q_ADJ[spot] || 0)) / DRAFT_Q.sd, 0.5, 1);
+  const p = genPlayer(spot, q, randInt(21, maxAge), gf * room, Math.max(0, gauss(DRAFT_Q.raw, 1.2)));
+  if (gf !== 1) p.gf = gf;
+  p.qz = round1((q - DRAFT_Q.mean - (DRAFT_Q_ADJ[spot] || 0)) / DRAFT_Q.sd); // how far above his class he stands
+  return p;
+}
 function genProspect(draftYear) {
   const spot = weightedPick(Object.keys(DRAFT_SPOT_W), Object.values(DRAFT_SPOT_W));
-  const p = genPlayer(spot, gauss(-0.45 + (DRAFT_Q_ADJ[spot] || 0), 1.4), randInt(21, 23));
+  // some prospects never develop and a few have far more in them than anyone can see: nobody knows which on draft day
+  const p = rookiePlayer(spot, DRAFT_Q.mean, DRAFT_Q.sd, 23);
   setTid(p, -2); // draft prospect
   p.exp = 0;
   initPerception(p, 'prospect'); // scouting fog: everyone (you and the AI) sees prospects through it

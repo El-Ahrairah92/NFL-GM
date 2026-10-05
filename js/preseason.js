@@ -16,6 +16,7 @@ function startPreseason() {
   for (const id in state.players) delete state.players[id].preS;
   state.prePlan = { starters: (state.prePlan && state.prePlan.starters) || 'auto', feat: {}, hold: {} };
   for (const t of shuffle(state.teams.slice())) if (isAI(t.id)) campSignings(t.id); // your camp roster is yours to build
+  devSummer('camp');
 }
 // every team brings extra bodies to camp: undrafted rookies and street free agents on minimum, non-guaranteed deals
 const CAMP_TARGET = { QB: 4, RB: 6, WR: 12, TE: 6, OL: 16, DL: 16, LB: 9, CB: 11, S: 7, K: 2, P: 1 }; // 90
@@ -48,7 +49,7 @@ function isUdfa(p) { return p.tid === -1 && p.udfa === state.season + 1; }
 function genUdfaClass(year, n) {
   for (let i = 0; i < n; i++) {
     const spot = weightedPick(Object.keys(DRAFT_SPOT_W), Object.values(DRAFT_SPOT_W));
-    const p = genPlayer(spot, gauss(-1.25 + (DRAFT_Q_ADJ[spot] || 0), 1.05), randInt(21, 24));
+    const p = rookiePlayer(spot, DRAFT_Q.mean + DRAFT_Q.udfa, DRAFT_Q.udfaSd, 24); // the players nobody drafted: a clear step below the class
     p.exp = 0; initPerception(p, 'prospect'); p.draftYear = year; p.udfa = year;
     // 32 teams passed on him seven times: nobody sees a starter here, whatever he really is
     const t = th(p); p.per.b = Math.min(p.per.b, t.rotation - 1 - rand() * 5); p.per.h = Math.min(p.per.h || 0, 0);
@@ -208,7 +209,7 @@ function simPreseasonWeek() {
   state.pre.wk++;
   practiceWeekAll();
   refreshPerception();
-  if (state.pre.wk >= PRESEASON_GAMES) { state.phase = 'CUTDOWN'; state.cut = { plan: {} }; addNews('Preseason is over. Rosters must be down to 53 before Week 1.'); }
+  if (state.pre.wk >= PRESEASON_GAMES) { devSummer('pre'); state.phase = 'CUTDOWN'; state.cut = { plan: {} }; addNews('Preseason is over. Rosters must be down to 53 before Week 1.'); }
 }
 // exhibition snaps: film for the scouts, reps toward positional comfort, and a preseason line for every player
 function applyPreBox(box, keep) {

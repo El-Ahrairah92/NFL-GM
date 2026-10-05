@@ -25,17 +25,26 @@ function expDelta(p) {
   return -clamp((p.age + 1 - pk) * 0.42, 0, 3);
 }
 
+const FOG = { b: 5.5, g: 7.5, miss: 0.18, missBy: 8.5, gem: 0.03, gemBy: 5 };
+const FOG_POS = { QB: 1.3, WR: 1.2, CB: 1.2, TE: 1.05, EDGE: 1.05, IDL: 1.05, S: 1, RB: 0.85, FB: 0.85, OL: 0.85, LB: 0.85, K: 0.7, P: 0.7 };
 function initPerception(p, kind) {
   const prospect = kind === 'prospect';
   const conf = prospect ? 0.2 : clamp(0.3 + (p.exp || 0) * 0.11, 0.3, 0.9);
-  const sdB = prospect ? 5.5 : 1 + 4.5 * (1 - conf);
-  const sdG = p.age <= 23 ? 6 : p.age <= 26 ? 3.5 : 1.5;
+  const fog = prospect ? (FOG_POS[PROFILE_GROUP[p.spot]] || 1) : 1; // some positions are much harder to project
+  const sdB = prospect ? FOG.b * fog : 1 + 4.5 * (1 - conf);
+  const sdG = prospect ? FOG.g * fog : p.age <= 23 ? 6 : p.age <= 26 ? 3.5 : 1.5;
   let h0 = gauss(0, 1.1);
   if (prospect) { // combine warriors: workout numbers move the needle more than they should
     const t = TEMPLATE_A[p.spot] || {};
     h0 = clamp(((p.a.spd - (t.spd || 60)) + (p.a.bur - (t.bur || 60))) * 0.07 + gauss(0, 0.7), -1.5, 2.5);
   }
-  p.per = { b: p.ovr + gauss(0, sdB), g: Math.max(0, p.pot - p.ovr + gauss(0, sdG)), h0, h: h0, conf };
+  // a prospect's hidden growth factor is invisible: the scouts project the growth a normal player with his tools would have
+  // some college games do not translate: the whole league reads him as far more ready than he is. A few are better than their tape.
+  let tb = 0;
+  if (prospect) { const sure = clamp(1 - (((p.qz || 0) - 1.4) / 1.2) * 0.7, 0.3, 1), miss = FOG.miss * sure; // the truly elite are much harder to get wrong
+    const r = rand(); tb = r < miss ? Math.max(3, gauss(FOG.missBy, 2)) * fog : r < miss + FOG.gem ? -Math.max(2, gauss(FOG.gemBy, 1.5)) : 0; }
+  p.per = { b: p.ovr + tb + gauss(0, sdB), g: Math.max(0, (p.pot - p.ovr) / (prospect && p.gf ? p.gf : 1) + gauss(0, sdG)), h0, h: h0, conf };
+  if (tb) p.per.tb = round1(tb);
 }
 function ensurePerception() { for (const id in state.players) { const p = state.players[id]; if (!p.per && p.a) initPerception(p, p.tid === -2 ? 'prospect' : 'vet'); } }
 
@@ -85,7 +94,7 @@ function tierOf(p, v, g) {
 }
 function upsideOf(p, c) {
   const t = th(p);
-  if (c === undefined) c = uCeil(p);
+  if (c === undefined) { if (p.upL && p.tid !== -2) return p.upL; c = uCeil(p); } // between checkpoints the staff's call stands
   if (c >= t.elite) return 'Elite';
   if (c >= t.hi) return 'High-End Starter';
   if (c >= t.mid) return 'Solid Starter';
@@ -192,8 +201,8 @@ function scoutProspects() {
   for (const id in state.players) {
     const p = state.players[id];
     if (p.tid !== -2 || !p.per) continue;
-    p.per.b += 0.03 * (p.ovr - p.per.b);
-    p.per.g += 0.03 * (Math.max(0, p.pot - p.ovr) - p.per.g);
+    p.per.b += 0.03 * (p.ovr + (p.per.tb || 0) - p.per.b); // more college tape does not fix a game that will not translate
+    p.per.g += 0.03 * (Math.max(0, p.pot - p.ovr) / (p.gf || 1) - p.per.g);
     p.per.conf = Math.min(0.4, p.per.conf + 0.008);
   }
 }

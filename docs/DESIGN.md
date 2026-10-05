@@ -398,3 +398,57 @@ Games were decided by 16.9 on average (NFL 11.3) with 21% decided by 28+. Talent
 
 ## Open
 - None for v2. Play/tag/defense details, compatibility matrices and the attribute index live in `PLAYBOOK_SPEC.md`.
+
+## 23. Look and feel
+
+The stylesheet ends with a "design layer" that every page inherits: 14px base type, 13px tables with small uppercase headers, crisp panels with a soft layered shadow, squared-off chips, and an ink top bar with a brass hairline. The team colour stays the only accent; brass is the fixed trim.
+
+The Staff page is the first page built on it:
+- a hierarchy tree (head coach, coordinators, specialists, with connector lines), each coach a clickable card with a monogram;
+- a "selected coach" strip under the tree (who he is, what he does, career path, contract and moves) so nothing needs a popup; ← → walks the staff;
+- position coaches as two dense tables;
+- a sticky right rail with the offense and defense systems as word-labelled bars (no percentages: those live on the Playbook page) and the staff budget.
+
+Nothing here changes a mechanic. New pages should reuse `.pagehead`, `.card h3`, `.oc`, `.ss-*`, `.rb` and `.kv2` rather than inventing their own.
+
+## 24. Development: growth is earned
+
+Code: `js/develop.js`. Nothing about a player's future is decided by where he is drafted. He is created with his tools, his room to grow and his character; scouts read him through fog; teams pick off that read; the career then plays out.
+
+**Room to grow.** Four areas: explosive, power, technique, mental. Each has a pool and a growth window. More is on offer than a typical player keeps (`DEV.room`), so the pool is not a promise.
+
+**Earning it.** Each year's slice is offered in three periods: the offseason (40%), camp and preseason (15%), and the regular season (45%, paid at checkpoints). What he earns goes onto his ratings; half of what he does not earn is lost for good.
+
+| Area | Game snaps | First-team reps | Position coach | Practice | Work ethic | Strength staff |
+|---|---|---|---|---|---|---|
+| Mental | 40% | 10% | 25% | 25% | | |
+| Technique | 35% | | 35% | 30% | | |
+| Body | | | | | 35% | 65% |
+
+Snap credit is a straight line: 60% of his unit's snaps is full credit. Exhibition snaps count for everyone, more in a player's first three years. A player being badly beaten learns a little less from his snaps. Technique rusts when it is not used.
+
+**Checkpoints.** End of camp, end of preseason, after weeks 4, 8, 12, 16 and 18, and the offseason. Each one pays growth, updates what the staff believes, and re-reads the upside pill.
+
+**Rare events.** Surge (a young player cashes in years of growth at once, likelier with snaps and good practice), collapse, late bloomer (26 to 30, likelier under a new, good position coach). Every year also carries a good-year or bad-year swing.
+
+**Prospects.** About 15% have far less growth in them than their tools suggest and about 8% have far more. Nobody can see which on draft day; the truth comes out over a year or two of checkpoints. Fog is heavier at quarterback, receiver and corner.
+
+**Aging.** Each player has an age his decline starts (around a position norm: RB 27, CB 28, WR/edge/LB 29, TE/S/DT 30, OL 31, QB 33, K/P 36) and a type: gradual (65%), cliff (20%), ageless (15%). The legs go first, the mind last. Work habits and the strength staff slow it; heavy seasons bring a running back's forward.
+
+**What you see.**
+- The upside pill is the staff's expected outcome. It is sticky between checkpoints, needs to clear a line by a margin to move, and cannot reverse for two checkpoints. A ▲ or ▼ marks a move until the next checkpoint.
+- Under it on the player card: the finished-product scouting line (the usual scouting language, written from his projected peak), who he plays like (an active or retired player in this league, matched on style and build first, level second), a best-case comp, and his development track (breaking out, ahead, on track, behind, stalled; for veterans holding steady, lost a step, falling off).
+- Roster view "Development" lists all of that with snap share, practice and position coach.
+
+**The record book.** Retired players are kept in `state.retired` (career totals, peak, awards, draft slot) and listed on the History page. They are also available as comps.
+
+**Tuning.** `devtest` harness (scratchpad `dev2.js`): eleven seasons, outcomes by pick, quarterbacks separately, yearly change by age, and how much of a career is talent against path.
+
+**Rookies.** Drafted and undrafted rookies are made by the same routine (`rookiePlayer`). They arrive raw, and the first three seasons carry the most growth. Three hidden things decide who busts:
+- *Never develops* (about 24%): far less growth in him than his tools suggest. *More than it looks* (about 9%): far more.
+- *Does not translate* (about 18%): the whole league reads him as much more ready than he is, and more college tape does not fix it. About 3% are better than their tape. The truth shows in camp and his first season.
+- Below-average prospects have less room to grow into; undrafted rookies are a clear step below the drafted class.
+
+**Position coach.** 30% of mental growth and 40% of technique. Young players under the best quarter of coaches realise about 90% of their room, under the worst quarter about 77%.
+
+**Measured (8 leagues x 16 seasons, careers of 8+ years; a level counts once held for two seasons; a bust never holds the rating of the league's last starter at his position).** League talent drifts down slightly (top-704 average 77.6 at the start, 77.0 at the end). Bust rate by slot: top 3 13%, 4-10 21%, 11-20 27%, 21-32 31%, early round 2 37%, late round 2 42%, round 3 49%, round 4 59%, round 5 68%, round 6 79%, round 7 89%; 78% of undrafted players who make a roster. Stars: 27% of top-3 picks, 22% of 4-10, 15% of 21-32, 6% of round 3, about 1% of round 7. Never a good starter: 36% of top-3 picks, 44% of 4-10, 51% of 11-20, 55% of 21-32. About 18% of prospects are misreads, which by selection is about half of the first round; 69% of first-round busts were misreads. Re-run with `run.sh <tag> 8 16` then `node agg.js <tag> 8` in the scratchpad.

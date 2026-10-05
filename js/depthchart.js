@@ -326,6 +326,7 @@ function practiceTeam(tid) {
       const g = clamp(46 + (cd - 52) * 0.12 - xt * 3 + (p.h.work - 55) * 0.42 + (p.h.disc - 55) * 0.28 + eff * 9 + (pbOf(p) - 75) * 0.14 + (cul - 50) * 0.08 + noise, 5, 99);
       p.prac = { g: Math.round(g), t: tier, wk };
       (p.pracH = p.pracH || []).push(Math.round(g)); if (p.pracH.length > 6) p.pracH.shift();
+      p.pa = p.pa ? [p.pa[0] + g, p.pa[1] + 1] : [g, 1]; // what he has shown since the last checkpoint
       pbLearn(p, REPS_MULT[tier] * (xt ? 0.85 : 1), eff);
       if (xt) crossTrainWeek(p);
       if (p.tid === state.userTid || p.psTid === state.userTid) p.seenW = (p.seenW || 0) + 1; // your staff gets to know him

@@ -10,7 +10,7 @@ const ROUND_NAMES = ['Wild Card', 'Divisional', 'Conference Final', 'Championshi
 
 function newLeague(userTid) {
   state = {
-    version: SAVE_VERSION, season: START_SEASON, phase: 'REG', week: 1, userTid,
+    version: SAVE_VERSION, devV: 1, cp: 0, retired: {}, season: START_SEASON, phase: 'REG', week: 1, userTid,
     teams: [], players: {}, coaches: {}, schedule: [], games: {}, playoffs: null,
     picks: [], draft: null, news: [], history: [], teamHist: {}, faWave: 0,
     nextPid: 1, nextCid: 1, nextGid: 1, nextPickId: 1, settings: { autoUser: false, showTrue: false },
@@ -58,6 +58,10 @@ const SAVE_VERSION = 3;
 function migrateState(st) {
   state = st;
   if (!st.prePlan) st.prePlan = { starters: 'auto', feat: {}, hold: {} }; // saves from before the preseason plan
+  if (!st.devV) { // saves from before earned growth: everyone gets his own decline, and the young have more on offer than they will keep
+    st.devV = 1; st.cp = st.cp || 0; st.retired = st.retired || {};
+    for (const id in st.players) { const p = st.players[id]; if (!p.a || !p.grow || !p.h) continue; if (!p.dc) genDecline(p); for (const g of AGE_GROUPS) if (p.grow[g] > 0) p.grow[g] = round1(p.grow[g] * (g === 'E' || g === 'P' ? DEV.roomP : DEV.room)); updateRatings(p); }
+  }
   st._needWeb = st.teams.some(t => t.staffBud === undefined);
   if (st.teams.some(t => !t.asst) && st.coaches && Object.keys(st.coaches).length) { for (const t of st.teams) ensureAssistants(t, true); fillAsstPool(3); for (const c of Object.values(st.coaches)) updateCoachOvr(c); addNews('League updated: every staff now has specialists and position coaches. Player development has moved from the coordinators to the position coaches.'); }
   for (const id in st.players) { const p = st.players[id]; if (p.h && p.h.work === undefined) { ensureCharacter(p); if (p.tid >= 0) { p.pbTid = p.tid; p.pb = p.exp === 0 ? 80 : 96; p.seenW = p.tid === st.userTid ? 16 : 0; } } }
@@ -240,6 +244,7 @@ function simWeek() {
   weeklyRecovery();
   practiceReps(state.userTid);
   inSeasonMoves();
+  { const i = CP_WEEKS.indexOf(state.week); if (i >= 0) devCheckpoint(state.week >= SEASON_WEEKS ? 'final' : 'season', state.week - (i ? CP_WEEKS[i - 1] : 0)); } // growth earned over the last month
   state.week++;
   practiceWeekAll(); // the week of work leading into the next game
   refreshPerception();
