@@ -7,13 +7,13 @@
 // Engine calibration constants (Phase 4 tunes these against the target sheet)
 const TUNE = {
   spread: 0.5,         // how much talent gaps matter: attributes are compressed toward the league mean on every snap
-  spreadQB: 0.66,      // quarterbacking stays more leveraged
+  spreadQB: 1.15,      // quarterbacking is not compressed: it is the most leveraged job on the field
   hfa: 0.3,            // home-field bonus, attribute points on every snap
   teamForm: 0.4,       // sd of team game-day form
   fatFree: 3.0,        // fatigue tolerated before it costs anything
   // trenches
-  passProMedian: 5.85, // seconds for an average rusher to beat an average blocker 1v1
-  rushScale: 0.036,
+  passProMedian: 5.35, // seconds for an average rusher to beat an average blocker 1v1
+  rushScale: 0.029,
   insideRush: 1.18,    // interior rushers take longer to get home than edges (crowded path, more double teams)    // how strongly the rush/block gap moves win time
   doubleBonus: 17,     // pass-block points added by a second blocker
   chipBonus: 7,
@@ -24,11 +24,13 @@ const TUNE = {
   comboBonus: 16,
   // coverage / passing
   openBase: -0.6,
+  recWeight: 0.85,     // how much the receiver's own skill moves the window
+  lbCover: 0.32,       // linebackers own zones that are open by design: their coverage skill moves the window less than a defensive back's
   openScale: 0.034,
-  covWeight: 1.7,      // a defender's coverage skill counts this much more than the receiver's route skill
+  covWeight: 1.5,      // a defender's coverage skill counts this much more than the receiver's route skill
   holeBonus: 0.9,
   readTime: 0.52,
-  catchBase: 2.8,
+  catchBase: 3.04,
   shade: 0.35, // how hard defenses roll coverage toward the best receiver
   dropBase: 0.07,
   intBase: 0.0067,
@@ -38,7 +40,7 @@ const TUNE = {
   runAfter: 1.08,       // yards a back typically adds after first contact
   carryLoad: 3.8,      // how much more a carry tires a back than an ordinary snap
   pocketOpen: 1.2,
-  shortOpen: 0.44,     // defenses give up the underneath
+  shortOpen: 0.52,     // defenses give up the underneath
   deepCov: -1.08,      // deep routes start covered: they need time (or a beaten defender) to come open
   midCov: -0.75,     // separation a receiver gains per second the QB can hold the ball in a clean pocket
   paBite: -0.8,        // logit: how readily second-level defenders bite on play-action

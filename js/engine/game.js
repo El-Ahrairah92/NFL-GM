@@ -169,7 +169,7 @@ function fgRange(g, K) {
 }
 function fgProb(g, K, dist) {
   const comfort = 32 + (ea(g, K, 'krng') - 50) * 0.45 + (ea(g, K, 'ktrj') - 70) * 0.05;
-  let p = clamp(0.952 + (ea(g, K, 'kcon') - 70) * 0.0015, 0.86, 0.99);
+  let p = clamp(0.945 + (ea(g, K, 'kcon') - 70) * 0.005, 0.8, 0.995); // consistency: the kicks he is supposed to make
   if (dist > comfort) { const x = dist - comfort; p -= x * (0.022 - (ea(g, K, 'kfal') - 60) * 0.00035) + x * x * 0.0003; }
   return clamp(p, 0.02, 0.995);
 }
@@ -468,7 +468,7 @@ function punt(g) {
   const pdis = ea(g, Pn, 'pdis'), phng = ea(g, Pn, 'phng'), pplc = ea(g, Pn, 'pplc'), pspn = ea(g, Pn, 'pspn');
   const ret = returner(g, d), cover = coverUnitScore(g, o);
   let gross = Math.round(gauss(46.8 + (pdis - 70) * 0.28, 5.5));
-  const hang = 4.25 + (phng - 70) * 0.02 + gauss(0, 0.25);
+  const hang = 4.25 + (phng - 70) * 0.032 + gauss(0, 0.25);
   inc(g, Pn.p, 'pnt'); g.ts[o].punts++;
   if (g.drive) g.drive.plays++;
   runClock(g, 9); g.running = false;
@@ -484,7 +484,7 @@ function punt(g) {
     else { gross = 100 - g.ydl; recv = 20; text = 'touchback'; inc(g, Pn.p, 'ptb'); }
   } else if (land >= 88) { recv = 100 - land; text = rand() < 0.5 ? 'downed' : 'fair catch'; }
   else {
-    const fair = clamp(0.42 + (hang - 4.25) * 0.5 + (cover - 60) * 0.008 + (pspn - 60) * 0.004, 0.15, 0.8);
+    const fair = clamp(0.42 + (hang - 4.25) * 0.5 + (cover - 60) * 0.008 + (pspn - 60) * 0.009, 0.15, 0.85); // a ball that turns over is hard to field cleanly
     if (rand() < 0.0075 * (1 + (pspn - 60) / 60) * (1 + (60 - ea(g, ret, 'hnd')) / 60)) {
       // muffed punt
       pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds — MUFFED by ${pshort(ret.p)}`);
@@ -493,7 +493,7 @@ function punt(g) {
     if (rand() < fair) { recv = 100 - land; text = 'fair catch'; }
     else {
       const rc = ea(g, ret, 'elu') * 0.35 + ea(g, ret, 'vis') * 0.25 + ea(g, ret, 'spd') * 0.25 + ea(g, ret, 'bur') * 0.15;
-      let r = Math.round(expRand(Math.max(2, 7.5 + (rc - cover - 18) * 0.08 + g.cx[d].st * 0.025)) * (1.2 - (hang - 4.25) * 0.4));
+      let r = Math.round(expRand(Math.max(2, 7.5 + (rc - cover - 18) * 0.08 + g.cx[d].st * 0.025)) * clamp(1.2 - (hang - 4.25) * 0.75, 0.5, 1.8));
       if (rand() < 0.004) r = land; // to the house
       inc(g, ret.p, 'prA'); inc(g, ret.p, 'prY', r);
       recv = 100 - land + r; text = `returned ${r} yds by ${pshort(ret.p)}`;

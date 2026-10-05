@@ -16,7 +16,7 @@ function runToContact(g, carrier, levels, opts = {}) {
     pos = Math.max(pos, lv.at);
     const d = lv.e;
     const space = lv.at >= 5 ? 1 : 0; // open-field tackles are harder
-    const tk = ea(g, d, 'tkl') * 0.6 + ea(g, d, 'spd') * 0.2 + ea(g, d, 'str') * 0.2;
+    const tk = space ? ea(g, d, 'tkl') * 0.5 + ea(g, d, 'spd') * 0.2 + ea(g, d, 'agi') * 0.2 + ea(g, d, 'str') * 0.1 : ea(g, d, 'tkl') * 0.6 + ea(g, d, 'spd') * 0.15 + ea(g, d, 'str') * 0.25; // in space he has to mirror the runner first
     const ev = elu * (0.4 + 0.15 * space) + bal * (0.4 - 0.15 * space) + cs * 0.1 + spd * 0.1;
     if (res.contactAt === undefined) res.contactAt = pos;
     const make = lgt(TUNE.tackleBase - space * 0.55 + soft(tk - ev, 15) * TUNE.tackleScale + (lv.bonus || 0) + (opts.tackleBonus || 0));
@@ -345,14 +345,16 @@ function resolvePass(g, off, def, oc, dc) {
       if (!defE || defE.blitz) { hole = true; defE = nearestDef(mm.free, r.endX); }
       const offC = rte * 0.45 + agi * 0.2 + (deep ? spd : bur) * 0.35;
       const defC = defE ? ea(g, defE, 'man') * 0.5 + ea(g, defE, 'agi') * 0.2 + ea(g, defE, deep ? 'spd' : 'bur') * 0.3 : 30;
-      w = TUNE.openBase + (soft(offC - 70, 14) - soft(defC - 70, 14) * TUNE.covWeight) * TUNE.openScale;
+      const lbM = defE && ['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 0.55 : 1;
+      w = TUNE.openBase + (soft(offC - 70, 14) * TUNE.recWeight - soft(defC - 70, 14) * TUNE.covWeight * lbM) * TUNE.openScale;
       if (hole) w += TUNE.holeBonus + 0.6;
       // deep help over the top
       const fs = mm.free.find(x => x.slot === 'FS' || x.slot === 'SS');
-      if (dc.cov === 'C1' && fs && (deep || r.band === 'I') && Math.abs(r.endX) < 3) help -= 0.45 * clamp(ea(g, fs, 'zone') / 75, 0.6, 1.3);
+      if (dc.cov === 'C1' && fs && (deep || r.band === 'I') && Math.abs(r.endX) < 3) help -= 0.45 * clamp((ea(g, fs, 'zone') * 0.55 + ea(g, fs, 'spd') * 0.45) / 75, 0.6, 1.3); // range is as much speed as it is eyes
       if (dc.cov === 'C2M' && deep) help -= 0.55;
       if (oc.tags.has('RUB') && r.dir === 'IN' && r.band !== 'D') w += 0.55;
       if (oc.tags.has('MOTION') && rand() < 0.4) w += 0.15;
+      if (defE && r.band !== 'D') w += (ea(g, e, 'rel') - ea(g, defE, 'prs')) * 0.006; // hand fighting through the stem, press or not
       // press at the line
       if (defE && (e.slot === 'X' || e.slot === 'Z' || e.slot === 'SLOT') && !(oc.bunch && e.slot !== 'X') && rand() < pressRate) {
         const winRel = rand() < lgt((ea(g, e, 'rel') - ea(g, defE, 'prs')) * 0.06);
@@ -364,9 +366,11 @@ function resolvePass(g, off, def, oc, dc) {
       else { owners.sort((a, b) => b[1] - a[1]); defE = owners[0][0]; if (owners.length > 1) help -= 0.3 * owners[1][1]; }
       const offC = rte * 0.55 + agi * 0.15 + (deep ? spd : bur) * 0.3;
       const own = owners.length ? owners[0][1] : 0.6;
-      const defC = defE ? ea(g, defE, 'zone') * 0.5 + ea(g, defE, 'prec') * 0.25 + ea(g, defE, 'spd') * 0.25 : 30;
-      w = TUNE.openBase + (soft(offC - 70, 14) - soft(defC - 70, 14) * TUNE.covWeight * own) * TUNE.openScale + (1 - own) * 0.5 + (hole ? TUNE.holeBonus * (dc.pres === 'FZ' ? 0.35 : 1) : 0); // fire-zone droppers pattern-read: the voids are smaller than they look
-      if ((dc.cov === 'C2' || dc.cov === 'T2') && (e.slot === 'X' || e.slot === 'Z') && r.band === 'S' && defE && defE.slot === 'CB') w -= 0.35; // squat corners
+      const defC = defE ? (deep ? ea(g, defE, 'zone') * 0.4 + ea(g, defE, 'prec') * 0.2 + ea(g, defE, 'spd') * 0.4 : ea(g, defE, 'zone') * 0.45 + ea(g, defE, 'prec') * 0.25 + ea(g, defE, 'spd') * 0.15 + ea(g, defE, 'agi') * 0.15) : 30;
+      const lbZ = defE && ['MLB', 'WLB', 'SAM'].includes(defE.slot) ? TUNE.lbCover : 1;
+      w = TUNE.openBase + (soft(offC - 70, 14) * TUNE.recWeight - soft(defC - 70, 14) * TUNE.covWeight * own * lbZ) * TUNE.openScale + (1 - own) * 0.5 + (hole ? TUNE.holeBonus * (dc.pres === 'FZ' ? 0.35 : 1) : 0); // fire-zone droppers pattern-read: the voids are smaller than they look
+      if ((dc.cov === 'C2' || dc.cov === 'T2') && (e.slot === 'X' || e.slot === 'Z') && r.band === 'S' && defE && defE.slot === 'CB') w -= 0.35 + (ea(g, defE, 'prs') - ea(g, e, 'rel')) * 0.012; // squat corners jam the release
+      else if (defE && r.band !== 'D' && defE.depth > 0 && defE.depth <= 2) w -= (ea(g, defE, 'prs') - ea(g, e, 'rel')) * 0.005; // underneath defenders reroute what comes through their zone
       if (dc.pres === 'FZ' && defE && defE.depth === 0) w -= 0.25; // the quarterback throws hot into a lineman he never expected to be there
     }
     if (bit.size && r.band !== 'S') w += TUNE.paOpen;
@@ -468,26 +472,27 @@ function resolvePass(g, off, def, oc, dc) {
 function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
   const e = r.e, defE = r.def;
   const air = r.depth;
-  let acc = air < 10 ? ea(g, qb, 'sacc') : air < 20 ? (ea(g, qb, 'sacc') + ea(g, qb, 'dacc')) / 2 : ea(g, qb, 'dacc') * 0.7 + ea(g, qb, 'arm') * 0.3;
+  const arm = ea(g, qb, 'arm'), outside = Math.abs(r.endX) > 2.2 && air >= 6; // the out-breaker to the far hash is an arm throw
+  let acc = air < 10 ? ea(g, qb, 'sacc') * (outside ? 0.8 : 1) + arm * (outside ? 0.2 : 0) : air < 20 ? ea(g, qb, 'sacc') * 0.4 + ea(g, qb, 'dacc') * 0.4 + arm * 0.2 : ea(g, qb, 'dacc') * 0.6 + arm * 0.4;
   if (onRun) acc = acc * 0.5 + ea(g, qb, 'tor') * 0.5;
-  if (hurry) acc -= 13 - ea(g, qb, 'pkt') * 0.08;
-  const arm = ea(g, qb, 'arm');
+  if (hurry) acc -= 13 - ea(g, qb, 'pkt') * 0.08 - (arm - 70) * 0.12; // a big arm can still drive it off his back foot
   const yardsToGoal = 100 - g.ydl;
   const airY = Math.min(air, yardsToGoal);
-  const pCatchable = lgt(TUNE.catchBase + 0.2 + r.w * 0.95 + soft(acc - 72, 16) * 0.056 - (air >= 20 ? 2.9 : air >= 10 ? 1.2 : air <= 2 ? -0.95 : -0.22) + (air >= 15 ? (arm - 70) * 0.012 : 0) + (r.role === 3 && air <= 5 ? 0.55 : 0) - (yardsToGoal <= 5 ? 0.45 : yardsToGoal <= 12 ? 0.3 : 0));
+  const pCatchable = lgt(TUNE.catchBase + 0.2 + r.w * 0.95 + soft(acc - 72, 16) * 0.056 - (air >= 20 ? 2.9 : air >= 10 ? 1.2 : air <= 2 ? -0.95 : -0.22) + (air >= 15 ? (arm - 70) * 0.012 : 0) + (r.w < 0.4 && air >= 5 ? (arm - 70) * 0.014 : 0) + (ea(g, e, 'hnd') - 70) * 0.012 + (r.role === 3 && air <= 5 ? 0.55 : 0) - (yardsToGoal <= 5 ? 0.45 : yardsToGoal <= 12 ? 0.3 : 0));
   res.target = e; res.air = airY; res.def = defE; res.hurry = hurry; res.route = r;
   let cWinP = 1;
-  if (r.w < 0.25 && defE) cWinP = lgt(0.25 + ((ea(g, e, 'cth') * 0.6 + ea(g, e, 'siz') * 0.4) - (ea(g, defE, 'bsk') * 0.6 + ea(g, defE, 'siz') * 0.4)) * 0.05 + r.w * 0.8);
-  res.xc = pCatchable * (1 - TUNE.dropBase * (1 - (ea(g, e, 'hnd') - 50) / 85)) * cWinP;
+  const rcC = ea(g, e, 'cth') * 0.5 + ea(g, e, 'hnd') * 0.15 + ea(g, e, 'siz') * 0.35, dfC = defE ? ea(g, defE, 'bsk') * 0.6 + ea(g, defE, 'siz') * 0.4 : 50;
+  const pDrop = clamp(TUNE.dropBase * Math.exp(-(ea(g, e, 'hnd') - 70) * 0.05) * (r.w < 0.25 ? 1.35 : 1), 0.008, 0.3); // hands: every catch, and most of all in traffic
+  if (r.w < 0.25 && defE) cWinP = lgt(0.25 + (rcC - dfC) * 0.05 + r.w * 0.8);
+  res.xc = pCatchable * (1 - pDrop) * cWinP;
   const tag = `${pshort(qb.p)} pass ${air >= 20 ? 'deep' : air >= 10 ? 'intermediate' : 'short'} ${r.endX < -1.5 ? 'left' : r.endX > 1.5 ? 'right' : 'middle'} to ${pshort(e.p)}`;
   if (rand() < pCatchable) {
     // drops
-    if (rand() < TUNE.dropBase * (1 - (ea(g, e, 'hnd') - 50) / 85)) { Object.assign(res, { kind: 'inc', drop: true, desc: tag + ' — dropped' }); return res; }
+    if (rand() < pDrop) { Object.assign(res, { kind: 'inc', drop: true, desc: tag + ' — dropped' }); return res; }
     // contested window
     if (r.w < 0.25 && defE) {
       res.contested = true;
-      const rc = ea(g, e, 'cth') * 0.6 + ea(g, e, 'siz') * 0.4, dcC = ea(g, defE, 'bsk') * 0.6 + ea(g, defE, 'siz') * 0.4;
-      const win = lgt(0.25 + (rc - dcC) * 0.05 + r.w * 0.8);
+      const win = lgt(0.25 + (rcC - dfC) * 0.05 + r.w * 0.8);
       if (rand() > win) {
         if (rand() < (0.075 + soft(ea(g, defE, 'bsk') - 65, 20) * 0.002) * (['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 0.4 : 1)) return interception(g, def, res, qb, defE, airY, tag);
         Object.assign(res, { kind: 'inc', pbu: ['MLB', 'WLB', 'SAM'].includes(defE.slot) && rand() < 0.6 ? null : defE, desc: tag + ` — broken up by ${pshort(defE.p)}` }); return res;
@@ -512,7 +517,7 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
   // off target or covered: incomplete or picked
   const decF = 1 + soft(Math.max(0, 70 - ea(g, qb, 'dec')), 18) * 0.015;
   const posF = defE ? (['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 0.35 : defE.depth === 0 ? 0.25 : 1.12) : 0.6;
-  const pInt = TUNE.intBase * Math.exp(-r.w * 0.85) * decF * (hurry ? 1.45 : 1) * (covID ? 1 : 1.5) * (airY >= 20 ? 1.35 : 1) * (defE ? 1 + soft(ea(g, defE, 'bsk') - 65, 20) * 0.025 : 1) * posF;
+  const pInt = TUNE.intBase * Math.exp(-r.w * 0.85) * decF * (hurry ? 1.45 : 1) * (covID ? 1 : 1.5) * (airY >= 20 ? 1.35 : 1) * (airY >= 10 || outside ? clamp(1 + (70 - arm) * 0.012, 0.7, 1.5) : 1) * (defE ? 1 + soft(ea(g, defE, 'bsk') - 65, 20) * 0.025 : 1) * posF;
   if (defE && rand() < pInt / Math.max(0.05, 1 - lgt(TUNE.catchBase + r.w))) return interception(g, def, res, qb, defE, airY, tag);
   if (defE && r.w < 0.4 && rand() < (['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 0.12 : 0.32)) res.pbu = defE;
   Object.assign(res, { kind: 'inc', desc: tag + ' — incomplete' + (res.pbu ? `, defended by ${pshort(res.pbu.p)}` : '') });
