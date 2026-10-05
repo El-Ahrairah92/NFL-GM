@@ -216,7 +216,9 @@ function defenseCall(g, oc) {
   // a fire zone is five rushers with three under and three deep behind them, whatever the sheet said
   if (call.pres === 'FZ') call.cov = 'C3';
   call.stunt = call.pres !== 'BLITZ' && rand() < dt.stunt;
-  call.subRush = (pkg === 'NICKEL' || pkg === 'DIME') && sit.passDown && rand() < 0.6;
+  // obvious passing downs in nickel or dime: the pass-rush line. If you named rush specialists, they come in every time.
+  const uc = userChart(g, d, 'def'), named = uc && (hasList(uc, 'RUSHE') || hasList(uc, 'RUSHI'));
+  call.subRush = (pkg === 'NICKEL' || pkg === 'DIME') && sit.passDown && (named || rand() < 0.6);
   call.runBlitz = (call.pres === 'BLITZ' || call.pres === 'FZ') && runEst > 0.55;
   return call;
 }

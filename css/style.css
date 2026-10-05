@@ -259,3 +259,31 @@ button.on { background: var(--hover); border-color: var(--good-b); font-weight: 
 
 .dc-box.soft .hd { background: var(--warn, #c9a227); }
 .dc-box.thin .hd { background: var(--bad, #c94a3a); }
+
+/* folds, practice rooms, staff org chart */
+details.fold > summary { cursor: pointer; font-weight: 600; color: var(--muted); list-style-position: inside; }
+details.fold > summary:hover { color: var(--accent); }
+details.fold[open] > summary { color: var(--text); }
+ul.tight { margin: 6px 0; padding-left: 18px; }
+.sech { margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); font-weight: 600; }
+.roomgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+button.roomcard { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; display: block; width: 100%; }
+button.roomcard.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.pmeter { height: 6px; border-radius: 3px; background: var(--panel2); border: 1px solid var(--line); overflow: hidden; }
+.pmeter i { display: block; height: 100%; }
+.org-top { display: flex; justify-content: center; }
+.org-top .org-card { min-width: 260px; max-width: 360px; border-top: 3px solid var(--accent); }
+.org-stem { width: 2px; height: 16px; background: var(--line); margin: 0 auto; }
+.org-cols { display: grid; grid-template-columns: 1fr 1fr minmax(190px, .55fr); gap: 14px; border-top: 2px solid var(--line); padding-top: 14px; }
+@media (max-width: 900px) { .org-cols { grid-template-columns: 1fr; } }
+.org-col { min-width: 0; }
+.org-h { font-size: 14px; text-transform: uppercase; letter-spacing: .6px; font-weight: 700; margin-bottom: 8px; }
+.org-h .small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.org-sub { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 12px 0 6px 10px; padding-left: 8px; border-left: 2px solid var(--line); }
+.org-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-left: 10px; padding-left: 8px; border-left: 2px solid var(--line); }
+.org-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
+.org-card.mini { padding: 8px 10px; background: var(--panel2); }
+.org-card.vacant { border-style: dashed; }
+.org-role { font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+.org-name { font-weight: 600; }
+.pill.on { color: var(--accent); border-color: var(--accent); }

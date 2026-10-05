@@ -96,7 +96,9 @@ function packageLayout(front, pkg) {
   }
   if (pkg === 'BASE') return [['LE', 'EDGE', -e, 0], ['NT', 'NT', -0.5, 0], ['DT', 'DT', 1.4, 0], ['RE', 'EDGE', e, 0],
     ['WLB', 'WLB', -1.5, 5], ['MLB', 'MLB', 0, 5], ['SAM', 'SAM', 2.6, 4], ...DB2];
-  const dl = odd ? [['LE', 'EDGE', -3.1, 0], ['DT1', 'DE', -1.3, 0], ['DT2', 'DE', 1.3, 0], ['RE', 'EDGE', 3.1, 0]]
+  // sub packages are a four-man line whatever the base front: two edges and two interior rushers playing tackle technique.
+  // (A 3-4 team's ends slide inside here as tackles; the job is DT, not base end.)
+  const dl = odd ? [['LE', 'EDGE', -3.1, 0], ['DT1', 'DT', -1.3, 0], ['DT2', 'DT', 1.3, 0], ['RE', 'EDGE', 3.1, 0]]
     : [['LE', 'EDGE', -e, 0], ['DT1', 'DT', -1.4, 0], ['DT2', 'DT', 1.4, 0], ['RE', 'EDGE', e, 0]];
   if (pkg === 'NICKEL') return [...dl, ['WLB', 'WLB', -1.2, 5], ['MLB', 'MLB', 0.8, 5], ...DB2, ['NCB', 'NCB', 2.4, 6]];
   return [...dl, ['WLB', 'WLB', 0, 5], ...DB2, ['NCB', 'NCB', 2.4, 6], ['DIME', 'DIME', -2.4, 6]]; // DIME
