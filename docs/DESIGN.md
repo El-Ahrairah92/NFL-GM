@@ -452,3 +452,19 @@ Snap credit is a straight line: 60% of his unit's snaps is full credit. Exhibiti
 **Position coach.** 30% of mental growth and 40% of technique. Young players under the best quarter of coaches realise about 90% of their room, under the worst quarter about 77%.
 
 **Measured (8 leagues x 16 seasons, careers of 8+ years; a level counts once held for two seasons; a bust never holds the rating of the league's last starter at his position).** League talent drifts down slightly (top-704 average 77.6 at the start, 77.0 at the end). Bust rate by slot: top 3 13%, 4-10 21%, 11-20 27%, 21-32 31%, early round 2 37%, late round 2 42%, round 3 49%, round 4 59%, round 5 68%, round 6 79%, round 7 89%; 78% of undrafted players who make a roster. Stars: 27% of top-3 picks, 22% of 4-10, 15% of 21-32, 6% of round 3, about 1% of round 7. Never a good starter: 36% of top-3 picks, 44% of 4-10, 51% of 11-20, 55% of 21-32. About 18% of prospects are misreads, which by selection is about half of the first round; 69% of first-round busts were misreads. Re-run with `run.sh <tag> 8 16` then `node agg.js <tag> 8` in the scratchpad.
+
+## 25. Coaching market, season review and confirmations
+
+**Coaching search.** Each offseason brings a deep college class (5 head coaches, 6 per coordinator job, 3 each for special teams and strength, 4 per specialist job, 6 per position job). Those not hired go back to campus when the search closes. During the search you only know a man's reputation until you interview him, at every level of the staff. Interviews are counted per job: 5 for head coach, 4 for each coordinator job, 4 for each specialist job, 3 for each position job.
+
+**Men under contract.** A coach employed elsewhere will move for a promotion, or sideways if the offer is clearly better: he wants at least 20% more than he makes, he is less willing the better his current club is, and a tie to someone on your staff or an expiring deal helps. His club gets one chance to match; a bigger offer makes that less likely. If they match he stays and cannot be approached again that year.
+
+**Raids.** Other clubs with an open job can come for your coaches, with no limit on how many: good coaches on winning clubs draw the most interest, and each man is approached at most once a year. It is a step up for him, or the same job next to a man he is tied to. Every offer you match raises his pay, so keeping a great staff together costs more each year. A sideways move you can match and he will usually stay. A promotion you can counter with the same money, but it works less than half the time. Anyone left unanswered leaves when you advance.
+
+**Promotions.** Any of your coordinators, special teams included, can be made head coach when the job is open. A special teams man does not call plays: his coordinators keep the sheets.
+
+**Season review.** When the season ends a review page opens and is kept with that season in History: champion and playoff results, the award slate (MVP, offensive and defensive player, both rookies, comeback, most improved, offensive lineman, man of the year, coach, assistant coach and executive of the year), first- and second-team All-Pro, the All-Rookie team, league leaders, the league's best and most changed teams, and your own club's year. All-Pro and All-Rookie selections are recorded on each player's card.
+
+**Confirmations.** Every multi-step sim (to the playoffs, through the playoffs, the rest of the draft, to next season, letting the staff make your pick) and every destructive action asks first, in the game's own dialog.
+
+**Scout wording.** Role phrases are chosen by the exact spot, not the position group, and a phrase that names a job or a build is only used on a player who has it.

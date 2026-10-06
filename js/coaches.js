@@ -281,13 +281,12 @@ function coachOffseason() {
   for (const c of Object.values(state.coaches)) {
     if ((c.role === 'OC' || c.role === 'DC') && c.ovr >= 70 && c.age < 60 && rand() < 0.18) {
       if (c.tid >= 0) { T(c.tid)[c.role.toLowerCase()] = null; addNews(`${T(c.tid).abbr} ${c.role} ${cname(c)} leaves to pursue head coaching jobs.`, [c.tid]); }
-      const side = c.role === 'OC' ? 'O' : 'D', arch = c.arch;
-      c.role = 'HC'; c.tid = -1;
-      c.k = { gm: Math.round(clamp(gauss(50, 10), 20, 90)), cul: Math.round(clamp(gauss(52, 11), 20, 92)), pc: c.k.pc, adp: c.k.adp };
-      c.t = { aggr: round2(clamp(gauss(0.5, 0.17), 0.05, 0.95)), clock: round2(clamp(gauss(0.5, 0.17), 0.05, 0.95)), bg: side };
-      makeCaller(c, arch);
-      if (!c.t.caller && rand() < 0.5) { c.t.caller = side; c.arch = arch; c.ct = jitterTend((side === 'O' ? OFF_ARCH : DEF_ARCH)[arch].t); }
-      updateCoachOvr(c);
+      c.tid = -1; promoteToHead(c);
+    }
+    // now and then a special teams coordinator gets his shot too: a manager of the whole game, not a play-caller
+    else if (c.role === 'STC' && c.ovr >= 74 && c.age < 60 && rand() < 0.05) {
+      if (c.tid >= 0) { T(c.tid).stc = null; addNews(`${T(c.tid).abbr} special teams coordinator ${cname(c)} leaves to pursue head coaching jobs.`, [c.tid]); }
+      c.tid = -1; promoteToHead(c);
     }
   }
   fillCoachPool(9); fillAsstPool(3); TEND_VER++;
@@ -358,7 +357,7 @@ for (const r of ASST_ROLES) { ROLE_LABEL[r] = ASST_LABEL[r]; ROLE_SHORT[r] = SPE
 // leans: what a specialist adds to (or takes from) his coordinator's call sheet. Values scale with his expertise.
 const LEANS = {
   PGC: { VERT: ['Vertical', { deep: 1.5, pa: 0.6 }], TIMING: ['Timing', { quick: 1.2, deep: -0.8 }], PA: ['Play-action', { pa: 1.6, boot: 1.6 }], QUICK: ['Quick game', { quick: 0.9, screen: 1.6 }] },
-  RGC: { ZONE: ['Zone', { zone: 0.8 }], GAP: ['Gap / power', { zone: -0.8 }], OPTION: ['Option', { qbRun: 2.5, rpo: 1.6 }] },
+  RGC: { ZONE: ['Zone', { zone: 0.8 }], GAP: ['Power / Gap', { zone: -0.8 }], OPTION: ['Option', { qbRun: 2.5, rpo: 1.6 }] },
   DPC: { PRESSURE: ['Pressure', { blitz: 1.6, sim: 1.6 }], MAN: ['Man-match', { man: 1.3 }], SHELL: ['Zone shell', { high: 0.9, blitz: -0.8 }] },
   DRC: { PENETRATE: ['Penetrating', { stunt: 1.6, base: -0.4 }], TWOGAP: ['Two-gap', { base: 0.8, stunt: -0.8 }] },
 };
@@ -509,8 +508,31 @@ function promoteToCoordinator(c) {
   updateCoachOvr(c); TEND_VER++;
   return c;
 }
+// a coordinator becomes a head coach: he keeps his side of the ball and often the play sheet; a special teams man runs the building and leaves the calls to his coordinators
+function promoteToHead(c) {
+  const from = c.role, side = from === 'OC' ? 'O' : from === 'DC' ? 'D' : 'ST', arch = c.arch, st = side === 'ST';
+  const num = (v, m, sd) => v !== undefined ? v : Math.round(clamp(gauss(m, sd), 20, 90));
+  c.role = 'HC';
+  c.k = { gm: Math.round(clamp(gauss(st ? 55 : 50, 10), 20, 90)), cul: Math.round(clamp(gauss(st ? 56 : 52, 11), 20, 92)), pc: num(c.k.pc, 42, 8), adp: num(c.k.adp, 50, 9) };
+  c.t = { aggr: round2(clamp(gauss(0.5, 0.17), 0.05, 0.95)), clock: round2(clamp(gauss(0.5, 0.17), 0.05, 0.95)), bg: side };
+  if (st) { c.t.caller = null; delete c.ct; c.arch = null; delete c.pk; }
+  else { makeCaller(c, arch); if (!c.t.caller && rand() < 0.5) { c.t.caller = side; c.arch = arch; c.ct = jitterTend((side === 'O' ? OFF_ARCH : DEF_ARCH)[arch].t); } }
+  c.promoted = state.season; updateCoachOvr(c); TEND_VER++;
+  return c;
+}
+function promoteHeadCost(c) { return round2(Math.max(c.sal || 0, coachAsk(c, 'HC') * 0.85)); } // an in-house promotion comes a little cheaper than the open market
 function userPromote(cid) { // from the Staff page: move one of your own assistants up into an open job above him
   const c = C(cid), t = T(state.userTid);
+  if (c && c.tid === t.id && ['OC', 'DC', 'STC'].includes(c.role)) {
+    if (t.hc) return 'Let your head coach go first';
+    const sal = promoteHeadCost(c);
+    if (sal - (c.sal || 0) > staffRoom(t.id) + 0.001) return `Not enough staff budget: he would want ${fmtMoney(sal)} as head coach`;
+    const was = ROLE_LABEL[c.role].toLowerCase(), key = c.role.toLowerCase();
+    t[key] = null; c.tid = -1; delete c.prom; promoteToHead(c); hireCoach(t.id, c.id, true);
+    signCoachContract(c, sal, askYears(c, 'HC'), askGtd(c, 'HC')); setCaller(t);
+    addNews(`${t.abbr} promoted ${was} ${cname(c)} to head coach.`, [t.id], 'coach');
+    return null;
+  }
   if (!c || c.tid !== t.id || !isAsst(c)) return 'He is not on your staff';
   if (SPEC_ROLES.includes(c.role)) {
     const key = ASST_SIDE[c.role] === 'O' ? 'oc' : 'dc';
@@ -555,6 +577,7 @@ function asstOffseason(recs, rank, pf, pa) {
 }
 // ---- how you see them: words, and a little unsure until you have worked with a man ----
 function asstWord(c, key) {
+  if (!coachKnown(c)) return "Not interviewed"; // during the search you only know your own staff and the men you have sat down with
   const mine = c.tid === state.userTid, sd = mine ? ((c.yrs || 0) >= 3 ? 2 : (c.yrs || 0) >= 1 ? 6 : 10) : 12;
   const v = c[key] + hashGauss(c.id, 700 + key.charCodeAt(1), 5) * sd;
   return v >= 78 ? 'Excellent' : v >= 64 ? 'Good' : v >= 46 ? 'Average' : v >= 34 ? 'Below average' : 'Poor';
@@ -572,7 +595,9 @@ const BOSS = { OC: 'HC', DC: 'HC', STC: 'HC', SC: 'HC', PGC: 'OC', RGC: 'OC', DP
 const ALL_ROLES = [...COACH_ROLES, ...ASST_ROLES];
 const ROLE_TIER = { HC: 1, OC: 2, DC: 2, STC: 2, SC: 2, PGC: 3, RGC: 3, DPC: 3, DRC: 3, QB: 4, RB: 4, WR: 4, TE: 4, OL: 4, DL: 4, LB: 4, DB: 4 };
 const CAROUSEL_DAYS = 4, DAY_NAME = ['Head coaches', 'Coordinators', 'Specialists', 'Position coaches'];
-const INTERVIEWS = { HC: 5, OC: 3, DC: 3, STC: 2, SC: 2 };
+// interviews you get for each job, by level: head coach, coordinators, specialists, position coaches
+const IV_TIER = { 1: 5, 2: 4, 3: 4, 4: 3 };
+function ivLeftOf(role) { const car = state.car; return !car ? 0 : car.ivLeft[role] !== undefined ? car.ivLeft[role] : IV_TIER[ROLE_TIER[role]] || 0; }
 function subRoles(role) { const out = []; const walk = r => { for (const k in BOSS) if (BOSS[k] === r) { out.push(k); walk(k); } }; walk(role); return out; }
 function staffCoach(t, role) { return COACH_ROLES.includes(role) ? C(t[role.toLowerCase()]) : asst(t, role); }
 function roleName(r) { return ROLE_LABEL[r] || r; }
@@ -625,8 +650,13 @@ function fitsJob(x, role, t) {
   if (x.tid === t.id) return false;
   const same = x.role === role, up = (POS_ROLES.includes(x.role) && SPEC_OVER[x.role] === role) || (SPEC_ROLES.includes(x.role) && role === (ASST_SIDE[x.role] === 'O' ? 'OC' : 'DC'));
   if (x.tid < 0) return same || up;
-  return up; // employed elsewhere: only for a promotion
+  if (x.hiredS === state.season && state.car) return false; // he took a job this week
+  return up || (same && t.id === state.userTid && !!state.car); // employed elsewhere: a promotion, or a sideways move if you make it worth his while
 }
+function isLateral(c, role) { return c.tid >= 0 && c.tid !== state.userTid && ROLE_TIER[role] >= ROLE_TIER[c.role]; }
+// will his club fight to keep him? 0..1, falling as your offer pulls away from what he makes now
+function clubMatchChance(c, sal) { const now = c.sal || coachAsk(c), r = sal / Math.max(0.05, now); return clamp(0.3 + (c.ovr - 62) * 0.02, 0.1, 0.8) * (r >= 1.5 ? 0.35 : r >= 1.3 ? 0.6 : 1); }
+function clubMatchWord(p) { return p >= 0.55 ? 'His club will probably match to keep him' : p >= 0.3 ? 'His club may match to keep him' : 'His club is unlikely to fight for him'; }
 function guysOf(c, role, t) { // the men he would bring, strongest tie first, one per job under him
   const out = [], used = new Set(), subs = subRoles(role), rep = repOf(c), cut = 0.75 - 0.45 * rep;
   const cands = Object.keys(c.links || {}).map(id => C(+id)).filter(Boolean).sort((a, b) => linkOf(c, b) - linkOf(c, a));
@@ -647,6 +677,7 @@ function demandsOf(c, role) {
   const car = state.car, u = state.userTid, t = T(u); role = role || c.role;
   if (car && car.dem[c.id] && car.dem[c.id].role === role) return car.dem[c.id];
   const d = { role, call: wantsCall(c, role), slots: guysOf(c, role, t), resign: null, sal: coachAsk(c, role), yrs: askYears(c, role), gtd: askGtd(c, role) };
+  if (c.tid >= 0 && c.tid !== u) d.sal = round2(Math.max(d.sal, (c.sal || 0) * (isLateral(c, role) ? 1.2 : 1.08))); // a man with a job does not move for the same money
   if (ROLE_TIER[role] <= 2 && role !== 'STC' && role !== 'SC' && hashGauss(c.id, 91, state.season) > 0.5) {
     const side = role === 'OC' ? 'off' : role === 'DC' ? 'def' : c.t && c.t.bg === 'D' ? 'def' : 'off';
     const p = rosterOf(u).filter(x => x.expiring && SPOTS[x.spot].side === side && ['Elite', 'All-Pro', 'Starter'].includes(tierOf(x))).sort((a, b) => uOvr(b) - uOvr(a))[0];
@@ -668,7 +699,14 @@ function judgeOffer(c, o) {
   let s = 50 + teamAppeal(t), hard = null;
   if (ROLE_TIER[o.role] < ROLE_TIER[c.role]) { s += 12; notes.push(['+', 'A step up for him']); }
   if (c.tid < 0) s += 5;
-  const ratio = o.sal / d.sal; s += clamp((ratio - 1) * 45, -30, 18); if (ratio < 0.92) notes.push(['-', 'Money is light']); else if (ratio > 1.08) notes.push(['+', 'Strong money']);
+  if (state.car && state.car.blocked && state.car.blocked[c.id]) hard = 'His club matched your offer and he is staying put';
+  if (isLateral(c, o.role)) {
+    const home = T(c.tid), tie = Math.max(0, ...ALL_ROLES.map(r => linkOf(c, staffCoach(t, r))));
+    s -= 12 + clamp(teamAppeal(home), -8, 10) * 0.6; notes.push(['-', `Under contract with ${home.abbr} in the same job: it takes a clearly better offer`]);
+    if (tie >= 0.3) { s += tie * 14; notes.push(['+', 'Has people he trusts on your staff']); }
+    if ((c.cyrs || 1) <= 1) { s += 5; notes.push(['+', 'His deal there is almost up']); }
+  }
+  const ratio = o.sal / d.sal; s += clamp((ratio - 1) * 45, -30, isLateral(c, o.role) ? 30 : 18); // a man with a job can be bought, at a price if (ratio < 0.92) notes.push(['-', 'Money is light']); else if (ratio > 1.08) notes.push(['+', 'Strong money']);
   s += (o.yrs - d.yrs) * 3 + (o.gtd - d.gtd) * 5; if (o.gtd < d.gtd) notes.push(['-', 'Wants more guaranteed years']);
   if (d.call !== 'none') { if (o.call) s += d.call === 'hard' ? 2 : 6; else if (d.call === 'hard') hard = 'He will not come unless he calls the plays'; else { s -= 8; notes.push(['-', 'Would like to call plays']); } }
   for (const g of d.slots) { if (o.slots[g.role] === g.cid) { s += g.w * 6; } else { s -= g.w * (g.firm ? 15 : 6); notes.push(['-', `Wants ${cname(C(g.cid))} as his ${roleName(g.role).toLowerCase()}${g.firm ? ' (insists)' : ''}`]); } }
@@ -679,24 +717,27 @@ function judgeOffer(c, o) {
     const boss = Object.keys(c.links || {}).map(id => C(+id)).find(b => b && b.tid < 0 && linkOf(c, b) >= 0.7 && ROLE_TIER[b.role] < ROLE_TIER[o.role] && isAbove(b.role, o.role));
     if (boss) hard = `He is waiting to see where ${cname(boss)} lands`;
   }
-  const need = Math.max(58, outsideOffer(c, o.role));
+  const need = isLateral(c, o.role) ? 60 : Math.max(58, outsideOffer(c, o.role)); // he is not shopping himself: there is no outside market to beat, only his own comfort
   return { score: s, need, ok: !hard && s >= need, hard, notes };
 }
 function interestLabel(j) { if (j.hard) return ['Will not sign', 'bad']; const d = j.score - j.need; return d >= 0 ? ['Ready to sign', 'good'] : d >= -6 ? ['Close', 'warn'] : d >= -15 ? ['Needs more', 'warn'] : ['Not interested', 'bad']; }
-function interview(cid) {
+function interview(cid, role) { // the job you are interviewing him for is the one that spends the interview
   const c = C(cid), car = state.car;
   if (!car || !c) return 'The search is closed';
   if (car.iv[cid]) return null;
-  const key = INTERVIEWS[c.role] !== undefined ? c.role : null;
-  if (key) { if ((car.ivLeft[key] || 0) <= 0) return `No interviews left for ${roleName(key).toLowerCase()} candidates`; car.ivLeft[key]--; }
-  car.iv[cid] = 1; demandsOf(c);
+  const key = role || c.role;
+  if (ivLeftOf(key) <= 0) return `No interviews left for ${roleName(key).toLowerCase()} candidates`;
+  car.ivLeft[key] = ivLeftOf(key) - 1;
+  car.iv[cid] = 1; demandsOf(c, key);
   return null;
 }
-function coachKnown(c) { return !state.car || c.tid === state.userTid || !!state.car.iv[c.id] || ROLE_TIER[c.role] >= 3 || c.tid >= 0; }
+// during the search you only really know your own staff and the men you have sat down with
+function coachKnown(c) { return !state.car || c.tid === state.userTid || !!state.car.iv[c.id]; }
 // ---- putting a man in a job ----
 function placeCoach(t, role, c, quiet) {
   if (c.tid >= 0 && c.tid !== t.id) vacateCoach(c);
-  if (c.role !== role) { if (POS_ROLES.includes(c.role) && SPEC_ROLES.includes(role)) promoteToSpecialist(c); else if (SPEC_ROLES.includes(c.role)) promoteToCoordinator(c); }
+  if (c.role !== role) { if (POS_ROLES.includes(c.role) && SPEC_ROLES.includes(role)) promoteToSpecialist(c); else if (SPEC_ROLES.includes(c.role)) promoteToCoordinator(c); else if (role === 'HC' && ['OC', 'DC', 'STC'].includes(c.role)) promoteToHead(c); }
+  c.hiredS = state.season;
   const cur = staffCoach(t, role);
   if (cur && cur !== c) dismissCoach(t, cur, quiet);
   if (COACH_ROLES.includes(role)) hireCoach(t.id, c.id, true); else setAsst(t, role, c, true);
@@ -725,6 +766,16 @@ function userHire(cid, o) {
   if (t.locks && t.locks[o.role] && cur) return `That job was promised to ${cname(C(t.locks[o.role]))}'s staff`;
   const cost = o.sal - (cur ? cur.sal || 0 : 0) + (cur ? owedIfFired(cur) : 0);
   if (cost > staffRoom(t.id) + 0.001) return 'Over your staff budget';
+  if (isLateral(c, o.role) && state.car) { // his club gets one chance to match
+    const car = state.car, home = T(c.tid); car.roll = car.roll || {}; car.blocked = car.blocked || {};
+    if (car.roll[c.id] === undefined) car.roll[c.id] = rand();
+    if (car.roll[c.id] < clubMatchChance(c, o.sal)) {
+      car.blocked[c.id] = 1; signCoachContract(c, round2(Math.max(c.sal || 0, o.sal)), Math.max(c.cyrs || 1, 2), Math.max(c.cgtd || 0, 1));
+      addNews(`${home.abbr} matched ${t.abbr}'s offer to keep ${roleName(c.role).toLowerCase()} ${cname(c)}: ${fmtMoney(c.sal)}/yr.`, [t.id, home.id], 'coach');
+      return `${home.abbr} matched your offer. He is staying.`;
+    }
+    addNews(`${t.abbr} hired ${cname(c)} away from ${home.abbr}.`, [t.id, home.id], 'coach');
+  }
   placeCoach(t, o.role, c);
   signCoachContract(c, o.sal, o.yrs, o.gtd);
   c.prom = { call: o.call ? callSide(c, o.role) : null, slots: Object.assign({}, o.slots), resign: o.resign ? (demandsOf(c, o.role).resign || o.resignPid || null) : null };
@@ -779,25 +830,81 @@ function aiHireRoles(roles) {
   }
   TEND_VER++;
 }
+// ---- other clubs come for your people ----
+// A club with an open job can ask for one of yours: a step up for him, or the same job next to a man he is tied to.
+// A sideways move you can match. A promotion is hard to talk a man out of.
+// There is no limit on how many come calling: good coaches on winning clubs draw the most interest, each man is approached once a year,
+// and every offer you match makes him dearer. What keeps a great staff together is money.
+const RAID = { promo: 0.10, lateral: 0.12, tie: 0.3 };
+function genRaids(roles) {
+  const car = state.car, u = state.userTid, ut = T(u);
+  if (!car || isAI(u)) return;
+  car.raids = car.raids || []; car.raided = car.raided || {};
+  const ur = standings()[u] || { w: 8, l: 9, t: 0 }, heat = 0.5 + clamp((ur.w / Math.max(1, ur.w + ur.l + ur.t) - 0.4) / 0.4, 0, 1); // winners get raided
+  for (const role of roles) for (const t of shuffle([...state.teams])) {
+    if (t.id === u || staffCoach(t, role) || car.raids.some(r => r.tid === t.id)) continue;
+    const boss = BOSS[role] ? staffCoach(t, BOSS[role]) : null;
+    const cands = ALL_ROLES.map(r => staffCoach(ut, r)).filter(c => c && c.hiredS !== state.season && !car.raided[c.id]).map(c => {
+      const same = c.role === role, up = (POS_ROLES.includes(c.role) && SPEC_OVER[c.role] === role) || (SPEC_ROLES.includes(c.role) && role === (ASST_SIDE[c.role] === 'O' ? 'OC' : 'DC')) || (role === 'HC' && (c.role === 'OC' || c.role === 'DC'));
+      if (!same && !up) return null;
+      const tie = boss ? linkOf(boss, c) : 0;
+      const q = clamp((c.ovr - 60) / 25, 0, 1.2); // how good the league thinks he is
+      const p = up ? 0.01 + q * RAID.promo * heat + tie * RAID.tie : Math.max(0, q - 0.6) * RAID.lateral * heat + (tie >= 0.3 ? tie * RAID.tie : 0);
+      return { c, up, tie, p };
+    }).filter(x => x && rand() < x.p).sort((a, b) => b.c.ovr + b.tie * 10 - a.c.ovr - a.tie * 10);
+    const x = cands[0]; if (!x) continue;
+    const sal = round2(Math.max(coachAsk(x.c, role), (x.c.sal || 0) * (x.up ? 1.1 : 1.2)));
+    car.raids.push({ cid: x.c.id, tid: t.id, role, promo: x.up, sal, yrs: askYears(x.c, role), tie: x.tie, roll: rand(), by: boss ? boss.id : null }); car.raided[x.c.id] = 1;
+    addNews(`${t.abbr} want your ${roleName(x.c.role).toLowerCase()} ${cname(x.c)}${x.up ? ` as their ${roleName(role).toLowerCase()}` : ''}${boss && x.tie >= 0.4 ? ` (${cname(boss)} asked for him)` : ''}. Answer on the Staff page before you advance.`, [u], 'coach');
+  }
+}
+function raidStayChance(r) { const c = C(r.cid), hc = C(T(state.userTid).hc); return r.promo ? 0.3 + (hc && linkOf(hc, c) >= 0.5 ? 0.2 : 0) : r.tie >= 0.6 ? 0.5 : 0.85; }
+function raidLeave(r) {
+  const c = C(r.cid), ut = T(state.userTid), t = T(r.tid); if (!c || c.tid !== ut.id || staffCoach(t, r.role)) return false;
+  const was = roleName(c.role).toLowerCase();
+  if (ut.locks) for (const k in ut.locks) if (ut.locks[k] === c.id) delete ut.locks[k];
+  delete c.prom; placeCoach(t, r.role, c, true); signCoachContract(c, r.sal, r.yrs, askGtd(c, r.role));
+  addNews(`${ut.abbr} ${was} ${cname(c)} left to become ${t.abbr}'s ${roleName(r.role).toLowerCase()}.`, [ut.id, t.id], 'coach');
+  return true;
+}
+function resolveRaids() { const car = state.car; if (!car || !car.raids) return; for (const r of car.raids) raidLeave(r); car.raids = []; }
+// keep = pay him what they offered to stay. Returns a message for the player.
+function answerRaid(i, keep) {
+  const car = state.car, r = car && car.raids ? car.raids[i] : null; if (!r) return 'That offer is gone';
+  const c = C(r.cid), t = T(state.userTid), club = T(r.tid);
+  car.raids.splice(i, 1);
+  if (!c || c.tid !== t.id) return 'He is no longer on your staff';
+  if (!keep) { raidLeave(r); return `${cname(c)} is off to ${club.abbr}.`; }
+  if (r.sal - (c.sal || 0) > staffRoom(t.id) + 0.001) { car.raids.splice(i, 0, r); return 'Over your staff budget: you cannot match that'; }
+  if (r.roll < raidStayChance(r)) {
+    signCoachContract(c, Math.max(c.sal || 0, r.sal), Math.max(c.cyrs || 1, r.yrs), Math.max(c.cgtd || 0, 1));
+    addNews(`${t.abbr} ${r.promo ? 'talked' : 'matched an offer to keep'} ${roleName(c.role).toLowerCase()} ${cname(c)}${r.promo ? ' out of leaving' : ''}: ${fmtMoney(c.sal)}/yr.`, [t.id], 'coach');
+    return `${cname(c)} is staying.`;
+  }
+  raidLeave(r); return `${cname(c)} thanked you for the offer and took the ${club.abbr} job anyway.`;
+}
 function genCollegeClass() { // fresh faces: no ties, cheap, and nobody really knows
-  for (const [role, n] of [['HC', 2], ['OC', 2], ['DC', 2], ['PGC', 1], ['RGC', 1], ['DPC', 1], ['DRC', 1], ...POS_ROLES.map(r => [r, 1])]) for (let i = 0; i < n; i++) {
-    const c = COACH_ROLES.includes(role) ? genCoach(role, { q: gauss(-0.1, 1.3) }) : genAssistant(role, { q: gauss(-0.1, 1.3) });
+  for (const [role, n] of [['HC', 5], ['OC', 6], ['DC', 6], ['STC', 3], ['SC', 3], ...SPEC_ROLES.map(r => [r, 4]), ...POS_ROLES.map(r => [r, 6])]) for (let i = 0; i < n; i++) {
+    const c = COACH_ROLES.includes(role) ? genCoach(role, { q: gauss(-0.15, 1.35) }) : genAssistant(role, { q: gauss(-0.15, 1.35) });
     c.college = true; c.age = clamp(c.age - randInt(2, 8), 28, 60); c.links = {};
   }
 }
 function startCarousel() {
-  state.car = { day: 0, iv: {}, ivLeft: Object.assign({}, INTERVIEWS), dem: {}, req: [] };
+  state.car = { day: 0, iv: {}, ivLeft: {}, dem: {}, req: [], raids: [], raided: {}, blocked: {}, roll: {} };
   ensureCoachContracts(); genCollegeClass(); seedWeb();
+  genRaids(['HC']);
 }
 // the market moves a tier a day; whatever is still open on the last day gets filled
 function advanceCarousel() {
   const car = state.car || (startCarousel(), state.car);
   const day = car.day;
+  resolveRaids(); // anyone you did not fight for is gone
   if (day === 0) aiHireRoles(['HC']);
   else if (day === 1) aiHireRoles(['OC', 'DC', 'STC', 'SC']);
   else if (day === 2) aiHireRoles(SPEC_ROLES);
   car.day++;
   if (car.day >= CAROUSEL_DAYS) { finishCarousel(); return; }
+  genRaids(car.day === 1 ? ['OC', 'DC'] : car.day === 2 ? SPEC_ROLES : POS_ROLES);
 }
 function finishCarousel() {
   const u = state.userTid, t = T(u);
@@ -807,6 +914,8 @@ function finishCarousel() {
   }
   aiHireRoles(ALL_ROLES);
   for (const x of state.teams) { for (const r of ALL_ROLES) { const c = staffCoach(x, r); if (c && c.sal === undefined) signCoachContract(c, coachAsk(c), askYears(c), askGtd(c)); } setCaller(x); }
+  // the college men nobody hired go back to campus
+  for (const id in state.coaches) { const c = state.coaches[id]; if (c.college && c.tid < 0) { for (const o in c.links || {}) { const x = C(+o); if (x && x.links) delete x.links[c.id]; } delete state.coaches[id]; } }
   state.car = null;
   leaveCoaches();
 }

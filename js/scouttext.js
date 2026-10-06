@@ -131,6 +131,46 @@ const ROLES = {
   K: { kcon: ['consistent kicker'], krng: ['big-legged kicker'], kfal: ['long-range specialist'], ktrj: ['clean-striking kicker'] },
   P: { pdis: ['big-legged punter'], pplc: ['directional punter'], phng: ['hang-time punter'], pspn: ['pooch-punt specialist'] },
 };
+// The job changes the words: a 3-4 end is not a nose, an outside corner is not a nickel, a guard does not protect the blind side.
+// ROLES_SPOT[spot][attr] replaces the group's list for players at that spot.
+const ROLES_SPOT = {
+  WRX: { agi: ['quick-footed route runner', 'sudden separator'] }, WRZ: { agi: ['quick-footed route runner', 'sudden separator'] },
+  SLOT: { siz: ['big slot receiver', 'size mismatch inside'], cth: ['contested-catch slot', 'tough over-the-middle target'], spd: ['vertical slot threat', 'seam-stretching slot receiver'] },
+  TEY: { rte: ['route-running tight end', 'reliable in-line target'] },
+  TEH: { rbk: ['blocking H-back', 'move blocker', 'run-game tight end'], siz: ['oversized move tight end'], str: ['lead-blocking H-back'] },
+  LT: { pbk: ['pass-protecting technician', 'blind-side protector', 'finesse pass blocker'], agi: ['athletic zone tackle', 'light-footed edge protector'] },
+  RT: { pbk: ['pass-protecting technician', 'strong-side pass protector', 'finesse pass blocker'], agi: ['athletic zone tackle', 'light-footed edge protector'] },
+  LG: { pbk: ['pass-protecting technician', 'interior pocket anchor'], agi: ['athletic zone blocker', 'pulling guard', 'light-footed mover'] },
+  RG: { pbk: ['pass-protecting technician', 'interior pocket anchor'], agi: ['athletic zone blocker', 'pulling guard', 'light-footed mover'] },
+  C: { pbk: ['pass-protecting technician', 'interior pocket anchor'], agi: ['athletic zone center', 'reach-blocking center'], bawr: ['cerebral center', 'line-calling anchor of the line', 'smart, steady veteran type'] },
+  NT: { shed: ['two-gapping nose', 'block-eating anchor', 'stack-and-shed nose tackle'], str: ['power-based nose', 'bull-rushing nose tackle'], siz: ['space-eating nose tackle', 'wide-bodied plugger'] },
+  DT: { str: ['power-rushing tackle', 'bull-rushing brawler'], siz: ['wide-bodied interior plugger', 'big-bodied defensive tackle'] },
+  DE: { prsh: ['interior pass rusher', 'pocket-pushing five-technique', 'inside-rushing end'], shed: ['two-gapping end', 'stack-and-shed lineman', 'edge-setting base end'], str: ['power end', 'heavy-handed base end'], siz: ['long, heavy base end', 'big-bodied five-technique'] },
+  WLB: { prec: ['instinctive linebacker', 'smart run-and-chase linebacker'] },
+  CB: { agi: ['quick-footed cover corner', 'mirror-and-match corner'] },
+  NCB: { man: ['sticky slot cover man', 'man-coverage nickel'], zone: ['zone nickel', 'instinctive slot defender'], prs: ['physical slot corner'], tkl: ['run-support nickel', 'blitzing slot corner'], spd: ['recovery-speed slot corner'], siz: ['big nickel corner'] },
+  FS: { man: ['matchup safety', 'man-coverage safety'], tkl: ['sure-tackling free safety', 'reliable last-line tackler'], shed: ['downhill free safety'], str: ['physical free safety'] },
+  SS: { zone: ['zone-savvy strong safety', 'rangy split-field safety'] },
+};
+// last line of defense for the wording: a phrase that names a job or a build is only used on a player who has it
+const ROLE_GUARD = [
+  [/\bnose\b/i, p => p.spot === 'NT'], [/three-technique/i, p => p.spot === 'DT'], [/defensive tackle/i, p => p.spot === 'DT' || p.spot === 'NT'], [/five-technique|base end/i, p => p.spot === 'DE'],
+  [/nickel corner|slot corner|\bnickel$|slot cover|slot defender|zone nickel|man-coverage nickel|run-support nickel/i, p => p.spot === 'NCB'], [/boundary corner/i, p => p.spot === 'CB'],
+  [/big nickel type/i, p => p.spot === 'SS' || p.spot === 'FS'], [/free safety|center-field|single-high/i, p => p.spot === 'FS'], [/strong safety/i, p => p.spot === 'SS'],
+  [/\bslot\b/i, p => ['SLOT', 'NCB', 'TEH', 'TEY'].includes(p.spot)], [/boundary receiver/i, p => p.spot === 'WRX' || p.spot === 'WRZ'],
+  [/blind-side/i, p => p.spot === 'LT'], [/\bguard\b/i, p => p.spot === 'LG' || p.spot === 'RG'], [/\bcenter\b/i, p => p.spot === 'C' || p.spot === 'FS'], [/\btackle\b/i, p => ['LT', 'RT', 'DT', 'NT'].includes(p.spot)],
+  [/in-line|sixth lineman/i, p => p.spot === 'TEY'], [/H-back|move tight end|move blocker/i, p => p.spot === 'TEH' || p.spot === 'FB'], [/green-dot|quarterback of the defense/i, p => p.spot === 'MLB'],
+  // builds: the tape measure and the scale have to agree
+  [/big-bodied|wide-bodied|space-eat|massive|oversized|heavy base|big slot|big nickel corner|size mismatch/i, p => bodyZ(p).w >= 0.25],
+  [/\blong\b|rangy boundary/i, p => bodyZ(p).h >= 0.25],
+];
+function bodyZ(p) { const b = SPOTS[p.spot] && SPOTS[p.spot].body; return b && p.m ? { h: (p.m.ht - b[0]) / b[1], w: (p.m.wt - b[2]) / b[3] } : { h: 0, w: 0 }; }
+function roleFits(p, phrase) { for (const [re, ok] of ROLE_GUARD) if (re.test(phrase) && !ok(p)) return false; return true; }
+function rolesFor(p) {
+  const out = {}, base = Object.assign({}, ROLES[PROFILE_GROUP[p.spot]], ROLES_SPOT[p.spot]);
+  for (const k in base) { const l = base[k].filter(x => roleFits(p, x)); if (l.length) out[k] = l; }
+  return out;
+}
 // "…with ___" add-ons for a second calling card
 const MODS = { spd: ['with real speed', 'who can run'], bur: ['with a quick first step', 'with good burst'], agi: ['with quick feet', 'who changes direction well'], str: ['with real power', 'who plays strong'], siz: ['with good size'],
   sacc: ['who is accurate underneath'], dacc: ['who can hit the deep ball'], arm: ['with a live arm'], proc: ['who sees the field well'], dec: ['who protects the football'], pkt: ['who stays calm in the pocket'], tor: ['who can throw on the move'],
@@ -254,11 +294,11 @@ function traitTags(p) {
 function scoutProfile(p, short) {
   if (!p.a) return '';
   const { grp, rows } = scoutRead(p);
-  const roles = ROLES[grp] || {};
+  const roles = rolesFor(p);
   // his calling card: core traits for the position get priority over side skills
   const lw = r => r.rel * (r.core ? 1 : 0.55);
   const ranked = rows.slice().sort((a, b) => lw(b) - lw(a));
-  const lead = ranked.find(r => roles[r.k]);
+  const lead = ranked.find(r => roles[r.k] && (r.k !== 'siz' || r.d >= 2)); // size is only a calling card if he really is big for the job
   if (!lead) return '';
   const role = pickStable(roles[lead.k], p, 101);
   const second = ranked.find(r => r !== lead && r.rel >= 3 && MODS[r.k] && r.d > -9);

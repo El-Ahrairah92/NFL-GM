@@ -31,7 +31,79 @@ function computeAwards() {
   }
   return out;
 }
-const AWARD_NAMES = { mvp: 'MVP', opoy: 'Offensive Player of the Year', dpoy: 'Defensive Player of the Year', oroy: 'Offensive Rookie of the Year', droy: 'Defensive Rookie of the Year' };
+const AWARD_NAMES = { mvp: 'MVP', opoy: 'Offensive Player of the Year', dpoy: 'Defensive Player of the Year', oroy: 'Offensive Rookie of the Year', droy: 'Defensive Rookie of the Year',
+  cpoy: 'Comeback Player of the Year', mip: 'Most Improved Player', oly: 'Offensive Lineman of the Year', moy: 'Man of the Year',
+  coy: 'Coach of the Year', acoy: 'Assistant Coach of the Year', exec: 'Executive of the Year' };
+// =====================================================================
+//  SEASON HONORS: the wider award slate, All-Pro and All-Rookie teams, leaders, and the story of the year.
+//  Worked out once, when the season ends, and kept with that season in the history books.
+// =====================================================================
+const HONOR_SLOTS = [['QB', 1], ['RB', 1], ['WR', 3], ['TE', 1], ['OL', 5], ['EDGE', 2], ['IDL', 2], ['LB', 3], ['CB', 3], ['S', 2], ['K', 1], ['P', 1]];
+const ROOKIE_SLOTS = [['QB', 1], ['RB', 1], ['WR', 2], ['TE', 1], ['OL', 2], ['EDGE', 1], ['IDL', 1], ['LB', 1], ['CB', 1], ['S', 1]];
+const HONOR_NAME = { QB: 'Quarterback', RB: 'Running back', WR: 'Receiver', TE: 'Tight end', OL: 'Offensive line', EDGE: 'Edge', IDL: 'Interior line', LB: 'Linebacker', CB: 'Corner', S: 'Safety', K: 'Kicker', P: 'Punter' };
+function honorGroup(p) { return p.spot === 'FB' ? null : p.pos === 'DL' ? (p.spot === 'EDGE' ? 'EDGE' : 'IDL') : p.pos; }
+// one number for "how good was his year": production where the position has it, the season grade where it does not
+function honorScore(p) {
+  const s = p.stats, g = honorGroup(p), gr = p.advS ? overallGrade(p.advS, p.spot) : null, grade = gr || 60, snaps = s.snp || 0;
+  if (g === 'QB' || g === 'RB' || g === 'WR' || g === 'TE') return offScore(s) + (grade - 60) * 1.2;
+  if (g === 'OL') return snaps < 500 ? -1 : (grade - 50) * 4 + snaps / 40;
+  if (g === 'K') return (s.fga || 0) < 12 ? -1 : (s.fgm || 0) * 3 - ((s.fga || 0) - (s.fgm || 0)) * 5 + (s.fgLng || 0) * 0.3;
+  if (g === 'P') return (s.pnt || 0) < 20 ? -1 : (s.pntY / s.pnt) * 4;
+  if (snaps < 380) return -1;
+  return defScore(s) * (g === 'CB' ? 0.8 : 1) + (grade - 60) * (g === 'CB' || g === 'S' ? 3 : 2.2);
+}
+function honorRef(p, extra) { return Object.assign({ pid: p.id, name: pname(p), pos: p.lbl, tid: p.tid, line: honorGroup(p) === 'OL' ? `${p.stats.gs || 0} starts, ${p.stats.snp || 0} snaps` : statSummary(p.stats, p.pos) }, extra || {}); }
+function seasonHonors(awards) {
+  const recs = standings(), season = state.season, po = state.playoffs;
+  const all = Object.values(state.players).filter(p => p.tid >= 0 && p.stats && (p.stats.gp || 0) >= 6 && p.a);
+  const by = {}; for (const p of all) { const g = honorGroup(p); if (g) (by[g] || (by[g] = [])).push([p, honorScore(p)]); }
+  for (const g in by) by[g] = by[g].filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+  const tag = (p, txt) => { p.awards = p.awards || []; p.awards.push(season + ' ' + txt); };
+  // All-Pro: first and second teams
+  const allPro = { 1: [], 2: [] };
+  for (const [g, n] of HONOR_SLOTS) { const l = by[g] || []; l.slice(0, n).forEach(([p]) => { allPro[1].push(honorRef(p, { g })); tag(p, 'First-team All-Pro'); }); l.slice(n, n * 2).forEach(([p]) => { allPro[2].push(honorRef(p, { g })); tag(p, 'Second-team All-Pro'); }); }
+  const allRookie = [];
+  for (const [g, n] of ROOKIE_SLOTS) (by[g] || []).filter(x => x[0].exp === 0).slice(0, n).forEach(([p]) => { allRookie.push(honorRef(p, { g })); tag(p, 'All-Rookie team'); });
+  // the wider slate
+  const give = (k, p, extra) => { if (!p || awards[k]) return; awards[k] = honorRef(p, extra); tag(p, AWARD_NAMES[k]); };
+  if (by.OL && by.OL[0]) give('oly', by.OL[0][0]);
+  const rate = p => { const g = honorGroup(p), l = by[g] || [], top = l.length ? l[0][1] : 1, me = l.find(x => x[0] === p); return me ? me[1] / Math.max(1, top) : 0; }; // how close to the best at his position
+  const back = all.filter(p => { const c = p.career || [], last = c.find(x => x.season === season - 1); return p.exp >= 2 && (p.stats.gp || 0) >= 12 && c.length && (!last || (last.gp || 0) <= 9); }).map(p => [p, rate(p)]).filter(x => x[1] >= 0.55).sort((a, b) => b[1] - a[1])[0];
+  if (back) { const last = (back[0].career || []).find(x => x.season === season - 1); give('cpoy', back[0], { note: last ? `played ${last.gp || 0} game${last.gp === 1 ? '' : 's'} last season` : 'out of the league last season' }); }
+  const up = all.filter(p => p.per && p.per.s0 !== undefined && (p.stats.gs || 0) >= 8 && p.exp >= 1 && rate(p) >= 0.4).map(p => [p, perOvr(p) - p.per.s0 + rate(p) * 5]).filter(x => x[1] >= 5).sort((a, b) => b[1] - a[1])[0]; // a real player now, not just a better backup
+  if (up) give('mip', up[0], { note: `now viewed as ${/^[AEIOU]/.test(tierOf(up[0])) ? 'an' : 'a'} ${tierOf(up[0])}` });
+  const man = all.filter(p => p.exp >= 4 && (p.stats.gs || 0) >= 10 && p.h && p.h.lead !== undefined).map(p => [p, p.h.lead * 0.5 + p.h.work * 0.25 + p.h.disc * 0.25 + Math.min(p.exp, 10) * 1.5 + rate(p) * 12]).sort((a, b) => b[1] - a[1])[0];
+  if (man) give('moy', man[0], { note: 'for leadership and the way he goes about his work' });
+  // coaches and front offices: the biggest step forward, weighted by where the club finished
+  const hadPrev = state.teams.some(t => (state.teamHist[t.id] || []).length), since = (t, word) => hadPrev ? `, ${word} ${Math.round(prevW(t))} wins a year ago` : '';
+  const prevW = t => { const h = state.teamHist[t.id] || [], l = h[h.length - 1]; return l ? l.w + l.t * 0.5 : 8.5; }, nowW = t => recs[t.id].w + recs[t.id].t * 0.5;
+  const pf = state.teams.map(t => recs[t.id].pf), pa = state.teams.map(t => recs[t.id].pa), rank = (arr, v, desc) => 1 + arr.filter(x => desc ? x > v : x < v).length;
+  const jump = t => (nowW(t) - prevW(t)) * 1.2 + nowW(t) * 0.7 + (po && po.elim[t.id] !== undefined ? 1.5 : 0);
+  const coyT = state.teams.filter(t => C(t.hc)).sort((a, b) => jump(b) - jump(a))[0];
+  if (coyT) { const c = C(coyT.hc), r = recs[coyT.id]; awards.coy = { cid: c.id, name: cname(c), pos: 'HC', tid: coyT.id, line: recStr(r) + since(coyT, 'after') }; (c.awards = c.awards || []).push(season + ' Coach of the Year'); }
+  const coords = []; for (const t of state.teams) for (const [k, off] of [['oc', true], ['dc', false]]) { const c = C(t[k]); if (!c) continue; const rk = off ? rank(pf, recs[t.id].pf, true) : rank(pa, recs[t.id].pa, false), last = (c.hist || []).filter(h => h.tid === t.id && h.role === c.role).pop(), before = last ? (off ? last.off : last.def) : 16; coords.push({ c, t, rk, off, sc: (33 - rk) * 1.0 + (before - rk) * 0.7 }); }
+  coords.sort((a, b) => b.sc - a.sc);
+  if (coords[0]) { const x = coords[0]; awards.acoy = { cid: x.c.id, name: cname(x.c), pos: x.c.role, tid: x.t.id, line: `No. ${x.rk} ${x.off ? 'scoring offense' : 'scoring defense'}` }; (x.c.awards = x.c.awards || []).push(season + ' Assistant Coach of the Year'); }
+  const rookieHelp = t => all.filter(p => p.tid === t.id && p.exp === 0).reduce((s, p) => s + Math.min(1, (p.stats.snp || 0) / 700), 0);
+  const execT = state.teams.slice().sort((a, b) => (jump(b) + rookieHelp(b) * 1.5) - (jump(a) + rookieHelp(a) * 1.5))[0];
+  if (execT) awards.exec = { name: execT.id === state.userTid ? 'You' : `${execT.region} front office`, pos: 'GM', tid: execT.id, line: `${recStr(recs[execT.id])}${since(execT, 'after')}${rookieHelp(execT) >= 2 ? ', with a rookie class that played right away' : ''}` };
+  // leaders
+  const lead = (k, label, f, min) => ({ label, rows: all.filter(p => !min || min(p)).map(p => [p, f ? f(p) : (p.stats[k] || 0)]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([p, v]) => ({ pid: p.id, name: pname(p), pos: p.lbl, tid: p.tid, v: Math.round(v * 10) / 10 })) });
+  const leaders = [lead('passY', 'Passing yards'), lead('passTD', 'Passing touchdowns'), lead('rushY', 'Rushing yards'), lead('rushTD', 'Rushing touchdowns'), lead('recY', 'Receiving yards'), lead('rec', 'Receptions'), lead('recTD', 'Receiving touchdowns'),
+    lead('tkl', 'Tackles'), lead('sck', 'Sacks'), lead('dint', 'Interceptions'), lead('pd', 'Passes defended'), lead('ff', 'Forced fumbles')];
+  // around the league
+  const best = f => state.teams.slice().sort((a, b) => f(b) - f(a))[0];
+  const league = [['Best record', best(t => nowW(t) + recs[t.id].pf / 10000), t => recStr(recs[t.id])], ['Top offense', best(t => recs[t.id].pf), t => `${(recs[t.id].pf / 17).toFixed(1)} points a game`], ['Top defense', best(t => -recs[t.id].pa), t => `${(recs[t.id].pa / 17).toFixed(1)} allowed a game`],
+    ['Biggest turnaround', best(t => nowW(t) - prevW(t)), t => `${Math.round(prevW(t))} wins to ${recStr(recs[t.id])}`], ['Hardest fall', best(t => prevW(t) - nowW(t)), t => `${Math.round(prevW(t))} wins to ${recStr(recs[t.id])}`]].filter(x => hadPrev || !/turnaround|fall/.test(x[0])).map(([label, t, f]) => ({ label, tid: t.id, line: f(t) }));
+  // your club
+  const u = state.userTid, mineAll = all.filter(p => p.tid === u), e = po ? po.elim[u] : undefined;
+  const topOf = l => l.map(p => [p, rate(p)]).sort((a, b) => b[1] - a[1])[0];
+  const mvpU = topOf(mineAll), rookU = topOf(mineAll.filter(p => p.exp === 0 && (p.stats.snp || 0) >= 150)), upU = mineAll.filter(p => p.per && p.per.s0 !== undefined && (p.stats.gs || 0) >= 4).map(p => [p, perOvr(p) - p.per.s0]).sort((a, b) => b[1] - a[1])[0];
+  const mine = { rec: recStr(recs[u]), result: e === undefined ? 'Missed the playoffs' : e === 4 ? 'Won the championship' : 'Lost in the ' + ROUND_NAMES[e], prev: Math.round(prevW(T(u))), pf: recs[u].pf, pa: recs[u].pa, offRk: rank(pf, recs[u].pf, true), defRk: rank(pa, recs[u].pa, false),
+    mvp: mvpU ? honorRef(mvpU[0]) : null, rookie: rookU ? honorRef(rookU[0]) : null, improved: upU && upU[1] >= 2 ? honorRef(upU[0], { note: tierOf(upU[0]) }) : null };
+  const bracket = po ? po.rounds.map((rd, i) => ({ name: ROUND_NAMES[i], games: rd.map(g => ({ h: g.h, a: g.a, win: g.win, score: g.score, gid: g.gid })) })) : [];
+  return { allPro, allRookie, leaders, league, mine, bracket };
+}
 
 function statSummary(s, pos) {
   if (!s) return '';
@@ -46,10 +118,12 @@ function statSummary(s, pos) {
 function endSeason() {
   const po = state.playoffs, recs = standings();
   const awards = computeAwards();
+  let wrap = null; try { wrap = seasonHonors(awards); } catch (e) { console.error(e); }
   seasonMovers();
   seasonPerception(awards);
   const ru = po.rounds[3][0].win === po.rounds[3][0].h ? po.rounds[3][0].a : po.rounds[3][0].h;
-  state.history.push({ season: state.season, champ: po.champ, runnerUp: ru, awards, userRec: recStr(recs[state.userTid]) });
+  state.history.push({ season: state.season, champ: po.champ, runnerUp: ru, awards, userRec: recStr(recs[state.userTid]), wrap });
+  { const old = state.history[state.history.length - 4]; if (old && old.wrap) delete old.wrap.bracket; } // older seasons keep the honors, not every score
   for (const k in awards) addNews(`${state.season} ${AWARD_NAMES[k]}: ${awards[k].name} (${T(awards[k].tid).abbr} ${awards[k].pos})`, [awards[k].tid], 'award');
   for (const t of state.teams) {
     const r = recs[t.id], e = po.elim[t.id];
