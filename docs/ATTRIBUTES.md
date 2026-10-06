@@ -158,6 +158,88 @@ Every attribute is compressed halfway toward the league average on each snap (`T
 
 These are connected and do change individual plays, but a 30-point gap did not move the score in this test: QB throw on the run; RB route running and pass blocking; most tight end side skills; OL speed and burst; interior DL play recognition; safety play recognition, press, shed and strength; kicker trajectory; and all four punter skills individually (together the punter is worth about a point).
 
-## Note on ratings
+## Final measurement (after the shape fixes and the rating refit)
 
-A player's tier and upside come from rating weights fitted to an older engine. They no longer match these values (for example safety speed is 25% of a safety's rating). Refitting them to this table is the next step.
+Same method, 1,600 games per row, engine as committed. Noise is about ±0.7 points on any single row. These supersede the per-attribute point values in the tables above; the "used for" descriptions still apply, with these changes: ball placement (accuracy) now decides much more of whether a throw is catchable; speed is the main separator on deep routes for receivers and the defenders covering them; man-coverage skill carries more of man coverage; hands are part of every catch; interior pressure makes it harder for the quarterback to step up and throw; linebackers move coverage windows less than defensive backs; a missed tackle after the catch is worth more.
+
+| Group | Whole group | Attributes, most valuable first |
+|---|---|---|
+| Quarterback | 11.8 | Arm strength 2.7, Processing 2.7, Short accuracy 2.1, Pocket presence 1.5, Deep accuracy 1.2, Speed 1.1, Decision-making 1.0, Agility small, Contact balance small, Throw on the run small |
+| Running back | 3.9 | Contact balance 1.9, Strength 1.0, Elusiveness small, Vision small, Ball security small, Route running small, Speed small, Hands small, Pass blocking small, Burst small, Agility small |
+| Receivers | 9.1 | Route running 3.1, Burst 1.4, Hands 1.4, Contested catch 1.2, Strength 1.1, Agility 1.0, Speed 0.9, Release small, Elusiveness small, Contact balance small |
+| Tight end | 3.8 | Route running 1.0, Agility 1.0, Burst small, Release small, Blocking awareness small, Contested catch small, Run blocking small, Hands small, Pass blocking small, Strength small, Elusiveness small, Ball security small, Speed small |
+| Offensive line | 6.0 | Run blocking 1.9, Pass blocking 1.9, Strength 1.7, Agility 1.6, Blocking awareness 1.4, Burst small, Speed small |
+| Interior defensive line | 5.9 | Block shedding 1.5, Burst 1.3, Pass rush 1.3, Strength 1.0, Agility small, Tackling small, Play recognition small, Strip small |
+| Edge rushers | 6.1 | Block shedding 1.7, Pass rush 1.6, Agility 1.0, Burst 0.9, Tackling 0.8, Strength 0.8, Play recognition small, Speed small, Strip small |
+| Linebackers | 4.6 | Tackling 1.2, Speed 0.9, Play recognition 0.9, Zone coverage small, Burst small, Agility small, Man coverage small, Strength small, Ball skills small, Press small, Block shedding small |
+| Cornerbacks | 6.5 | Man coverage 1.8, Zone coverage 1.1, Ball skills 0.9, Agility 0.8, Press small, Burst small, Speed small, Play recognition small, Strip small, Tackling small, Block shedding small |
+| Safeties | 4.9 | Speed 1.5, Play recognition 1.3, Ball skills 0.7, Zone coverage small, Tackling small, Burst small, Block shedding small, Man coverage small, Strength small, Agility small, Press small |
+| Kicker | 0.8 | Trajectory small, Range small, Falloff small, Consistency small |
+| Punter | 1.4 | Hang time 0.8, Placement small, Spin small, Distance small |
+
+Rating weights (`js/derived.js`, version 4) are fitted to this table: 65% what each attribute moves on the field, 35% the earlier weights, with every position re-centred so its average rating did not change. A typical player moved about one rating point.
+
+An elite quarterback (92 in every passing skill) takes a bottom-six roster to about ten wins in seventeen; a poor one (62) wins about five with the same roster.
+
+## Size
+
+Height, weight and reach are judged against the norm for a player's own position, so "big" means big for a corner or big for a guard. Bigger is generally better. The cost of weight is mostly carried by his athletic ratings (a prospect a standard deviation heavier than his position's norm is generated about 2 points slower, 1.5 less agile and 3 stronger), with only small direct penalties in the engine.
+
+| Position | Weight | Height and reach |
+|---|---|---|
+| QB | Harder to sack; sneaks. Slightly slower to escape | Throws over the middle; fewer batted passes |
+| RB | Runs through tackles at the line, yards after contact | A shorter back has the lower centre of gravity at the line |
+| WR / TE | Beating press, contested catches, yards through contact, perimeter blocks | Contested catches; deep balls |
+| OL | Anchor against power; drive blocks. Slightly worse against speed and on the move | Reach keeps speed rushers off |
+| DL / Edge | Holds the point against the run; power rush. Tires a little sooner | Speed rush; batting passes; playing off zone blocks |
+| LB | Takes on linemen; tackling | Closes underneath throwing lanes |
+| CB / S | Press, contested catches, tackling | Press; contested catches; deep balls |
+
+Measured (a player 1.5 standard deviations above the norm against one 1.5 below, 2,000 games, body only with ratings held equal), in points per game: weight is worth QB 0.3, RB 1.5, WR 0.8, TE 0.6, OL 1.6, interior DL 1.1, edge 1.4, LB 0.9, CB 1.3, S 0.8. Height is worth QB 0.5, TE 0.8, S 0.8, and about 0.3–0.4 for OL, edge and CB; it is neutral for RB, WR, interior DL and LB. About 1.5% of throws are batted at the line (0.46 per team per game), almost all by defensive linemen.
+
+`TUNE.size` scales every one of these effects; 0 switches them off.
+
+## Receivers blocking on the edge
+
+On an outside run the widest receiver or tight end on that side has to block the corner who forces the play. His run blocking, strength, agility and weight go against the corner's block shedding, tackling, strength and weight, with the receiver giving up a dozen points because he is not a lineman. A good block makes the corner less likely to be in on the tackle, later to arrive and easier to break. It is a small, situational skill: too small to move league-wide rushing numbers in testing, but it is live on every outside run.
+
+## Penalties
+
+Flags follow discipline. Each side's chance on a play scales with the discipline of the players involved (about two thirds), the position coach who runs their room (about one third) and the head coach's culture. The least disciplined player on the field is the likeliest to draw the flag, and penalties are kept as a player stat.
+
+- Before the snap: false start, delay, illegal formation (more when the unit is still learning the playbook, and on the road); offside, neutral zone, encroachment, twelve men.
+- During the play: offensive holding (more when the rusher has won), defensive pass interference at the spot (more for a beaten or slow defender), defensive holding and illegal contact, roughing the passer. The other side declines when the play already went its way.
+- After the whistle: face mask, unnecessary roughness, horse collar, taunting. The play stands and fifteen yards are added.
+
+Measured over sixteen seasons: about 5.9 accepted penalties and 45 yards per team per game, with teams ranging from roughly 60 to 135 a season. Low-discipline players are flagged about three times as often as high-discipline ones.
+
+## Season realism audit
+
+The engine is checked against about 120 season-level numbers from a normal recent NFL season: league rates, team extremes, leaderboards at several depths, and how many players clear the usual milestones. Sixteen simulated seasons, after tuning:
+
+- League rates in range: points 23.2, plays 63.2, completion 64.3%, 7.2 yards per attempt, sack rate 6.7%, 4.4 yards per carry, third down 40%, field goals 86%, scrambles 5.5% of dropbacks, about 2 defensive touchdowns per team.
+- Catch rates by position: receivers about 65%, tight ends 71%, backs 79%.
+- Leaders in range: passing about 5,100, rushing about 1,640, receiving about 1,650, 120 catches, 170 tackles, 17 sacks, 6 interceptions, 19 passes defended.
+- Still off: the best and worst starting quarterbacks are further apart in completion percentage than real ones (about 74% and 55% against 70% and 58%); gains of 20 yards or more are a little rare and first downs a little common; too many players reach 120 tackles because starting linebackers never rotate.
+
+Quarterback remains the most leveraged position after this pass: a 30-point gap across his attributes is worth about 11 points a game, against 8.5 for a whole receiver group and 7 for a whole offensive line.
+
+## Snap counts and playing-time bands
+
+Snap counts are exact: every play puts eleven men on each side and each one is credited, so a player's snaps always reconcile with the personnel grouping and package that were called. Kneel-downs, spikes and kicking plays are not counted.
+
+Measured share of the unit's snaps in games a player appeared in (staff-run teams / your own chart at its usual settings):
+
+- Quarterback 98. Lead back 69, second back 33–38.
+- Receivers 91 / 83 / 67 / 30. Tight ends 77 / 35 / 15. Linemen 93–100.
+- Edge 81–84 / 72–77 / 43–50. Interior line 77–80 / 67–71 / 48–55 / 29–31.
+- Linebackers 95 / 80–85 / 38. Corners 99 / 96 / 57–66. Safeties 99 / 92–96, with a third safety around 45 (big nickel and dime).
+- Calls: 11 personnel about 60%, 12 about 18%, 10 about 9%; nickel about 57%, base about 29%, dime about 13%.
+
+When you run a unit yourself, "Next man's snaps" at each spot moves inside a band (least / usual / most) and the engine never goes outside it, whatever an older save holds:
+
+- Running back 20 / 35 / 50%. Edge 10 / 20 / 40%. Interior line 15 / 25 / 45%. Nose 15 / 25 / 50%.
+- X and Z 0 / 3 / 15%. Slot 0 / 6 / 25%. Tight ends 0 / 8 / 30%.
+- Middle linebacker 0–10%, weak side 0–20%, corners 0–8 or 10%, slot corner 0–20%, safeties 0–8 or 10%. Quarterback and offensive line do not rotate.
+
+The man who rotates in is the first one listed at the spot who is not already starting somewhere else in that grouping, and the staff's default order keeps players in their own position rooms.

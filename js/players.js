@@ -140,7 +140,7 @@ function shouldRetire(p) {
 }
 
 // ---------- season stat helpers ----------
-const STAT_KEYS = ['gp', 'gs', 'passA', 'passC', 'passY', 'passTD', 'passInt', 'sacked', 'passLng', 'rushA', 'rushY', 'rushTD', 'rushLng', 'fum',
+const STAT_KEYS = ['pen', 'gp', 'gs', 'passA', 'passC', 'passY', 'passTD', 'passInt', 'sacked', 'passLng', 'rushA', 'rushY', 'rushTD', 'rushLng', 'fum',
   'tgt', 'rec', 'recY', 'recTD', 'recLng', 'tkl', 'sck', 'dint', 'pd', 'ff', 'fr', 'dtd', 'fgm', 'fga', 'fgLng', 'xpm', 'xpa', 'pnt', 'pntY'];
 const MAX_KEYS = new Set(['passLng', 'rushLng', 'recLng', 'fgLng']);
 function addStats(into, line) {

@@ -7,41 +7,49 @@
 // Engine calibration constants (Phase 4 tunes these against the target sheet)
 const TUNE = {
   spread: 0.5,         // how much talent gaps matter: attributes are compressed toward the league mean on every snap
-  spreadQB: 1.15,      // quarterbacking is not compressed: it is the most leveraged job on the field
+  spreadQBlow: 0.65,   // ...but the worst starters are still professionals: the bottom is not stretched
+  spreadQB: 1.03,      // quarterbacking is not compressed: it is the most leveraged job on the field
   hfa: 0.3,            // home-field bonus, attribute points on every snap
   teamForm: 0.4,       // sd of team game-day form
   fatFree: 3.0,        // fatigue tolerated before it costs anything
   // trenches
-  passProMedian: 5.35, // seconds for an average rusher to beat an average blocker 1v1
+  passProMedian: 5.5,  // seconds for an average rusher to beat an average blocker 1v1
   rushScale: 0.029,
-  insideRush: 1.18,    // interior rushers take longer to get home than edges (crowded path, more double teams)    // how strongly the rush/block gap moves win time
+  insideRush: 1.1,     // interior rushers take longer to get home than edges (crowded path, more double teams)    // how strongly the rush/block gap moves win time
   doubleBonus: 17,     // pass-block points added by a second blocker
   chipBonus: 7,
   pickupMiss: 0.13,    // blitz/sim pickup failure for an average protection
   stuntMiss: 0.22,
-  runWin: 0.03,       // logit: front defender beats his run block (average vs average)
+  runWin: -0.2,        // logit: front defender beats his run block (average vs average)
   runScale: 0.12,
   comboBonus: 16,
   // coverage / passing
   openBase: -0.6,
-  recWeight: 0.85,     // how much the receiver's own skill moves the window
-  lbCover: 0.32,       // linebackers own zones that are open by design: their coverage skill moves the window less than a defensive back's
+  accScale: 0.06,      // how much ball placement decides whether a throw is catchable
+  wrBlock: 12,         // receivers give up this many points to the corner they are blocking (they are not linemen)
+  size: 1,             // master dial for every height and weight effect (0 switches them off)
+  sizeFat: 0.02,       // extra fatigue per standard deviation of weight
+  batBase: 0.017,      // chance a throw is batted at the line
+  helpShort: 0.58, helpDeep: 0.25, // how often a second defender is close enough to clean up a missed tackle after the catch
+  carrierW: 0.68,      // how much the runner's own skill moves a tackle attempt
+  recWeight: 0.78,     // how much the receiver's own skill moves the window
+  lbCover: 0.18,       // linebackers own zones that are open by design: their coverage skill moves the window less than a defensive back's
   openScale: 0.034,
   covWeight: 1.5,      // a defender's coverage skill counts this much more than the receiver's route skill
   holeBonus: 0.9,
   readTime: 0.52,
-  catchBase: 3.04,
-  shade: 0.35, // how hard defenses roll coverage toward the best receiver
-  dropBase: 0.07,
-  intBase: 0.0067,
+  catchBase: 2.08,
+  shade: 0.4, // how hard defenses roll coverage toward the best receiver
+  dropBase: 0.041,
+  intBase: 0.0092,
   // tackling
-  tackleBase: 2.0,
+  tackleBase: 2.12,
   tackleScale: 0.03,
-  runAfter: 1.08,       // yards a back typically adds after first contact
+  runAfter: 1.0,        // yards a back typically adds after first contact
   carryLoad: 3.8,      // how much more a carry tires a back than an ordinary snap
   pocketOpen: 1.2,
-  shortOpen: 0.52,     // defenses give up the underneath
-  deepCov: -1.08,      // deep routes start covered: they need time (or a beaten defender) to come open
+  shortOpen: 0.48,     // defenses give up the underneath
+  deepCov: -0.95,      // deep routes start covered: they need time (or a beaten defender) to come open
   midCov: -0.75,     // separation a receiver gains per second the QB can hold the ball in a clean pocket
   paBite: -0.8,        // logit: how readily second-level defenders bite on play-action
   paOpen: 0.22,        // separation gained downfield when they do
@@ -147,6 +155,10 @@ function fatPenalty(g, p, grp) {
 function fillSlots(g, s, slots, table, opts = {}) {
   const T_ = g.side[s], used = new Set(opts.exclude || []), out = [];
   const chart = opts.chart;
+  const listFor = key => { if (!key) return null; for (const pk of opts.pkgKeys || []) { const l = chart.lists[pk + ':' + key]; if (l) return l; } return chart.lists[key] && chart.lists[key].length ? chart.lists[key] : null; };
+  // everybody who starts somewhere in this grouping: the man who rotates in is the first one listed who is not already on the field
+  const firsts = new Set();
+  if (chart) for (const [name, slot] of slots) { const l = listFor(opts.keyOf(name, slot)); if (l) { const id = l.find(i => !firsts.has(i) && T_.roster.some(p => p.id === i)); if (id !== undefined) firsts.add(id); } }
   for (const [name, slot, x, depth] of slots) {
     const [spot, grp] = table[slot];
     let best = null, bs = -1e9;
@@ -154,18 +166,18 @@ function fillSlots(g, s, slots, table, opts = {}) {
     // your depth chart: listed players come first (in order); fatigue can still force a sub, and #2 gets his rotation share
     const key = chart ? opts.keyOf(name, slot) : null;
     // a package can have its own order at a spot (your nickel linebacker need not be your base one); otherwise the base order
-    let list = null;
-    if (key) { for (const pk of opts.pkgKeys || []) { const l = chart.lists[pk + ':' + key]; if (l) { list = l; break; } } if (!list && chart.lists[key] && chart.lists[key].length) list = chart.lists[key]; }
-    let rotHit = false;
+    const list = listFor(key);
+    let rotHit = false, rotId = null;
     if (list) {
       const listed = list.map(id => T_.roster.find(p => p.id === id)).filter(Boolean).filter(p => !cands.some(c => c.p === p)).map(p => ({ p, r: slotRating(p, spot) }));
       if (listed.length) cands = [...listed, ...cands];
-      rotHit = g.preview ? false : opts.rot ? opts.rot(key) : rand() < (chart.rot[key] || 0); // a preview shows the order as set, never a random rotation snap
+      rotHit = g.preview ? false : opts.rot ? opts.rot(key) : rand() < rotOf(chart, ROT_BAND[key] || !opts.rotKeyOf ? key : opts.rotKeyOf(name)); // a preview shows the order as set, never a random rotation snap
+      if (rotHit) rotId = list.find((id, i) => i >= 1 && !firsts.has(id) && !used.has(id) && T_.roster.some(p => p.id === id));
     }
     for (const c of cands) {
       if (used.has(c.p.id)) continue;
       let sc = c.r * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp);
-      if (list) { const i = list.indexOf(c.p.id); if (i >= 0) sc = 300 - i * 14 * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp) + (i === 1 && rotHit ? 30 : 0); }
+      if (list) { const i = list.indexOf(c.p.id); if (i >= 0) sc = 300 - i * 14 * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp) + (c.p.id === rotId ? 30 + i * 14 * (ROT_GAP[grp] || 1) : 0); }
       if (T_.rest && T_.rest.has(c.p.id)) sc -= 40; // a planned series off
       if (g.pbNeed && slot !== 'QB' && c.p.a) { const k = pbOf(c.p), need = g.pbNeed[s]; if (k < need) sc -= (need - k) * 0.3; } // he does not know this call
       if (g.ps[c.p.id] && g.ps[c.p.id].last === name) sc += 1.5; // continuity: no needless shuffling
@@ -190,7 +202,7 @@ function offUnit(g, s, pers, call) {
   const rbScore = (p, slot) => {
     if ((slot === 'Y' || slot === 'H' || slot === 'Y2') && p.spot === 'FB') return -13; // a fullback is not your tight end
     if (slot !== 'RB' || !p.a) return 0;
-    if (p.spot !== 'RB') return p.spot === 'FB' ? -6 : -8; // a receiver in the backfield is a gadget, not a feature back
+    if (p.spot !== 'RB') return p.spot === 'FB' ? -14 : -8; // a receiver in the backfield is a gadget, not a feature back
     if (call && call.passDown) return (ea0(p, 'hnd') + ea0(p, 'pbk') + ea0(p, 'rte') - 180) * 0.12;
     if (!T_.rb2Turn) return 0;
     // committee series: the No. 2 back gets his drive unless he's hopelessly outclassed
@@ -204,7 +216,7 @@ function offUnit(g, s, pers, call) {
   const rbKey = call && call.passDown && hasList(chart, 'RB3D') ? 'RB3D' : shortYd && hasList(chart, 'RBSY') ? 'RBSY' : 'RB';
   return fillSlots(g, s, slots, OFF_SLOT, {
     score: rbScore, chart, pkgKeys: [pers], keyOf: name => name === 'RB' ? rbKey : name,
-    rot: key => key === 'RB' ? !!T_.rb2Turn : rand() < (chart.rot[key] || 0),
+    rot: key => key === 'RB' ? !!T_.rb2Turn : rand() < rotOf(chart, key),
   });
 }
 // ---------- user depth charts (t.dch): lists by chart key, #2 rotation share, auto per unit ----------
@@ -250,7 +262,8 @@ function defUnit(g, s, front, pkg, subRush, bign) {
   if (!chart) return fix(fillSlots(g, s, layout, DEF_SLOT, { score }));
   // passing downs: your rush specialists take over the edge and interior spots
   const EDGE_NAMES = new Set(['LE', 'RE', 'LOLB', 'ROLB']);
-  return fix(fillSlots(g, s, layout, DEF_SLOT, { score, chart, pkgKeys, keyOf: (name, slot) => {
+  // the rush specialists rotate at the rate set for the spot they are standing in
+  return fix(fillSlots(g, s, layout, DEF_SLOT, { score, chart, pkgKeys, rotKeyOf: name => DEF_CHART_KEY[name] || name, keyOf: (name, slot) => {
     if (slot === 'BIGN') return 'BIGN';
     if (subRush && DEF_SLOT[slot][1] === 'DL') { const k = EDGE_NAMES.has(name) ? 'RUSHE' : 'RUSHI'; if (hasList(chart, k)) return k; }
     return DEF_CHART_KEY[name] || name;
@@ -286,12 +299,27 @@ function coverUnitScore(g, s) {
 function soft(x, cap) { return cap * Math.tanh(x / cap); }
 
 // Effective attribute for an on-field player this snap
+// ---- body: how big he is for his position ----
+// w: weight, h: height, len: reach (height and arm length), each in standard deviations from the norm at his own spot.
+// Everything below is a trade: mass anchors and drives but is slower to move; length keeps blockers off and closes
+// throwing lanes but plays high. Centred on each position's norm, so the league averages do not move.
+const NO_BODY = { w: 0, h: 0, len: 0 }, BODY_CACHE = new WeakMap(); // kept off the player so it never reaches a save
+function bod(e) {
+  const p = e && e.p;
+  if (!p || !p.m || !p.spot || !SPOTS[p.spot]) return NO_BODY;
+  const c = BODY_CACHE.get(p);
+  if (c && c.s === p.spot && c.wt === p.m.wt && c.ht === p.m.ht) return c;
+  const b = SPOTS[p.spot].body, w = clamp((p.m.wt - b[2]) / b[3], -2.5, 2.5), h = clamp((p.m.ht - b[0]) / b[1], -2.5, 2.5);
+  const arm = clamp(((p.m.arm || b[4]) - (b[4] + (p.m.ht - b[0]) * 0.35)) / 0.6, -2.5, 2.5); // arms long or short for his height
+  const v = { s: p.spot, wt: p.m.wt, ht: p.m.ht, w, h, len: clamp(h * 0.65 + arm * 0.35, -2.5, 2.5) };
+  BODY_CACHE.set(p, v); return v;
+}
 function ea(g, e, k) {
   const p = e.p;
   if (!p.a) return 45 + (p._gs || 0);
   let v = p.a[k] !== undefined ? p.a[k] : 25;
   const pool = ATTRS[k] ? ATTRS[k][3] : null;
-  v = 70 + (v - 70) * (pool === 'pass' ? TUNE.spreadQB : TUNE.spread);
+  v = 70 + (v - 70) * (pool === 'pass' ? (v < 70 ? TUNE.spreadQBlow : TUNE.spreadQB) : TUNE.spread);
   v += p._gs || 0;
   const grp = ATTRS[k] ? ATTRS[k][2] : null;
   if (grp === 'T' || grp === 'M') v -= e.pen;
@@ -312,7 +340,7 @@ function tickFatigue(g, units) {
     if (!st) continue;
     const load = FAT[e.grp] ? FAT[e.grp][0] : 0.5;
     const stam = e.p.h ? e.p.h.stam : 60;
-    st.fat += load * (1.35 - stam / 100) * (1 + (e.p.wear || 0) * 0.02) * (e.extraLoad || 1);
+    st.fat += load * (1.35 - stam / 100) * (1 + (e.p.wear || 0) * 0.02) * (e.extraLoad || 1) * (1 + bod(e).w * TUNE.sizeFat); // a heavier man tires sooner
     st.snp++;
     st.last = e.name;
     if (e.spot) { const sp = st.sp || (st.sp = {}); sp[e.spot] = (sp[e.spot] || 0) + 1; }

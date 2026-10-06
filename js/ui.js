@@ -607,7 +607,8 @@ function depthChartHTML() {
   const all = ro.filter(p => (key === 'KR' ? returnScore(p) > -1e8 : SPOTS[p.spot].side === SPOTS[spot].side) && !list.includes(p.id));
   const related = all.filter(p => key === 'KR' || ['K', 'P'].includes(key) || lvl(p) > 0 || fam.includes(p.spot));
   const cands = (ui.dchAll ? all : related).sort((x, y) => key === 'KR' ? returnScore(y) - returnScore(x) : lvl(y) - lvl(x) || val(y) - val(x));
-  const rot = ROT_KEYS.has(key) ? `<label class="small muted">No. 2 snaps</label> <select data-change="dchRot" data-key="${key}">${ROT_OPTS.map(([v, l]) => `<option value="${v}" ${(c.rot[key] || 0) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>` : '';
+  const rotNow = rotOf(c, key), rotList = rotOpts(key), rotPick = rotList.length ? rotList.reduce((a, o) => Math.abs(o[0] - rotNow) < Math.abs(a[0] - rotNow) ? o : a)[0] : 0;
+  const rot = ROT_KEYS.has(key) && rotList.length > 1 ? `<label class="small muted" title="Share of this spot's snaps that go to the next man up. Each spot has a realistic range.">Next man's snaps</label> <select data-change="dchRot" data-key="${key}">${rotList.map(([v, l]) => `<option value="${v}" ${v === rotPick ? 'selected' : ''}>${l}</option>`).join('')}</select>` : '';
   const roleNote = sel && sel.type && DEF_SLOT[sel.type] && DEF_SLOT[sel.type][1] === 'LB' ? (['NICKEL', 'DIME', 'BIGN'].includes(vid) ? 'In sub packages this job is mostly coverage: range and zone or man skills matter more than taking on blocks.' : 'In base and heavy looks this job is mostly run defense: tackling, shedding blocks and strength matter more than coverage.') : '';
   // where else he already is in this look, so you can see a clash before you make it
   const elsewhere = p => { if (tab === 'pkg' || auto) return ''; const hit = dcLayout(t, tab, vid).find(b => b.key !== key && (c.lists[vid + ':' + b.key] || [])[0] === p.id); return hit ? ` <span class="pill warn" title="He is listed first at ${hit.label} in this look">starts at ${hit.label}</span>` : ''; };
@@ -932,6 +933,7 @@ function teamStatsHTML() {
     vol('Rush yds', 'rushY', a => a.rushY), vol('Carries', 'rushA', a => a.rushA), rate('Y/Car', 'ypc', a => a.rushA ? a.rushY / a.rushA : 0, 2),
     vol('1st downs', 'fd', a => a.fd), rate('3rd down %', 'd3', a => a.d3a ? 100 * a.d3c / a.d3a : 0),
     vol(def ? 'Takeaways' : 'Giveaways', 'to', a => a.to), vol('Punts', 'punts', a => a.punts),
+    ...(def ? [] : [vol('Penalties', 'pen', a => a.pen || 0, 'Accepted penalties committed'), vol('Pen yds', 'penY', a => a.penY || 0)]),
   ];
   return head + '<div class="card">' + table('tstat-' + side, cols, rows, { sort: 'pts', dir: def ? 1 : -1, rowClass }) + '</div>' + (def ? '<div class="muted small" style="margin-top:6px">Defense shows what each club has allowed: fewest points first.</div>' : '');
 }
@@ -2205,7 +2207,7 @@ function boxModal(gid) {
   html += `<div class="section-title">Team Stats</div><table style="max-width:520px"><thead><tr><th class="num">${T(a).abbr}</th><th style="text-align:center"></th><th>${T(h).abbr}</th></tr></thead><tbody>
     ${tsr('First Downs', t => t.fd)}${tsr('Total Yards', t => t.passY - t.sackY + t.rushY)}${tsr('Passing', t => t.passY - t.sackY)}${tsr('Comp-Att', t => t.passC + '-' + t.passA)}
     ${tsr('Sacked-Yds', t => t.sacks + '-' + t.sackY)}${tsr('Rushing', t => `${t.rushY} (${t.rushA} car)`)}${tsr('3rd Down', t => `${t.d3c}-${t.d3a}`)}${tsr('4th Down', t => `${t.d4c}-${t.d4a}`)}
-    ${tsr('Turnovers', t => t.to)}${tsr('Punts', t => t.punts)}${tsr('Possession', t => fmtClock(t.top))}</tbody></table>`;
+    ${tsr('Turnovers', t => t.to)}${tsr('Penalties', t => t.pen === undefined ? '—' : `${t.pen}-${t.penY}`)}${tsr('Punts', t => t.punts)}${tsr('Possession', t => fmtClock(t.top))}</tbody></table>`;
   html += filmRoomHTML(b);
   // player stats
   const lines = Object.entries(b.stats).map(([pid, l]) => ({ p: P(pid) || (+pid < 0 ? { id: +pid, first: 'Emergency', last: l.nm || 'Sub', lbl: '—', pos: 'WR', spot: 'WRZ', tid: l.tid } : null), l })).filter(x => x.p);

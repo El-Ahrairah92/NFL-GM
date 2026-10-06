@@ -21,7 +21,7 @@ function coachCtx(tid, oppTid) {
   };
 }
 function newTS() {
-  return { fd: 0, plays: 0, passA: 0, passC: 0, passY: 0, sacks: 0, sackY: 0, rushA: 0, rushY: 0, to: 0, d3a: 0, d3c: 0, d4a: 0, d4c: 0, top: 0, punts: 0, prs: 0, tos: 0 };
+  return { pen: 0, penY: 0, fd: 0, plays: 0, passA: 0, passC: 0, passY: 0, sacks: 0, sackY: 0, rushA: 0, rushY: 0, to: 0, d3a: 0, d3c: 0, d4a: 0, d4c: 0, top: 0, punts: 0, prs: 0, tos: 0 };
 }
 function durMult(p) {
   if (!p || !p.h) return 1;
@@ -164,22 +164,23 @@ function snap(g) {
 }
 function fgRange(g, K) {
   // longest kick a coach will try: where the make rate falls to ~45%
-  for (let dist = 65; dist >= 30; dist--) if (fgProb(g, K, dist) >= 0.56) return dist;
+  for (let dist = 62; dist >= 30; dist--) if (fgProb(g, K, dist) >= 0.56) return dist;
   return 30;
 }
 function fgProb(g, K, dist) {
   const comfort = 32 + (ea(g, K, 'krng') - 50) * 0.45 + (ea(g, K, 'ktrj') - 70) * 0.05;
-  let p = clamp(0.945 + (ea(g, K, 'kcon') - 70) * 0.005, 0.8, 0.995); // consistency: the kicks he is supposed to make
+  let p = clamp(0.935 + (ea(g, K, 'kcon') - 70) * 0.004, 0.8, 0.975); // consistency: the kicks he is supposed to make
   if (dist > comfort) { const x = dist - comfort; p -= x * (0.022 - (ea(g, K, 'kfal') - 60) * 0.00035) + x * x * 0.0003; }
-  return clamp(p, 0.02, 0.995);
+  return clamp(p, 0.02, 0.975);
 }
 
 // Who gets the tackle on the stat sheet. Linemen who hold the point rarely finish the play themselves: the back
 // spills to a linebacker or a defensive back coming downhill. And most tackles draw a second man.
 const TKL_W = { MLB: 2.3, WLB: 2.3, SAM: 2.3, SS: 2, FS: 2, CB: 1.45, NCB: 1.7, DIME: 1.7, EDGE: 0.8, DE: 0.7, DT: 0.6, NT: 0.5 };
-const TKL_SPILL = 0.36, TKL_ASSIST = 0.07, TKL_SCRUM = 0.6;
+const TKL_SPILL = 0.36, TKL_ASSIST = 0.07, TKL_SCRUM = 0.6, TKL_SAFETY = 0.48;
 function shareTackle(res, def) {
   if (!res.tackler || (res.kind !== 'run' && res.kind !== 'comp' && res.kind !== 'scramble')) return;
+  res.noTkl = rand() < (res.kind === 'scramble' ? 0.45 : res.kind === 'comp' ? 0.11 : 0.06); // out of bounds, a slide, or he just goes down: nobody is credited
   const others = () => def.filter(e => e !== res.tackler && e !== res.assist && e.p && !e.blitz);
   const pickW = l => l.length ? weightedPick(l, l.map(e => TKL_W[e.slot] || 1)) : null;
   if (res.tackler.depth === 0 && res.kind === 'run' && res.yds >= 1 && rand() < TKL_SPILL) {
@@ -191,6 +192,14 @@ function shareTackle(res, def) {
     const lbs = res.tackler.slot === 'SS' ? [] : others().filter(e => e.depth > 0 && TKL_W[e.slot] === TKL_W.MLB);
     const t = lbs.length && rand() < 0.35 ? pick(lbs) : rand() < 0.3 ? pickW(others().filter(e => e.depth === 0)) : pickW(others().filter(e => e.depth > 0 && !lbs.includes(e)));
     if (t) { if (!res.assist && rand() < 0.4) res.assist = res.tackler; res.tackler = t; }
+  }
+  else if (res.tackler.depth > 0 && (res.tackler.slot === 'FS' || res.tackler.slot === 'SS') && rand() < TKL_SAFETY) {
+    const pool = others().filter(e => !['FS', 'SS'].includes(e.slot)), t = pool.length ? weightedPick(pool, pool.map(e => (TKL_W[e.slot] || 1) * (TKL_W[e.slot] === TKL_W.MLB ? 0.9 : e.depth === 0 ? 1.2 : 0.8))) : null;
+    if (t) { if (!res.assist && rand() < 0.3) res.assist = res.tackler; res.tackler = t; }
+  }
+  else if (res.tackler.depth > 0 && ['CB', 'NCB', 'DIME'].includes(res.tackler.slot) && rand() < 0.07) {
+    const t = pickW(others().filter(e => e.depth > 0 && TKL_W[e.slot] === TKL_W.MLB));
+    if (t) res.tackler = t;
   }
   if (!res.assist && rand() < TKL_ASSIST) res.assist = pickW(others());
 }
@@ -210,6 +219,7 @@ function runPlay(g, oc, dc) {
   const dcp = knob(C(T(g.tids[o]).oc), 'dcp');
   // the play-calling chess match: a sharper caller hides his tendencies and reads the other side's
   g.key = clamp(keyed * (0.35 + g.cx[d].dpc / 99 * 0.45) * (1.25 - dcp / 200) * 0.6 + (g.cx[d].dpc - g.cx[o].pc) * 0.003, -0.55, 0.55);
+  if (preSnapPenalty(g, off, def)) return; // the flag comes out before the snap: no play
   recordFilm(g, o, oc.b, oc.pers, oc.isRun);
   const downB = g.down, togoB = g.togo, ydlB = g.ydl, before = { down: g.down, togo: g.togo, ydl: g.ydl, poss: o, score: [g.score[0], g.score[1]], q: g.q, clock: g.clock };
   if (g.pbp) g.pendingDD = `${ordinal(g.down)} & ${g.ydl + g.togo >= 100 ? 'Goal' : g.togo} at ${spotTxt(g)}`;
@@ -220,14 +230,101 @@ function runPlay(g, oc, dc) {
   // fatigue: a carry costs a back extra
   if (res.carrier && res.kind === 'run') res.carrier.extraLoad = TUNE.carryLoad;
   tickFatigue(g, [...off, ...def]);
+  if (liveBallPenalty(g, res, oc, dc, off, def)) { g.ts[o].plays--; if (downB === 3) g.ts[o].d3a--; else if (downB === 4) g.ts[o].d4a--; return; } // the play comes back
   shareTackle(res, def);
+  const scoreB = g.score[0] + g.score[1];
   applyResult(g, res, oc, dc, off, def, { downB, togoB, ydlB });
+  if (g.poss === o && g.score[0] + g.score[1] === scoreB && !res.fumble) lateFoul(g, res, off, def);
   chartPlay(g, oc, dc, res, before, off, def);
   // injuries: whoever was in the collision, plus the trenches
   injuryCheck(g, (res.involved || []).filter(Boolean), res.kind === 'sack' ? 0.011 : 0.0042); // quarterbacks get hurt taking sacks
   // away from the ball: a hamstring on a route, a rolled ankle in coverage
   if (rand() < 0.0011) { const e = pick([...off, ...def].filter(e => e.slot !== 'QB' && e.depth !== 0 && !OL_SLOTS.includes(e.slot))); if (e && e.p.id >= 0 && !e.p.injury && rand() < durMult(e.p)) injure(g, e.p); }
   if (rand() < 0.008) { const pool = [...off.filter(e => OL_SLOTS.includes(e.slot)), ...def.filter(e => e.depth === 0)]; const e = pick(pool); if (e && e.p.id >= 0 && !e.p.injury && rand() < durMult(e.p)) injure(g, e.p); }
+}
+
+// ---------- penalties ----------
+// Flags follow discipline: the players on the field, the position coach who runs their room, and the head coach's culture.
+// Per-play chances for a team of average discipline.
+const PEN = { offPre: 0.026, defPre: 0.015, holdRun: 0.018, holdPass: 0.025, defHold: 0.02, dpi: 0.066, rough: 0.011, lateDef: 0.0095, lateOff: 0.0022 };
+function discFactor(g, side, entries) {
+  const ps = entries.map(e => e.p).filter(p => p && p.h);
+  if (!ps.length) return 1;
+  ps.forEach(p => { if (p.h.disc === undefined) ensureCharacter(p); });
+  const tid = g.tids[side], own = ps.reduce((s, p) => s + p.h.disc, 0) / ps.length;
+  const room = ps.reduce((s, p) => s + (ROOM_COACH[p.pos] ? roomDisc(tid, p.pos) : 52), 0) / ps.length;
+  return clamp(1 + (56 - (0.65 * own + 0.35 * room)) / 28, 0.45, 2.2) * clamp(1.2 - knob(C(T(tid).hc), 'cul') / 250, 0.8, 1.2);
+}
+// who the flag is on: the least disciplined are the likeliest
+function flagOn(entries) { const es = entries.filter(e => e.p && e.p.h); return es.length ? weightedPick(es, es.map(e => Math.max(30, 125 - (e.p.h.disc === undefined ? 55 : e.p.h.disc)))) : null; }
+// walk it off. onOffense: against the team with the ball. Returns the yards actually marked.
+function assessPenalty(g, onOffense, yards, name, who, opts = {}) {
+  const o = g.poss, side = onOffense ? o : 1 - o, dd = g.pbp ? `${ordinal(g.down)} & ${g.ydl + g.togo >= 100 ? 'Goal' : g.togo} at ${spotTxt(g)}` : '';
+  let y = yards;
+  if (onOffense) { if (g.ydl - y < 1) y = Math.max(1, Math.floor(g.ydl / 2)); g.ydl -= y; g.togo += y; }
+  else {
+    const toGoal = 100 - g.ydl;
+    if (y >= toGoal) y = opts.spot ? Math.max(1, toGoal - 1) : Math.max(1, Math.floor(toGoal / 2));
+    g.ydl += y; g.togo -= y;
+    if (opts.autoFirst || g.togo <= 0) { g.down = 1; g.togo = Math.min(10, 100 - g.ydl); g.ts[o].fd++; }
+  }
+  g.ts[side].pen = (g.ts[side].pen || 0) + 1; g.ts[side].penY = (g.ts[side].penY || 0) + y;
+  if (who && who.p) inc(g, who.p, 'pen');
+  g.running = false;
+  if (g.pbp) g.pbp.push({ q: g.q, c: Math.max(0, Math.round(g.clock)), t: g.tids[o], dd, x: `PENALTY on ${T(g.tids[side]).abbr}${who && who.p ? ' ' + pshort(who.p) : ''}: ${name}, ${y} yard${y === 1 ? '' : 's'}${opts.autoFirst && !onOffense ? ', automatic first down' : ''}${opts.noPlay === false ? '' : ' — no play'}` });
+  return y;
+}
+// before the snap: false starts, delay, illegal formation; offside, encroachment, twelve men
+function preSnapPenalty(g, off, def) {
+  const o = g.poss, d = 1 - o;
+  const line = off.filter(e => e.slot !== 'QB'), front = def.filter(e => e.depth === 0);
+  const lost = line.length ? line.reduce((s, e) => s + (100 - (PRAC_SIDE[e.p.pos] ? pbOf(e.p) : 100)), 0) / line.length / 100 : 0; // players still learning the calls jump
+  const r = rand(), pOff = PEN.offPre * discFactor(g, o, line) * (o === 1 ? 1.15 : 1) * (1 + lost * 1.5), pDef = PEN.defPre * discFactor(g, d, front);
+  if (r < pOff) { const k = rand(); const who = k < 0.72 ? flagOn(line.filter(e => OL_SLOTS.includes(e.slot) || e.slot === 'Y' || e.slot === 'H')) || flagOn(line) : null;
+    assessPenalty(g, true, 5, k < 0.72 ? 'False start' : k < 0.86 ? 'Delay of game' : 'Illegal formation', who); return true; }
+  if (r < pOff + pDef) { const k = rand(); const who = k < 0.9 ? flagOn(front) : null;
+    assessPenalty(g, false, 5, k < 0.55 ? 'Offside' : k < 0.75 ? 'Neutral zone infraction' : k < 0.9 ? 'Encroachment' : 'Too many men on the field', who); return true; }
+  return false;
+}
+// after the whistle: the play stands and fifteen yards are tacked on
+function lateFoul(g, res, off, def) {
+  if (res.kind !== 'run' && res.kind !== 'comp' && res.kind !== 'scramble') return;
+  const o = g.poss, d = 1 - o, r = rand();
+  const near = [res.tackler, res.assist].filter(Boolean), pD = PEN.lateDef * discFactor(g, d, near.length ? near : def);
+  if (r < pD) { const k = rand(); assessPenalty(g, false, 15, k < 0.4 ? 'Unnecessary roughness' : k < 0.75 ? 'Face mask' : k < 0.9 ? 'Horse-collar tackle' : 'Unsportsmanlike conduct', near.length && k < 0.9 ? pick(near) : flagOn(def), { autoFirst: true, noPlay: false }); return; }
+  if (r < pD + PEN.lateOff * discFactor(g, o, off)) { const k = rand(); assessPenalty(g, true, 15, k < 0.55 ? 'Unnecessary roughness' : k < 0.8 ? 'Unsportsmanlike conduct' : 'Taunting', flagOn(off.filter(e => e.slot !== 'QB')), { noPlay: false }); }
+}
+// during the play. Returns true when the play is wiped out and the penalty has been marked off.
+function liveBallPenalty(g, res, oc, dc, off, def) {
+  const o = g.poss, d = 1 - o, pass = !oc.isRun && res.kind !== 'run';
+  const gain = res.kind === 'comp' || res.kind === 'run' || res.kind === 'scramble' ? res.yds || 0 : res.kind === 'sack' ? res.yds || -6 : 0;
+  const converted = gain >= g.togo, turnover = res.kind === 'int' || !!res.fumble;
+  const waste = () => { runClock(g, randInt(4, 7)); g.running = false; };
+  // offensive holding: likelier when a blocker has been beaten
+  const blockers = off.filter(e => OL_SLOTS.includes(e.slot) || e.slot === 'Y' || e.slot === 'H' || e.slot === 'FB');
+  if (rand() < (pass ? PEN.holdPass * (res.pressure ? 1.7 : 1) : PEN.holdRun) * discFactor(g, o, blockers)) {
+    // the defense takes the result instead when the play already went its way
+    const decline = turnover || res.kind === 'sack' || (g.down >= 3 && !converted);
+    if (!decline) { waste(); assessPenalty(g, true, 10, 'Offensive holding', flagOn(blockers)); return true; }
+  }
+  if (pass) {
+    // pass interference: a beaten defender grabs
+    if (res.kind === 'inc' && res.target && res.def && !res.throwaway && !res.batted && !res.drop && (res.air || 0) >= 5 &&
+        rand() < PEN.dpi * discFactor(g, d, [res.def]) * (res.route && res.route.w < 0.3 ? 1.5 : 0.7) * clamp(1 + (70 - ea(g, res.def, res.air >= 20 ? 'spd' : 'man')) * 0.02, 0.6, 1.6)) {
+      waste(); assessPenalty(g, false, Math.max(5, res.air), 'Defensive pass interference', res.def, { autoFirst: true, spot: true }); return true;
+    }
+    // holding and illegal contact downfield: the offense takes the play instead if it was better
+    const cover = def.filter(e => e.depth > 0 && !e.blitz);
+    if (rand() < PEN.defHold * discFactor(g, d, cover) && !(res.kind === 'comp' && !res.fumble && gain >= Math.max(g.togo, 5))) {
+      waste(); assessPenalty(g, false, 5, rand() < 0.65 ? 'Defensive holding' : 'Illegal contact', flagOn(cover), { autoFirst: true }); return true;
+    }
+    // roughing the passer wipes out an incompletion, a sack or an interception
+    const home = (res.rushers || []).map(a => a.e).filter(Boolean);
+    if (home.length && (res.kind === 'inc' || res.kind === 'int' || res.kind === 'sack') && rand() < PEN.rough * discFactor(g, d, home)) {
+      waste(); assessPenalty(g, false, 15, 'Roughing the passer', flagOn(home), { autoFirst: true }); return true;
+    }
+  }
+  return false;
 }
 
 function playText(oc, dc, res) {
@@ -255,8 +352,8 @@ function applyResult(g, res, oc, dc, off, def, b) {
     inc(g, c.p, 'rushA'); inc(g, c.p, 'rushY', yds); mx(g, c.p, 'rushLng', yds);
     ts.rushA++; ts.rushY += yds;
     if (res.kind === 'run' && c.slot !== 'QB') { g.runY[o][0] += yds; g.runY[o][1]++; g.runCred[o] = (g.runY[o][0] + 4.2 * 8) / (g.runY[o][1] + 8); }
-    if (res.tackler && g.ydl + yds < 100) { credit(res.tackler, 'tkl'); if (yds < 0) credit(res.tackler, 'tfl'); }
-    if (res.assist && g.ydl + yds < 100) credit(res.assist, 'tkl');
+    if (res.tackler && !res.noTkl && g.ydl + yds < 100) { credit(res.tackler, 'tkl'); if (yds < 0) credit(res.tackler, 'tfl'); }
+    if (res.assist && !res.noTkl && g.ydl + yds < 100) credit(res.assist, 'tkl');
     stop = res.slide ? false : (res.kind === 'scramble' && rand() < 0.3) || (oc.dir === 'OUT' && rand() < 0.2);
     desc += ` for ${yds === 0 ? 'no gain' : yds + ' yd' + (Math.abs(yds) === 1 ? '' : 's')}`;
     if (res.fumble && g.ydl + yds < 100) return fumbleLost(g, res, c, yds, txt, desc, b);
@@ -266,8 +363,8 @@ function applyResult(g, res, oc, dc, off, def, b) {
     inc(g, qb, 'passA'); inc(g, qb, 'passC'); inc(g, qb, 'passY', yds); mx(g, qb, 'passLng', yds);
     inc(g, r, 'tgt'); inc(g, r, 'rec'); inc(g, r, 'recY', yds); mx(g, r, 'recLng', yds); inc(g, r, 'yac', Math.max(0, yds - Math.max(0, res.air)));
     ts.passA++; ts.passC++; ts.passY += yds;
-    if (res.tackler && g.ydl + yds < 100) { credit(res.tackler, 'tkl'); if (yds < 0) credit(res.tackler, 'tfl'); }
-    if (res.assist && g.ydl + yds < 100) credit(res.assist, 'tkl');
+    if (res.tackler && !res.noTkl && g.ydl + yds < 100) { credit(res.tackler, 'tkl'); if (yds < 0) credit(res.tackler, 'tfl'); }
+    if (res.assist && !res.noTkl && g.ydl + yds < 100) credit(res.assist, 'tkl');
     stop = !!res.oob && (g.q === 2 && g.clock <= 120 || g.q >= 4 && g.clock <= 300);
     desc += ` for ${yds} yd${Math.abs(yds) === 1 ? '' : 's'}`;
     if (res.fumble && g.ydl + yds < 100) return fumbleLost(g, res, res.target, yds, txt, desc, b);
@@ -289,7 +386,7 @@ function applyResult(g, res, oc, dc, off, def, b) {
         inc(g, rec.p, 'fr'); inc(g, res.qb.p, 'fum'); ts.to++;
         logPlay(g, txt, res.desc + ' — FUMBLE, recovered by ' + pshort(rec.p));
         endDrive(g, 'Fumble');
-        if (rand() < 0.07) { g.drive = null; g.poss = d; inc(g, rec.p, 'dtd'); touchdown(g, d, `${pshort(rec.p)} fumble return`); }
+        if (rand() < 0.13) { g.drive = null; g.poss = d; inc(g, rec.p, 'dtd'); touchdown(g, d, `${pshort(rec.p)} fumble return`); }
         else startPossession(g, d, clamp(100 - (g.ydl + yds), 1, 99));
         runClock(g, randInt(5, 7));
         return;
@@ -310,7 +407,7 @@ function applyResult(g, res, oc, dc, off, def, b) {
     return;
   }
   // clock for the play itself
-  runClock(g, res.kind === 'inc' ? randInt(4, 6) : res.kind === 'sack' ? randInt(5, 7) : randInt(5, 8));
+  runClock(g, (res.kind === 'inc' ? randInt(4, 6) : res.kind === 'sack' ? randInt(5, 7) : randInt(5, 8)) + (rand() < 0.65 ? 1 : 0));
   g.running = !stop;
   logPlay(g, txt, desc);
   trackFamily(g, oc, b, yds);
@@ -334,7 +431,7 @@ function fumbleLost(g, res, carrier, yds, txt, desc, b) {
     logPlay(g, txt, desc + ' — FUMBLE, recovered by ' + pshort(rec.p));
     if (g.drive) { g.drive.plays++; g.drive.yds += yds; }
     endDrive(g, 'Fumble');
-    if (rand() < 0.05) { g.drive = null; g.poss = d; inc(g, rec.p, 'dtd'); touchdown(g, d, `${pshort(rec.p)} fumble return`); }
+    if (rand() < 0.1) { g.drive = null; g.poss = d; inc(g, rec.p, 'dtd'); touchdown(g, d, `${pshort(rec.p)} fumble return`); }
     else startPossession(g, d, 100 - sp);
     return;
   }
@@ -419,7 +516,7 @@ function fourthDown(g, range) {
     if (mins < 9 && diff <= -17) return false;
   }
   if (g.q >= 5 && diff < 0 && (diff < -3 || dist > range)) return false;
-  const seenRange = range + gauss(0, (100 - cx.gm) / 12);
+  const seenRange = Math.min(range + clamp(gauss(0, (100 - cx.gm) / 12), -6, 3), 64);
   let call;
   if (rand() < 0.04 + cx.gm / 170) call = recommend4th(g, dist, range);
   else if (g.togo <= 1 && g.ydl >= 40 && rand() < 0.15 + cx.aggr * 0.45) call = 'go';
@@ -435,7 +532,7 @@ function recommend4th(g, dist, range) {
   const t = g.togo, y = g.ydl;
   const conv = 0.68 * Math.exp(-0.115 * (t - 1));
   const goVal = y + t >= 100 ? conv * 6.9 - (1 - conv) * ep(100 - y) : conv * ep(y + t) - (1 - conv) * ep(100 - y);
-  const pFG = dist <= range + 3 ? fgProb(g, kickUnitPlayer(g, g.poss, 'K'), dist) : 0;
+  const pFG = dist <= range + 2 ? fgProb(g, kickUnitPlayer(g, g.poss, 'K'), dist) : 0;
   const fgVal = pFG * (3 - ep(30)) - (1 - pFG) * ep(Math.max(20, 107 - y));
   const puntLand = y + 41, puntVal = -ep(puntLand >= 100 ? 20 : 100 - puntLand);
   if (goVal >= fgVal && goVal >= puntVal) return 'go';
@@ -564,7 +661,7 @@ function touchdown(g, side, text) {
     } else {
       const K = kickUnitPlayer(g, side, 'K');
       inc(g, K.p, 'xpa');
-      if (rand() < fgProb(g, K, 33)) { inc(g, K.p, 'xpm'); g.score[side] += 1; g.qs[side][Math.min(g.q, 5) - 1] += 1; entry.text += ` (${pshort(K.p)} kick)`; }
+      if (rand() < fgProb(g, K, 33) * 0.995) { inc(g, K.p, 'xpm'); g.score[side] += 1; g.qs[side][Math.min(g.q, 5) - 1] += 1; entry.text += ` (${pshort(K.p)} kick)`; }
       else { entry.text += ' (kick failed)'; pbpLog(g, 'Extra point is no good', false); }
     }
     checkOT(g);
@@ -582,7 +679,7 @@ function startPossession(g, side, ydl) {
   // committee backs: some series go to the No. 2
   const rb1 = g.cx[side].ot.rb1;
   const ch = userChart(g, side, 'off');
-  g.side[side].rb2Turn = ch && ch.rot.RB !== undefined ? rand() < ch.rot.RB : rand() < clamp((0.97 - clamp(rb1, 0.5, 0.8)) * 1.35, 0.26, 0.56);
+  g.side[side].rb2Turn = ch ? rand() < rotOf(ch, 'RB') : rand() < clamp((0.97 - clamp(rb1, 0.5, 0.8)) * 1.35, 0.26, 0.56);
   g.side[side].rb3Turn = g.side[side].rb2Turn && rand() < 0.24;
   // series off for receivers and tight ends (never in the two-minute drill or late in a game)
   const T_ = g.side[side]; T_.rest = null;

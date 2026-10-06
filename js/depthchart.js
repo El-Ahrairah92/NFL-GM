@@ -21,7 +21,21 @@ const CHART_SECTIONS = [
 ];
 const CHART_DEPTH = { RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, K: 1, P: 1, KR: 2 };
 const ROT_KEYS = new Set(['RB', 'X', 'Z', 'SLOT', 'Y', 'H', 'EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'MLB', 'WLB', 'CB1', 'CB2', 'NCB', 'FS', 'SS']);
-const ROT_OPTS = [[0, 'Starter plays'], [0.1, 'Spell (10%)'], [0.2, 'Light (20%)'], [0.35, 'Split (35%)'], [0.5, 'Even (50%)']];
+// How much of a spot's work goes to the next man up: [least, usual, most]. Your setting moves inside the band and no further:
+// nobody plays every snap on a defensive line, no back carries a whole offense, and a starting corner does not sit a third of the game.
+const ROT_BAND = {
+  RB: [0.2, 0.35, 0.5], X: [0, 0.03, 0.15], Z: [0, 0.03, 0.15], SLOT: [0, 0.06, 0.25], Y: [0, 0.08, 0.3], H: [0, 0.08, 0.3],
+  EDGE1: [0.1, 0.2, 0.4], EDGE2: [0.1, 0.2, 0.4], IDL1: [0.15, 0.25, 0.45], IDL2: [0.15, 0.25, 0.45], NT: [0.15, 0.25, 0.5],
+  MLB: [0, 0, 0.1], WLB: [0, 0, 0.2], CB1: [0, 0, 0.08], CB2: [0, 0, 0.1], NCB: [0, 0, 0.2], FS: [0, 0, 0.08], SS: [0, 0, 0.1],
+};
+function rotOf(c, key) { const b = ROT_BAND[key]; if (!b) return 0; const v = c && c.rot && c.rot[key] !== undefined ? c.rot[key] : b[1]; return clamp(v, b[0], b[2]); }
+// the choices offered at a spot: the ends of its band, the usual share, and a step in between
+function rotOpts(key) {
+  const b = ROT_BAND[key]; if (!b) return [];
+  const r = v => Math.round(v * 100) / 100, vals = [...new Set([b[0], b[1], r((b[1] + b[2]) / 2), b[2]].map(r))].sort((x, y) => x - y);
+  const name = v => v === 0 ? 'Starter plays' : v === r(b[1]) ? 'Usual' : v < b[1] ? 'Lean on the starter' : v === r(b[2]) ? 'Heavy rotation' : 'Rotate more';
+  return vals.map(v => [v, v === 0 ? name(v) : `${name(v)} (${Math.round(v * 100)}%)`]);
+}
 
 // the staff's recommended chart (they know who's really better)
 function defaultChart(tid) {
@@ -29,7 +43,9 @@ function defaultChart(tid) {
   const lists = {}, starters = { off: new Set(), def: new Set(), st: new Set() };
   for (const sec of CHART_SECTIONS) for (const [key] of sec.rows) {
     const spot = chartSpotFor(tid, key), n = CHART_DEPTH[key] || 3;
-    const ranked = ro.filter(p => SPOTS[p.spot].side === SPOTS[spot].side || key === 'KR').map(p => [p, key === 'KR' ? returnScore(p) : slotRating(p, spot)])
+    // the staff keeps players in their own rooms, the way it does when it runs the unit itself: a safety is not a linebacker because he grades out close
+    const away = p => p.spot === 'FB' && spot !== 'FB' ? 14 : SPOTS[spot].g === p.pos ? 0 : (p.pos === 'CB' || p.pos === 'S') && (SPOTS[spot].g === 'CB' || SPOTS[spot].g === 'S') ? 2 : 8;
+    const ranked = ro.filter(p => SPOTS[p.spot].side === SPOTS[spot].side || key === 'KR').map(p => [p, key === 'KR' ? returnScore(p) : slotRating(p, spot) - away(p)])
       .sort((a, b) => b[1] - a[1]).map(x => x[0]);
     if (!ranked.length) { lists[key] = []; continue; }
     // starters are unique within a unit (packages may reuse anyone)
@@ -86,7 +102,7 @@ function dcLineup(tid, tab, vid) {
 }
 function ensureChart(tid) {
   const t = T(tid);
-  if (!t.dch) t.dch = { auto: { off: true, def: true, st: true }, lists: defaultChart(tid), rot: { RB: 0.2 } };
+  if (!t.dch) t.dch = { auto: { off: true, def: true, st: true }, lists: defaultChart(tid), rot: {} }; // a spot with no setting plays its usual rotation
   // older saves had one 4-man rush list: split it into edge and interior specialists
   if (t.dch.lists.RUSH) {
     const old = t.dch.lists.RUSH.map(id => P(id)).filter(Boolean);

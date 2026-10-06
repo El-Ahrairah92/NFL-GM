@@ -36,10 +36,13 @@ function chooseRushers(g, def, dc) {
 
 // ---------- pass protection ----------
 function rushVsBlock(g, r, b, oNet) {
-  const speed = ea(g, r, 'prsh') * 0.55 + ea(g, r, 'bur') * 0.25 + ea(g, r, 'agi') * 0.2;
-  const power = ea(g, r, 'prsh') * 0.55 + ea(g, r, 'str') * 0.45;
-  const vsSpeed = ea(g, b, 'pbk') * 0.55 + ea(g, b, 'agi') * 0.3 + ea(g, b, 'bawr') * 0.15;
-  const vsPower = ea(g, b, 'pbk') * 0.55 + ea(g, b, 'str') * 0.45;
+  const R = bod(r), B = bod(b), z = TUNE.size;
+  // a rusher: length wins the edge, mass wins the bull rush; heavy is slow around the corner, tall plays high
+  const speed = ea(g, r, 'prsh') * 0.55 + ea(g, r, 'bur') * 0.25 + ea(g, r, 'agi') * 0.2 + (R.len * 1.8 - R.w * 0.5) * z;
+  const power = ea(g, r, 'prsh') * 0.55 + ea(g, r, 'str') * 0.45 + (R.w * 2.4 - R.h * 0.3) * z;
+  // a blocker: long arms keep a speed rusher off him, mass anchors against power; heavy feet lose the edge, a tall man gets walked back
+  const vsSpeed = ea(g, b, 'pbk') * 0.65 + ea(g, b, 'agi') * 0.2 + ea(g, b, 'bawr') * 0.15 + (B.len * 1.8 - B.w * 0.4) * z;
+  const vsPower = ea(g, b, 'pbk') * 0.55 + ea(g, b, 'str') * 0.45 + (B.w * 2.6 - B.h * 0.3) * z;
   return Math.max(speed - vsSpeed, power - vsPower) - oNet;
 }
 // Returns { rushers: [{e, t, blockers:[], free}], tPress, first }
@@ -116,7 +119,7 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
       const b = a.blockers[0];
       let diff = rushVsBlock(g, r, b, oNet);
       if (a.blockers.length > 1) diff -= TUNE.doubleBonus + (ea(g, a.blockers[1], 'pbk') - 70) * 0.3;
-      if (a.chip) diff -= TUNE.chipBonus;
+      if (a.chip) diff -= TUNE.chipBonus * clamp(0.55 + (ea(g, a.chip, 'pbk') * 0.6 + ea(g, a.chip, 'str') * 0.4 - 50) / 45, 0.4, 1.5);
       const med = TUNE.passProMedian * Math.exp(-soft(diff, 14) * TUNE.rushScale);
       a.t = med * Math.exp(gauss(0, 0.38)) * (Math.abs(r.x) < 2 ? TUNE.insideRush : 1) + (a.chip ? 0.25 : 0) + (a.stuntDelay || 0); // the inside path to the QB is the crowded one
     }
@@ -181,10 +184,13 @@ function runBlocking(g, off, def, oc, dc, target, carrierSlot) {
   const dNet = cx.rb;
   for (const r of res) {
     const e = r.e;
-    const shedScore = ea(g, e, 'shed') * 0.5 + (zone ? (ea(g, e, 'bur') * 0.25 + ea(g, e, 'agi') * 0.25) : ea(g, e, 'str') * 0.5);
+    const E = bod(e), zs = TUNE.size;
+    // against zone the defender has to move (weight hurts, length helps him play off the block); against gap runs he has to hold (mass and low pads)
+    const shedScore = ea(g, e, 'shed') * 0.5 + (zone ? (ea(g, e, 'bur') * 0.25 + ea(g, e, 'agi') * 0.25) : ea(g, e, 'str') * 0.5) + (zone ? E.len * 1.2 - E.w * 0.4 : E.w * 2.4 - E.h * 0.3 + E.len * 0.4) * zs;
     if (r.state === 'free') { r.win = 1; continue; }
     const b = r.blockers[0];
-    let block = ea(g, b, 'rbk') * 0.55 + (zone ? ea(g, b, 'agi') : ea(g, b, 'str')) * 0.3 + ea(g, b, 'bawr') * 0.15 + dNet;
+    const wideRun = Math.abs(target) >= 2.2; // reaching a defender on a run to the edge is a foot race
+    let block = ea(g, b, 'rbk') * 0.5 + (zone ? ea(g, b, 'agi') : ea(g, b, 'str')) * 0.27 + ea(g, b, 'bawr') * 0.13 + ea(g, b, 'bur') * (wideRun ? 0.04 : 0.1) + (wideRun ? ea(g, b, 'spd') * 0.06 : 0) + dNet + (zone ? bod(b).len * 0.6 - bod(b).w * 0.3 : bod(b).w * 2.4 - bod(b).h * 0.3) * zs; // get-off, then feet or power; mass moves people, tall men lose leverage
     if (r.lvl === 1) {
       if (r.blockers.length > 1) block += TUNE.comboBonus;
       if (!zone && r.e.x * Math.sign(target) > 0) block += 3; // down blocks have the angle
@@ -193,13 +199,13 @@ function runBlocking(g, off, def, oc, dc, target, carrierSlot) {
       // the combo still has to get a man up to the linebacker in time
       if (r.combo) {
         const c = climbers.find(x => x.fromCombo === r);
-        const clim = lgt(1.1 + ((ea(g, c.e, 'bawr') + ea(g, c.e, 'agi')) / 2 - 62) * 0.05);
+        const clim = lgt(1.1 + (ea(g, c.e, 'bawr') * 0.4 + ea(g, c.e, 'agi') * 0.35 + ea(g, c.e, 'spd') * 0.25 - 62) * 0.05);
         if (rand() > clim && c.used) { const lb = res.find(x => x.climb === c); if (lb) { lb.state = 'free'; lb.blockers = []; lb.lateClimb = true; } }
       }
     } else {
       // linebacker vs a climbing lineman / puller / lead blocker
-      const lbScore = ea(g, e, 'shed') * 0.4 + ea(g, e, 'spd') * 0.3 + ea(g, e, 'prec') * 0.3;
-      const climbScore = ea(g, b, 'rbk') * 0.5 + ea(g, b, 'agi') * 0.3 + ea(g, b, 'str') * 0.2 + dNet + (r.climb && r.climb.lead ? 2 : 0);
+      const lbScore = ea(g, e, 'shed') * 0.4 + ea(g, e, 'spd') * 0.3 + ea(g, e, 'prec') * 0.3 + E.w * 1.5 * zs; // a bigger linebacker can take on a lineman
+      const climbScore = ea(g, b, 'rbk') * 0.45 + ea(g, b, 'agi') * 0.22 + ea(g, b, 'str') * 0.15 + ea(g, b, 'spd') * 0.18 + dNet + (r.climb && r.climb.lead ? 2 : 0) - bod(b).w * 0.3 * zs; // he has to get there first, and the heavy ones are a little late
       r.win = lgt(-1.0 + soft(lbScore - climbScore, 14) * 0.06);
     }
   }
