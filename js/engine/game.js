@@ -62,7 +62,7 @@ function simGame(hTid, aTid, opts = {}) {
     snap(g);
   }
   endDrive(g, 'End of Game');
-  for (const id in g.ps) if (+id >= 0 && g.ps[id].snp && g.stats[id]) { g.stats[id].snp = g.ps[id].snp; if (g.ps[id].sp) g.stats[id].sp = g.ps[id].sp; }
+  for (const id in g.ps) if (+id >= 0 && g.ps[id].snp && g.stats[id]) { g.stats[id].snp = g.ps[id].snp; if (g.ps[id].sp) g.stats[id].sp = g.ps[id].sp; if (g.ps[id].sq) g.stats[id].sq = g.ps[id].sq; }
   for (const p of g.dressed) delete p._gs;
   const box = {
     id: state.nextGid++, season: state.season, week: opts.week || 0, playoff: opts.playoff || null,

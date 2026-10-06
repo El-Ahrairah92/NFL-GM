@@ -342,6 +342,7 @@ function tickFatigue(g, units) {
     const stam = e.p.h ? e.p.h.stam : 60;
     st.fat += load * (1.35 - stam / 100) * (1 + (e.p.wear || 0) * 0.02) * (e.extraLoad || 1) * (1 + bod(e).w * TUNE.sizeFat); // a heavier man tires sooner
     st.snp++;
+    if (g.pre) { const sq = st.sq || (st.sq = [0, 0, 0]); sq[g.q <= 1 ? 0 : g.q === 2 ? 1 : 2]++; }
     st.last = e.name;
     if (e.spot) { const sp = st.sp || (st.sp = {}); sp[e.spot] = (sp[e.spot] || 0) + 1; }
   }

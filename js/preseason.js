@@ -17,6 +17,7 @@ function startPreseason() {
   state.prePlan = { starters: (state.prePlan && state.prePlan.starters) || 'auto', feat: {}, hold: {} };
   for (const t of shuffle(state.teams.slice())) if (isAI(t.id)) campSignings(t.id); // your camp roster is yours to build
   devSummer('camp');
+  openCamp(); // the staff names the open jobs and the first week of practice is in the books
 }
 // every team brings extra bodies to camp: undrafted rookies and street free agents on minimum, non-guaranteed deals
 const CAMP_TARGET = { QB: 4, RB: 6, WR: 12, TE: 6, OL: 16, DL: 16, LB: 9, CB: 11, S: 7, K: 2, P: 1 }; // 90
@@ -209,6 +210,7 @@ function simPreseasonWeek() {
   state.pre.wk++;
   practiceWeekAll();
   refreshPerception();
+  if (state.camp) { if (state.pre.wk < PRESEASON_GAMES) campWeek(`Camp, week ${state.pre.wk + 1}`); else campBattles(state.camp.tid); } // a practice week follows each of the first two games; the last game goes straight onto the boards
   if (state.pre.wk >= PRESEASON_GAMES) { devSummer('pre'); state.phase = 'CUTDOWN'; state.cut = { plan: {} }; addNews('Preseason is over. Rosters must be down to 53 before Week 1.'); }
 }
 // exhibition snaps: film for the scouts, reps toward positional comfort, and a preseason line for every player
@@ -219,8 +221,10 @@ function applyPreBox(box, keep) {
     if (!p || !l.snp) continue;
     const s = p.preS || (p.preS = { snp: 0, gp: 0, adv: {}, st: {} });
     s.snp += l.snp; s.gp++;
+    if (l.sq) { s.sq = s.sq || [0, 0, 0]; l.sq.forEach((v, i) => s.sq[i] += v); }
+    s.last = { wk: box.pre, snp: l.snp, sq: l.sq || null, g: box.adv && box.adv[pid] && l.snp >= 10 ? overallGrade(box.adv[pid], p.spot) : null, line: statSummary(l, p.pos) };
     if (box.adv && box.adv[pid]) addAdv(s.adv, box.adv[pid]);
-    const st = Object.assign({}, l); delete st.sp; delete st.nm;
+    const st = Object.assign({}, l); delete st.sp; delete st.nm; delete st.sq;
     addStats(s.st, st);
   }
   repsLearning(box);

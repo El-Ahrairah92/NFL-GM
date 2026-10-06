@@ -691,3 +691,26 @@ button.oc.sp, div.oc.sp { padding: 8px 10px; }
 .wr-tbl { table-layout: fixed; }
 .wr-tbl th:first-child, .wr-tbl td:first-child { width: 104px; }
 .wr-p { white-space: normal; }
+
+/* ---------- training camp ---------- */
+.camp-k { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.camp-b { margin-bottom: 12px; }
+.camp-rows { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.camp-r { border: 1px solid var(--line2); border-left: 3px solid var(--line); border-radius: 6px; padding: 9px 12px; background: var(--panel2); }
+.camp-r.in { border-left-color: var(--brass); background: var(--panel); }
+.camp-who { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.camp-ev { display: grid; grid-template-columns: 170px 190px minmax(0, 1fr); gap: 4px 18px; margin-top: 8px; font-size: 13px; }
+.camp-ev .camp-k { margin-bottom: 2px; }
+.camp-n { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.camp-act { margin-top: 8px; }
+.camp-line { display: flex; align-items: center; gap: 8px; color: var(--brass); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; margin: 2px 0; }
+.camp-line::before, .camp-line::after { content: ''; flex: 1; border-top: 2px dashed var(--brass); opacity: .7; }
+.camp-bub { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; margin-top: 12px; align-items: start; }
+.camp-br { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 13px; }
+.camp-meet { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; align-items: start; }
+.camp-order { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 4px; }
+@media (max-width: 760px) {
+  .camp-ev { grid-template-columns: 1fr 1fr; }
+  .camp-film { grid-column: 1 / -1; }
+  .camp-bub, .camp-meet { grid-template-columns: 1fr; }
+}

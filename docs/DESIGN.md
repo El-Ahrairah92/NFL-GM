@@ -468,3 +468,19 @@ Snap credit is a straight line: 60% of his unit's snaps is full credit. Exhibiti
 **Confirmations.** Every multi-step sim (to the playoffs, through the playoffs, the rest of the draft, to next season, letting the staff make your pick) and every destructive action asks first, in the game's own dialog.
 
 **Scout wording.** Role phrases are chosen by the exact spot, not the position group, and a phrase that names a job or a build is only used on a player who has it.
+
+## 26. Training camp
+
+Camp opens when rookie free agency ends. There are three practice weeks (camp opening, then one after each of the first two exhibitions) and three games, then one cutdown day.
+
+**Practice produces evidence, not ratings.** Coaches set the reps: each room is ordered by its coach's board, and men in a battle get a look with the group above them. One-on-one drills (receivers and corners, tight ends and safeties, backs and linebackers, blockers and rushers) give every player a record, kept by who it came against: the ones, the twos or the threes. Team periods add plays that stood out, for better and worse. Each week is graded against the player's own room, and the camp grade is the running total. Exhibition snaps are remembered by when they came (early, second quarter, second half).
+
+**Each coach keeps his own board.** A position coach starts with an impression of every player that is off by more the weaker an evaluator he is, and leans the way his temperament leans (a teacher toward the young, an old-school coach toward veterans). Practice weeks and exhibitions pull his read toward the truth. Boards are never shown as numbers.
+
+**Battles.** The staff names a battle wherever a starting job or the last roster spots at a position are too close to call. Standings (leads, closing, slipping, fading) follow the coach's board and are recomputed every week; a battle that stops being close moves to "settled on the field". You can name a winner, which closes the battle on the page and changes nothing else.
+
+**What camp shows that ratings do not.** Playbook pickup, special teams value (the same speed, tackling and burst the coverage units really use), a second position he can play, conditioning and practice habits appear as tags.
+
+**The bubble.** The staff's 53 as it stands, room by room in each coach's order with the line drawn where he would stop: lock, likely, bubble, practice-squad candidate, long shot.
+
+**Staff meeting.** After every practice week each coach presents his room: his order, who had the best week, who he is pushing for and why, who he has cooled on. It is advisory. On cutdown day, any cut a coach would not make is listed with what he saw.
