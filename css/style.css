@@ -714,3 +714,37 @@ button.oc.sp, div.oc.sp { padding: 8px 10px; }
   .camp-film { grid-column: 1 / -1; }
   .camp-bub, .camp-meet { grid-template-columns: 1fr; }
 }
+
+/* ---------- squad planner ---------- */
+.pl-rooms { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+.pl-rooms > button[data-action="campRoom"] { display: flex; align-items: baseline; gap: 6px; padding: 7px 12px; font-weight: 700; letter-spacing: .03em; }
+.pl-rooms > button[data-action="campRoom"] span { font-weight: 500; font-size: 11px; color: var(--muted); }
+.pl-rooms > button.on { background: var(--ink); color: var(--ink-text); border-color: var(--ink); box-shadow: inset 0 -2px var(--brass); }
+.pl-rooms > button.on span { color: var(--ink-muted); }
+.pl-head { margin-bottom: 12px; }
+.pl-hints { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+.pl-g { margin-bottom: 12px; }
+.pl-gh { gap: 8px; flex-wrap: wrap; }
+.pl-name { font-weight: 700; font-size: 15px; border: 1px solid transparent; background: transparent; color: var(--text); padding: 3px 6px; margin-left: -6px; border-radius: 5px; min-width: 0; width: 240px; }
+.pl-name:hover, .pl-name:focus { border-color: var(--line); background: var(--panel2); outline: none; }
+.pl-rows { margin-top: 8px; display: flex; flex-direction: column; }
+.pl-r { display: grid; grid-template-columns: minmax(200px, 1.5fr) 88px 62px 104px 92px minmax(150px, 1.3fr) auto; gap: 4px 14px; padding: 9px 4px; border-top: 1px solid var(--line2); align-items: start; font-size: 13px; }
+.pl-r:first-child { border-top: none; }
+.pl-who { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+.pl-n { width: 20px; height: 20px; flex: none; border-radius: 50%; background: var(--ink); color: var(--ink-text); font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+.pl-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.pl-c .camp-k { margin-bottom: 2px; }
+.pl-note { grid-column: 1 / -2; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pl-note:empty { display: none; }
+.pl-act { display: flex; gap: 4px; grid-row: 1; grid-column: -2 / -1; }
+.camp-wks { display: flex; gap: 3px; margin-top: 3px; }
+.camp-wk { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line2); border-radius: 3px; padding: 0 3px; font-variant-numeric: tabular-nums; }
+@media (max-width: 1250px) { .pl-r { grid-template-columns: minmax(0, 1.4fr) 84px 58px 100px 84px auto; } .pl-game { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding-left: 28px; } .pl-game .camp-k { display: inline; margin: 0; } .pl-note { padding-left: 28px; } }
+@media (max-width: 760px) {
+  .pl-r { grid-template-columns: 1fr 1fr 1fr; gap: 8px 10px; }
+  .pl-who { grid-column: 1 / -1; }
+  .pl-game, .pl-note { grid-column: 1 / -1; }
+  .pl-act { grid-row: auto; grid-column: 1 / -1; }
+  .pl-name { width: 100%; }
+  .pl-rooms > button[data-action="campRoom"] { padding: 9px 11px; }
+}

@@ -401,57 +401,76 @@ const CAMP_CAT = { lock: ['Lock', 'good'], likely: ['Likely', ''], bubble: ['Bub
 function campPlayerBits(p) {
   const rec = campRecord(p), c = p.camp && p.camp.s === state.season ? p.camp : null, g = campGrade(p), sc = c ? c.sc.filter(v => v !== undefined && v !== null) : [];
   const trend = sc.length >= 2 ? (sc[sc.length - 1] - sc[sc.length - 2] >= 6 ? ' <span class="good" title="Better this week">▲</span>' : sc[sc.length - 1] - sc[sc.length - 2] <= -6 ? ' <span class="bad" title="Worse this week">▼</span>' : '') : '';
-  const last = p.preS && p.preS.last, sq = last && last.sq, when = sq ? (sq[0] >= sq[1] && sq[0] >= sq[2] ? 'early, with the first group' : sq[1] >= sq[2] ? 'second quarter' : 'second half') : '';
-  return { grade: gradeChip(g) + trend, drills: rec ? `<b>${rec.w}–${rec.l}</b>${rec.v1[0] + rec.v1[1] >= 3 ? ` <span class="muted">(${rec.v1[0]}–${rec.v1[1]} vs the ones)</span>` : ''}` : '<span class="muted">—</span>',
-    reps: c && c.t !== undefined ? ['With the ones', 'With the twos', 'With the threes'][c.t] : '',
-    film: last ? `${gradeChip(last.g)} <span class="small muted">${last.snp} snaps, ${when}${last.line ? ' · ' + esc(last.line) : ''}</span>` : '<span class="small muted">No game film yet</span>',
+  const last = p.preS && p.preS.last, sq = p.preS && p.preS.sq, tot = sq ? sq[0] + sq[1] + sq[2] : 0;
+  const when = tot ? [['early', sq[0]], ['2nd quarter', sq[1]], ['2nd half', sq[2]]].filter(x => x[1] / tot >= 0.2).map(x => `${Math.round(100 * x[1] / tot)}% ${x[0]}`).join(', ') : '';
+  const n = campLastNote(p);
+  return { g, grade: gradeChip(g) + trend, weeks: sc.length ? sc.map(v => `<span class="camp-wk">${v}</span>`).join('') : '',
+    drills: rec ? `<b>${rec.w}–${rec.l}</b>` : '<span class="muted">—</span>', vs1: rec && rec.v1[0] + rec.v1[1] ? `${rec.v1[0]}–${rec.v1[1]}` : '<span class="muted">—</span>',
+    reps: c && c.t !== undefined ? ['Ones', 'Twos', 'Threes'][c.t] : '<span class="muted">—</span>',
+    pre: gradeChip(preGrade(p)), snaps: p.preS ? p.preS.snp : 0, when, line: p.preS && p.preS.gp && p.pos !== 'OL' ? statSummary(p.preS.st, p.pos) : '', lastG: last ? gradeChip(last.g) : '',
     traits: campTraits(p).map(([t, cls]) => `<span class="pill ${cls}">${esc(t)}</span>`).join(' '),
-    note: (() => { const n = campLastNote(p); return n ? `<span class="${n[1] > 0 ? 'good' : n[1] < 0 ? 'bad' : ''}">${n[1] > 0 ? '＋' : n[1] < 0 ? '－' : '·'}</span> ${esc(n[2])}` : ''; })() };
+    note: n ? `<span class="${n[1] > 0 ? 'good' : n[1] < 0 ? 'bad' : ''}">${n[1] > 0 ? '＋' : n[1] < 0 ? '－' : '·'}</span> ${esc(n[2])}` : '' };
+}
+// one player's line in the planner: everything camp has shown about him, side by side with the men next to him
+function planRowHTML(p, bub, rank, g, i) {
+  const x = campPlayerBits(p), cat = bub[p.id] ? CAMP_CAT[bub[p.id].cat] : null;
+  return `<div class="pl-r"><div class="pl-who">${g ? `<span class="pl-n">${i + 1}</span>` : ''}<div><div>${playerLink(p)} <span class="small muted">${esc(p.lbl)} · ${p.age} · ${p.exp === 0 ? 'R' : p.exp + 'y'}</span></div><div class="pl-pills"><span class="pill">${tierOf(p)}</span>${upsidePill(p)}${cat ? ` <span class="pill ${cat[1]}" title="Where his position coach has him today">${cat[0]}</span>` : ''}</div></div></div>
+    <div class="pl-c"><span class="camp-k">Coach has him</span>${rank ? `<b>${rank[0]}</b> <span class="small muted">of ${rank[1]}</span>` : '—'}</div>
+    <div class="pl-c"><span class="camp-k">Reps</span>${x.reps}</div>
+    <div class="pl-c"><span class="camp-k">Camp</span>${x.grade}<div class="camp-wks" title="Practice weeks, oldest first">${x.weeks}</div></div>
+    <div class="pl-c"><span class="camp-k">Drills</span>${x.drills}<div class="small muted">vs ones ${x.vs1}</div></div>
+    <div class="pl-c pl-game"><span class="camp-k">Games</span>${x.pre} <span class="small muted">${x.snaps ? x.snaps + ' snaps' : 'no snaps'}</span>${x.when ? `<div class="small muted">${x.when}</div>` : ''}${x.line ? `<div class="small">${esc(x.line)}</div>` : ''}</div>
+    <div class="pl-note">${x.traits}${x.note ? ` <span class="small">${x.note}</span>` : ''}</div>
+    <div class="pl-act">${g ? `<button class="sm" data-action="planMove" data-gid="${g.id}" data-pid="${p.id}" data-dir="-1" title="Move up" ${i === 0 ? 'disabled' : ''}>▲</button><button class="sm" data-action="planMove" data-gid="${g.id}" data-pid="${p.id}" data-dir="1" title="Move down" ${i === g.pids.length - 1 ? 'disabled' : ''}>▼</button><button class="sm" data-action="planRemove" data-gid="${g.id}" data-pid="${p.id}" title="Take him out of this group">✕</button>` : ''}</div></div>`;
 }
 function campHTML() {
   const u = state.userTid;
-  if (!campOn()) return `<div class="pagehead"><div><h1>Training camp</h1></div></div><div class="card">${state.phase === 'PRESEASON' && !state.pre ? `<h3>Camp has not opened yet</h3><p class="muted">Finish building the roster you want to bring (up to 90 players), then press <b>Open Training Camp</b>. The staff names the open jobs and the first week of practice is run before the first exhibition.</p>` : '<p class="muted">Camp runs between rookie free agency and cutdown day. Battles, the bubble and the staff meetings appear here once it opens.</p>'}</div>`;
-  const cm = state.camp, tab = ui.campTab || 'battles', ro = rosterOf(u), on = ro.filter(countsOn53), games = state.pre ? state.pre.wk : PRESEASON_GAMES;
-  const openB = cm.battles.filter(b => !b.closed);
+  if (!campOn()) return `<div class="pagehead"><div><h1>Training camp</h1></div></div><div class="card">${state.phase === 'PRESEASON' && !state.pre ? '<h3>Camp has not opened yet</h3><p class="muted">Press <b>Open Training Camp</b>. The first week of practice is run before the first exhibition.</p>' : '<p class="muted">Camp runs between rookie free agency and cutdown day. The squad planner, the bubble and the practice reports appear here once it opens.</p>'}</div>`;
+  const cm = state.camp, tab = ui.campTab === 'bubble' || ui.campTab === 'report' ? ui.campTab : 'plan', ro = rosterOf(u), on = ro.filter(countsOn53), games = state.pre ? state.pre.wk : PRESEASON_GAMES;
   let html = `<div class="pagehead"><div><h1>Training camp</h1><div class="sub">${esc(cm.label || 'Camp')} · practice week ${cm.blocks} of ${CAMP_BLOCKS} · ${games} of ${PRESEASON_GAMES} exhibitions played · ${on.length} in camp, ${Math.max(0, on.length - ROSTER_MAX)} to cut</div></div></div>
-    <div class="subtabs">${[['battles', `Battles (${openB.length})`], ['bubble', 'The bubble'], ['meeting', 'Staff meeting'], ['report', 'Practice report']].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="campTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
-  if (tab === 'battles') {
-    html += '<p class="small muted" style="margin:0 0 10px">The staff names a battle wherever a job or the last roster spots are too close to call. Coaches set the reps, and men in a battle get a look with the group above them. Standings follow each position coach\'s board, which starts as an impression and sharpens with every practice week and exhibition. A good coach reads his room better than a poor one.</p>';
-    if (!cm.battles.length) html += '<div class="card muted">No job on this roster is close enough to call a battle right now.</div>';
-    for (const b of cm.battles) {
-      const rows = battleBoard(b), c = campCoach(u, b.pos);
-      html += `<div class="card camp-b"><div class="row"><div><div class="camp-k">${b.kind === 'start' ? 'Starting job' : `${rows.length} men for ${b.n} spot${b.n === 1 ? '' : 's'}`}</div><h3 style="margin:2px 0 0">${esc(b.label)}</h3></div><span class="spacer"></span><span class="small muted">${c ? `${coachNameLink(c)}'s board · ${campEyeWord(c).toLowerCase()}` : 'No position coach: a rough read'}</span></div>
-        <div class="camp-rows">${rows.map((r, i) => { const x = campPlayerBits(r.p), p = r.p; return `${b.kind === 'spot' && i === b.n ? '<div class="camp-line"><span>the line</span></div>' : ''}<div class="camp-r${r.in ? ' in' : ''}">
-          <div class="camp-who"><span class="pill ${r.st[1]}">${r.st[0]}</span> ${playerLink(p)} <span class="small muted">${esc(p.lbl)} · ${p.age} · ${p.exp === 0 ? 'rookie' : p.exp + ' yr' + (p.exp === 1 ? '' : 's')}</span> <span class="pill">${tierOf(p)}</span>${upsidePill(p)}</div>
-          <div class="camp-ev"><div><span class="camp-k">Camp</span>${x.grade} <span class="small muted">${x.reps}</span></div><div><span class="camp-k">Drills</span>${x.drills}</div><div class="camp-film"><span class="camp-k">Last game</span>${x.film}</div></div>
-          ${x.traits || x.note ? `<div class="camp-n">${x.traits} ${x.note ? `<span class="small">${x.note}</span>` : ''}</div>` : ''}
-          ${b.kind === 'start' ? `<div class="camp-act"><button class="sm${b.closed === p.id ? ' primary' : ''}" data-action="campWinner" data-bid="${b.id}" data-pid="${p.id}">${b.closed === p.id ? 'Winner (undo)' : 'Name him the winner'}</button></div>` : ''}</div>`; }).join('')}</div></div>`;
+    <div class="subtabs">${[['plan', 'Squad planner'], ['bubble', 'The bubble'], ['report', 'Practice report']].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="campTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
+  if (tab === 'plan') {
+    const pl = ensurePlan(), bub = campBubble(u), room = PLAN_ROOMS.find(r => r[0] === ui.campRoom) || PLAN_ROOMS[0], [rk, rname, poss] = room;
+    const all = ro.filter(p => p.a && poss.includes(p.pos)), groups = (pl.groups[rk] || []);
+    for (const g of groups) g.pids = g.pids.filter(id => { const p = P(id); return p && p.tid === u; });
+    // each coach's order in his room, as a rank
+    const rankOf = {}; for (const pos of poss) { const l = all.filter(p => p.pos === pos).sort((a, b) => coachRead(b, u) - coachRead(a, u)); l.forEach((p, i) => rankOf[p.id] = [i + 1, l.length]); }
+    html += `<div class="pl-rooms">${PLAN_ROOMS.map(r => { const n = ro.filter(p => r[2].includes(p.pos)).length; return `<button class="${r[0] === rk ? 'on' : ''}" data-action="campRoom" data-room="${r[0]}">${r[0]}<span>${n}</span></button>`; }).join('')}<span class="spacer"></span><button class="sm" data-action="campRoomStep" data-dir="-1" title="Previous room (←)">←</button><button class="sm" data-action="campRoomStep" data-dir="1" title="Next room (→)">→</button></div>`;
+    // the coach's word on this room
+    const meet = campMeeting(u).filter(m => (m.role === 'ST' ? ['K', 'P'] : m.role === 'DB' ? ['CB', 'S'] : [m.role]).some(x => poss.includes(x)))[0];
+    const say = []; if (meet) { const inRoom = p => p && poss.includes(p.pos);
+      if (inRoom(meet.star)) say.push(`<b>${playerLink(meet.star, true)}</b> had the best week.`);
+      if (meet.push && inRoom(meet.push.p)) say.push(`Pushing for <b>${playerLink(meet.push.p, true)}</b>: ${esc(meet.push.why)}.`);
+      if (inRoom(meet.cool)) say.push(`Has cooled on <b>${playerLink(meet.cool, true)}</b>.`);
+      if (inRoom(meet.worry)) say.push(`<b>${playerLink(meet.worry, true)}</b> had a rough week.`); }
+    const hints = cm.battles.filter(b => poss.includes(b.pos));
+    html += `<div class="card pl-head"><div class="row"><div><div class="camp-k">${rname} · ${all.length} in camp · staff would keep ${poss.reduce((s, x) => s + ROSTER_TEMPLATE[x], 0)}</div><h3 style="margin:2px 0 0">${meet && meet.c ? coachNameLink(meet.c) : '<span class="muted">No position coach</span>'} <span class="small muted" style="font-weight:400">${meet && meet.c ? esc(meet.c.style || '') + ' · ' : ''}${meet ? meet.eye.toLowerCase() : ''}</span></h3></div><span class="spacer"></span>
+      <input type="text" placeholder="New group, e.g. Backup X" maxlength="40" data-change="planNew" data-room="${rk}" style="width:210px"><button class="sm" data-action="planReset" data-room="${rk}" title="Throw away your groups in this room and start from the staff's chart">Reset room</button></div>
+      ${say.length ? `<div class="small" style="margin-top:8px">${say.join(' ')}</div>` : ''}
+      ${hints.length ? `<div class="small pl-hints">${hints.map(b => `<span><span class="muted">Too close to call for the staff:</span> <b>${esc(b.label)}</b> — ${battleBoard(b).map(r => esc(r.p.last)).join(', ')} <button class="sm" data-action="planFromBattle" data-bid="${b.id}" data-room="${rk}">Make it a group</button></span>`).join('')}</div>` : ''}</div>`;
+    const grouped = new Set(groups.flatMap(g => g.pids));
+    for (const g of groups) {
+      const ps = g.pids.map(id => P(id)), free = all.filter(p => !g.pids.includes(p.id)).sort((a, b) => rankOf[a.id][0] - rankOf[b.id][0]);
+      html += `<div class="card pl-g"><div class="row pl-gh"><input type="text" class="pl-name" value="${esc(g.name)}" maxlength="40" data-change="planName" data-gid="${g.id}" title="Rename this group"><span class="small muted">${ps.length} ${ps.length === 1 ? 'man' : 'men'}</span><span class="spacer"></span>
+        <select data-change="planAdd" data-gid="${g.id}"><option value="">Add a player…</option>${free.map(p => `<option value="${p.id}">${esc(p.lbl)} ${esc(pname(p))}${grouped.has(p.id) ? '' : ' ·'}</option>`).join('')}<option value="other">Someone from another room…</option></select>
+        <button class="sm" data-action="planGroupMove" data-gid="${g.id}" data-dir="-1" title="Move this group up">▲</button><button class="sm" data-action="planGroupMove" data-gid="${g.id}" data-dir="1" title="Move this group down">▼</button><button class="sm danger" data-action="planDelete" data-gid="${g.id}" title="Delete this group">Delete</button></div>
+        ${ps.length ? `<div class="pl-rows">${ps.map((p, i) => planRowHTML(p, bub, rankOf[p.id] || null, g, i)).join('')}</div>` : '<div class="small muted" style="padding:8px 0">Empty. Add anyone you want to compare here.</div>'}</div>`;
     }
-    if (cm.settled && cm.settled.length) html += `<div class="card"><h3>Settled on the field</h3><div class="small">${cm.settled.slice().reverse().map(s => { const p = P(s.pid); return p ? `<div style="margin:3px 0"><span class="muted">${esc(s.label)}:</span> ${playerLink(p, true)} pulled away${s.blk ? ` after practice week ${s.blk}` : ''}.</div>` : ''; }).join('')}</div></div>`;
-    html += '<div class="small muted" style="margin-top:8px">Naming a winner closes the battle on this page. It does not change your depth chart or cut anyone: those are still yours to do.</div>';
+    if (ui.planOther) { const g = planGroup(ui.planOther), others = ro.filter(p => p.a && !poss.includes(p.pos) && !(g && g.pids.includes(p.id))).sort((a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos) || uOvr(b) - uOvr(a));
+      if (g) html += `<div class="callout small">Add a player from another room to <b>${esc(g.name)}</b>: <select data-change="planAdd" data-gid="${g.id}"><option value="">Choose…</option>${others.map(p => `<option value="${p.id}">${esc(p.lbl)} ${esc(pname(p))}</option>`).join('')}</select> <button class="sm" data-action="planOtherClose">Done</button></div>`; }
+    const rest = all.filter(p => !grouped.has(p.id)).sort((a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos) || rankOf[a.id][0] - rankOf[b.id][0]);
+    html += `<div class="card pl-g"><div class="row pl-gh"><h3 style="margin:0">Not in a group</h3><span class="small muted">${rest.length} · in the coach's order</span></div>${rest.length ? `<div class="pl-rows">${rest.map(p => planRowHTML(p, bub, rankOf[p.id], null, 0)).join('')}</div>` : '<div class="small muted" style="padding:8px 0">Everyone in this room is in one of your groups.</div>'}</div>
+      <div class="small muted" style="margin-top:8px">This is your scratch pad. Groups, names and order are yours and change nothing on the real depth chart or the roster. A player can sit in more than one group. "Coach has him" is the position coach's order in his room, which is an opinion that sharpens as camp goes on.</div>`;
   } else if (tab === 'bubble') {
     const bub = campBubble(u), cnt = k => on.filter(p => bub[p.id] && bub[p.id].cat === k).length;
     html += `<div class="card"><div class="wr-stat"><div><b>${cnt('lock') + cnt('likely')}</b><span>locks and likely</span></div><div><b>${cnt('bubble')}</b><span>on the bubble</span></div><div><b>${cnt('ps')}</b><span>practice-squad candidates</span></div><div><b>${cnt('long')}</b><span>long shots</span></div><div><b>${ro.length - on.length}</b><span>heading to IR</span></div></div>
       <p class="small muted" style="margin:10px 0 0">The staff's ${ROSTER_MAX} as it stands today, room by room, in each coach's order. The line is where he would stop if he had to cut now. It is his opinion: your own read of each player is the pill beside his name.</p></div><div class="camp-bub">`;
-    for (const pos of POSITIONS) { const l = ro.filter(p => p.pos === pos && bub[p.id]).sort((a, b) => bub[a.id].i - bub[b.id].i); if (!l.length) continue; const line = ROSTER_TEMPLATE[pos], c = campCoach(u, pos);
+    for (const pos of POSITIONS) { const l = ro.filter(p => p.pos === pos && bub[p.id]).sort((a, b) => bub[a.id].i - bub[b.id].i); if (!l.length) continue; const line = ROSTER_TEMPLATE[pos];
       html += `<div class="card camp-room"><div class="row"><h3 style="margin:0">${ROOM_NAME[pos] || (pos === 'K' ? 'Kickers' : 'Punters')}</h3><span class="spacer"></span><span class="small muted">carrying ${l.filter(p => countsOn53(p)).length} · staff keeps ${line}</span></div>${l.map((p, i) => { const cat = CAMP_CAT[bub[p.id].cat], g = campGrade(p); return `${i === line && bub[p.id].cat !== 'ir' ? '<div class="camp-line"><span>the line</span></div>' : ''}<div class="camp-br"><span class="pill ${cat[1]}">${cat[0]}</span> ${playerLink(p, true)} <span class="small muted">${p.age}</span><span class="spacer"></span><span class="pill">${tierOf(p)}</span> ${gradeChip(g)}</div>`; }).join('')}</div>`; }
-    html += '</div>';
-  } else if (tab === 'meeting') {
-    html += '<p class="small muted" style="margin:0 0 10px">After every practice week each coach presents his room: his order, who he is pushing for, who he has cooled on, and who stood out. It is advice. Nobody on the staff holds it against you if you go another way.</p><div class="camp-meet">';
-    for (const m of campMeeting(u)) { const nm = m.role === 'ST' ? 'Specialists' : m.role === 'DB' ? 'Defensive backs' : ROOM_NAME[m.role];
-      const say = [];
-      if (m.star) say.push(`<b>${playerLink(m.star, true)}</b> had the best week in the room.${campLastNote(m.star) ? ' <span class="muted">' + esc(campLastNote(m.star)[2]) + '</span>' : ''}`);
-      if (m.push) say.push(`He is pushing for <b>${playerLink(m.push.p, true)}</b>: ${esc(m.push.why)}.`);
-      if (m.cool) say.push(`He has cooled on <b>${playerLink(m.cool, true)}</b>, more than you have.`);
-      if (m.worry) say.push(`<b>${playerLink(m.worry, true)}</b> had a rough week.${campLastNote(m.worry) ? ' <span class="muted">' + esc(campLastNote(m.worry)[2]) + '</span>' : ''}`);
-      if (!say.length) say.push('<span class="muted">Nothing changed his mind this week.</span>');
-      html += `<div class="card"><div class="row"><div><div class="camp-k">${nm}</div><h3 style="margin:2px 0 0">${m.c ? coachNameLink(m.c) : '<span class="bad">No coach</span>'}</h3></div><span class="spacer"></span><span class="small muted">${m.c ? esc(m.c.style || '') + ' · ' : ''}${m.eye}</span></div>
-        <div class="small" style="margin:8px 0">${say.map(s => `<div style="margin:4px 0">${s}</div>`).join('')}</div>
-        <div class="camp-k">His order</div><div class="small camp-order">${m.order.map((o, i) => `<span class="${['bubble'].includes(o.cat) ? 'warn' : ['ps', 'long'].includes(o.cat) ? 'muted' : ''}">${i + 1}. ${playerLink(o.p, true)}</span>`).join('')}</div></div>`; }
     html += '</div>';
   } else {
     const blk = cm.blocks - 1, rows = ro.filter(p => p.camp && p.camp.s === state.season && p.camp.sc[blk] !== undefined).map(p => ({ p, wk: p.camp.sc[blk], n: p.camp.notes.filter(x => x[0] === blk).pop() }));
-    html += `<div class="card"><h3>Practice report · week ${cm.blocks}</h3><div class="small muted" style="margin-bottom:8px">This week's work in drills and team periods. One week is a small sample: the camp grade on the Battles page is the running total.</div>` + table('campRep', [
+    html += `<div class="card"><h3>Practice report · week ${cm.blocks}</h3><div class="small muted" style="margin-bottom:8px">This week's work in drills and team periods. One week is a small sample: the camp grade is the running total.</div>` + table('campRep', [
       { k: 'pos', l: 'Pos', v: x => x.p.lbl, f: x => esc(x.p.lbl) }, { k: 'n', l: 'Name', v: x => x.p.last, f: x => playerLink(x.p) },
       { k: 't', l: 'Reps', v: x => -(x.p.camp.t || 0), f: x => `<span class="small">${['Ones', 'Twos', 'Threes'][x.p.camp.t || 0]}</span>` },
       { k: 'wk', l: 'This week', v: x => x.wk, f: x => gradeChip(x.wk), num: 1 }, { k: 'cg', l: 'Camp', v: x => campGrade(x.p) || 0, f: x => gradeChip(campGrade(x.p)), num: 1 },
@@ -2688,7 +2707,15 @@ const actions = {
   box: d => boxModal(+d.gid),
   seasonOpen: d => { ui.seasonYr = d && d.s ? +d.s : null; view = 'season'; closeModal(true); render(); window.scrollTo(0, 0); },
   campTab: d => { ui.campTab = d.tab; render(); },
-  campWinner: d => { campNameWinner(d.bid, +d.pid); save(); render(); },
+  campRoom: d => { ui.campRoom = d.room; ui.planOther = null; render(); },
+  campRoomStep: d => { const i = Math.max(0, PLAN_ROOMS.findIndex(r => r[0] === ui.campRoom)); ui.campRoom = PLAN_ROOMS[(i + +d.dir + PLAN_ROOMS.length) % PLAN_ROOMS.length][0]; ui.planOther = null; render(); },
+  planMove: d => { planMove(+d.gid, +d.pid, +d.dir); save(); render(); },
+  planRemove: d => { planRemove(+d.gid, +d.pid); save(); render(); },
+  planGroupMove: d => { planGroupMove(+d.gid, +d.dir); save(); render(); },
+  planDelete: async d => { const g = planGroup(+d.gid); if (!g) return; if (g.pids.length && !await ask({ title: `Delete "${g.name}"?`, body: 'The group goes away. The players stay on your roster and in camp.', yes: 'Delete group', no: 'Keep it', danger: true })) return; planDelete(+d.gid); save(); render(); },
+  planReset: async d => { if (!await ask({ title: 'Reset this room?', body: 'Your groups in this room are replaced with a fresh set from the staff\'s chart.', yes: 'Reset', no: 'Keep mine', danger: true })) return; planSeedRoom(state.userTid, d.room); save(); render(); },
+  planFromBattle: d => { const b = state.camp.battles.find(x => x.id === d.bid); if (b) planNew(d.room, b.label, battleBoard(b).map(r => r.p.id)); save(); render(); },
+  planOtherClose: () => { ui.planOther = null; render(); },
   askYes: () => askDone(true),
   askNo: () => askDone(false),
   closeModal: () => closeModal(),
@@ -2836,6 +2863,9 @@ const changes = {
   tradeTeam: v => { ui.tradeTid = +v; ui.get = { players: [], picks: [] }; },
   histTeam: v => { ui.histTid = +v; },
   seasonPick: v => { ui.seasonYr = +v; },
+  planNew: (v, el) => { planNew(el.dataset.room, v); save(); },
+  planName: (v, el) => { const g = planGroup(+el.dataset.gid), n = String(v || '').trim().slice(0, 40); if (g && n) g.name = n; save(); },
+  planAdd: (v, el) => { if (v === 'other') { ui.planOther = +el.dataset.gid; return; } if (v) planAdd(+el.dataset.gid, +v); save(); },
   autoUser: (v, el) => { state.settings.autoUser = el.checked; save(); toast(el.checked ? 'Auto-manage on.' : 'Auto-manage off.'); },
   showTrue: (v, el) => { state.settings.showTrue = el.checked; save(); },
   gamePopups: (v, el) => { state.settings.gamePopups = el.checked; save(); },
@@ -2902,6 +2932,12 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('toggle', e => { const el = e.target; if (el && el.dataset && el.dataset.fold) (ui.fold || (ui.fold = {}))[el.dataset.fold] = el.open; }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (askResolve) askDone(false); else closeModal(); } });
+document.addEventListener('keydown', e => { // ← → walks the rooms of the squad planner
+  if (!state || view !== 'camp' || !campOn() || (ui.campTab && ui.campTab !== 'plan' && ui.campTab !== 'battles') || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+  const tg = e.target; if (tg && tg.closest && tg.closest('input, select, textarea')) return;
+  if (!$('#modal').classList.contains('hidden') || askResolve) return;
+  actions.campRoomStep({ dir: e.key === 'ArrowLeft' ? -1 : 1 }); e.preventDefault();
+});
 document.addEventListener('keydown', e => { // ← → walks the staff chart
   if (!state || view !== 'coaches' || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || (e.target.closest && e.target.closest('input, select, textarea')) || !$('#modal').classList.contains('hidden')) return;
   const list = staffList(T(ui.staffTid == null ? state.userTid : ui.staffTid)); if (!list.length) return;

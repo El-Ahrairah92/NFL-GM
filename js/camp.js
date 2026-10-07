@@ -237,4 +237,26 @@ function campWeek(label) {
   cm.label = label;
   if (!isAI(cm.tid)) addNews(`${label}: the staff has updated its boards. ${cm.battles.filter(b => !b.closed).length} battles are open.`, [cm.tid]);
 }
-function campNameWinner(bid, pid) { const b = state.camp && state.camp.battles.find(x => x.id === bid); if (!b) return; b.closed = b.closed === pid ? null : pid; }
+// ---- the squad planner: your own unofficial depth chart ----
+// Groups are yours: name them, fill them with anyone, order them however you like. Nothing here touches the real depth chart or the roster.
+const PLAN_ROOMS = [['QB', 'Quarterbacks', ['QB']], ['RB', 'Running backs', ['RB']], ['WR', 'Receivers', ['WR']], ['TE', 'Tight ends', ['TE']], ['OL', 'Offensive line', ['OL']], ['DL', 'Defensive line', ['DL']], ['LB', 'Linebackers', ['LB']], ['CB', 'Corners', ['CB']], ['S', 'Safeties', ['S']], ['ST', 'Specialists', ['K', 'P']]];
+const PLAN_SEED = { QB: [['Starter', ['QB']]], RB: [['Lead back', ['RB']]], WR: [['X receiver', ['X']], ['Z receiver', ['Z']], ['Slot', ['SLOT']]], TE: [['Tight end (Y)', ['Y']], ['Move tight end (H)', ['H']]],
+  OL: [['Left tackle', ['LT']], ['Left guard', ['LG']], ['Center', ['C']], ['Right guard', ['RG']], ['Right tackle', ['RT']]], DL: [['Edge', ['EDGE1', 'EDGE2']], ['Interior', ['IDL1', 'IDL2', 'NT']]], LB: [['Middle linebacker', ['MLB']], ['Weak side', ['WLB']]],
+  CB: [['Outside corner', ['CB1', 'CB2']], ['Slot corner', ['NCB']]], S: [['Free safety', ['FS']], ['Strong safety', ['SS']]], ST: [['Kicker', ['K']], ['Punter', ['P']]] };
+function planRoomOf(p) { const r = PLAN_ROOMS.find(x => x[2].includes(p.pos)); return r ? r[0] : null; }
+function planSeedRoom(tid, room) {
+  const cm = state.camp, lists = defaultChart(tid), poss = PLAN_ROOMS.find(x => x[0] === room)[2], used = new Set(), out = [];
+  for (const [name, keys] of PLAN_SEED[room] || []) {
+    const ids = []; for (let i = 0; i < 2; i++) for (const k of keys) { const id = (lists[k] || [])[i], p = id !== undefined ? P(id) : null; if (p && poss.includes(p.pos) && !ids.includes(id) && (i > 0 || !used.has(id))) { ids.push(id); if (i === 0) used.add(id); } }
+    out.push({ id: cm.plan.nid++, name, pids: ids.slice(0, keys.length > 1 ? 4 : 2) });
+  }
+  cm.plan.groups[room] = out;
+}
+function ensurePlan() { const cm = state.camp; if (!cm) return null; if (!cm.plan) { cm.plan = { groups: {}, nid: 1 }; for (const [room] of PLAN_ROOMS) planSeedRoom(cm.tid, room); } return cm.plan; }
+function planGroup(gid) { const pl = ensurePlan(); for (const r in pl.groups) { const g = pl.groups[r].find(x => x.id === gid); if (g) return g; } return null; }
+function planNew(room, name, pids) { const pl = ensurePlan(); name = String(name || '').trim().slice(0, 40); if (!name) return; (pl.groups[room] = pl.groups[room] || []).push({ id: pl.nid++, name, pids: (pids || []).slice() }); }
+function planAdd(gid, pid) { const g = planGroup(gid); if (g && !g.pids.includes(pid)) g.pids.push(pid); }
+function planRemove(gid, pid) { const g = planGroup(gid); if (g) g.pids = g.pids.filter(x => x !== pid); }
+function planMove(gid, pid, dir) { const g = planGroup(gid); if (!g) return; const i = g.pids.indexOf(pid), j = i + dir; if (i < 0 || j < 0 || j >= g.pids.length) return; [g.pids[i], g.pids[j]] = [g.pids[j], g.pids[i]]; }
+function planDelete(gid) { const pl = ensurePlan(); for (const r in pl.groups) pl.groups[r] = pl.groups[r].filter(x => x.id !== gid); }
+function planGroupMove(gid, dir) { const pl = ensurePlan(); for (const r in pl.groups) { const l = pl.groups[r], i = l.findIndex(x => x.id === gid), j = i + dir; if (i >= 0 && j >= 0 && j < l.length) { [l[i], l[j]] = [l[j], l[i]]; return; } } }
