@@ -17,7 +17,7 @@ function campOn() { return !!(state.camp && state.camp.season === state.season);
 function campOf(p) { return p.camp && p.camp.s === state.season ? p.camp : (p.camp = { s: state.season, r: [0, 0, 0], oo: [[0, 0], [0, 0], [0, 0]], sc: [], notes: [], form: round1(hashGauss(p.id, 811, state.season) * 2.2) }); }
 // ---- the coach who runs his room, and how sharp his eye is ----
 function campCoach(tid, pos) { return pos === 'K' || pos === 'P' ? C(T(tid).stc) : posCoach(tid, pos); }
-function campCoachQ(c) { return !c ? 38 : c.dev !== undefined ? (c.dev + c.disc) / 2 : c.k && c.k.units !== undefined ? c.k.units : c.ovr || 50; }
+function campCoachQ(c) { return !c ? 38 : typeof c.dev === 'number' && typeof c.disc === 'number' ? (c.dev + c.disc) / 2 : c.k && c.k.units !== undefined ? c.k.units : c.ovr || 50; }
 function campEyeWord(c) { const q = campCoachQ(c); return q >= 78 ? 'His reads are usually right' : q >= 62 ? 'A reliable evaluator' : q >= 48 ? 'Hit and miss as an evaluator' : 'His reads have missed before'; }
 // what a coach's temperament makes him lean toward (advisory only)
 function campBias(c, p) {
@@ -58,7 +58,7 @@ function coachRead(p, tid) {
 }
 function jobRead(p, spot, tid) { return slotRating(p, spot) + (coachRead(p, tid) - p.ovr); }
 // ---- what camp shows that the ratings do not ----
-function stValue(p) { return !p.a || !['WLB', 'MLB', 'SS', 'FS', 'NCB', 'CB', 'RB', 'TEH', 'TEY', 'SLOT', 'WRX', 'WRZ', 'FB', 'EDGE'].includes(p.spot) ? 0 : (p.a.spd + (p.a.tkl || 40) + (p.a.bur || 50)) / 3; }
+function stValue(p) { return p.a && ST_OK.has(p.spot) ? stCover(p) : 0; }
 function campTraits(p) {
   const out = [], h = p.h || {}, pb = typeof pbOf === 'function' ? pbOf(p) : 96, st = stValue(p);
   if (pb < 50) out.push(['Still learning the playbook', 'warn']); else if (pb < 68 && p.exp <= 1) out.push(['Has the core calls', '']);
@@ -219,6 +219,9 @@ function campObjections(tid, plan) {
     if (!['lock', 'likely'].includes(bub[p.id].cat)) continue;
     const c = campCoach(tid, p.pos), keepOver = rosterOf(tid).filter(x => x.pos === p.pos && x.id !== p.id && plan[x.id] !== 'cut' && plan[x.id] !== 'ps' && bub[x.id] && coachRead(x, tid) < coachRead(p, tid)).sort((a, b) => coachRead(a, tid) - coachRead(b, tid))[0];
     out.push({ p, c, over: keepOver || null, note: campLastNote(p) }); }
+  // the special teams coordinator speaks up for the men who cover his kicks
+  const stc = C(T(tid).stc), core = rosterOf(tid).filter(p => p.a && ST_OK.has(p.spot)).sort((a, b) => stCover(b) - stCover(a)).slice(0, 6);
+  for (const p of core) if ((plan[p.id] === 'cut' || plan[p.id] === 'ps') && stCover(p) >= 68 && !out.some(o => o.p === p)) out.push({ p, c: stc, over: null, note: [0, 0, 'One of the best men on the coverage units.'] });
   return out;
 }
 function campLastNote(p) { const c = p.camp && p.camp.s === state.season ? p.camp : null; return c && c.notes.length ? c.notes[c.notes.length - 1] : null; }
@@ -242,17 +245,24 @@ function campWeek(label) {
 const PLAN_ROOMS = [['QB', 'Quarterbacks', ['QB']], ['RB', 'Running backs', ['RB']], ['WR', 'Receivers', ['WR']], ['TE', 'Tight ends', ['TE']], ['OL', 'Offensive line', ['OL']], ['DL', 'Defensive line', ['DL']], ['LB', 'Linebackers', ['LB']], ['CB', 'Corners', ['CB']], ['S', 'Safeties', ['S']], ['ST', 'Specialists', ['K', 'P']]];
 const PLAN_SEED = { QB: [['Starter', ['QB']]], RB: [['Lead back', ['RB']]], WR: [['X receiver', ['X']], ['Z receiver', ['Z']], ['Slot', ['SLOT']]], TE: [['Tight end (Y)', ['Y']], ['Move tight end (H)', ['H']]],
   OL: [['Left tackle', ['LT']], ['Left guard', ['LG']], ['Center', ['C']], ['Right guard', ['RG']], ['Right tackle', ['RT']]], DL: [['Edge', ['EDGE1', 'EDGE2']], ['Interior', ['IDL1', 'IDL2', 'NT']]], LB: [['Middle linebacker', ['MLB']], ['Weak side', ['WLB']]],
-  CB: [['Outside corner', ['CB1', 'CB2']], ['Slot corner', ['NCB']]], S: [['Free safety', ['FS']], ['Strong safety', ['SS']]], ST: [['Kicker', ['K']], ['Punter', ['P']]] };
+  CB: [['Outside corner', ['CB1', 'CB2']], ['Slot corner', ['NCB']]], S: [['Free safety', ['FS']], ['Strong safety', ['SS']]], ST: [['Kicker', ['K']], ['Punter', ['P']], ['Kickoff coverage', ['KO']], ['Punt team', ['PU']]] };
 function planRoomOf(p) { const r = PLAN_ROOMS.find(x => x[2].includes(p.pos)); return r ? r[0] : null; }
+const PLAN_PHASES = ['COACHES', 'RESIGN', 'FA', 'DRAFT', 'UDFA', 'PRESEASON', 'CUTDOWN'];
+function planOn() { return !!state && PLAN_PHASES.includes(state.phase); }
 function planSeedRoom(tid, room) {
-  const cm = state.camp, lists = defaultChart(tid), poss = PLAN_ROOMS.find(x => x[0] === room)[2], used = new Set(), out = [];
+  const cm = { plan: state.plan }, lists = defaultChart(tid), poss = PLAN_ROOMS.find(x => x[0] === room)[2], used = new Set(), out = [];
   for (const [name, keys] of PLAN_SEED[room] || []) {
+    if (ST_UNIT[keys[0]]) { out.push({ id: cm.plan.nid++, name, pids: (lists[keys[0]] || []).slice(0, ST_SIZE) }); continue; }
     const ids = []; for (let i = 0; i < 2; i++) for (const k of keys) { const id = (lists[k] || [])[i], p = id !== undefined ? P(id) : null; if (p && poss.includes(p.pos) && !ids.includes(id) && (i > 0 || !used.has(id))) { ids.push(id); if (i === 0) used.add(id); } }
     out.push({ id: cm.plan.nid++, name, pids: ids.slice(0, keys.length > 1 ? 4 : 2) });
   }
   cm.plan.groups[room] = out;
 }
-function ensurePlan() { const cm = state.camp; if (!cm) return null; if (!cm.plan) { cm.plan = { groups: {}, nid: 1 }; for (const [room] of PLAN_ROOMS) planSeedRoom(cm.tid, room); } return cm.plan; }
+function ensurePlan() {
+  if (!state.plan && state.camp && state.camp.plan) { state.plan = state.camp.plan; delete state.camp.plan; } // a plan started under the old camp page carries over
+  if (!state.plan) { state.plan = { groups: {}, nid: 1 }; for (const [room] of PLAN_ROOMS) planSeedRoom(state.userTid, room); }
+  return state.plan;
+}
 function planGroup(gid) { const pl = ensurePlan(); for (const r in pl.groups) { const g = pl.groups[r].find(x => x.id === gid); if (g) return g; } return null; }
 function planNew(room, name, pids) { const pl = ensurePlan(); name = String(name || '').trim().slice(0, 40); if (!name) return; (pl.groups[room] = pl.groups[room] || []).push({ id: pl.nid++, name, pids: (pids || []).slice() }); }
 function planAdd(gid, pid) { const g = planGroup(gid); if (g && !g.pids.includes(pid)) g.pids.push(pid); }

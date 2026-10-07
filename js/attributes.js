@@ -15,10 +15,11 @@ const ATTRS = {
   prsh: ['Pass Rush', 'PRU', 'T', 'def'], shed: ['Block Shedding', 'SHD', 'T', 'def'], tkl: ['Tackling', 'TKL', 'T', 'def'], strp: ['Ball Stripping', 'STP', 'T', 'def'],
   prec: ['Play Recognition', 'PRC', 'M', 'def'], man: ['Man Coverage', 'MAN', 'T', 'def'], zone: ['Zone Coverage', 'ZON', 'T', 'def'], prs: ['Press', 'PRS', 'T', 'def'], bsk: ['Ball Skills', 'BSK', 'T', 'def'],
   kcon: ['Kick Consistency', 'KCN', 'T', 'kick'], krng: ['Comfort Range', 'KRG', 'P', 'kick'], kfal: ['Range Falloff', 'KFL', 'T', 'kick'], ktrj: ['Trajectory', 'TRJ', 'T', 'kick'],
+  st: ['Special Teams', 'ST', 'T', 'teams'],
   pdis: ['Punt Distance', 'PDS', 'P', 'punt'], pplc: ['Directional Placement', 'PPL', 'T', 'punt'], phng: ['Hang Time', 'HNG', 'P', 'punt'], pspn: ['Spin Control', 'SPN', 'T', 'punt'],
 };
-const POOL_LABELS = { ath: 'Athletic', pass: 'Passing', carry: 'Ball Carrying', recv: 'Receiving', block: 'Blocking', def: 'Defense', kick: 'Kicking', punt: 'Punting' };
-const SIDE_POOLS = { off: ['ath', 'pass', 'carry', 'recv', 'block'], def: ['ath', 'def'], k: ['ath', 'kick'], p: ['ath', 'punt'] };
+const POOL_LABELS = { ath: 'Athletic', pass: 'Passing', carry: 'Ball Carrying', recv: 'Receiving', block: 'Blocking', def: 'Defense', kick: 'Kicking', punt: 'Punting', teams: 'Special Teams' };
+const SIDE_POOLS = { off: ['ath', 'pass', 'carry', 'recv', 'block', 'teams'], def: ['ath', 'def', 'teams'], k: ['ath', 'kick'], p: ['ath', 'punt'] };
 const ATH_KEYS = ['spd', 'bur', 'agi', 'str'];
 const AGE_GROUPS = ['E', 'P', 'T', 'M'];
 const AGE_GROUP_LABEL = { E: 'Explosive', P: 'Power', T: 'Technique', M: 'Mental' };
@@ -370,7 +371,8 @@ function genPlayer(spot, q, age, gf, raw) {
     if (ATTRS[k][3] !== pool) continue;
     const t = S.t[k], ath = pool === 'ath';
     let v;
-    if (t === undefined) v = gauss(30, 8);
+    if (k === 'st') v = genST(spot, q); // its own skill: tied to the position, barely to how good he is from scrimmage
+    else if (t === undefined) v = gauss(30, 8);
     else {
       const [mean, sd] = Array.isArray(t) ? t : [t, ath ? 6 : 5];
       v = mean + q * (ath ? 3 : 6) + gauss(0, sd);

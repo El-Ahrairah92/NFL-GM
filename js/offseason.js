@@ -165,6 +165,7 @@ function draftOrder(year) {
 }
 
 function startOffseason() {
+  state.plan = null; // a new offseason: the roster planner starts from the staff's chart again
   const year = state.season + 1;
   growCap(); // new league year: cap, minimum salary and dead money roll over
   state.draft = { year, order: draftOrder(year), idx: 0 };
@@ -392,7 +393,7 @@ function finishDraft() {
 // ---------- roster maintenance ----------
 // what cutting him saves this year (guaranteed money is sunk either way)
 function cutSavings(p) { const d = deadIfCut(p); return p.contract.yrs > 0 ? p.contract.amt - d.now - d.next * 0.5 : 0; }
-function cutValue(p) { return playerValue(p, p.tid) - (cutSavings(p) - MIN_SALARY) * 0.4 + (p.draft && p.exp <= 1 ? 3 : 0); }
+function cutValue(p) { return playerValue(p, p.tid) - (cutSavings(p) - MIN_SALARY) * 0.4 + (p.draft && p.exp <= 1 ? 3 : 0) + stRosterValue(p); } // the last spots go to men who cover kicks
 function autoCut(tid, limit, activeOnly) {
   const cuts = [];
   while (true) {
@@ -462,7 +463,7 @@ function beginWaivers() {
 }
 const onWaivers = () => Object.values(state.players).filter(p => p.tid === -1 && p.waiver);
 // how a team values a waived player against the last man it is carrying at his position
-function waiverScore(p, tid) { return viewOvr(p, tid) + (p.age <= 24 ? viewGrowth(p, tid) * 0.4 : 0); }
+function waiverScore(p, tid) { return viewOvr(p, tid) + (p.age <= 24 ? viewGrowth(p, tid) * 0.4 : 0) + stRosterValue(p); }
 function waiverDrop(p, tid) { // the player a claiming team would let go, or null if he would not make their roster
   const room = rosterOf(tid).filter(x => x.pos === p.pos && !onIR(x)).sort((a, b) => waiverScore(a, tid) - waiverScore(b, tid));
   if (!room.length || room.length <= ROSTER_MIN[p.pos] - 1) return null;

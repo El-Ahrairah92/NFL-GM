@@ -224,9 +224,9 @@ const DEF_CHART_KEY = { LE: 'EDGE1', LOLB: 'EDGE1', RE: 'EDGE2', ROLB: 'EDGE2', 
   NT: 'NT', WLB: 'WLB', MLB: 'MLB', SAM: 'SAM', CB1: 'CB1', CB2: 'CB2', NCB: 'NCB', DIME: 'DIME', FS: 'FS', SS: 'SS' };
 const CHART_SPOT = { QB: 'QB', RB: 'RB', RB3D: 'RB', RBSY: 'RB', FB: 'FB', X: 'WRX', Z: 'WRZ', SLOT: 'SLOT', SLOT2: 'SLOT', Y: 'TEY', H: 'TEH', Y2: 'TEY', OL6: 'RT',
   LT: 'LT', LG: 'LG', C: 'C', RG: 'RG', RT: 'RT', EDGE1: 'EDGE', EDGE2: 'EDGE', IDL1: 'DT', IDL2: 'DT', NT: 'NT', RUSH: 'EDGE', MLB: 'MLB', WLB: 'WLB', SAM: 'WLB',
-  CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', K: 'K', P: 'P', KR: 'RB', RUSHE: 'EDGE', RUSHI: 'DT', BIGN: 'SS' };
+  CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', K: 'K', P: 'P', KR: 'RB', PRET: 'RB', KO: 'SS', KRU: 'TEH', PU: 'SS', PRU: 'CB', RUSHE: 'EDGE', RUSHI: 'DT', BIGN: 'SS' };
 const baseKey = k => { const i = k.indexOf(':'); return i < 0 ? k : k.slice(i + 1); }; // 'NICKEL:MLB' -> 'MLB'
-const CHART_UNIT = k0 => { const k = baseKey(k0); return ['K', 'P', 'KR'].includes(k) ? 'st' : ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'RUSH', 'RUSHE', 'RUSHI', 'MLB', 'WLB', 'SAM', 'CB1', 'CB2', 'NCB', 'DIME', 'FS', 'SS', 'BIGN'].includes(k) ? 'def' : 'off'; };
+const CHART_UNIT = k0 => { const k = baseKey(k0); return ['K', 'P', 'KR', 'PRET', 'KO', 'KRU', 'PU', 'PRU'].includes(k) ? 'st' : ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'RUSH', 'RUSHE', 'RUSHI', 'MLB', 'WLB', 'SAM', 'CB1', 'CB2', 'NCB', 'DIME', 'FS', 'SS', 'BIGN'].includes(k) ? 'def' : 'off'; };
 // the QB the staff (or your chart) has under center
 function starterQB(g, s) {
   const p = chartFirst(g, s, 'QB') || (g.side[s].depth.QB[0] ? g.side[s].depth.QB[0].p : null);
@@ -274,9 +274,9 @@ function kickUnitPlayer(g, s, spot) {
   return { p: pick || (d.length ? d[0].p : g.side[s].roster[0]), slot: spot, name: spot, spot, grp: 'QB', x: 0, depth: 0, pen: 0, s };
 }
 // Return man: best open-field runner who isn't a key starter
-function returner(g, s) {
+function returner(g, s, punt) {
   const T_ = g.side[s];
-  const chosen = chartFirst(g, s, 'KR');
+  const chosen = (punt && chartFirst(g, s, 'PRET')) || chartFirst(g, s, 'KR');
   if (chosen) return { p: chosen, slot: 'KR', name: 'KR', spot: 'RB', grp: 'RB', x: 0, depth: 0, pen: 0, s };
   let best = null, bs = -1e9;
   for (const p of T_.roster) {
@@ -359,3 +359,5 @@ function depthView(tid) {
     k: kickUnitPlayer(g, 0, 'K'), p: kickUnitPlayer(g, 0, 'P'),
   };
 }
+// Newer modules are pulled in from here rather than listed in index.html, so a browser holding an older copy of that page still loads a complete game.
+if (typeof document !== 'undefined' && typeof ST_KEYS === 'undefined') document.write('<script src="js/engine/teams.js?v=' + Date.now() + '"></script>');

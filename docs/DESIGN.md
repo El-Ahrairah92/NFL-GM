@@ -484,3 +484,17 @@ Camp opens when rookie free agency ends. There are three practice weeks (camp op
 **The bubble.** The staff's 53 as it stands, room by room in each coach's order with the line drawn where he would stop: lock, likely, bubble, practice-squad candidate, long shot.
 
 **Staff meeting.** After every practice week each coach presents his room: his order, who had the best week, who he is pushing for and why, who he has cooled on. It is advisory. On cutdown day, any cut a coach would not make is listed with what he saw.
+
+## 27. Special teams
+
+**The skill.** Every offensive and defensive player has a Special Teams rating: taking on blocks at speed, staying in a lane, tackling in space. It is tied to position (linebackers, safeties and fullbacks run highest; quarterbacks and linemen lowest) and only loosely to how good a player is from scrimmage, so a fringe linebacker can be one of the best special teamers in the league. Older saves are given the rating on load.
+
+**The units.** Four units of ten: kickoff coverage, kick return, the punt team (the first two are gunners) and punt return (the first two hold up the gunners). They are drawn from the men who dress. The staff weighs what a man does on the unit against the risk of exposing a starter; on the Situational & Special Teams tab you can take control and set every unit, the kick returner and the punt returner yourself. An empty place on a unit is filled for that game only.
+
+**The plays.** Kickoffs are settled by the return unit's blocking against the coverage unit. Punts are settled three ways: gunners against the men holding them up (fair catches and balls downed deep), coverage against return blocking (return yards and long returns), and the rush against the protection (blocks). An average matchup changes nothing; league averages are unchanged.
+
+**What it costs and pays.** Every special teams snap tires the men on it and carries a small injury risk, which is the price of using starters. Players are credited with special teams snaps and tackles and carry a special teams grade. A gap of 15 points of skill on every player in both directions is worth about two points a game; a realistic good-versus-bad gap is about one.
+
+**Roster spots.** Core special teamers dress on game day ahead of slightly better players who do not help there, and other clubs value them at cutdown and on waivers. In camp the special teams coordinator objects if you cut one of his best coverage men, and the planner's Specialists room starts with the kickoff and punt units.
+
+**Roster planner (replaces the camp page).** The planner tab opens when the season ends and stays through the coaching search, re-signing, free agency, the draft, rookie free agency, camp and cutdown day. Before camp opens the practice and exhibition columns are empty and each row shows last season instead (grade, snaps, starts, stat line) along with the player's contract. Groups you build carry through the whole offseason and are reset to the staff's chart when the next one begins.

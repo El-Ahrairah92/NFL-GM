@@ -56,6 +56,7 @@ function newLeague(userTid) {
 const SAVE_VERSION = 3;
 // bring older saves up to date
 function migrateState(st) {
+  if (typeof ensureST === 'function') for (const id in st.players) ensureST(st.players[id]); // older leagues: everyone gets a special teams skill
   state = st;
   if (!st.prePlan) st.prePlan = { starters: 'auto', feat: {}, hold: {} }; // saves from before the preseason plan
   if (!st.devV) { // saves from before earned growth: everyone gets his own decline, and the young have more on offer than they will keep

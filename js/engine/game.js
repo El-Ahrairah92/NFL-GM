@@ -563,13 +563,16 @@ function fieldGoal(g) {
 function punt(g) {
   const o = g.poss, d = 1 - o, Pn = kickUnitPlayer(g, o, 'P');
   const pdis = ea(g, Pn, 'pdis'), phng = ea(g, Pn, 'phng'), pplc = ea(g, Pn, 'pplc'), pspn = ea(g, Pn, 'pspn');
-  const ret = returner(g, d), cover = coverUnitScore(g, o);
+  const ret = returner(g, d, true), PU = stUnits(g, o).PU, PRU = stUnits(g, d).PRU;
+  // the men on the field: coverage against the return's blockers, gunners against the men holding them up, the rush against the protection
+  const mCov = stAvg(PRU, stBlock) - stAvg(PU, stCover) - ST0.pu, mGun = stAvg(PU.slice(0, 2), stGun) - stAvg(PRU.slice(0, 2), stJam) - ST0.gun, mRush = stAvg(PRU.slice(2), stRush) - stAvg(PU.slice(2), stBlock) - ST0.rush;
+  stSnap(g, [PU, PRU]);
   let gross = Math.round(gauss(46.8 + (pdis - 70) * 0.28, 5.5));
   const hang = 4.25 + (phng - 70) * 0.032 + gauss(0, 0.25);
   inc(g, Pn.p, 'pnt'); g.ts[o].punts++;
   if (g.drive) g.drive.plays++;
   runClock(g, 9); g.running = false;
-  if (rand() < 0.003) { pbpLog(g, `${pshort(Pn.p)} punt BLOCKED`); changePoss(g, clamp(100 - g.ydl + randInt(-5, 5), 1, 99), 'Blocked Punt'); return; }
+  if (rand() < clamp(0.003 * Math.exp(mRush / ST_K.rush), 0.0005, 0.014)) { stShare(g, PRU.slice(2), 12); stShare(g, PU.slice(2), -12); pbpLog(g, `${pshort(Pn.p)} punt BLOCKED`); changePoss(g, clamp(100 - g.ydl + randInt(-5, 5), 1, 99), 'Blocked Punt'); return; }
   let land = g.ydl + gross, recv, text;
   // plus-territory punts: directional/coffin-corner aim inside the 10
   if (g.ydl >= 52 && rand() < lgt((pplc - 58) * 0.06)) {
@@ -579,9 +582,9 @@ function punt(g) {
     // backspin can save it at the goal line
     if (rand() < clamp((pspn - 55) * 0.012, 0, 0.45)) { land = randInt(95, 99); gross = land - g.ydl; recv = 100 - land; text = 'downed'; }
     else { gross = 100 - g.ydl; recv = 20; text = 'touchback'; inc(g, Pn.p, 'ptb'); }
-  } else if (land >= 88) { recv = 100 - land; text = rand() < 0.5 ? 'downed' : 'fair catch'; }
+  } else if (land >= 88) { recv = 100 - land; text = rand() < clamp(0.5 + mGun * 0.02, 0.2, 0.85) ? 'downed' : 'fair catch'; }
   else {
-    const fair = clamp(0.42 + (hang - 4.25) * 0.5 + (cover - 60) * 0.008 + (pspn - 60) * 0.009, 0.15, 0.85); // a ball that turns over is hard to field cleanly
+    const fair = clamp(0.42 + (hang - 4.25) * 0.5 + mGun * ST_K.gun + (pspn - 60) * 0.009, 0.15, 0.85); // a ball that turns over is hard to field cleanly
     if (rand() < 0.0075 * (1 + (pspn - 60) / 60) * (1 + (60 - ea(g, ret, 'hnd')) / 60)) {
       // muffed punt
       pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds — MUFFED by ${pshort(ret.p)}`);
@@ -590,8 +593,10 @@ function punt(g) {
     if (rand() < fair) { recv = 100 - land; text = 'fair catch'; }
     else {
       const rc = ea(g, ret, 'elu') * 0.35 + ea(g, ret, 'vis') * 0.25 + ea(g, ret, 'spd') * 0.25 + ea(g, ret, 'bur') * 0.15;
-      let r = Math.round(expRand(Math.max(2, 7.5 + (rc - cover - 18) * 0.08 + g.cx[d].st * 0.025)) * clamp(1.2 - (hang - 4.25) * 0.75, 0.5, 1.8));
-      if (rand() < 0.004) r = land; // to the house
+      const expR = 7.5 + (rc - 78) * 0.08 + g.cx[d].st * 0.025;
+      let r = Math.round(expRand(Math.max(2, expR + mCov * ST_K.pu)) * clamp(1.2 - (hang - 4.25) * 0.75, 0.5, 1.8));
+      if (rand() < 0.004 * Math.exp(clamp(mCov, -12, 12) / 6)) r = land; // to the house
+      stShare(g, PU, clamp(expR - r, -15, 8)); stShare(g, PRU, clamp(r - expR, -8, 15)); if (r < land) stTackle(g, PU);
       inc(g, ret.p, 'prA'); inc(g, ret.p, 'prY', r);
       recv = 100 - land + r; text = `returned ${r} yds by ${pshort(ret.p)}`;
       if (recv >= 100) { pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds — ${pshort(ret.p)} RETURNS IT FOR A TOUCHDOWN`); endDrive(g, 'Punt'); g.drive = null; g.poss = d; touchdown(g, d, `${pshort(ret.p)} ${land} yd punt return`); return; }
@@ -605,18 +610,21 @@ function punt(g) {
 function kickoff(g, kickSide, safetyKick) {
   if (g.over) return;
   const recv = 1 - kickSide, K = kickUnitPlayer(g, kickSide, 'K');
-  const ret = returner(g, recv), cover = coverUnitScore(g, kickSide);
+  const ret = returner(g, recv), KO = stUnits(g, kickSide).KO, KRU = stUnits(g, recv).KRU, mKo = stAvg(KRU, stBlock) - stAvg(KO, stCover) - ST0.ko;
   let start;
   const tbP = safetyKick ? 0 : clamp(0.18 + (ea(g, K, 'krng') - 70) * 0.008 + (ea(g, K, 'ktrj') - 70) * 0.003, 0.05, 0.6);
   if (rand() < tbP) { start = 35; pbpLog(g, `${pshort(K.p)} kicks off — touchback`, false); }
   else {
     const rc = ea(g, ret, 'elu') * 0.3 + ea(g, ret, 'vis') * 0.25 + ea(g, ret, 'spd') * 0.3 + ea(g, ret, 'bur') * 0.15;
-    start = Math.round(gauss((safetyKick ? 38 : 27) + (rc - cover) * 0.12 + g.cx[recv].st * 0.025 - (ea(g, K, 'ktrj') - 70) * 0.04, 6.5));
-    if (rand() < 0.012) start += randInt(20, 45);
+    const expS = (safetyKick ? 38 : 27) + (rc - 62) * 0.12 + g.cx[recv].st * 0.025 - (ea(g, K, 'ktrj') - 70) * 0.04;
+    stSnap(g, [KO, KRU]);
+    start = Math.round(gauss(expS + mKo * ST_K.ko, 6.5));
+    if (rand() < 0.012 * Math.exp(clamp(mKo, -12, 12) / 7)) start += randInt(20, 45);
+    stShare(g, KO, clamp(expS - start, -15, 8)); stShare(g, KRU, clamp(start - expS, -8, 15)); if (start < 95) stTackle(g, KO);
     start = clamp(start, 5, 99);
     const r = start - (safetyKick ? 20 : 0);
     inc(g, ret.p, 'krA'); inc(g, ret.p, 'krY', Math.max(0, start));
-    if (!safetyKick && rand() < 0.0035) {
+    if (!safetyKick && rand() < 0.0035 * Math.exp(clamp(mKo, -12, 12) / 6)) {
       startPossession(g, recv, 100); if (g.over) return;
       endDrive(g, 'Kick Return TD');
       pbpLog(g, `${pshort(ret.p)} returns the kickoff for a TOUCHDOWN`, false);

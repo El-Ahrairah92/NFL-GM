@@ -17,9 +17,10 @@ const CHART_SECTIONS = [
   ] },
   { unit: 'off', title: 'Offensive packages', pkg: true, rows: [['RB3D', 'Passing-down back (3rd & long, 2-minute)'], ['RBSY', 'Short-yardage / goal-line back']] },
   { unit: 'def', title: 'Defensive packages', pkg: true, rows: [['RUSHE', 'Rush specialists · edge (passing downs)'], ['RUSHI', 'Rush specialists · interior (passing downs)'], ['BIGN', 'Big nickel safety (third safety in the slot)']] },
-  { unit: 'st', title: 'Special teams', rows: [['K', 'Kicker'], ['P', 'Punter'], ['KR', 'Returner']] },
+  { unit: 'st', title: 'Special teams', rows: [['K', 'Kicker'], ['P', 'Punter'], ['KR', 'Kick returner'], ['PRET', 'Punt returner']] },
+  { unit: 'st', title: 'Special teams units', pkg: true, rows: [['KO', 'Kickoff coverage'], ['KRU', 'Kick return blockers'], ['PU', 'Punt team (first two are the gunners)'], ['PRU', 'Punt return (first two hold up the gunners)']] },
 ];
-const CHART_DEPTH = { RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, K: 1, P: 1, KR: 2 };
+const CHART_DEPTH = { RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, K: 1, P: 1, KR: 2, PRET: 2, KO: 10, KRU: 10, PU: 10, PRU: 10 };
 const ROT_KEYS = new Set(['RB', 'X', 'Z', 'SLOT', 'Y', 'H', 'EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'MLB', 'WLB', 'CB1', 'CB2', 'NCB', 'FS', 'SS']);
 // How much of a spot's work goes to the next man up: [least, usual, most]. Your setting moves inside the band and no further:
 // nobody plays every snap on a defensive line, no back carries a whole offense, and a starting corner does not sit a third of the game.
@@ -45,7 +46,9 @@ function defaultChart(tid) {
     const spot = chartSpotFor(tid, key), n = CHART_DEPTH[key] || 3;
     // the staff keeps players in their own rooms, the way it does when it runs the unit itself: a safety is not a linebacker because he grades out close
     const away = p => p.spot === 'FB' && spot !== 'FB' ? 14 : SPOTS[spot].g === p.pos ? 0 : (p.pos === 'CB' || p.pos === 'S') && (SPOTS[spot].g === 'CB' || SPOTS[spot].g === 'S') ? 2 : 8;
-    const ranked = ro.filter(p => SPOTS[p.spot].side === SPOTS[spot].side || key === 'KR').map(p => [p, key === 'KR' ? returnScore(p) : slotRating(p, spot) - away(p)])
+    if (ST_UNIT[key]) { lists[key] = stStaffUnit(ro.filter(p => !p.injury), key, stStarters(ro)).map(p => p.id); continue; } // the staff's ten: the job each man does, less the risk to a starter
+    const isRet = key === 'KR' || key === 'PRET';
+    const ranked = ro.filter(p => SPOTS[p.spot].side === SPOTS[spot].side || isRet).map(p => [p, isRet ? returnScore(p) : slotRating(p, spot) - away(p)])
       .sort((a, b) => b[1] - a[1]).map(x => x[0]);
     if (!ranked.length) { lists[key] = []; continue; }
     // starters are unique within a unit (packages may reuse anyone)
@@ -57,7 +60,7 @@ function defaultChart(tid) {
 }
 function returnScore(p) { if (!['RB', 'WRX', 'WRZ', 'SLOT', 'CB', 'NCB', 'FS', 'SS'].includes(p.spot)) return -1e9; return p.a.spd * 0.3 + p.a.bur * 0.2 + (p.a.elu || 30) * 0.25 + (p.a.vis || 30) * 0.15 + (p.a.bsec || 50) * 0.1 - (p.ovr >= 80 ? 6 : 0); }
 // display names (chart keys stay stable for saves)
-const CHART_NAME = { NCB: 'SLOT CB', DIME: 'SLOT CB2', RUSHE: 'EDGE RUSH', RUSHI: 'INT RUSH', IDL1: 'DT', IDL2: 'DT', EDGE1: 'EDGE', EDGE2: 'EDGE', CB1: 'CB', CB2: 'CB', RB3D: '3RD-DOWN RB', RBSY: 'SHORT-YD RB', OL6: '6TH OL', SLOT2: 'WR4', Y2: 'TE3' };
+const CHART_NAME = { NCB: 'SLOT CB', DIME: 'SLOT CB2', RUSHE: 'EDGE RUSH', RUSHI: 'INT RUSH', IDL1: 'DT', IDL2: 'DT', EDGE1: 'EDGE', EDGE2: 'EDGE', CB1: 'CB', CB2: 'CB', RB3D: '3RD-DOWN RB', RBSY: 'SHORT-YD RB', KR: 'KR', PRET: 'PR', KO: 'KO COVER', KRU: 'KO RETURN', PU: 'PUNT', PRU: 'PUNT RET', OL6: '6TH OL', SLOT2: 'WR4', Y2: 'TE3' };
 const chartName = k => CHART_NAME[baseKey(k)] || baseKey(k);
 // ---- the chart follows the scheme: which position a slot really is depends on the front you run ----
 function teamFront(tid) { const t = T(tid); return t && typeof defTend === 'function' ? defTend(t).front : '4-3'; }

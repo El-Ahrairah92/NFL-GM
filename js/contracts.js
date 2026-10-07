@@ -346,7 +346,7 @@ function gameDayActives(tid) {
   const counts = {}; ro.forEach(p => counts[p.pos] = (counts[p.pos] || 0) + 1);
   const out = new Set();
   // coaches know who helps on Sunday: the least valuable surplus bodies sit (often QB3, extra linemen, raw rookies)
-  for (const p of ro.slice().sort((a, b) => a.ovr - b.ovr)) {
+  for (const p of ro.slice().sort((a, b) => a.ovr + stRosterValue(a) * 1.5 - b.ovr - stRosterValue(b) * 1.5)) { // a core special teamer dresses ahead of a slightly better body who does not help there
     if (ro.length - out.size <= GAMEDAY_ACTIVE) break;
     if (counts[p.pos] > (GAMEDAY_MIN[p.pos] || 1)) { out.add(p.id); counts[p.pos]--; }
   }

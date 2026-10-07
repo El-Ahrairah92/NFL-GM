@@ -267,3 +267,5 @@ function applyCutPlan() {
   for (const id in plan) { const p = P(+id); if ((plan[id] === 'cut' || plan[id] === 'ps') && p && p.tid === state.userTid) releasePlayer(p.id); }
   state.cut = null;
 }
+// Newer modules are pulled in from here rather than listed in index.html, so a browser holding an older copy of that page still loads a complete game.
+if (typeof document !== 'undefined' && typeof CAMP_BLOCKS === 'undefined') document.write('<script src="js/camp.js?v=' + Date.now() + '"></script>');
