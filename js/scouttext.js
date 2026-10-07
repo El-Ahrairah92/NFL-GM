@@ -5,6 +5,8 @@
 //  TRAITS[attr] = { p: [mild, solid, elite], n: [mild, bad, awful] } — each a list of variants.
 // =====================================================================
 const TRAITS = {
+  st: { p: [['Contributes on special teams', 'Can cover kicks', 'Useful in the kicking game'], ['Core special teamer', 'Plays on every coverage unit', 'Runs down kicks with bad intentions', 'Four-phase special teams player'], ['Special teams ace', 'One of the best coverage players in the league', 'Makes his living on special teams', 'First man down the field on every kick']],
+    n: [['Limited special teams value', 'Not much help in the kicking game'], ['Does not help on special teams', 'Not a factor on coverage units', 'Has never been a special teams player'], ['A liability on coverage units', 'Offers nothing on special teams']] },
   spd: { p: [['Good long speed', 'Runs well for the position', 'Enough speed to threaten a defense'], ['Plus speed', 'Pulls away in the open field', 'Legit vertical speed'], ['Rare long speed', 'Track speed', 'One of the fastest players on the field', 'Blazing top gear']],
     n: [['A step slow', 'Average speed at best', 'Builds speed slowly', 'Not a burner'], ['Lacks top-end speed', 'Gets caught from behind', 'Plays at one speed', 'Speed is a real limitation'], ['Painfully slow', 'Runs like he is in sand', 'No long speed to speak of', 'Cannot threaten anyone vertically']] },
   bur: { p: [['Gets going quickly', 'Decent short-area burst', 'Good initial quickness'], ['Explosive first step', 'Sudden mover', 'Hits top speed in a hurry'], ['Shot out of a cannon', 'Rare get-off', 'Explodes off the snap', 'Elite short-area burst']],
@@ -78,7 +80,7 @@ const TRAITS = {
   pspn: { p: [['Controls the bounce'], ['Kills it dead'], ['Master of the backspin']], n: [['Bounces are unpredictable'], ['Touchback-prone'], ['Touchback machine']] },
 };
 // noun for "X is the best part of his game"
-const TRAIT_NOUN = { spd: 'long speed', bur: 'burst', agi: 'lateral quickness', str: 'play strength', siz: 'size', sacc: 'short accuracy', dacc: 'deep ball', arm: 'arm strength', proc: 'processing',
+const TRAIT_NOUN = { st: 'special teams work', spd: 'long speed', bur: 'burst', agi: 'lateral quickness', str: 'play strength', siz: 'size', sacc: 'short accuracy', dacc: 'deep ball', arm: 'arm strength', proc: 'processing',
   dec: 'decision-making', pkt: 'pocket presence', tor: 'ability to throw on the move', vis: 'vision', elu: 'elusiveness', bal: 'contact balance', bsec: 'ball security', rte: 'route running',
   rel: 'release', hnd: 'hands', cth: 'contested-catch ability', pbk: 'pass protection', rbk: 'run blocking', bawr: 'assignment awareness', prsh: 'pass rush', shed: 'block shedding',
   tkl: 'tackling', strp: 'knack for forcing fumbles', prec: 'instincts', man: 'man coverage', zone: 'zone coverage', prs: 'press technique', bsk: 'ball skills',
@@ -87,16 +89,16 @@ const TRAIT_NOUN = { spd: 'long speed', bur: 'burst', agi: 'lateral quickness', 
 // which traits a scout weighs at each position group (wider than the value weights: roles live in the secondary skills)
 const PROFILE_ATTRS = {
   QB: ['sacc', 'dacc', 'arm', 'proc', 'dec', 'pkt', 'tor', 'spd', 'elu'],
-  RB: ['vis', 'elu', 'bal', 'bsec', 'spd', 'bur', 'str', 'hnd', 'rte', 'pbk'],
-  FB: ['rbk', 'pbk', 'bawr', 'str', 'hnd', 'bal', 'vis'],
-  WR: ['rte', 'rel', 'hnd', 'cth', 'spd', 'bur', 'agi', 'elu', 'siz', 'rbk'],
-  TE: ['rte', 'hnd', 'cth', 'spd', 'rbk', 'pbk', 'bawr', 'str', 'elu', 'siz'],
+  RB: ['vis', 'elu', 'bal', 'bsec', 'spd', 'bur', 'str', 'hnd', 'rte', 'pbk', 'st'],
+  FB: ['rbk', 'pbk', 'bawr', 'str', 'hnd', 'bal', 'vis', 'st'],
+  WR: ['rte', 'rel', 'hnd', 'cth', 'spd', 'bur', 'agi', 'elu', 'siz', 'rbk', 'st'],
+  TE: ['rte', 'hnd', 'cth', 'spd', 'rbk', 'pbk', 'bawr', 'str', 'elu', 'siz', 'st'],
   OL: ['pbk', 'rbk', 'bawr', 'agi', 'str', 'siz'],
   IDL: ['prsh', 'shed', 'tkl', 'prec', 'bur', 'str', 'siz'],
-  EDGE: ['prsh', 'shed', 'tkl', 'prec', 'bur', 'spd', 'agi', 'str'],
-  LB: ['tkl', 'shed', 'prec', 'zone', 'man', 'prsh', 'spd', 'str'],
-  CB: ['man', 'zone', 'prs', 'bsk', 'prec', 'tkl', 'spd', 'agi', 'siz'],
-  S: ['zone', 'man', 'bsk', 'prec', 'tkl', 'shed', 'spd', 'str'],
+  EDGE: ['prsh', 'shed', 'tkl', 'prec', 'bur', 'spd', 'agi', 'str', 'st'],
+  LB: ['tkl', 'shed', 'prec', 'zone', 'man', 'prsh', 'spd', 'str', 'st'],
+  CB: ['man', 'zone', 'prs', 'bsk', 'prec', 'tkl', 'spd', 'agi', 'siz', 'st'],
+  S: ['zone', 'man', 'bsk', 'prec', 'tkl', 'shed', 'spd', 'str', 'st'],
   K: ['kcon', 'krng', 'kfal', 'ktrj'], P: ['pdis', 'pplc', 'phng', 'pspn'],
 };
 const PROFILE_GROUP = { QB: 'QB', RB: 'RB', FB: 'FB', WRX: 'WR', WRZ: 'WR', SLOT: 'WR', TEY: 'TE', TEH: 'TE', LT: 'OL', LG: 'OL', C: 'OL', RG: 'OL', RT: 'OL',
@@ -166,13 +168,28 @@ const ROLE_GUARD = [
 ];
 function bodyZ(p) { const b = SPOTS[p.spot] && SPOTS[p.spot].body; return b && p.m ? { h: (p.m.ht - b[0]) / b[1], w: (p.m.wt - b[2]) / b[3] } : { h: 0, w: 0 }; }
 function roleFits(p, phrase) { for (const [re, ok] of ROLE_GUARD) if (re.test(phrase) && !ok(p)) return false; return true; }
+const ROLE_IMPLIES = [[/press/i, ['prs']], [/slot|shifty|quick-footed|mirror|sudden|light-footed|athletic|pulling|reach/i, ['agi']], [/burner|speed|vertical|stretcher|home-run|rangy|sideline|breakaway|big-play|seam-stretch|chase-down|run-and-chase|space linebacker|dual-threat|running quarterback|designed-run/i, ['spd']],
+  [/power|bull|mauler|thumper|hammer|brawler|anchor|grader|plodder|battering|plugger|space-eat|enforcer|physical|heavy/i, ['str']], [/tackl|thumper|enforcer|box |run-support|downhill|last-line/i, ['tkl']],
+  [/sure-handed|reliable|possession|pass-catching|receiving back|safety-valve|chain-mov|third-down back|satellite|mismatch/i, ['hnd']], [/contested|jump-ball|red-zone|traffic|over-the-middle/i, ['cth']], [/route|separator|technician|option-route|move tight end|big slot/i, ['rte']],
+  [/ballhawk|turnover|takeaway|playmaker/i, ['bsk']], [/instinct|smart|cerebral|green-dot|quarterback of the defense|assignment|communicat|steady|line-calling|point-guard|pre-snap/i, ['prec', 'bawr', 'proc']],
+  [/man-coverage|cover man|cover corner|matchup|eraser|travel|sticky|coverage linebacker|nickel|slot corner|slot cover/i, ['man']], [/zone|center-field|deep-middle|single-high|split-field|off-coverage/i, ['zone']],
+  [/pass rusher|edge rusher|rusher|penetrat|gap shooter|pocket-|blitz|pressure|inside-rushing/i, ['prsh']], [/first-step|speed rusher|quick-twitch|bend|explosive|slasher|change-of-pace|sudden|quick-footed|quick first step|burst/i, ['bur']],
+  [/run stuffer|two-gap|block-eating|stack-and-shed|edge-set|take-on|run stopper|block-destroy|hybrid/i, ['shed']], [/pass-protect|protector|pass-pro|blitz-pickup|protection|pocket anchor|max-protect/i, ['pbk']], [/run-game|road grader|drive blocker|lead-block|blocking|in-line|sixth lineman|sealed|point-of-attack|zone blocker|iso-lead/i, ['rbk']],
+  [/scrambler|escape|off-script|creator/i, ['elu']], [/pocket|poised/i, ['pkt']], [/game manager|caretaker|low-risk/i, ['dec']], [/big-armed|arm-talent|power thrower/i, ['arm']], [/vertical passer|downfield|shot-play/i, ['dacc']], [/rhythm|timing|ball-control|distributor/i, ['sacc']],
+  [/movement passer|bootleg|off-script/i, ['tor']], [/tackle-breaking|yards-after-contact|contact|grinder|banger/i, ['bal']], [/ball-security|trustworthy|clock-killer/i, ['bsec']], [/patient|one-cut|between-the-tackles|tailback instincts/i, ['vis']],
+  [/shifty|make-you-miss|jitterbug|scatback|run-after-catch|catch-and-run|gadget|space back/i, ['elu']], [/release|press-beating/i, ['rel']], [/special team|coverage-unit|kick/i, ['st', 'tkl', 'bur']], [/instincts|sees the field|assignments/i, ['prec', 'bawr', 'proc']], [/can run|real speed/i, ['spd', 'bur']], [/quick feet|changes direction/i, ['agi']], [/real power|plays strong/i, ['str']], [/big|long|wide-bodied|massive|oversized|size/i, ['siz']]];
+function roleImplied(phrase) { const out = new Set(); for (const [re, ks] of ROLE_IMPLIES) if (re.test(phrase)) ks.forEach(k => out.add(k)); return out; }
+// a starter is not described by his special teams work, and a backup who brings none has a real hole
+function stCounts(p) { return !['Elite', 'All-Pro', 'Starter'].includes(tierOf(p)); }
+const ST_ROLES = ['special teams ace', 'core special teamer', 'coverage-unit regular', 'four-phase special teamer'];
 function rolesFor(p) {
   const out = {}, base = Object.assign({}, ROLES[PROFILE_GROUP[p.spot]], ROLES_SPOT[p.spot]);
   for (const k in base) { const l = base[k].filter(x => roleFits(p, x)); if (l.length) out[k] = l; }
+  if (stCounts(p) && p.a && p.a.st !== undefined && typeof ST_OK !== 'undefined' && ST_OK.has(p.spot)) out.st = ST_ROLES;
   return out;
 }
 // "…with ___" add-ons for a second calling card
-const MODS = { spd: ['with real speed', 'who can run'], bur: ['with a quick first step', 'with good burst'], agi: ['with quick feet', 'who changes direction well'], str: ['with real power', 'who plays strong'], siz: ['with good size'],
+const MODS = { st: ['who is a core special teamer', 'who covers kicks', 'who earns his keep on special teams'], spd: ['with real speed', 'who can run'], bur: ['with a quick first step', 'with good burst'], agi: ['with quick feet', 'who changes direction well'], str: ['with real power', 'who plays strong'], siz: ['with good size'],
   sacc: ['who is accurate underneath'], dacc: ['who can hit the deep ball'], arm: ['with a live arm'], proc: ['who sees the field well'], dec: ['who protects the football'], pkt: ['who stays calm in the pocket'], tor: ['who can throw on the move'],
   vis: ['with good vision', 'who finds the crease'], elu: ['with some wiggle', 'who can make a man miss'], bal: ['who runs through contact', 'with good contact balance'], bsec: ['who holds onto the ball'], rte: ['who runs good routes', 'with route polish'],
   rel: ['who beats press'], hnd: ['with reliable hands', 'who catches the ball well'], cth: ['who wins in traffic'], pbk: ['who holds up in pass protection', 'you can trust in pass pro'], rbk: ['who helps in the run game', 'who blocks'],
@@ -180,11 +197,11 @@ const MODS = { spd: ['with real speed', 'who can run'], bur: ['with a quick firs
   man: ['who can cover man-to-man'], zone: ['with good zone instincts'], prs: ['who can press'], bsk: ['with ball skills', 'who gets his hands on the ball'], kcon: ['who is steady'], krng: ['with a strong leg'], kfal: ['who holds up from distance'], ktrj: ['with a clean stroke'],
   pdis: ['with a big leg'], pplc: ['with good placement'], phng: ['with good hang time'], pspn: ['with touch'] };
 // "…who ___" caveats: [mild, bad, awful]
-const CAVEATS = { spd: [['without real long speed', 'who is not a burner'], ['who lacks top-end speed', 'who gets caught from behind'], ['with no speed to speak of']], bur: [['who is not sudden'], ['who is slow to accelerate', 'without a second gear'], ['who is heavy-footed']],
+const CAVEATS = { st: [['who adds little on special teams'], ['who does not help on special teams'], ['who offers nothing on special teams']], spd: [['without real long speed', 'who is not a burner'], ['who lacks top-end speed', 'who gets caught from behind'], ['with no speed to speak of']], bur: [['who is not sudden'], ['who is slow to accelerate', 'without a second gear'], ['who is heavy-footed']],
   agi: [['who is a little stiff'], ['with stiff hips', 'who struggles to change direction'], ['who cannot redirect']], str: [['who could be stronger'], ['who gets pushed around', 'who lacks play strength'], ['who is badly underpowered']], siz: [['who is a bit undersized'], ['who is undersized'], ['who is tiny for the position']],
   sacc: [['whose ball placement wanders'], ['who sprays the ball underneath'], ['who misses the easy ones']], dacc: [['whose deep ball comes and goes'], ['with an erratic deep ball'], ['who cannot connect downfield']], arm: [['with an average arm'], ['with a limited arm'], ['with a noodle arm']],
   proc: [['who is a beat slow through his reads'], ['who is slow through progressions'], ['who cannot read a defense']], dec: [['who will force a throw'], ['who forces too many throws', 'who is turnover-prone'], ['who is reckless with the ball']], pkt: [['who gets antsy in the pocket'], ['who panics under pressure'], ['who melts against the rush']],
-  tor: [['who is better from a set base'], ['who struggles outside the pocket'], ['who cannot throw on the move']], vis: [['who leaves yards on the field'], ['who misses running lanes'], ['with no feel for the blocking']], elu: [['without much wiggle'], ['who will not make anyone miss'], ['who goes down to the first man every time']],
+  tor: [['who is better from a set base'], ['who struggles outside the pocket'], ['who cannot throw on the move']], vis: [['who leaves yards on the field'], ['who misses running lanes'], ['with no feel for running lanes']], elu: [['with little wiggle'], ['who will not make anyone miss'], ['who goes down to the first man every time']],
   bal: [['who goes down on solid contact'], ['who goes down on first contact'], ['who folds at the first hit']], bsec: [['who carries it loose at times'], ['with fumble issues'], ['who cannot be trusted with the ball']], rte: [['whose routes need polish'], ['who is a raw route runner'], ['who cannot separate']],
   rel: [['who can get hung up at the line'], ['who struggles against press'], ['who is erased by press coverage']], hnd: [['who drops the occasional easy one'], ['with inconsistent hands', 'who fights the ball'], ['with hands of stone']], cth: [['who is average in traffic'], ['who loses contested catches'], ['who needs to be wide open']],
   pbk: [['who can be beaten in pass protection'], ['who struggles in pass pro', 'who is leaky in protection'], ['who is a liability in pass protection']], rbk: [['who gets stalemated as a run blocker'], ['who does not move anyone in the run game'], ['who is a liability as a run blocker']],
@@ -250,8 +267,8 @@ function traitClass(p) { return TRAIT_CLASS[PROFILE_GROUP[p.spot]] || null; }
 function traitBank(p, k) { const c = TRAITS_BY[traitClass(p)]; return (c && c[k]) || TRAITS[k]; }
 const CAVEATS_BY = {
   OL: { spd: [['who is not much of an athlete in space'], ['who lumbers in the open field', 'with limited range'], ['with no foot speed to speak of']], bur: [['who is not sudden'], ['who is slow out of his stance'], ['who is heavy-footed']] },
-  DL: { spd: [['without much range', 'who is not a burner'], ['who lacks closing speed', 'who is no factor in pursuit'], ['with no speed to speak of']], bur: [['who is not sudden'], ['who is slow off the snap', 'without a first step'], ['who is heavy-footed']] },
-  LB: { spd: [['without great range', 'who is not a burner'], ['with limited range', 'who gets outrun to the edge'], ['with no speed to speak of']] },
+  DL: { spd: [['with limited range', 'who is not a burner'], ['who lacks closing speed', 'who is no factor in pursuit'], ['with no speed to speak of']], bur: [['who is not sudden'], ['who is slow off the snap', 'without a first step'], ['who is heavy-footed']] },
+  LB: { spd: [['with limited range', 'who is not a burner'], ['with limited range', 'who gets outrun to the edge'], ['with no speed to speak of']] },
   DB: { spd: [['without real long speed', 'who is not a burner'], ['who lacks top-end speed', 'who can be run past'], ['with no speed to speak of']] },
 };
 function caveatBank(p, k) { const c = CAVEATS_BY[traitClass(p)]; return (c && c[k]) || CAVEATS[k]; }
@@ -261,8 +278,8 @@ function scoutRead(p) {
   const grp = PROFILE_GROUP[p.spot], keys = PROFILE_ATTRS[grp] || [], t = TEMPLATE_A[p.spot] || {}, w = SPOTS[p.spot].w || {};
   const fog = p.per ? 1 - p.per.conf : 0.3, grow = p.age <= 25 && p.per ? p.per.g * 0.7 : 0;
   const rows = keys.map(k => {
-    const base = t[k] !== undefined ? t[k] : 45; // skills a starter at this spot isn't asked for: judged against a modest bar
-    const seen = (k === 'siz' ? p.a.siz : p.a[k]) + (k === 'siz' ? 0 : grow) + hashGauss(p.id, k.charCodeAt(0) * 31 + k.charCodeAt(1), 3) * 7 * fog;
+    const base = k === 'st' ? (typeof ST_BASE !== 'undefined' && ST_BASE[p.spot] !== undefined ? ST_BASE[p.spot] : 50) : t[k] !== undefined ? t[k] : 45; // skills a starter at this spot isn't asked for: judged against a modest bar
+    const seen = (k === 'siz' ? p.a.siz : p.a[k] === undefined ? base : p.a[k]) + (k === 'siz' ? 0 : grow) + hashGauss(p.id, k.charCodeAt(0) * 31 + k.charCodeAt(1), 3) * 7 * fog;
     return { k, d: seen - base, core: w[k] !== undefined };
   });
   const mean = rows.reduce((s, r) => s + r.d, 0) / Math.max(1, rows.length);
@@ -280,9 +297,9 @@ function scoutTraits(p) {
   // so a depth player's report shows what's REALLY wrong with him instead of "bad at everything"
   const { mean } = scoutRead(p);
   const adj = r => r.d - Math.min(0, mean) * 0.55;
-  const weak = rows.filter(r => adj(r) <= -5.5).sort((a, b) => adj(a) - adj(b)).map(r => { const bank = traitBank(p, r.k); if (!bank) return null; const t = tierN(adj(r)); return t < 0 ? null : pickStable(bank.n[t], p, r.k.charCodeAt(0) * 7 + r.k.charCodeAt(1)); }).filter(Boolean).slice(0, 4);
+  const weak = rows.filter(r => adj(r) <= -5.5 && (r.k !== 'st' || stCounts(p))).sort((a, b) => adj(a) - adj(b)).map(r => { const bank = traitBank(p, r.k); if (!bank) return null; const t = tierN(adj(r)); return t < 0 ? null : pickStable(bank.n[t], p, r.k.charCodeAt(0) * 7 + r.k.charCodeAt(1)); }).filter(Boolean).slice(0, 4);
   // relative strengths: even a bargain-bin player does something better than the rest of his game
-  const best = rows.filter(r => r.rel >= 4 && TRAIT_NOUN[r.k]).sort((a, b) => b.rel - a.rel).slice(0, 2)
+  const best = rows.filter(r => r.rel >= 4 && TRAIT_NOUN[r.k] && (r.k !== 'st' || stCounts(p))).sort((a, b) => b.rel - a.rel).slice(0, 2)
     .map((r, i) => { const n = TRAIT_NOUN[r.k], pl = /s$/.test(n) && !/ness$|speed$/.test(n); return i === 0 ? `His ${n} ${pl ? 'are' : 'is'} the best part of his game` : `${n[0].toUpperCase() + n.slice(1)} ${pl ? 'stand' : 'stands'} out relative to the rest of his skill set`; });
   return { str, weak, best };
 }
@@ -296,21 +313,26 @@ function scoutProfile(p, short) {
   const { grp, rows } = scoutRead(p);
   const roles = rolesFor(p);
   // his calling card: core traits for the position get priority over side skills
-  const lw = r => r.rel * (r.core ? 1 : 0.55);
+  const bench = stCounts(p);
+  const lw = r => r.k === 'st' ? (bench && r.d >= 9 && typeof stCover === 'function' && stCover(p) >= 68 ? r.rel * 0.85 : -99) : r.rel * (r.core ? 1 : 0.55); // only a real special teamer is introduced as one
   const ranked = rows.slice().sort((a, b) => lw(b) - lw(a));
   const lead = ranked.find(r => roles[r.k] && (r.k !== 'siz' || r.d >= 2)); // size is only a calling card if he really is big for the job
   if (!lead) return '';
   const role = pickStable(roles[lead.k], p, 101);
-  const second = ranked.find(r => r !== lead && r.rel >= 3 && MODS[r.k] && r.d > -9);
-  const worst = rows.slice().sort((a, b) => a.rel - b.rel).find(r => r !== lead && r !== second && r.rel <= -4 && r.d <= -4 && CAVEATS[r.k]);
+  const said = roleImplied(role); said.add(lead.k);
+  const second = ranked.find(r => r !== lead && r.rel >= 3 && MODS[r.k] && r.d > -9 && !said.has(r.k) && (r.k !== 'st' || (bench && r.d >= 6)));
+  const modEarly = second ? pickStable(MODS[second.k], p, 107) : null;
+  if (second) { said.add(second.k); roleImplied(modEarly).forEach(k => said.add(k)); }
+  const worst = rows.slice().sort((a, b) => a.rel - b.rel).find(r => r !== lead && r !== second && r.rel <= -4 && r.d <= -4 && CAVEATS[r.k] && !said.has(r.k) && (r.k !== 'st' || bench));
   const { mean } = scoutRead(p), wAdj = worst ? worst.d - Math.min(0, mean) * 0.55 : 0;
   const lvl = pickStable(LEVEL_WORD[tierOf(p)] || ['Depth-level'], p, 103);
-  const mod = second ? pickStable(MODS[second.k], p, 107) : null;
+  const mod = modEarly;
   const cav = worst ? pickStable(caveatBank(p, worst.k)[wAdj <= -17 ? 2 : wAdj <= -11 ? 1 : 0], p, 109) : null;
   let s = short ? role[0].toUpperCase() + role.slice(1) : `${lvl} ${role}`;
   if (mod) s += ` ${mod}`;
   if (cav) {
-    if (mod && /^who|^you/.test(mod)) s += ' but ' + cav.replace(/^who /, '').replace(/^with /, 'has ').replace(/^without /, 'lacks ');
+    if (mod && /^you/.test(mod)) s += ' but ' + (/^who /.test(cav) ? cav : cav.replace(/^with /, 'who has ').replace(/^without /, 'who lacks ')); // "…you can trust in pass pro but who misses assignments"
+    else if (mod && /^who/.test(mod)) s += ' but ' + cav.replace(/^who /, '').replace(/^with /, 'has ').replace(/^without /, 'lacks ');
     else if (mod && /^with/.test(cav)) s += ' but ' + cav.replace(/^with /, '').replace(/^without /, 'without '); // "with A but B"
     else s += ' ' + cav;
   }
