@@ -179,6 +179,18 @@ function setChartAuto(tid, unit, on) {
   if (on) { for (const k in c.lists) if (k.includes(':') && CHART_UNIT(k) === unit) delete c.lists[k]; if (c.vl) delete c.vl[unit]; c.auto[unit] = true; refreshChart(tid); }
   else { c.auto[unit] = true; refreshChart(tid); if (c.vl) delete c.vl[unit]; c.auto[unit] = false; ensureViewLists(tid); } // start from the staff's chart as it stands
 }
+// one spot's order into every other look on that side of the ball
+function applySpotAll(tid, tab, vid, key) {
+  const t = T(tid), c = ensureChart(tid), src = c.lists[vid + ':' + key]; if (!src) return 0; let n = 0;
+  for (const { v, b, k } of viewSlots(t, tab)) if (b.key === key && v.id !== vid) { c.lists[k] = src.slice(); n++; }
+  return n;
+}
+// this whole look into every other look, wherever the same spot exists
+function applyChartAll(tid, tab, vid) {
+  const t = T(tid), c = ensureChart(tid); let n = 0;
+  for (const { v, b, k } of viewSlots(t, tab)) { if (v.id === vid) continue; const src = c.lists[vid + ':' + b.key]; if (src && src.length) { c.lists[k] = src.slice(); n++; } }
+  return n;
+}
 function copyView(tid, tab, from, to) {
   const t = T(tid), c = ensureChart(tid);
   if (c.auto[tab]) setChartAuto(tid, tab, false);
@@ -323,7 +335,7 @@ function crossTrainWeek(p, weeks) {
   if (!p.xt || !p.a || p.injury) return;
   if (comfortOf(p, p.xt) >= 100) { delete p.xt; return; }
   ensureCharacter(p);
-  const pts = 2.4 * learnRate(p) * (0.75 + p.h.work / 200) * crossTrainRate(p, p.xt) * (weeks || 1) * (p.tid >= 0 ? teachMult(p.tid, p.pos) : 1);
+  const pts = 2.4 * learnRate(p) * (0.75 + p.h.work / 200) * crossTrainRate(p, p.xt) * clamp((p.xts || 0.3) / 0.3, 0.5, 3) * (weeks || 1) * (p.tid >= 0 ? teachMult(p.tid, p.pos) : 1);
   if (learnSpot(p, p.xt, pts)) {
     updateRatings(p);
     if (p.tid === state.userTid) addNews(`${pname(p)} is now ${comfortLabel(comfortOf(p, p.xt)).toLowerCase()} at ${SPOTS[p.xt].l} after cross-training.`, [p.tid], 'prog');

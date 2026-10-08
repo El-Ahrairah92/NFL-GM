@@ -510,3 +510,16 @@ Camp opens when rookie free agency ends. There are three practice weeks (camp op
 **Preseason playing time.** Set per position group how long the first team plays (sit, a series, a quarter, a half, three quarters) or leave it on the coach's plan, which is a series in game one, a quarter in game two and the night off in game three.
 
 **Sharpness.** A player with fewer than 16 preseason snaps opens the season rusty: a small cut to every rating in his first game and half of it in his second. The usual build-up is enough to be sharp. The preseason panel lists which starters are short, and a rusty player says so on his card.
+
+## 29. Where a man is working, and the shared player row
+
+**Working at.** Every player has one setting for where he practices: his own spot, another spot, or a split with a second spot that takes 20 to 50 percent of his reps. It is set on his card or in the practice order and replaces the old cross-training picker. With nothing set he works at his listed position. It decides:
+- which room and position coach he belongs to in camp (the planner, the bubble, the staff meeting and the camp reports all follow it)
+- which drills he takes and who he faces, with his reps divided by the split
+- what his notes say: a record at each spot when he is splitting time, and "working at" when he is away from his listed position
+- where his comfort grows: the spot that is new to him, at a pace that follows his share of reps there
+A spot he does not know yet costs him in the drills, by the same comfort penalty the games use.
+
+**One row, four views.** The roster planner's player row has switchable views: Camp (coach's rank, reps, camp grade, drills, games), Scouting (build, scheme fit, development track, the scouting line and what he becomes, strengths and weaknesses), Contract (salary, years, guaranteed, savings and dead money if cut, waiver risk) and Special teams (tag, grade, snaps, tackles, units, return ability). Camp, exhibition, season and practice grades also appear on the depth chart editor and in the practice order.
+
+**Whole-chart edits.** From any personnel grouping or package you can push one spot's order, or the whole chart, into every other look on that side of the ball.

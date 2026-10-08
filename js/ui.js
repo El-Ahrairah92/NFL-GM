@@ -436,15 +436,30 @@ function campPlayerBits(p) {
     note: n ? `<span class="${n[1] > 0 ? 'good' : n[1] < 0 ? 'bad' : ''}">${n[1] > 0 ? '＋' : n[1] < 0 ? '－' : '·'}</span> ${esc(n[2])}` : '' };
 }
 // one player's line in the planner: everything camp has shown about him, side by side with the men next to him
+const PLAN_VIEWS = [['camp', 'Camp'], ['scout', 'Scouting'], ['contract', 'Contract'], ['st', 'Special teams']];
 function planRowHTML(p, bub, rank, g, i) {
-  const x = campPlayerBits(p), cat = bub[p.id] ? CAMP_CAT[bub[p.id].cat] : null;
-  return `<div class="pl-r"><div class="pl-who">${g ? `<span class="pl-n">${i + 1}</span>` : ''}<div><div>${playerLink(p)} <span class="small muted">${esc(p.lbl)} · ${p.age} · ${p.exp === 0 ? 'R' : p.exp + 'y'}${p.contract ? ` · ${fmtMoney(p.contract.amt)}${p.expiring ? ', <span class="warn">expiring</span>' : p.contract.yrs ? ` × ${p.contract.yrs}` : ''}` : ''}</span></div><div class="pl-pills"><span class="pill">${tierOf(p)}</span>${upsidePill(p)}${cat ? ` <span class="pill ${cat[1]}" title="Where his position coach has him today">${cat[0]}</span>` : ''}</div></div></div>
-    <div class="pl-c"><span class="camp-k">Coach has him</span>${rank ? `<b>${rank[0]}</b> <span class="small muted">of ${rank[1]}</span>` : '—'}</div>
-    <div class="pl-c"><span class="camp-k">Reps</span>${x.reps}</div>
-    <div class="pl-c"><span class="camp-k">Camp</span>${x.grade}<div class="camp-wks" title="Practice weeks, oldest first">${x.weeks}</div></div>
-    <div class="pl-c"><span class="camp-k">Drills</span>${x.drills}<div class="small muted">vs ones ${x.vs1}</div></div>
-    <div class="pl-c pl-game">${!x.snaps && x.lastYr ? `<span class="camp-k">Last season</span>${gradeChip(x.lastYr.adv ? x.lastYr.adv.g : null)} <span class="small muted">${x.lastYr.snp || 0} snaps · ${x.lastYr.gs || 0} starts</span><div class="small">${p.pos === 'OL' ? '' : esc(statSummary(x.lastYr, p.pos))}</div></div><div class="pl-c" style="display:none">` : ''}<span class="camp-k">Games</span>${x.pre} <span class="small muted">${x.snaps ? x.snaps + ' snaps' : 'no snaps'}</span>${x.when ? `<div class="small muted">${x.when}</div>` : ''}${x.line ? `<div class="small">${esc(x.line)}</div>` : ''}</div>
-    <div class="pl-note">${x.traits}${x.note ? ` <span class="small">${x.note}</span>` : ''}</div>
+  const view = PLAN_VIEWS.some(v => v[0] === ui.planView) ? ui.planView : 'camp', x = campPlayerBits(p), cat = bub[p.id] ? CAMP_CAT[bub[p.id].cat] : null, wl = workLabel(p), cell = (k, body) => `<div class="pl-c"><span class="camp-k">${k}</span>${body}</div>`;
+  let mid = '', foot = '';
+  if (view === 'camp') {
+    mid = cell('Coach has him', rank ? `<b>${rank[0]}</b> <span class="small muted">of ${rank[1]}</span>` : '—') + cell('Reps', x.reps) + cell('Camp', `${x.grade}<div class="camp-wks" title="Practice blocks, oldest first">${x.weeks}</div>`) + cell('Drills', `${x.drills}<div class="small muted">vs ones ${x.vs1}</div>`)
+      + `<div class="pl-c pl-game">${!x.snaps && x.lastYr ? `<span class="camp-k">Last season</span>${gradeChip(x.lastYr.adv ? x.lastYr.adv.g : null)} <span class="small muted">${x.lastYr.snp || 0} snaps · ${x.lastYr.gs || 0} starts</span><div class="small">${p.pos === 'OL' ? '' : esc(statSummary(x.lastYr, p.pos))}</div>` : `<span class="camp-k">Games</span>${x.pre} <span class="small muted">${x.snaps ? x.snaps + ' snaps' : 'no snaps'}</span>${x.when ? `<div class="small muted">${x.when}</div>` : ''}${x.line ? `<div class="small">${esc(x.line)}</div>` : ''}`}</div>`;
+    foot = `${x.traits}${x.note ? ` <span class="small">${x.note}</span>` : ''}`;
+  } else if (view === 'scout') {
+    const t = scoutTraits(p), dev = isDeveloping(p);
+    mid = cell('Coach has him', rank ? `<b>${rank[0]}</b> <span class="small muted">of ${rank[1]}</span>` : '—') + cell('Build', `<span class="small">${htwt(p)}</span>`) + cell('Fit', `<span class="small">${fitLabel(schemeFit(p, p.tid))}</span>`) + cell('Track', trackPill(p) || '—')
+      + `<div class="pl-c pl-game"><span class="camp-k">The read</span><span class="small">${esc(scoutProfile(p))}</span>${dev ? `<div class="small muted">Becomes: ${esc(scoutProfile(finishedPlayer(p), true))}</div>` : ''}</div>`;
+    foot = t.str.slice(0, 3).map(z => `<span class="pill good">${esc(z)}</span>`).join(' ') + ' ' + t.weak.slice(0, 2).map(z => `<span class="pill bad">${esc(z)}</span>`).join(' ');
+  } else if (view === 'contract') {
+    const c = p.contract || {}, d = deadIfCut(p), sv = cutSavings(p);
+    mid = cell('Salary', `<b>${fmtMoney(c.amt || 0)}</b>`) + cell('Years', p.expiring ? '<span class="warn">Expiring</span>' : (c.yrs || 0) + '') + cell('Guaranteed', c.gtd ? fmtMoney(c.gtd) : '<span class="muted">none</span>') + cell('If cut', `<span class="${sv > 0 ? 'good' : 'muted'}">saves ${fmtMoney(Math.max(0, sv))}</span>`)
+      + `<div class="pl-c pl-game"><span class="camp-k">Dead money if cut</span><span class="${d.now + d.next > 0 ? 'bad' : 'muted'}">${fmtMoney(d.now)} now${d.next ? ', ' + fmtMoney(d.next) + ' next year' : ''}</span>${p.exp < WAIVER_EXP && state.phase !== 'REG' ? `<div class="small muted">If waived: ${claimRiskIfCut(p)}</div>` : ''}</div>`;
+  } else {
+    const w = stWord(p), ch = ensureChart(state.userTid), units = ST_KEYS.filter(k => (ch.lists[k] || []).includes(p.id)).map(k => ST_UNIT[k]), rs = returnScore(p), sg = stGrade(p.stats);
+    mid = cell('Special teams', w ? `<span class="pill ${w[1]}">${w[0]}</span>` : '<span class="muted small">Not a special teams body</span>') + cell('Grade', sg !== null ? gradeChip(sg) : '<span class="muted">—</span>') + cell('Snaps', (p.stats && p.stats.sts) || 0) + cell('Tackles', (p.stats && p.stats.stk) || 0)
+      + `<div class="pl-c pl-game"><span class="camp-k">Units</span><span class="small">${units.length ? units.join(', ') : '<span class="muted">none</span>'}</span>${rs > 60 ? `<div class="small muted">${rs >= 72 ? 'A real return man' : 'Can return kicks'}</div>` : ''}</div>`;
+  }
+  return `<div class="pl-r"><div class="pl-who">${g ? `<span class="pl-n">${i + 1}</span>` : ''}<div><div>${playerLink(p)} <span class="small muted">${esc(p.lbl)} · ${p.age} · ${p.exp === 0 ? 'R' : p.exp + 'y'}${view !== 'contract' && p.contract ? ` · ${fmtMoney(p.contract.amt)}${p.expiring ? ', <span class="warn">expiring</span>' : ''}` : ''}</span></div><div class="pl-pills"><span class="pill">${tierOf(p)}</span>${upsidePill(p)}${cat ? ` <span class="pill ${cat[1]}" title="Where his position coach has him today">${cat[0]}</span>` : ''}${wl ? ` <span class="pill on" title="Where he is working">at ${esc(wl)}</span>` : ''}</div></div></div>
+    ${mid}<div class="pl-note">${foot}</div>
     <div class="pl-act">${g ? `<button class="sm" data-action="planMove" data-gid="${g.id}" data-pid="${p.id}" data-dir="-1" title="Move up" ${i === 0 ? 'disabled' : ''}>▲</button><button class="sm" data-action="planMove" data-gid="${g.id}" data-pid="${p.id}" data-dir="1" title="Move down" ${i === g.pids.length - 1 ? 'disabled' : ''}>▼</button><button class="sm" data-action="planRemove" data-gid="${g.id}" data-pid="${p.id}" title="Take him out of this group">✕</button>` : ''}</div></div>`;
 }
 function campHTML() {
@@ -455,11 +470,11 @@ function campHTML() {
     <div class="subtabs">${[['plan', 'Squad planner'], ['bubble', 'The bubble'], ...(camp ? [['report', 'Practice report']] : [])].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="campTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
   if (tab === 'plan') {
     const pl = ensurePlan(), bub = campBubble(u), room = PLAN_ROOMS.find(r => r[0] === ui.campRoom) || PLAN_ROOMS[0], [rk, rname, poss] = room;
-    const all = ro.filter(p => p.a && poss.includes(p.pos)), groups = (pl.groups[rk] || []);
+    const all = ro.filter(p => p.a && poss.includes(cpos(p))), groups = (pl.groups[rk] || []);
     for (const g of groups) g.pids = g.pids.filter(id => { const p = P(id); return p && p.tid === u; });
     // each coach's order in his room, as a rank
-    const rankOf = {}; for (const pos of poss) { const l = all.filter(p => p.pos === pos).sort((a, b) => coachRead(b, u) - coachRead(a, u)); l.forEach((p, i) => rankOf[p.id] = [i + 1, l.length]); }
-    html += `<div class="pl-rooms">${PLAN_ROOMS.map(r => { const n = ro.filter(p => r[2].includes(p.pos)).length; return `<button class="${r[0] === rk ? 'on' : ''}" data-action="campRoom" data-room="${r[0]}">${r[0]}<span>${n}</span></button>`; }).join('')}<span class="spacer"></span><button class="sm" data-action="campRoomStep" data-dir="-1" title="Previous room (←)">←</button><button class="sm" data-action="campRoomStep" data-dir="1" title="Next room (→)">→</button></div>`;
+    const rankOf = {}; for (const pos of poss) { const l = all.filter(p => cpos(p) === pos).sort((a, b) => coachRead(b, u) - coachRead(a, u)); l.forEach((p, i) => rankOf[p.id] = [i + 1, l.length]); }
+    html += `<div class="pl-rooms">${PLAN_ROOMS.map(r => { const n = ro.filter(p => r[2].includes(cpos(p))).length; return `<button class="${r[0] === rk ? 'on' : ''}" data-action="campRoom" data-room="${r[0]}">${r[0]}<span>${n}</span></button>`; }).join('')}<span class="spacer"></span><span class="subtabs" style="margin:0">${PLAN_VIEWS.map(([k, l]) => `<button class="${(ui.planView || 'camp') === k ? 'on' : ''}" data-action="planView" data-v="${k}">${l}</button>`).join('')}</span><button class="sm" data-action="campRoomStep" data-dir="-1" title="Previous room (←)">←</button><button class="sm" data-action="campRoomStep" data-dir="1" title="Next room (→)">→</button></div>`;
     // the coach's word on this room
     const meet = !camp ? (() => { const c = campCoach(u, poss[0]); return { c, eye: campEyeWord(c), star: null, push: null, cool: null, worry: null }; })() : campMeeting(u).filter(m => (m.role === 'ST' ? ['K', 'P'] : m.role === 'DB' ? ['CB', 'S'] : [m.role]).some(x => poss.includes(x)))[0];
     const say = []; if (meet) { const inRoom = p => p && poss.includes(p.pos);
@@ -489,7 +504,7 @@ function campHTML() {
     const bub = campBubble(u), cnt = k => on.filter(p => bub[p.id] && bub[p.id].cat === k).length;
     html += `<div class="card"><div class="wr-stat"><div><b>${cnt('lock') + cnt('likely')}</b><span>locks and likely</span></div><div><b>${cnt('bubble')}</b><span>on the bubble</span></div><div><b>${cnt('ps')}</b><span>practice-squad candidates</span></div><div><b>${cnt('long')}</b><span>long shots</span></div><div><b>${ro.length - on.length}</b><span>heading to IR</span></div></div>
       <p class="small muted" style="margin:10px 0 0">The staff's ${ROSTER_MAX} as it stands today, room by room, in each coach's order. The line is where he would stop if he had to cut now. It is his opinion: your own read of each player is the pill beside his name.</p></div><div class="camp-bub">`;
-    for (const pos of POSITIONS) { const l = ro.filter(p => p.pos === pos && bub[p.id]).sort((a, b) => bub[a.id].i - bub[b.id].i); if (!l.length) continue; const line = ROSTER_TEMPLATE[pos];
+    for (const pos of POSITIONS) { const l = ro.filter(p => cpos(p) === pos && bub[p.id]).sort((a, b) => bub[a.id].i - bub[b.id].i); if (!l.length) continue; const line = ROSTER_TEMPLATE[pos];
       html += `<div class="card camp-room"><div class="row"><h3 style="margin:0">${ROOM_NAME[pos] || (pos === 'K' ? 'Kickers' : 'Punters')}</h3><span class="spacer"></span><span class="small muted">carrying ${l.filter(p => countsOn53(p)).length} · staff keeps ${line}</span></div>${l.map((p, i) => { const cat = CAMP_CAT[bub[p.id].cat], g = campGrade(p); return `${i === line && bub[p.id].cat !== 'ir' ? '<div class="camp-line"><span>the line</span></div>' : ''}<div class="camp-br"><span class="pill ${cat[1]}">${cat[0]}</span> ${playerLink(p, true)} <span class="small muted">${p.age}</span><span class="spacer"></span><span class="pill">${tierOf(p)}</span> ${gradeChip(g)}</div>`; }).join('')}</div>`; }
     html += '</div>';
   } else {
@@ -497,6 +512,7 @@ function campHTML() {
     html += `<div class="card"><h3>Practice report · week ${cm.blocks}</h3><div class="small muted" style="margin-bottom:8px">This week's work in drills and team periods. One week is a small sample: the camp grade is the running total.</div>` + table('campRep', [
       { k: 'pos', l: 'Pos', v: x => x.p.lbl, f: x => esc(x.p.lbl) }, { k: 'n', l: 'Name', v: x => x.p.last, f: x => playerLink(x.p) },
       { k: 't', l: 'Reps', v: x => -(x.p.camp.t || 0), f: x => `<span class="small">${['Ones', 'Twos', 'Threes'][x.p.camp.t || 0]}</span>` },
+      { k: 'w', l: 'Working at', v: x => workOf(x.p).a, f: x => `<span class="small">${esc(workLabel(x.p) || SPOTS[x.p.spot].l)}</span>` },
       { k: 'wk', l: 'This week', v: x => x.wk, f: x => gradeChip(x.wk), num: 1 }, { k: 'cg', l: 'Camp', v: x => campGrade(x.p) || 0, f: x => gradeChip(campGrade(x.p)), num: 1 },
       { k: 'note', l: 'What the coaches saw', f: x => x.n ? `<span class="small ${x.n[1] > 0 ? 'good' : x.n[1] < 0 ? 'bad' : 'muted'}">${esc(x.n[2])}</span>` : '' },
     ], rows, { sort: 'wk', limit: 100 }) + '</div>';
@@ -706,7 +722,7 @@ function dcPlayerMeta(p, key, spot, job) {
   const cf = comfortLabel(comfortOf(p, spot));
   // his level at this particular job, when it is not his overall level (a run-stuffing nose asked to rush the passer)
   const here = job && job !== tierOf(p) ? `<span class="pill ${THIN_TIERS.has(job) ? 'bad' : OK_TIERS.has(job) ? 'warn' : 'good'}" title="How he grades at this job in this look: what the spot asks for, not his overall level">${job} here</span>` : '';
-  return `<span class="dc-meta">${['K', 'P', 'KR', 'PRET'].includes(key) ? '' : ST_UNIT[key] ? (stWord(p) ? `<span class="pill ${stWord(p)[1]}">${stWord(p)[0]}</span>` : '<span class="pill muted">Not a special teams body</span>') : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p)}${here}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
+  return `<span class="dc-meta">${['K', 'P', 'KR', 'PRET'].includes(key) ? '' : ST_UNIT[key] ? (stWord(p) ? `<span class="pill ${stWord(p)[1]}">${stWord(p)[0]}</span>` : '<span class="pill muted">Not a special teams body</span>') : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p)}${rowGrades(p)}${here}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
 }
 const THIN_TIERS = new Set(['Depth', 'Project', 'Fringe', 'Washed']), OK_TIERS = new Set(['Rotation', 'Backup']);
 // how he grades at this job in this package (his level, his comfort at the spot, and what the package asks of it)
@@ -755,7 +771,7 @@ function depthChartHTML() {
       <div class="dc-wrap"><div class="card"><div class="dc-board ${tab}">${boxes}</div>
       <div class="small muted" style="margin-top:10px">${auto ? `The staff's lineup for <b>${esc(view.label)}</b>. Take control to set it yourself.` : `<b>${esc(view.label)}</b> has its own chart. What you see is exactly what you set: changing one position never touches another, and nothing is filled in for you.`} <span class="cfdot warn">●</span> Decent / <span class="cfdot bad">●</span> Raw at the spot · <span class="cfdot bad">✚</span> injured. A box turns amber or red when its starter grades below starting level <b>at that position in this look</b>, which can differ from his overall tier.</div>
       ${thin.length ? `<div class="small" style="margin-top:8px"><b class="bad">Below starting level at these jobs:</b> ${thin.join(' · ')} <span class="muted">(graded on what the spot asks for in this look)</span></div>` : ''}
-      ${!auto && others.length ? `<div class="row small" style="margin-top:10px"><span class="muted">Copy every matching position into this chart from</span> <select id="dchCopyFrom">${others.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('')}</select> <button class="sm" data-action="dchCopy" data-to="${vid}">Copy</button></div>` : ''}</div><div class="dc-side">`;
+      ${!auto && others.length ? `<div class="row small" style="margin-top:10px"><span class="muted">Copy every matching position into this chart from</span> <select id="dchCopyFrom">${others.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('')}</select> <button class="sm" data-action="dchCopy" data-to="${vid}">Copy</button></div><div class="row small" style="margin-top:6px;gap:6px"><span class="muted">Or push from here:</span> <button class="sm" data-action="dchSpotAll" data-tab="${tab}" data-vid="${vid}" data-key="${key}" title="This spot's order replaces the same spot in every other grouping">${esc(label || 'This spot')} → every look</button> <button class="sm" data-action="dchChartAll" data-tab="${tab}" data-vid="${vid}" title="Every spot in this grouping replaces the same spot in every other grouping">This whole chart → every look</button></div>` : ''}</div><div class="dc-side">`;
   }
   ui.dchEdit = editKey;
   // ---- right: the selected job ----
@@ -1212,11 +1228,17 @@ function pracChip(p) {
   return `<span class="pill ${c}">${l}</span>`;
 }
 function pracTrend(p) { const h = (p.pracH || []).slice(-5); return h.map(g => `<i class="pdot" style="background:${g >= 59 ? 'var(--good)' : g < 42 ? 'var(--bad)' : 'var(--muted)'}" title="${pracGradeLabel(g)}"></i>`).join(''); }
-function crossTrainSelect(p) {
-  if (p.tid !== state.userTid) return '';
-  const opts = crossTrainSpots(p);
-  if (!opts.length) return '';
-  return `<select data-change="xtSet" data-pid="${p.id}" class="${p.xt ? 'on' : ''}" title="Practice time at a second position"><option value="">—</option>${opts.map(s => `<option value="${s}" ${p.xt === s ? 'selected' : ''}>${SPOTS[s].l} (${comfortLabel(comfortOf(p, s))})</option>`).join('')}</select>`;
+function crossTrainSelect(p, card) { // where he is working: his own spot, another one, or a split of the two
+  if (p.tid !== state.userTid || !p.a) return '';
+  const opts = workSpots(p); if (opts.length < 2) return card ? '<span class="small muted">He only plays one spot.</span>' : '';
+  const w = workOf(p), lab = sp => `${SPOTS[sp].l}${sp === p.spot ? '' : ' (' + comfortLabel(comfortOf(p, sp)).toLowerCase() + ')'}`, cd = card ? ' data-card="1"' : '';
+  return `<span class="work-sel"><select data-change="workSet" data-part="a" data-pid="${p.id}"${cd} class="${w.a !== p.spot ? 'on' : ''}" title="The spot he practices and competes at">${opts.map(sp => `<option value="${sp}" ${w.a === sp ? 'selected' : ''}>${lab(sp)}</option>`).join('')}</select><select data-change="workSet" data-part="b" data-pid="${p.id}"${cd} class="${w.b ? 'on' : ''}" title="A second spot that takes a share of his reps"><option value="">+ second spot</option>${opts.filter(sp => sp !== w.a).map(sp => `<option value="${sp}" ${w.b === sp ? 'selected' : ''}>${lab(sp)}</option>`).join('')}</select>${w.b ? `<select data-change="workSet" data-part="sb" data-pid="${p.id}"${cd} title="Share of his reps at the second spot">${[0.2, 0.3, 0.4, 0.5].map(v => `<option value="${v}" ${Math.abs(w.sb - v) < 0.05 ? 'selected' : ''}>${Math.round(v * 100)}% there</option>`).join('')}</select>` : ''}</span>`;
+}
+// camp, exhibition and season grades in one glance, for any list of players
+function rowGrades(p) {
+  const cg = campOn() ? campGrade(p) : null, pg = (state.phase === 'PRESEASON' || state.phase === 'CUTDOWN') ? preGrade(p) : null, sg = p.advS && state.phase !== 'PRESEASON' && state.phase !== 'CUTDOWN' ? overallGrade(p.advS, p.spot) : null, pr = p.prac && p.prac.g !== null && p.prac.g !== undefined && state.phase === 'REG' ? Math.round(p.prac.g) : null;
+  const bit = (l, v, t) => v === null || v === undefined ? '' : `<span class="rg" title="${t}"><i>${l}</i>${gradeChip(v)}</span>`;
+  return bit('Camp', cg, 'Practice grade so far in camp') + bit('Pre', pg, 'Grade in the exhibitions') + bit('Season', sg, 'Game grade this season') + bit('Prac', pr, 'This week of practice');
 }
 const PRAC_ORDER = PRAC_ROOMS.flatMap(r => r[2]);
 function pracRoomInfo(u, pos) {
@@ -1280,7 +1302,8 @@ function practiceHTML() {
       { k: 'pr', l: 'This week', f: p => pracChip(p) },
       { k: 'tr', l: 'Recent', f: p => pracTrend(p) },
       { k: 'pb', l: 'Playbook', f: p => `${pbBar(pbOf(p))} <span class="small muted">${pbLabel(pbOf(p))}</span>` },
-      { k: 'xt', l: 'Cross-train', f: p => crossTrainSelect(p), title: 'Give him practice time at another position. It costs him a little of his own week.' },
+      { k: 'xt', l: 'Working at', f: p => crossTrainSelect(p), title: 'The spot he practices at. A second spot takes a share of his reps, and a spot that is new to him is where his comfort grows.' },
+      { k: 'rg', l: 'Grades', f: p => rowGrades(p) },
       { k: 'we', l: 'Work ethic', f: p => charPill(p, 'work') },
       { k: 'di', l: 'Discipline', f: p => charPill(p, 'disc') },
       { k: 'le', l: 'Leadership', f: p => charPill(p, 'lead') },
@@ -2289,6 +2312,7 @@ function playerModal(pid, replace) {
   left += '<div class="row" style="margin-top:12px">';
   if (p.tid === u && optionDue(p) && state.phase === 'RESIGN') left += `<button class="primary" data-action="option" data-pid="${p.id}" data-v="1">Exercise option (${fmtMoney(optionAmount(p))})</button><button data-action="option" data-pid="${p.id}" data-v="0">Decline option</button>`;
   if (p.tid === u && canTag(p)) left += `<button data-action="tag" data-pid="${p.id}">Franchise tag (${fmtMoney(tagAmount(p))})</button>`;
+  if (p.tid === u && p.a && workSpots(p).length > 1) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Where he is working <span title="Sets the room he sits in during camp, the drills he takes, what the reports say about him, and where his comfort at a new spot grows.">ⓘ</span></div>${crossTrainSelect(p, true)}</div>`;
   if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && PRAC_SIDE[p.pos]) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">In the building${p.seenW ? ` · ${p.seenW} week${p.seenW === 1 ? '' : 's'} with your staff` : ''}</div><div class="small" style="margin-bottom:4px">Playbook ${pbBar(pbOf(p))} <span class="muted">${pbLabel(pbOf(p))}</span> · this week ${pracChip(p)}</div><div class="row small" style="gap:6px">${charPill(p, 'work')}${charPill(p, 'disc')}${charPill(p, 'lead')}</div>${p.tid === u && crossTrainSpots(p).length ? `<div class="small" style="margin-top:6px">Cross-train at ${crossTrainSelect(p).replace('data-pid=', 'data-card="1" data-pid=')}${p.xt ? ` <span class="muted">now ${comfortLabel(comfortOf(p, p.xt)).toLowerCase()} (${Math.round(comfortOf(p, p.xt))}/100)</span>` : ''}</div>` : ''}</div>`;
   if (p.tid === u && extensionDue(p)) left += termButtons(p, 'extend');
   if (p.tid === u && state.phase === 'PRESEASON' && state.prePlan && p.pos !== 'K' && p.pos !== 'P') { const pl = state.prePlan, cur = pl.feat[p.id] ? 'feat' : pl.hold[p.id] ? 'hold' : ''; left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Preseason playing time${p.preS ? ` · ${p.preS.snp} snaps so far` : ''}</div><span class="seg">${[['', 'Normal'], ['feat', 'Feature'], ['hold', 'Hold out']].map(([k, l]) => `<button class="sm ${cur === k ? 'on' : ''}" data-action="preFeat" data-card="1" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span></div>`; }
@@ -2772,6 +2796,9 @@ const actions = {
   planOtherClose: () => { ui.planOther = null; render(); },
   schedPart: d => { ui.schedPart = d.part; ui.schedWeekA = 1; render(); },
   cardScope: d => { ui.cardScope = d.v; playerModal(+d.pid, true); },
+  dchSpotAll: d => { const n = applySpotAll(state.userTid, d.tab, d.vid, d.key); toast(n ? `Copied to ${n} other look${n === 1 ? '' : 's'}.` : 'No other look has that spot.'); save(); render(); },
+  dchChartAll: async d => { if (!await ask({ title: 'Copy this chart to every look?', body: 'Every spot in this grouping replaces the same spot in all the others on this side of the ball. Spots that only exist elsewhere are left alone.', yes: 'Copy to every look', no: 'Cancel' })) return; const n = applyChartAll(state.userTid, d.tab, d.vid); toast(`Updated ${n} spot${n === 1 ? '' : 's'} in the other looks.`); save(); render(); },
+  planView: d => { ui.planView = d.v; render(); },
   askYes: () => askDone(true),
   askNo: () => askDone(false),
   closeModal: () => closeModal(),
@@ -2906,6 +2933,7 @@ const changes = {
   negGtd: v => { ui.neg.gtd = +v; negModal(); },
   preStarters: v => { state.prePlan.starters = v; save(); },
   preShare: (v, el) => { const pl = state.prePlan; pl.share = pl.share || {}; if (+v < 0) delete pl.share[el.dataset.pos]; else pl.share[el.dataset.pos] = +v; save(); },
+  workSet: (v, el) => { setWork(+el.dataset.pid, el.dataset.part, v); save(); if (el.dataset.card) playerModal(+el.dataset.pid, true); },
   xtSet: (v, el) => { setCrossTrain(+el.dataset.pid, v || null); save(); if (el.dataset.card) playerModal(+el.dataset.pid, true); render(); },
   udfaOffer: (v, el) => { const err = udfaOffer(+el.dataset.pid, v === '' ? null : +v); if (err) toast(err); save(); render(); },
   faF: (v, el) => { (ui.faF || (ui.faF = Object.assign({}, FA_DEF)))[el.dataset.f] = v; },

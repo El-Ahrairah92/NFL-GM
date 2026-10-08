@@ -13,6 +13,27 @@ const CAMP_ROOMS = [['QB', ['QB']], ['RB', ['RB']], ['WR', ['WR']], ['TE', ['TE'
 const CAMP_JOBS = [['QB', 'Quarterback'], ['RB', 'Running back'], ['X', 'X receiver'], ['Z', 'Z receiver'], ['SLOT', 'Slot receiver'], ['Y', 'Tight end'], ['LT', 'Left tackle'], ['LG', 'Left guard'], ['C', 'Center'], ['RG', 'Right guard'], ['RT', 'Right tackle'],
   ['EDGE1', 'Edge'], ['EDGE2', 'Edge'], ['IDL1', 'Interior line'], ['IDL2', 'Interior line'], ['MLB', 'Middle linebacker'], ['WLB', 'Weak-side linebacker'], ['CB1', 'Corner'], ['CB2', 'Corner'], ['NCB', 'Slot corner'], ['FS', 'Free safety'], ['SS', 'Strong safety'], ['K', 'Kicker'], ['P', 'Punter']];
 const CAMP_TIER_NAME = ['the ones', 'the twos', 'the threes'];
+// ---- where a man is working ----
+// One setting drives his camp: the room he sits in, the drills he takes, who he faces, where his comfort grows and what the reports say.
+// A second spot takes a share of his reps (a tenth to a half). With nothing set he works at his own position.
+function workOf(p) { const w = p.work; if (w && w.a && SPOTS[w.a]) return { a: w.a, b: w.b && SPOTS[w.b] && w.b !== w.a ? w.b : null, sb: w.b && w.b !== w.a ? clamp(w.sb || 0.3, 0.1, 0.5) : 0 }; return p.xt && SPOTS[p.xt] ? { a: p.spot, b: p.xt, sb: 0.3 } : { a: p.spot, b: null, sb: 0 }; }
+function cpos(p) { return p.pos === 'K' || p.pos === 'P' || !SPOTS[p.spot] ? p.pos : SPOTS[workOf(p).a].g; }
+function campOvr(p) { const w = workOf(p); return w.a === p.spot || !p.a ? p.ovr : slotRating(p, w.a); }
+function wsh(p, grp) { const w = workOf(p); return (grp.includes(SPOTS[w.a].g) ? 1 - w.sb : 0) + (w.b && grp.includes(SPOTS[w.b].g) ? w.sb : 0); }
+function wspot(p, grp) { const w = workOf(p), ina = grp.includes(SPOTS[w.a].g), inb = w.b && grp.includes(SPOTS[w.b].g); return ina && inb ? (rand() < w.sb ? w.b : w.a) : ina ? w.a : w.b; }
+function workSpots(p) { return SPOTS[p.spot] && p.pos !== 'K' && p.pos !== 'P' ? [p.spot, ...crossTrainSpots(p)] : [p.spot]; }
+function workLabel(p) { const w = workOf(p); return w.a === p.spot && !w.b ? null : w.b ? `${SPOTS[w.a].l} ${Math.round((1 - w.sb) * 100)}% / ${SPOTS[w.b].l} ${Math.round(w.sb * 100)}%` : SPOTS[w.a].l; }
+function setWork(pid, part, v) {
+  const p = P(pid); if (!p) return; const ok = workSpots(p), w = Object.assign({ a: p.spot, b: null, sb: 0.3 }, workOf(p));
+  if (part === 'a') w.a = ok.includes(v) ? v : p.spot; else if (part === 'b') w.b = v && ok.includes(v) ? v : null; else if (part === 'sb') w.sb = clamp(+v || 0.3, 0.1, 0.5);
+  if (w.b === w.a) w.b = null; if (!w.sb) w.sb = 0.3;
+  delete p.xt; delete p.xts;
+  if (w.a === p.spot && !w.b) { delete p.work; return; }
+  p.work = { a: w.a, b: w.b, sb: w.b ? w.sb : 0 };
+  // the spot that is new to him is where his comfort grows, at the pace of the reps he gets there
+  const away = w.a !== p.spot ? [w.a, w.b ? 1 - w.sb : 1] : [w.b, w.sb];
+  if (away[0] && away[0] !== p.spot && comfortOf(p, away[0]) < 100) { p.xt = away[0]; p.xts = away[1]; }
+}
 function campOn() { return !!(state.camp && state.camp.season === state.season); }
 function campOf(p) { return p.camp && p.camp.s === state.season ? p.camp : (p.camp = { s: state.season, r: [0, 0, 0], oo: [[0, 0], [0, 0], [0, 0]], sc: [], notes: [], form: round1(hashGauss(p.id, 811, state.season) * 2.2) }); }
 // ---- the coach who runs his room, and how sharp his eye is ----
@@ -48,15 +69,15 @@ function campBiasWhy(c, p) {
 function campGrade(p) { const c = p.camp && p.camp.s === state.season ? p.camp : null; if (!c || !c.sc.length) return null; let s = 0, w = 0; c.sc.forEach((v, i) => { const k = 1 + i * 0.25; s += v * k; w += k; }); return Math.round(s / w); }
 // the coach's number for a player (never shown as a number): a noisy first impression that evidence pulls toward the truth
 function coachRead(p, tid) {
-  const c = campCoach(tid === undefined ? p.tid : tid, p.pos), q = campCoachQ(c), sd = clamp(5 - (q - 40) / 14, 1.5, 5);
-  const prior = p.ovr + campBias(c, p) + clamp(hashGauss(p.id, 700 + (c ? c.id % 89 : 0), state.season), -1.8, 1.8) * sd;
+  const c = campCoach(tid === undefined ? p.tid : tid, cpos(p)), q = campCoachQ(c), ov = campOvr(p), sd = clamp(5 - (q - 40) / 14, 1.5, 5);
+  const prior = ov + campBias(c, p) + clamp(hashGauss(p.id, 700 + (c ? c.id % 89 : 0), state.season), -1.8, 1.8) * sd;
   const cg = campGrade(p), pg = typeof preGrade === 'function' ? preGrade(p) : null;
   const blocks = p.camp && p.camp.s === state.season ? p.camp.sc.length : 0, games = p.preS ? p.preS.gp || 0 : 0;
   const w = Math.min(0.62, blocks * 0.16 + games * 0.07);
-  const num = v => typeof v === 'number' && isFinite(v), evid = p.ovr + (num(cg) ? (cg - 60) * 0.22 : 0) + (num(pg) ? (pg - 60) * 0.14 : 0);
+  const num = v => typeof v === 'number' && isFinite(v), evid = ov + (num(cg) ? (cg - 60) * 0.22 : 0) + (num(pg) ? (pg - 60) * 0.14 : 0);
   return prior * (1 - w) + evid * w + campBias(c, p) * w;
 }
-function jobRead(p, spot, tid) { return slotRating(p, spot) + (coachRead(p, tid) - p.ovr); }
+function jobRead(p, spot, tid) { return slotRating(p, spot) + (coachRead(p, tid) - campOvr(p)); }
 // ---- what camp shows that the ratings do not ----
 function stValue(p) { return p.a && ST_OK.has(p.spot) ? stCover(p) : 0; }
 function campTraits(p) {
@@ -92,22 +113,23 @@ function campPractice(tid, load) {
   const cm = state.camp, ro = rosterOf(tid).filter(p => p.a && !p.injury), blk = cm.blocks;
   // coaches set the reps: each room in the order its coach sees it; men in a battle get a look with the group above them
   const tier = {}, inBattle = new Set((cm.battles || []).filter(b => !b.closed).flatMap(b => b.cands));
-  for (const pos of POSITIONS) { const n = REPS_FIRST[pos] || 1; ro.filter(p => p.pos === pos).sort((a, b) => coachRead(b, tid) - coachRead(a, tid)).forEach((p, i) => { tier[p.id] = i < n ? 0 : i < n * 2 ? 1 : 2; }); }
+  for (const pos of POSITIONS) { const n = REPS_FIRST[pos] || 1; ro.filter(p => cpos(p) === pos).sort((a, b) => coachRead(b, tid) - coachRead(a, tid)).forEach((p, i) => { tier[p.id] = i < n ? 0 : i < n * 2 ? 1 : 2; }); }
   const MIX = [[0.7, 0.25, 0.05], [0.25, 0.55, 0.2], [0.05, 0.3, 0.65]], week = {};
-  const W = id => week[id] || (week[id] = { oo: [[0, 0], [0, 0], [0, 0]], plus: 0, minus: 0, vs: {}, line: null });
+  const W = id => week[id] || (week[id] = { oo: [[0, 0], [0, 0], [0, 0]], plus: 0, minus: 0, vs: {}, sp: {}, line: null });
   const edge = {}; for (const p of ro) edge[p.id] = campEdge(p);
   const pickTier = (p) => { let m = MIX[tier[p.id]]; if (inBattle.has(p.id) && tier[p.id] > 0) m = MIX[tier[p.id] - 1].map((v, i) => (v + m[i]) / 2); const r = rand(); return r < m[0] ? 0 : r < m[0] + m[1] ? 1 : 2; };
   for (const [og, osk, dg, dsk] of CAMP_DRILLS) {
-    const O = ro.filter(p => og.includes(p.pos)), D = ro.filter(p => dg.includes(p.pos)); if (!O.length || !D.length) continue;
-    for (const a of O) { const reps = Math.round(((tier[a.id] === 1 ? 7 : 5) + (inBattle.has(a.id) ? 2 : 0)) * load);
+    const O = ro.filter(p => wsh(p, og) > 0), D = ro.filter(p => wsh(p, dg) > 0); if (!O.length || !D.length) continue;
+    for (const a of O) { const reps = Math.round(((tier[a.id] === 1 ? 7 : 5) + (inBattle.has(a.id) ? 2 : 0)) * load * wsh(a, og));
       for (let i = 0; i < reps; i++) { const tt = pickTier(a), pool = D.filter(d => tier[d.id] === tt), b = pick(pool.length ? pool : D);
-        const win = rand() < lgt((CAMP_SK[osk](a) + edge[a.id] - CAMP_SK[dsk](b) - edge[b.id]) / 7.5 + (osk === 'pro' ? 0.25 : osk === 'rec' ? -0.1 : 0)); // blockers win a few more pass-rush reps than they lose
-        W(a.id).oo[tier[b.id]][win ? 0 : 1]++; W(b.id).oo[tier[a.id]][win ? 1 : 0]++; (W(a.id).vs[b.id] = W(a.id).vs[b.id] || [0, 0])[win ? 0 : 1]++; (W(b.id).vs[a.id] = W(b.id).vs[a.id] || [0, 0])[win ? 1 : 0]++; campOf(a).r[tier[b.id]]++; campOf(b).r[tier[a.id]]++; } }
+        const sa = wspot(a, og), sd = wspot(b, dg);
+        const win = rand() < lgt((CAMP_SK[osk](a) + edge[a.id] - comfortPen(a, sa) - CAMP_SK[dsk](b) - edge[b.id] + comfortPen(b, sd)) / 7.5 + (osk === 'pro' ? 0.25 : osk === 'rec' ? -0.1 : 0)); // blockers win a few more pass-rush reps than they lose
+        W(a.id).oo[tier[b.id]][win ? 0 : 1]++; W(b.id).oo[tier[a.id]][win ? 1 : 0]++; (W(a.id).vs[b.id] = W(a.id).vs[b.id] || [0, 0])[win ? 0 : 1]++; (W(b.id).vs[a.id] = W(b.id).vs[a.id] || [0, 0])[win ? 1 : 0]++; (W(a.id).sp[sa] = W(a.id).sp[sa] || [0, 0])[win ? 0 : 1]++; (W(b.id).sp[sd] = W(b.id).sp[sd] || [0, 0])[win ? 1 : 0]++; campOf(a).r[tier[b.id]]++; campOf(b).r[tier[a.id]]++; } }
   }
   // team periods: plays that stood out, for better and worse
-  const roomAvg = pos => { const l = ro.filter(p => p.pos === pos); return l.length ? avg(l.map(p => p.ovr)) : 60; };
+  const roomAvg = pos => { const l = ro.filter(p => cpos(p) === pos); return l.length ? avg(l.map(p => p.ovr)) : 60; };
   for (const p of ro) {
-    const w = W(p.id), h = p.h || {}, pb = typeof pbOf === 'function' ? pbOf(p) : 96, rel = (p.ovr + edge[p.id] - roomAvg(p.pos)) / 9 + (tier[p.id] === 0 ? -0.25 : tier[p.id] === 2 ? 0.2 : 0); // the threes face the threes
+    const w = W(p.id), h = p.h || {}, pb = typeof pbOf === 'function' ? pbOf(p) : 96, rel = (campOvr(p) + edge[p.id] - roomAvg(cpos(p))) / 9 + (tier[p.id] === 0 ? -0.25 : tier[p.id] === 2 ? 0.2 : 0); // the threes face the threes
     const up = clamp(0.55 * Math.exp(rel * 0.5), 0.1, 2.2), dn = clamp(0.5 * Math.exp(-rel * 0.5) + (pb < 60 ? 0.25 : 0) + ((h.disc || 55) < 40 ? 0.15 : 0), 0.08, 2.2);
     for (let i = 0; i < 3; i++) { if (rand() < up / 3) w.plus++; if (rand() < dn / 3) w.minus++; }
     if (p.pos === 'QB') { const att = tier[p.id] === 0 ? 22 : tier[p.id] === 1 ? 16 : 10, pc = clamp(0.67 + (p.a.sacc - 70) * 0.004 + (p.a.dec - 70) * 0.002 + edge[p.id] * 0.006, 0.48, 0.84); let c = 0, ints = 0; for (let i = 0; i < att; i++) { if (rand() < pc) c++; else if (rand() < clamp(0.07 + (70 - p.a.dec) * 0.003, 0.02, 0.2)) ints++; } w.line = `${c} of ${att} in seven-on-seven${ints ? `, ${ints} intercepted` : ''}, mostly with ${CAMP_TIER_NAME[tier[p.id]]}`; w.qb = [c, att, ints]; }
@@ -117,16 +139,17 @@ function campPractice(tid, load) {
   // grade the week and write it down
   const usedNotes = new Set();
   const WT = [1.3, 1, 0.7], LT = [0.7, 1, 1.3], adj = p => { const w = W(p.id); let aw = 0, al = 0; for (let t = 0; t < 3; t++) { aw += w.oo[t][0] * WT[t]; al += w.oo[t][1] * LT[t]; } return [aw, al]; };
-  const roomRate = {}; for (const pos of POSITIONS) { let aw = 0, al = 0; for (const p of ro.filter(x => x.pos === pos)) { const r = adj(p); aw += r[0]; al += r[1]; } roomRate[pos] = aw + al ? aw / (aw + al) : 0.5; }
+  const roomRate = {}; for (const pos of POSITIONS) { let aw = 0, al = 0; for (const p of ro.filter(x => cpos(x) === pos)) { const r = adj(p); aw += r[0]; al += r[1]; } roomRate[pos] = aw + al ? aw / (aw + al) : 0.5; }
   for (const p of ro) {
     const w = W(p.id), c = campOf(p); let aw = 0, al = 0, n = 0;
     for (let t = 0; t < 3; t++) { aw += w.oo[t][0] * WT[t]; al += w.oo[t][1] * LT[t]; n += w.oo[t][0] + w.oo[t][1]; c.oo[t][0] += w.oo[t][0]; c.oo[t][1] += w.oo[t][1]; }
-    let sc = 60 + (n ? ((aw + roomRate[p.pos] * 2) / (aw + al + 2) - roomRate[p.pos]) * 75 : 0) + (w.plus - w.minus) * 4.5;
+    let sc = 60 + (n ? ((aw + (roomRate[cpos(p)] || 0.5) * 2) / (aw + al + 2) - (roomRate[cpos(p)] || 0.5)) * 75 : 0) + (w.plus - w.minus) * 4.5;
     if (w.qb) sc = 60 + (w.qb[0] / w.qb[1] - 0.66) * 110 - w.qb[2] * 5 + (w.plus - w.minus) * 3;
     if (w.k) sc = 60 + (w.k[0] / w.k[1] - 0.75) * 90;
     if (w.pn) sc = 60 + (w.pn - 4.3) * 45;
     c.sc[blk] = Math.round(clamp(sc, 22, 96));
     c.t = tier[p.id];
+    for (const k in w.sp) { const t = (c.sp = c.sp || {})[k] || (c.sp[k] = [0, 0]); t[0] += w.sp[k][0]; t[1] += w.sp[k][1]; }
     const note = campNote(p, w, tier[p.id], usedNotes); if (note) c.notes.push([blk, note[0], note[1]]);
     if (c.notes.length > 6) c.notes.shift();
   }
@@ -161,14 +184,16 @@ function campNote(p, w, tier, used) {
   const cap = x => x.charAt(0).toUpperCase() + x.slice(1) + '.', fresh = l => { const f = l.filter(x => !used.has(p.pos + x)); const c = pick(f.length ? f : l); used.add(p.pos + c); return c; };
   const tot = w.oo.reduce((s, x) => s + x[0] + x[1], 0), wins = w.oo.reduce((s, x) => s + x[0], 0), v1 = w.oo[0], with1 = v1[0] + v1[1];
   const good = w.plus > w.minus || (tot >= 5 && wins / tot >= 0.62), bad = w.minus > w.plus || (tot >= 5 && wins / tot <= 0.36), sign = good && !bad ? 1 : bad && !good ? -1 : 0;
-  const ev = good && w.plus && CAMP_PLUS[p.pos] ? fresh(CAMP_PLUS[p.pos]) : bad && w.minus && CAMP_MINUS[p.pos] ? fresh(CAMP_MINUS[p.pos]) : null;
+  const ev = good && w.plus && CAMP_PLUS[cpos(p)] ? fresh(CAMP_PLUS[cpos(p)]) : bad && w.minus && CAMP_MINUS[cpos(p)] ? fresh(CAMP_MINUS[cpos(p)]) : null;
   if (w.line) return [w.plus > w.minus ? 1 : w.minus > w.plus ? -1 : 0, [w.line, ev].filter(Boolean).map(cap).join(' ')];
   // who he won and lost against
   const vs = Object.entries(w.vs || {}).map(([id, r]) => ({ o: P(+id), w: r[0], l: r[1] })).filter(x => x.o && x.w + x.l >= 2);
   const beat = vs.filter(x => x.w > x.l).sort((a, b) => (b.w - b.l) - (a.w - a.l) || b.o.ovr - a.o.ovr)[0], lost = vs.filter(x => x.l > x.w).sort((a, b) => (b.l - b.w) - (a.l - a.w) || a.o.ovr - b.o.ovr)[0];
   const rec = !tot ? null : pick([`went ${wins}–${tot - wins} in the drills`, `won ${wins} of ${tot} drill reps`, `${wins}–${tot - wins} in one-on-ones`]) + (with1 >= 3 ? ` (${v1[0]}–${v1[1]} against ${CAMP_TIER_NAME[0]})` : tier === 2 ? ', mostly against the threes' : tier === 1 && with1 === 0 ? ', none of it against the ones' : '');
   const opp = good && beat ? pick([`got the better of ${beat.o.last} (${beat.w}–${beat.l})`, `had ${beat.o.last}'s number, ${beat.w} to ${beat.l}`, `won his reps against ${beat.o.last}`]) : bad && lost ? pick([`${lost.o.last} had his number (${lost.l}–${lost.w})`, `could not handle ${lost.o.last}, who won ${lost.l} of ${lost.l + lost.w}`, `lost his reps to ${lost.o.last}`]) : null;
-  const parts = [rec, ev && opp ? (rand() < 0.5 ? ev : opp) : ev || opp].filter(Boolean);
+  const here = Object.keys(w.sp || {}).filter(k => SPOTS[k]);
+  const where = here.length > 1 ? 'split his reps: ' + here.map(k => `${w.sp[k][0]}–${w.sp[k][1]} at ${SPOTS[k].l}`).join(', ') : here.length === 1 && here[0] !== p.spot && rec ? `${rec}, working at ${SPOTS[here[0]].l}` : null;
+  const parts = [where || rec, ev && opp ? (rand() < 0.5 ? ev : opp) : ev || opp].filter(Boolean);
   if (!parts.length) return null;
   return [sign, parts.map(cap).join(' ')];
 }
@@ -180,7 +205,7 @@ function campBattles(tid) {
   for (const [key, label] of CAMP_JOBS) {
     const a = P((lists[key] || [])[0]); if (!a) continue;
     const spot = chartSpotFor(tid, key), top = jobRead(a, spot, tid);
-    const ch = ro.filter(p => p.pos === a.pos && p.id !== a.id && !starters.has(p.id) && !taken.has(p.id) && jobRead(p, spot, tid) >= top - 4.5).sort((x, y) => jobRead(y, spot, tid) - jobRead(x, spot, tid)).slice(0, 2);
+    const ch = ro.filter(p => cpos(p) === cpos(a) && p.id !== a.id && !starters.has(p.id) && !taken.has(p.id) && jobRead(p, spot, tid) >= top - 4.5).sort((x, y) => jobRead(y, spot, tid) - jobRead(x, spot, tid)).slice(0, 2);
     if (!ch.length) continue;
     ch.forEach(p => taken.add(p.id));
     out.push({ id: 'J' + key, kind: 'start', key, spot, pos: a.pos, label, n: 1, cands: [a.id, ...ch.map(p => p.id)], gap: top - jobRead(ch[0], spot, tid) });
@@ -188,7 +213,7 @@ function campBattles(tid) {
   out.sort((x, y) => x.gap - y.gap); out.length = Math.min(out.length, 6);
   const fighting = new Set(out.flatMap(b => b.cands)); // a man competing to start is not on the roster bubble
   for (const pos of POSITIONS) {
-    const l = ro.filter(p => p.pos === pos).sort((x, y) => coachRead(y, tid) - coachRead(x, tid)), line = ROSTER_TEMPLATE[pos];
+    const l = ro.filter(p => cpos(p) === pos).sort((x, y) => coachRead(y, tid) - coachRead(x, tid)), line = ROSTER_TEMPLATE[pos];
     if (l.length <= line) continue;
     const mark = (coachRead(l[line - 1], tid) + coachRead(l[line], tid)) / 2;
     const c = l.filter((p, i) => i >= line - 2 && i <= line + 2 && Math.abs(coachRead(p, tid) - mark) <= 4.5 && !fighting.has(p.id));
@@ -218,10 +243,10 @@ function battleBoard(b) {
 function campBubble(tid) {
   const out = {}, ro = rosterOf(tid).filter(p => p.a);
   for (const pos of POSITIONS) {
-    const l = ro.filter(p => p.pos === pos && countsOn53(p)).sort((x, y) => coachRead(y, tid) - coachRead(x, tid)), line = ROSTER_TEMPLATE[pos];
+    const l = ro.filter(p => cpos(p) === pos && countsOn53(p)).sort((x, y) => coachRead(y, tid) - coachRead(x, tid)), line = ROSTER_TEMPLATE[pos];
     const mark = l.length > line ? (coachRead(l[line - 1], tid) + coachRead(l[line], tid)) / 2 : -99;
     l.forEach((p, i) => { const d = coachRead(p, tid) - mark; out[p.id] = { i, cat: l.length <= line ? (i < line - 1 ? 'lock' : 'likely') : i < line ? (d >= 5 ? 'lock' : d >= 2 ? 'likely' : 'bubble') : d >= -3 ? 'bubble' : psRoomOK(tid, p) ? 'ps' : 'long' }; });
-    for (const p of ro.filter(p => p.pos === pos && !countsOn53(p))) out[p.id] = { i: 99, cat: 'ir' };
+    for (const p of ro.filter(p => cpos(p) === pos && !countsOn53(p))) out[p.id] = { i: 99, cat: 'ir' };
   }
   return out;
 }
@@ -230,7 +255,7 @@ function psRoomOK(tid, p) { return p.exp <= 2 || (p.exp <= 6 && p.age <= 27); }
 function campMeeting(tid) {
   const bub = campBubble(tid), ro = rosterOf(tid).filter(p => p.a), blk = state.camp.blocks - 1, out = [];
   for (const [role, poss] of [...CAMP_ROOMS, ['ST', ['K', 'P']]]) {
-    const c = role === 'ST' ? C(T(tid).stc) : asst(T(tid), role), l = ro.filter(p => poss.includes(p.pos)); if (!l.length) continue;
+    const c = role === 'ST' ? C(T(tid).stc) : asst(T(tid), role), l = ro.filter(p => poss.includes(cpos(p))); if (!l.length) continue;
     const view = l.map(p => ({ p, r: coachRead(p, tid), u: uOvr(p), cat: bub[p.id] ? bub[p.id].cat : 'long', wk: p.camp && p.camp.s === state.season ? p.camp.sc[blk] : null }));
     const push = view.filter(x => ['bubble', 'ps', 'long'].includes(x.cat)).map(x => ({ x, d: x.r - x.u })).filter(o => o.d >= 2.5).sort((a, b) => b.d - a.d)[0];
     const cool = view.filter(x => ['lock', 'likely'].includes(x.cat)).map(x => ({ x, d: x.r - x.u })).filter(o => o.d <= -3).sort((a, b) => a.d - b.d)[0];
@@ -245,7 +270,7 @@ function campObjections(tid, plan) {
   const bub = campBubble(tid), out = [];
   for (const id in plan) { if (plan[id] !== 'cut' && plan[id] !== 'ps') continue; const p = P(+id); if (!p || p.tid !== tid || !bub[p.id]) continue;
     if (!['lock', 'likely'].includes(bub[p.id].cat)) continue;
-    const c = campCoach(tid, p.pos), keepOver = rosterOf(tid).filter(x => x.pos === p.pos && x.id !== p.id && plan[x.id] !== 'cut' && plan[x.id] !== 'ps' && bub[x.id] && coachRead(x, tid) < coachRead(p, tid)).sort((a, b) => coachRead(a, tid) - coachRead(b, tid))[0];
+    const c = campCoach(tid, cpos(p)), keepOver = rosterOf(tid).filter(x => cpos(x) === cpos(p) && x.id !== p.id && plan[x.id] !== 'cut' && plan[x.id] !== 'ps' && bub[x.id] && coachRead(x, tid) < coachRead(p, tid)).sort((a, b) => coachRead(a, tid) - coachRead(b, tid))[0];
     out.push({ p, c, over: keepOver || null, note: campLastNote(p) }); }
   // the special teams coordinator speaks up for the men who cover his kicks
   const stc = C(T(tid).stc), core = rosterOf(tid).filter(p => p.a && ST_OK.has(p.spot)).sort((a, b) => stCover(b) - stCover(a)).slice(0, 6);
@@ -261,7 +286,7 @@ function openCamp() {
   state.camp = { season: state.season, tid: u, blocks: 0, battles: [], settled: [] };
   campBattles(u);      // the staff names the open jobs before anyone puts on pads
   // where every man stood in his room before the first practice, so the reports can say who moved
-  state.camp.pre = {}; for (const pos of POSITIONS) rosterOf(u).filter(p => p.a && p.pos === pos).sort((a, b) => coachRead(b, u) - coachRead(a, u)).forEach((p, i) => state.camp.pre[p.id] = i + 1);
+  state.camp.pre = {}; for (const pos of POSITIONS) rosterOf(u).filter(p => p.a && cpos(p) === pos).sort((a, b) => coachRead(b, u) - coachRead(a, u)).forEach((p, i) => state.camp.pre[p.id] = i + 1);
   campWeek('Camp, week 1', 1.2); campWeek('Camp, week 2', 1.2); // the main block of camp comes before any game
 }
 function campWeek(label, load) {
@@ -276,14 +301,14 @@ const PLAN_ROOMS = [['QB', 'Quarterbacks', ['QB']], ['RB', 'Running backs', ['RB
 const PLAN_SEED = { QB: [['Starter', ['QB']]], RB: [['Lead back', ['RB']]], WR: [['X receiver', ['X']], ['Z receiver', ['Z']], ['Slot', ['SLOT']]], TE: [['Tight end (Y)', ['Y']], ['Move tight end (H)', ['H']]],
   OL: [['Left tackle', ['LT']], ['Left guard', ['LG']], ['Center', ['C']], ['Right guard', ['RG']], ['Right tackle', ['RT']]], DL: [['Edge', ['EDGE1', 'EDGE2']], ['Interior', ['IDL1', 'IDL2', 'NT']]], LB: [['Middle linebacker', ['MLB']], ['Weak side', ['WLB']]],
   CB: [['Outside corner', ['CB1', 'CB2']], ['Slot corner', ['NCB']]], S: [['Free safety', ['FS']], ['Strong safety', ['SS']]], ST: [['Kicker', ['K']], ['Punter', ['P']], ['Kickoff coverage', ['KO']], ['Punt team', ['PU']]] };
-function planRoomOf(p) { const r = PLAN_ROOMS.find(x => x[2].includes(p.pos)); return r ? r[0] : null; }
+function planRoomOf(p) { const r = PLAN_ROOMS.find(x => x[2].includes(cpos(p))); return r ? r[0] : null; }
 const PLAN_PHASES = ['COACHES', 'RESIGN', 'FA', 'DRAFT', 'UDFA', 'PRESEASON', 'CUTDOWN'];
 function planOn() { return !!state && PLAN_PHASES.includes(state.phase); }
 function planSeedRoom(tid, room) {
   const cm = { plan: state.plan }, lists = defaultChart(tid), poss = PLAN_ROOMS.find(x => x[0] === room)[2], used = new Set(), out = [];
   for (const [name, keys] of PLAN_SEED[room] || []) {
     if (ST_UNIT[keys[0]]) { out.push({ id: cm.plan.nid++, name, pids: (lists[keys[0]] || []).slice(0, ST_SIZE) }); continue; }
-    const ids = []; for (let i = 0; i < 2; i++) for (const k of keys) { const id = (lists[k] || [])[i], p = id !== undefined ? P(id) : null; if (p && poss.includes(p.pos) && !ids.includes(id) && (i > 0 || !used.has(id))) { ids.push(id); if (i === 0) used.add(id); } }
+    const ids = []; for (let i = 0; i < 2; i++) for (const k of keys) { const id = (lists[k] || [])[i], p = id !== undefined ? P(id) : null; if (p && poss.includes(cpos(p)) && !ids.includes(id) && (i > 0 || !used.has(id))) { ids.push(id); if (i === 0) used.add(id); } }
     out.push({ id: cm.plan.nid++, name, pids: ids.slice(0, keys.length > 1 ? 4 : 2) });
   }
   cm.plan.groups[room] = out;
@@ -328,12 +353,12 @@ function prepBattles(tid) { // the staff's open jobs, whether or not camp has st
   let out = []; try { campBattles(tid); out = state.camp.battles; } finally { state.camp = keep; }
   return out;
 }
-function briefLeagueBar(pos) { const n = LINEUP_NEED[pos] || 1, v = state.teams.map(t => { const l = rosterOf(t.id).filter(p => p.pos === pos && p.a).sort((a, b) => b.ovr - a.ovr).slice(0, n); return l.length ? avg(l.map(p => p.ovr)) : 55; }); return avg(v); }
+function briefLeagueBar(pos) { const n = LINEUP_NEED[pos] || 1, v = state.teams.map(t => { const l = rosterOf(t.id).filter(p => cpos(p) === pos && p.a).sort((a, b) => b.ovr - a.ovr).slice(0, n); return l.length ? avg(l.map(p => p.ovr)) : 55; }); return avg(v); }
 function coachBrief(tid, role) {
   const t = T(tid), c = staffCoach(t, role); if (!c) return null;
   const on = campOn(), cm = state.camp, poss = BRIEF_ROOMS[role] || [], ro = rosterOf(tid).filter(p => p.a), bub = campBubble(tid), battles = prepBattles(tid);
-  const inRooms = p => poss.includes(p.pos), mine = ro.filter(inRooms), blk = on ? cm.blocks - 1 : -1;
-  const read = p => coachRead(p, tid), order = pos => ro.filter(p => p.pos === pos).sort((a, b) => read(b) - read(a));
+  const inRooms = p => poss.includes(cpos(p)), mine = ro.filter(inRooms), blk = on ? cm.blocks - 1 : -1;
+  const read = p => coachRead(p, tid), order = pos => ro.filter(p => cpos(p) === pos).sort((a, b) => read(b) - read(a));
   const wk = p => p.camp && p.camp.s === state.season ? p.camp.sc[blk] : undefined, note = p => { const n = campLastNote(p); return n ? ` <span class="muted">${esc(n[2])}</span>` : ''; };
   const S = [], sec = (h, lines) => { lines = lines.filter(Boolean); if (lines.length) S.push({ h, lines }); };
   const roomBattles = pos => battles.filter(b => b.pos === pos);
