@@ -221,7 +221,7 @@ function campObjections(tid, plan) {
     out.push({ p, c, over: keepOver || null, note: campLastNote(p) }); }
   // the special teams coordinator speaks up for the men who cover his kicks
   const stc = C(T(tid).stc), core = rosterOf(tid).filter(p => p.a && ST_OK.has(p.spot)).sort((a, b) => stCover(b) - stCover(a)).slice(0, 6);
-  for (const p of core) if ((plan[p.id] === 'cut' || plan[p.id] === 'ps') && stCover(p) >= 68 && !out.some(o => o.p === p)) out.push({ p, c: stc, over: null, note: [0, 0, 'One of the best men on the coverage units.'] });
+  for (const p of core) if ((plan[p.id] === 'cut' || plan[p.id] === 'ps') && stCover(p) >= 68 && !out.some(o => o.p === p)) out.push({ p, c: stc, over: null, note: [0, 0, 'One of the best men on the kick-coverage units.'] });
   return out;
 }
 function campLastNote(p) { const c = p.camp && p.camp.s === state.season ? p.camp : null; return c && c.notes.length ? c.notes[c.notes.length - 1] : null; }

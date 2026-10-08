@@ -955,7 +955,15 @@ function genDefPk(arch) {
 // a pass defense coordinator's own packages, by what he believes in
 const SPEC_PK_POOL = { PRESSURE: ['FZ', 'BLITZ', 'SIM', 'C0', 'STUNT'], MAN: ['C1', 'C2M', 'C0', 'BLITZ'], SHELL: ['T2', 'C6', 'C4', 'C2', 'DISG', 'BIGN'], PENETRATE: ['STUNT', 'UNDER'], TWOGAP: ['BEAR', 'BIGN'] };
 function genSpecPk(c) { const pool = (SPEC_PK_POOL[c.lean] || []).slice(); shuffle(pool); return pool.slice(0, c.role === 'DPC' ? 3 : 2); }
+// every defense carries some man coverage and brings an extra rusher now and then
+function floorDefPk(pk) {
+  if (!pk || pk.fl) return pk; pk.fl = 1;
+  if (!MAN_SHELLS.some(k => (pk.sh[k] || 0) >= 0.05)) { pk.sh.C1 = Math.max(pk.sh.C1 || 0, 0.07); normShares(pk.sh); }
+  if ((pk.pr.BLITZ || 0) + (pk.pr.FZ || 0) < 0.05) { pk.pr.BLITZ = Math.max(pk.pr.BLITZ || 0, 0.06); normShares(pk.pr); }
+  return pk;
+}
 function ensureDefPk(c) {
+  if (c && c.pk) floorDefPk(c.pk);
   if (!c) return;
   if ((c.role === 'DC' || (c.role === 'HC' && c.t && c.t.caller === 'D')) && !c.pk) c.pk = genDefPk(c.arch);
   if ((c.role === 'DPC' || c.role === 'DRC') && !c.pks) c.pks = genSpecPk(c);

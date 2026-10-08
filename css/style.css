@@ -748,3 +748,21 @@ button.oc.sp, div.oc.sp { padding: 8px 10px; }
   .pl-name { width: 100%; }
   .pl-rooms > button[data-action="campRoom"] { padding: 9px 11px; }
 }
+
+/* ---------- no accidental text selection; fields and reports can still be selected ---------- */
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea, select, .selectable { -webkit-user-select: text; user-select: text; }
+/* ---------- the game's own tooltip ---------- */
+#tip { position: fixed; z-index: 120; max-width: 300px; padding: 7px 10px; border-radius: 6px; background: var(--ink); color: var(--ink-text); border-top: 2px solid var(--brass); box-shadow: 0 10px 26px -8px rgba(10, 14, 24, .6); font-size: 12.5px; line-height: 1.4; pointer-events: none; opacity: 0; transition: opacity .1s; }
+#tip.on { opacity: 1; }
+/* ---------- futures deals ---------- */
+.fut-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 9px 2px; border-top: 1px solid var(--line2); }
+.fut-row:first-child { border-top: none; }
+.fut-who { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.fut-who .link { font-size: 15px; font-weight: 600; padding: 6px 4px; }
+.fut-row > button { flex: none; }
+@media (max-width: 760px) {
+  .fut-row { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px 2px; }
+  .fut-who .link { font-size: 16px; padding: 10px 6px; }
+  .fut-row > button { align-self: flex-end; min-height: 40px; padding: 8px 16px; }
+}

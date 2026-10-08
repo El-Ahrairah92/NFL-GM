@@ -5,8 +5,8 @@
 //  TRAITS[attr] = { p: [mild, solid, elite], n: [mild, bad, awful] } — each a list of variants.
 // =====================================================================
 const TRAITS = {
-  st: { p: [['Contributes on special teams', 'Can cover kicks', 'Useful in the kicking game'], ['Core special teamer', 'Plays on every coverage unit', 'Runs down kicks with bad intentions', 'Four-phase special teams player'], ['Special teams ace', 'One of the best coverage players in the league', 'Makes his living on special teams', 'First man down the field on every kick']],
-    n: [['Limited special teams value', 'Not much help in the kicking game'], ['Does not help on special teams', 'Not a factor on coverage units', 'Has never been a special teams player'], ['A liability on coverage units', 'Offers nothing on special teams']] },
+  st: { p: [['Contributes on special teams', 'Can cover kicks', 'Useful in the kicking game'], ['Core special teamer', 'Plays on every kick-coverage unit', 'Runs down kicks with bad intentions', 'Four-phase special teams player'], ['Special teams ace', 'One of the best kick-coverage men in the league', 'Makes his living on special teams', 'First man down the field on every kick']],
+    n: [['Limited special teams value', 'Not much help in the kicking game'], ['Does not help on special teams', 'Not a factor covering kicks', 'Has never been a special teams player'], ['A liability covering kicks', 'Offers nothing on special teams']] },
   spd: { p: [['Good long speed', 'Runs well for the position', 'Enough speed to threaten a defense'], ['Plus speed', 'Pulls away in the open field', 'Legit vertical speed'], ['Rare long speed', 'Track speed', 'One of the fastest players on the field', 'Blazing top gear']],
     n: [['A step slow', 'Average speed at best', 'Builds speed slowly', 'Not a burner'], ['Lacks top-end speed', 'Gets caught from behind', 'Plays at one speed', 'Speed is a real limitation'], ['Painfully slow', 'Runs like he is in sand', 'No long speed to speak of', 'Cannot threaten anyone vertically']] },
   bur: { p: [['Gets going quickly', 'Decent short-area burst', 'Good initial quickness'], ['Explosive first step', 'Sudden mover', 'Hits top speed in a hurry'], ['Shot out of a cannon', 'Rare get-off', 'Explodes off the snap', 'Elite short-area burst']],
@@ -156,6 +156,7 @@ const ROLES_SPOT = {
 };
 // last line of defense for the wording: a phrase that names a job or a build is only used on a player who has it
 const ROLE_GUARD = [
+  [/plodder/i, p => p.a && p.a.spd <= 74 && p.a.bur <= 78], // a plodder is slow by definition
   [/\bnose\b/i, p => p.spot === 'NT'], [/three-technique/i, p => p.spot === 'DT'], [/defensive tackle/i, p => p.spot === 'DT' || p.spot === 'NT'], [/five-technique|base end/i, p => p.spot === 'DE'],
   [/nickel corner|slot corner|\bnickel$|slot cover|slot defender|zone nickel|man-coverage nickel|run-support nickel/i, p => p.spot === 'NCB'], [/boundary corner/i, p => p.spot === 'CB'],
   [/big nickel type/i, p => p.spot === 'SS' || p.spot === 'FS'], [/free safety|center-field|single-high/i, p => p.spot === 'FS'], [/strong safety/i, p => p.spot === 'SS'],
@@ -181,7 +182,7 @@ const ROLE_IMPLIES = [[/press/i, ['prs']], [/slot|shifty|quick-footed|mirror|sud
 function roleImplied(phrase) { const out = new Set(); for (const [re, ks] of ROLE_IMPLIES) if (re.test(phrase)) ks.forEach(k => out.add(k)); return out; }
 // a starter is not described by his special teams work, and a backup who brings none has a real hole
 function stCounts(p) { return !['Elite', 'All-Pro', 'Starter'].includes(tierOf(p)); }
-const ST_ROLES = ['special teams ace', 'core special teamer', 'coverage-unit regular', 'four-phase special teamer'];
+const ST_ROLES = ['special teams ace', 'core special teamer', 'kick-coverage regular', 'four-phase special teamer'];
 function rolesFor(p) {
   const out = {}, base = Object.assign({}, ROLES[PROFILE_GROUP[p.spot]], ROLES_SPOT[p.spot]);
   for (const k in base) { const l = base[k].filter(x => roleFits(p, x)); if (l.length) out[k] = l; }

@@ -13,7 +13,7 @@ function startPreseason() {
     for (let i = 0; i < ids.length; i += 2) wk.push({ h: ids[i], a: ids[i + 1] });
     state.pre.sched.push(wk);
   }
-  for (const id in state.players) delete state.players[id].preS;
+  for (const id in state.players) { const p = state.players[id]; if (p.preS && p.preS.gp) { (p.preCar = p.preCar || []).push(Object.assign({ season: p.preS.season || state.season - 1, tid: p.tid, snp: p.preS.snp }, p.preS.st)); if (p.preCar.length > 8) p.preCar.shift(); } delete p.preS; } // last summer's exhibitions go into the record
   state.prePlan = { starters: (state.prePlan && state.prePlan.starters) || 'auto', feat: {}, hold: {} };
   for (const t of shuffle(state.teams.slice())) if (isAI(t.id)) campSignings(t.id); // your camp roster is yours to build
   devSummer('camp');
@@ -67,7 +67,8 @@ function startUdfa() {
 // how he sees a team: is there a job to win there?
 function udfaPath(p, tid) {
   const room = rosterOf(tid).filter(x => x.pos === p.pos);
-  const ahead = room.filter(x => perOvr(x) >= perOvr(p) - 1).length;
+  const cls = room.filter(x => x.id !== p.id && x.exp === 0 && perOvr(x) < perOvr(p) - 1).length; // other rookies already there are competition for the same looks, whatever their grade
+  const ahead = room.filter(x => x.id !== p.id && perOvr(x) >= perOvr(p) - 1).length + cls * 0.6;
   return clamp((ROSTER_TEMPLATE[p.pos] - ahead) * 1.3, -5, 5) + clamp((CAMP_TARGET[p.pos] || 3) - room.length, -3, 4) * 0.5;
 }
 function udfaPathLabel(x) { return x >= 3 ? 'Clear path to a job' : x >= 0 ? 'Fair shot' : x >= -3 ? 'Crowded room' : 'Long odds'; }
@@ -204,6 +205,7 @@ function simPreseasonWeek() {
     const box = simGame(m.h, m.a, { pre: n, pbp: mine });
     box.pre = n; box.playoff = `Preseason ${n}`; // label only: exhibitions can end in a tie
     applyPreBox(box, mine);
+    m.score = box.score.slice(); if (mine) m.gid = box.id;
     if (mine) state.games[box.id] = box;
   }
   injuryTick();
@@ -219,7 +221,7 @@ function applyPreBox(box, keep) {
   for (const pid in box.stats) {
     const p = P(pid), l = box.stats[pid];
     if (!p || !l.snp) continue;
-    const s = p.preS || (p.preS = { snp: 0, gp: 0, adv: {}, st: {} });
+    const s = p.preS || (p.preS = { snp: 0, gp: 0, adv: {}, st: {}, season: state.season });
     s.snp += l.snp; s.gp++;
     if (l.sq) { s.sq = s.sq || [0, 0, 0]; l.sq.forEach((v, i) => s.sq[i] += v); }
     s.last = { wk: box.pre, snp: l.snp, sq: l.sq || null, g: box.adv && box.adv[pid] && l.snp >= 10 ? overallGrade(box.adv[pid], p.spot) : null, line: statSummary(l, p.pos) };

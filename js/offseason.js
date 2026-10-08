@@ -122,8 +122,7 @@ function endSeason() {
   seasonMovers();
   seasonPerception(awards);
   const ru = po.rounds[3][0].win === po.rounds[3][0].h ? po.rounds[3][0].a : po.rounds[3][0].h;
-  state.history.push({ season: state.season, champ: po.champ, runnerUp: ru, awards, userRec: recStr(recs[state.userTid]), wrap });
-  { const old = state.history[state.history.length - 4]; if (old && old.wrap) delete old.wrap.bracket; } // older seasons keep the honors, not every score
+  state.history.push({ season: state.season, champ: po.champ, runnerUp: ru, awards, userRec: recStr(recs[state.userTid]), wrap, res: { reg: packWeeks(state.schedule), pre: state.preRes || null } }); // older seasons keep the honors, not every score
   for (const k in awards) addNews(`${state.season} ${AWARD_NAMES[k]}: ${awards[k].name} (${T(awards[k].tid).abbr} ${awards[k].pos})`, [awards[k].tid], 'award');
   for (const t of state.teams) {
     const r = recs[t.id], e = po.elim[t.id];
@@ -439,11 +438,13 @@ function fixCap(tid) {
 }
 
 // One call for anything that skips the waiver screen (auto-managed leagues, test harnesses)
+function packWeeks(weeks) { return weeks.map(wk => wk.map(m => [m.h, m.a, m.score ? m.score[0] : -1, m.score ? m.score[1] : -1])); } // a season's results in a few kilobytes
 function startNewSeason() { beginWaivers(); resolveWaivers(); }
 // ---------- cutdown → waivers → season ----------
 // Cuts happen league-wide, players with fewer than four seasons hit the waiver wire, claims are awarded worst record first.
 function beginWaivers() {
   const plan = (state.cut && state.cut.plan) || {}, u = state.userTid;
+  if (state.pre && state.pre.sched) state.preRes = packWeeks(state.pre.sched);
   state.pre = null; state.cut = null; state.udfa = null;
   const prio = standings().slice().sort((a, b) => (a.w + a.t * 0.5) - (b.w + b.t * 0.5) || a.pf - a.pa - (b.pf - b.pa)).map(r => r.tid);
   state.wv = { claims: {}, ai: {}, ps: [], want: {}, prio: prio.length === state.teams.length ? prio : state.teams.map(t => t.id) };

@@ -135,6 +135,8 @@ function initSide(g, s) {
   const T_ = g.side[s] || (g.side[s] = { tid, onField: new Set() });
   if (!T_.active) T_.active = g.pre ? preseasonActives(tid) : gameDayActives(tid); // 48 dress on game day; in preseason the starters sit
   T_.roster = rosterOf(tid).filter(p => !p.injury && T_.active.has(p.id));
+  // the emergency quarterback: a third passer who did not dress may come in once the men ahead of him are hurt
+  if (!g.pre && !T_.roster.some(p => p.pos === 'QB')) { const em = rosterOf(tid).filter(p => p.pos === 'QB' && !p.injury && !T_.active.has(p.id)).sort((a, b) => b.ovr - a.ovr)[0]; if (em) { T_.active.add(em.id); T_.roster.push(em); if (g.pbp) g.pbp.push({ q: g.q || 1, c: Math.max(0, Math.round(g.clock || 0)), t: tid, dd: '', x: `${T(tid).abbr} are down to the emergency quarterback: ${em.first} ${em.last} comes in` }); } }
   if (T_.roster.length < 22) { // emergency fillers so a decimated team can still line up
     let i = 0;
     while (T_.roster.length < 30) T_.roster.push({ id: -100 - s * 50 - (i++), first: 'Emergency', last: 'Sub' + i, spot: 'WRZ', pos: 'WR', lbl: '—', ovr: 40, tid, a: null, h: null });

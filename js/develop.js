@@ -293,8 +293,8 @@ function finishedRemark(p) {
 // ---- comps: who in this league (or its history) plays like the finished product ----
 const COMP_CACHE = { key: null, m: {} };
 function compPool(spotGrp) {
-  const live = Object.values(state.players).filter(c => c.a && c.tid !== -2 && c.exp >= 3 && PROFILE_GROUP[c.spot] === spotGrp).map(c => ({ id: c.id, n: pname(c), tid: c.tid, a: c.a, m: c.m, v: perOvr(c) }));
-  const old = Object.values(state.retired || {}).filter(r => r.a && PROFILE_GROUP[r.spot] === spotGrp && r.pk >= 74).map(r => ({ rid: r.id, n: r.n, tid: -9, a: r.a, m: { ht: r.ht, wt: r.wt }, v: r.pk, yrs: r.to }));
+  const live = Object.values(state.players).filter(c => c.a && c.tid !== -2 && c.exp >= 3 && PROFILE_GROUP[c.spot] === spotGrp).map(c => ({ id: c.id, n: pname(c), tid: c.tid, a: c.a, m: c.m, v: perOvr(c), spot: c.spot }));
+  const old = Object.values(state.retired || {}).filter(r => r.a && PROFILE_GROUP[r.spot] === spotGrp && r.pk >= 74).map(r => ({ rid: r.id, n: r.n, tid: -9, a: r.a, m: { ht: r.ht, wt: r.wt }, v: r.pk, yrs: r.to, spot: r.spot }));
   return live.concat(old);
 }
 function compFor(p, best) {
@@ -306,7 +306,9 @@ function compFor(p, best) {
   const a = projectedAttrs(p, best), level = uCeil(p) + (best ? 4 : 0);
   const mean = o => keys.reduce((s, k) => s + (o[k] || 25), 0) / Math.max(1, keys.length), ma = mean(a);
   let bestC = null, bestD = 1e9;
-  for (const c of compPool(grp)) {
+  const fam = s => ({ LT: 'OT', RT: 'OT', LG: 'IOL', RG: 'IOL', C: 'IOL' }[s] || PROFILE_GROUP[s]); // a tackle is compared to tackles, a guard to guards and centers
+  let pool = compPool(grp).filter(c => fam(c.spot) === fam(p.spot)); if (pool.length < 4) pool = compPool(grp);
+  for (const c of pool) {
     if (c.id === p.id) continue;
     const mc = mean(c.a);
     let d = 0;
