@@ -14,7 +14,7 @@ function startPreseason() {
     state.pre.sched.push(wk);
   }
   for (const id in state.players) { const p = state.players[id]; if (p.preS && p.preS.gp) { (p.preCar = p.preCar || []).push(Object.assign({ season: p.preS.season || state.season - 1, tid: p.tid, snp: p.preS.snp }, p.preS.st)); if (p.preCar.length > 8) p.preCar.shift(); } delete p.preS; } // last summer's exhibitions go into the record
-  state.prePlan = { starters: (state.prePlan && state.prePlan.starters) || 'auto', feat: {}, hold: {} };
+  state.prePlan = { starters: 'auto', share: (state.prePlan && state.prePlan.share) || {}, feat: {}, hold: {} };
   for (const t of shuffle(state.teams.slice())) if (isAI(t.id)) campSignings(t.id); // your camp roster is yours to build
   devSummer('camp');
   openCamp(); // the staff names the open jobs and the first week of practice is in the books
@@ -147,7 +147,7 @@ function resolveUdfaRound() {
 function finishUdfa() {
   state.udfa = null;
   state.phase = 'PRESEASON';
-  startPreseason();
+  if (isAI(state.userTid)) startPreseason(); else state.pre = null; // you meet with the staff first, then open camp yourself
   addNews('Rookie free agency is over. Camp rosters are set; anyone still unsigned is a free agent.');
 }
 // positions where a roster is short of what it needs to line up
@@ -162,11 +162,13 @@ function rosterShortfalls(tid) {
 // the night off). feat: bubble players who stay in for extra film. hold: players kept out entirely.
 const PRE_MODES = [['auto', 'Coach\'s plan (a series, a quarter, then sit)'], ['sit', 'Starters sit'], ['series', 'Starters play one series'], ['quarter', 'Starters play a quarter'], ['half', 'Starters play a half']];
 const PRE_AUTO = ['series', 'quarter', 'sit'];
+// how much of an exhibition the first group plays, as a share of the game: the usual build-up is a series, a quarter, then the night off
+const PRE_SHARE_AUTO = [0.1, 0.25, 0], PRE_SHARE_OPTS = [[-1, "Coach's plan"], [0, 'Sit'], [0.1, 'A series'], [0.25, 'A quarter'], [0.5, 'A half'], [0.75, 'Three quarters']];
+const PRE_GROUPS = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S'];
 function prePlanFor(tid) {
   const pl = tid === state.userTid && !state.settings.autoUser && state.prePlan ? state.prePlan : null;
-  let mode = pl ? pl.starters : 'auto';
-  if (mode === 'auto') mode = PRE_AUTO[state.pre ? Math.min(state.pre.wk, 2) : 0];
-  return { mode, feat: pl ? pl.feat : {}, hold: pl ? pl.hold : {} };
+  const auto = PRE_SHARE_AUTO[state.pre ? Math.min(state.pre.wk, 2) : 0], sh = (pl && pl.share) || {};
+  return { share: pos => sh[pos] !== undefined && sh[pos] >= 0 ? sh[pos] : auto, auto, feat: pl ? pl.feat : {}, hold: pl ? pl.hold : {} };
 }
 function preStarters(tid, g) {
   if (g && g.preStart && g.preStart[tid]) return g.preStart[tid];
@@ -179,11 +181,10 @@ function preseasonActives(tid, g) {
   const plan = prePlanFor(tid), starters = preStarters(tid, g), sit = new Set();
   const q = g && g.q ? g.q : 1, snp = id => (g && g.ps[id] ? g.ps[id].snp : 0);
   const ro = rosterOf(tid).filter(p => !p.injury);
-  const startSnaps = Math.max(0, ...ro.filter(p => starters.has(p.id)).map(p => snp(p.id)));
-  const startersIn = plan.mode === 'half' ? q <= 2 : plan.mode === 'quarter' ? q <= 1 : plan.mode === 'series' ? q <= 1 && startSnaps < 12 : false;
+  const elapsed = !g ? 0 : q > 4 ? 1 : ((q - 1) * 900 + (900 - Math.max(0, Math.min(900, g.clock === undefined ? 900 : g.clock)))) / 3600; // share of the game played so far
   for (const p of ro) {
     if (plan.hold[p.id]) sit.add(p.id);
-    else if (starters.has(p.id) && !plan.feat[p.id]) { if (!startersIn) sit.add(p.id); }
+    else if (starters.has(p.id) && !plan.feat[p.id]) { const s = plan.share(p.pos); if (!(s > 0 && (elapsed < s || (s <= 0.12 && snp(p.id) < 8 && q <= 1)))) sit.add(p.id); } // each group plays its share; a "series" is at least a handful of snaps
   }
   // the twos give way to the threes after halftime, unless you want more film on someone
   const played = new Set(ro.filter(p => !sit.has(p.id) && !plan.feat[p.id] && p.pos !== 'K' && p.pos !== 'P' && ((q >= 3 && snp(p.id) >= 22) || snp(p.id) >= 45)).map(p => p.id));
@@ -212,7 +213,7 @@ function simPreseasonWeek() {
   state.pre.wk++;
   practiceWeekAll();
   refreshPerception();
-  if (state.camp) { if (state.pre.wk < PRESEASON_GAMES) campWeek(`Camp, week ${state.pre.wk + 1}`); else campBattles(state.camp.tid); } // a practice week follows each of the first two games; the last game goes straight onto the boards
+  if (state.camp) { if (state.pre.wk < PRESEASON_GAMES) campWeek(`After game ${state.pre.wk}`, 0.7); else campBattles(state.camp.tid); } // a practice week follows each of the first two games; the last game goes straight onto the boards
   if (state.pre.wk >= PRESEASON_GAMES) { devSummer('pre'); state.phase = 'CUTDOWN'; state.cut = { plan: {} }; addNews('Preseason is over. Rosters must be down to 53 before Week 1.'); }
 }
 // exhibition snaps: film for the scouts, reps toward positional comfort, and a preseason line for every player

@@ -267,6 +267,7 @@ function applyBox(box, playoff) {
   for (const pid in box.stats) {
     const p = P(pid);
     if (!p) continue;
+    if (p.rust && (box.stats[pid].snp || 0) >= 15) { p.rust = Math.round((p.rust - 0.5) * 100) / 100; if (p.rust <= 0) delete p.rust; } // a game or two of real snaps and the rust is gone
     if (playoff) { p.pstats = p.pstats || {}; addStats(p.pstats, box.stats[pid]); }
     else addStats(p.stats, box.stats[pid]);
     if (p.tid >= 0) addWear(p, box.stats[pid], p.tid);

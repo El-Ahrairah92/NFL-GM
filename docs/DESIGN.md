@@ -498,3 +498,15 @@ Camp opens when rookie free agency ends. There are three practice weeks (camp op
 **Roster spots.** Core special teamers dress on game day ahead of slightly better players who do not help there, and other clubs value them at cutdown and on waivers. In camp the special teams coordinator objects if you cut one of his best coverage men, and the planner's Specialists room starts with the kickoff and punt units.
 
 **Roster planner (replaces the camp page).** The planner tab opens when the season ends and stays through the coaching search, re-signing, free agency, the draft, rookie free agency, camp and cutdown day. Before camp opens the practice and exhibition columns are empty and each row shows last season instead (grade, snaps, starts, stat line) along with the player's contract. Groups you build carry through the whole offseason and are reset to the staff's chart when the next one begins.
+
+## 28. Camp, restructured
+
+**The meeting.** When rookie free agency ends camp does not open by itself. The Staff page opens on the head coach and every coach on the chart has his say, at his own level: the head coach on the whole roster (strong and thin rooms against the league, open jobs, the rookie class, what he wants out of camp), coordinators on their side room by room, the run and pass specialists on their area, position coaches on their room (order, each competition and what each man has to show, who must make it on special teams), the special teams coordinator on his units, returners and specialists, and the strength coach on conditioning. It is rebuilt from the roster each time you look, so signing or cutting someone changes what they say.
+
+**Camp.** Opening camp runs two heavier practice weeks before the first exhibition, then a lighter week after each of the first two games: four practice blocks in all. Each coach's page then becomes a camp report, updated after every block: who stood out and who struggled, how his board has moved since before camp, where each competition stands, and what he wants from the next game.
+
+**Camp notes.** A much larger bank of lines for every position, plus who a man won and lost against in drills by name. Within a room, no two men get the same line in the same week while another is available.
+
+**Preseason playing time.** Set per position group how long the first team plays (sit, a series, a quarter, a half, three quarters) or leave it on the coach's plan, which is a series in game one, a quarter in game two and the night off in game three.
+
+**Sharpness.** A player with fewer than 16 preseason snaps opens the season rusty: a small cut to every rating in his first game and half of it in his second. The usual build-up is enough to be sharp. The preseason panel lists which starters are short, and a rusty player says so on his card.

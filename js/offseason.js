@@ -444,7 +444,7 @@ function startNewSeason() { beginWaivers(); resolveWaivers(); }
 // Cuts happen league-wide, players with fewer than four seasons hit the waiver wire, claims are awarded worst record first.
 function beginWaivers() {
   const plan = (state.cut && state.cut.plan) || {}, u = state.userTid;
-  if (state.pre && state.pre.sched) state.preRes = packWeeks(state.pre.sched);
+  if (state.pre && state.pre.sched) { state.preRes = packWeeks(state.pre.sched); setSharpness(); }
   state.pre = null; state.cut = null; state.udfa = null;
   const prio = standings().slice().sort((a, b) => (a.w + a.t * 0.5) - (b.w + b.t * 0.5) || a.pf - a.pa - (b.pf - b.pa)).map(r => r.tid);
   state.wv = { claims: {}, ai: {}, ps: [], want: {}, prio: prio.length === state.teams.length ? prio : state.teams.map(t => t.id) };

@@ -194,7 +194,7 @@ function render() {
   if (!state) { app.innerHTML = setupHTML(); return; }
   document.documentElement.style.setProperty('--accent', T(state.userTid).color);
   if (state.phase === 'RECAP' && ui.wrapSeen !== state.season) { ui.wrapSeen = state.season; ui.seasonYr = null; view = 'season'; } // the season just ended: open its review once
-  if (state.phase === 'PRESEASON' && campOn() && !state.settings.autoUser && ui.campSeen !== state.season) { ui.campSeen = state.season; ui.campTab = 'battles'; view = 'camp'; } // camp just opened: start on its page
+  if (state.phase === 'PRESEASON' && !state.pre && !state.settings.autoUser && ui.prepSeen !== state.season) { ui.prepSeen = state.season; ui.staffTid = null; ui.staffSel = T(state.userTid).hc; view = 'coaches'; } // rookie free agency is over: meet with the staff before camp
   let page;
   try { page = pageHTML(); } catch (e) { showError(e, `drawing the ${view} page`); page = `<div class="callout bad">This page hit an error (details at the bottom of the screen).</div>`; }
   const SC = '.tbl-wrap, .scroll, .dc-cands, .dc-side, nav.tabs, .subtabs, .msheet-card', keep = [...app.querySelectorAll(SC)].map(e => [e.scrollLeft, e.scrollTop]), wy = window.scrollY, same = app.dataset.view === view;
@@ -318,7 +318,7 @@ function phaseCallout() {
     case 'FA': return `Free agency wave ${state.faWave + 1} of ${FA_WAVES}. Sign players on the <b>Free Agents</b> tab before AI teams do. Unsigned players lower their asking price each wave.`;
     case 'DRAFT': { const pk = currentPick(); return pk ? `Pick ${pk.pick} (Rd ${pk.round}): <b>${T(pk.owner).abbr}</b> on the clock. ${pk.owner === u ? 'That\'s you! Choose on the <b>Draft</b> tab.' : ''}` : ''; }
     case 'UDFA': { const n = rosterOf(u).length, o = state.udfa ? Object.keys(state.udfa.offers).length : 0; return `Rookie free agency, round ${(state.udfa ? state.udfa.round : 0) + 1} of ${UDFA_ROUNDS}. Every team is bidding for the best undrafted players. Make your offers on the <b>Free Agents</b> tab, then send them. You have <b>${n}</b> of ${OFFSEASON_MAX} camp spots filled and <b>${o}</b> offer${o === 1 ? '' : 's'} out. Nobody is signed for you.`; }
-    case 'PRESEASON': return `Preseason: ${PRESEASON_GAMES} exhibition games. Your starters sit; the bubble players and rookies get the snaps, and what they put on film sharpens every evaluation before <b>Cutdown Day</b>.`;
+    case 'PRESEASON': return !state.pre ? 'Rookie free agency is over. <b>Meet with your staff</b> on the Staff page: every coach has his view of the roster, the open jobs and what he wants to see. When you are ready, open training camp.' : `Camp and ${PRESEASON_GAMES} exhibition games. Each coach files a <b>camp report</b> on the Staff page after every practice block. Set how long each group plays on the Roster page: a starter who does not play in August opens the season a step slow.`;
     case 'WAIVERS': { const n = onWaivers().length, pos = state.wv.prio.indexOf(u) + 1; return `Cuts are in across the league: <b>${n}</b> players are on waivers. You are <b>#${pos}</b> of ${state.teams.length} in claim order (worst record first). Put in claims and line up your practice squad on the <b>Waiver Wire</b> tab, then start the season.`; }
     case 'CUTDOWN': { const n = rosterOf(u).filter(countsOn53).length; return `Cutdown Day: ${n} players, ${ROSTER_MAX} spots. Go through each position group with your staff on the <b>Cutdown Day</b> tab. Anything you leave undecided, the staff decides.`; }
   }
@@ -408,6 +408,17 @@ function teamLeaders(tid) {
 function newsList(items) {
   if (!items.length) return '<div class="muted">No news.</div>';
   return `<ul class="news">${items.map(n => `<li class="${n.tids.includes(state.userTid) ? 'mine' : ''}"><span class="when">${n.s} ${esc(n.when)}</span><span>${esc(n.text)}</span></li>`).join('')}</ul>`;
+}
+// ---------- the staff speaks: the meeting before camp, the report after each practice block ----------
+function briefOn() { return !state.settings.autoUser && (state.phase === 'PRESEASON' || (state.phase === 'CUTDOWN' && campOn())); }
+function briefHTML(t, role) {
+  if (!briefOn()) return '';
+  const b = coachBrief(t.id, role); if (!b) return '';
+  const on = campOn(), lvl = role === 'HC' ? 'The whole roster' : ['OC', 'DC', 'STC', 'SC'].includes(role) ? 'His side of the building' : SPEC_ROLES.includes(role) ? 'His area' : 'His room';
+  return `<div class="card brief"><div class="row"><div><div class="camp-k">${on ? 'Camp report' : 'Prepare for training camp'} · ${lvl}</div><h3 style="margin:2px 0 0">${esc(cname(b.c))} <span class="small muted" style="font-weight:400">${esc(b.title)}${b.eye ? ' · ' + b.eye.toLowerCase() : ''}</span></h3></div><span class="spacer"></span>
+    <span class="small muted">${on ? 'Updated after every practice block.' : 'Pick anyone on the chart to hear him out. ← → walks the staff.'}</span></div>
+    ${b.sections.length ? b.sections.map(x => `<div class="brief-s"><div class="camp-k">${x.h}</div>${x.lines.map(l => `<p>${l}</p>`).join('')}</div>`).join('') : '<p class="muted small">He has nothing to add right now.</p>'}
+    ${on ? '' : '<div class="small muted" style="margin-top:10px">This is advice from one man at his level. When you have heard enough, press <b>Open Training Camp</b>.</div>'}</div>`;
 }
 // ---------- training camp ----------
 const CAMP_CAT = { lock: ['Lock', 'good'], likely: ['Likely', ''], bubble: ['Bubble', 'warn'], ps: ['Practice squad', 'muted'], long: ['Long shot', 'bad'], ir: ['IR', 'muted'] };
@@ -1333,13 +1344,15 @@ function waiverResultModal(r) {
 }
 // ---------- preseason playing-time plan ----------
 function prePlanHTML() {
-  const pl = state.prePlan || { starters: 'auto', feat: {}, hold: {} }, u = state.userTid;
+  const pl = state.prePlan || { feat: {}, hold: {} }, u = state.userTid, sh = pl.share || {};
   const names = o => Object.keys(o).map(id => P(+id)).filter(p => p && p.tid === u).map(p => playerLink(p, true)).join(', ') || '<span class="muted">none</span>';
-  const wk = state.pre ? state.pre.wk : 0, eff = prePlanFor(u).mode;
-  return `<div class="card" style="margin-bottom:14px"><div class="row"><h3 style="margin:0">Preseason plan · game ${Math.min(wk + 1, PRESEASON_GAMES)} of ${PRESEASON_GAMES}</h3><span class="spacer"></span>
-    <label class="small muted">Starters</label> <select data-change="preStarters">${PRE_MODES.map(([k, l]) => `<option value="${k}" ${pl.starters === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-    <p class="small muted" style="margin:8px 0 6px">This game: <b>${{ sit: 'starters sit', series: 'starters play the opening series', quarter: 'starters play the first quarter', half: 'starters play the first half' }[eff]}</b>. Backups take over from there and give way to the third string after halftime. More snaps means better film and faster learning at a new spot, and more exposure to injury.</p>
-    <div class="small"><b>Featured</b> (stay in for extra snaps): ${names(pl.feat)}</div><div class="small" style="margin-top:3px"><b>Held out</b>: ${names(pl.hold)}</div>
+  const wk = state.pre ? state.pre.wk : 0, auto = prePlanFor(u).auto, word = v => (PRE_SHARE_OPTS.find(o => o[0] === v) || [0, Math.round(v * 100) + '%'])[1].toLowerCase();
+  const starters = preStarters(u), short = rosterOf(u).filter(p => starters.has(p.id) && p.pos !== 'K' && p.pos !== 'P' && (p.preS ? p.preS.snp : 0) < SHARP_SNAPS);
+  return `<div class="card" style="margin-bottom:14px"><div class="row"><h3 style="margin:0">Preseason playing time · game ${Math.min(wk + 1, PRESEASON_GAMES)} of ${PRESEASON_GAMES}</h3><span class="spacer"></span><span class="small muted">Coach's plan this game: first team plays ${word(auto)}</span></div>
+    <p class="small muted" style="margin:8px 0 8px">How long each group's first team plays. The backups take over from there and give way to the third string after halftime. More snaps is better film and more risk of injury.</p>
+    <div class="pre-shares">${PRE_GROUPS.map(g => `<label><span>${g}</span><select data-change="preShare" data-pos="${g}">${PRE_SHARE_OPTS.map(([v, l]) => `<option value="${v}" ${(sh[g] === undefined ? -1 : sh[g]) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`).join('')}</div>
+    ${short.length ? `<div class="small ${wk >= PRESEASON_GAMES - 1 ? 'warn' : 'muted'}" style="margin-top:8px"><b>${short.length} starter${short.length === 1 ? '' : 's'}</b> ${short.length === 1 ? 'has' : 'have'} fewer than ${SHARP_SNAPS} preseason snaps and would open the season a step slow: ${short.slice(0, 10).map(p => playerLink(p, true) + ' <span class="muted">(' + (p.preS ? p.preS.snp : 0) + ')</span>').join(', ')}${short.length > 10 ? ' and more' : ''}.</div>` : '<div class="small good" style="margin-top:8px">Every starter has enough preseason work to open the season sharp.</div>'}
+    <div class="small" style="margin-top:8px"><b>Featured</b> (stay in for extra snaps): ${names(pl.feat)}</div><div class="small" style="margin-top:3px"><b>Held out</b>: ${names(pl.hold)}</div>
     <div class="small muted" style="margin-top:6px">Set these per player in the <b>Preseason</b> roster view or on his card.</div></div>`;
 }
 function preSnapReport(b) {
@@ -1994,6 +2007,7 @@ function coachesHTML() {
     ${has ? `<div class="tree-pos"><i class="stem o"></i><i class="stem d"></i>${STAFF_POS_ROW.map(r => `<div class="leaf">${card(r, 'pc')}</div>`).join('')}</div>` : ''}
     <div class="tree-foot">Click anyone to bring up his file below. ← → moves through the staff.</div></div>`;
   let main = tree;
+  if (sel && mine) main += briefHTML(t, selRole); // during camp his word comes first, right under the chart
   if (sel) main += staffSelHTML(t, sel, selRole, mine, canHire);
   html += `<div class="staff-wrap"><div class="staff-main">${main}</div><div class="staff-rail">${staffRailHTML(t, mine)}</div></div>`;
   if (state.phase === 'COACHES' && mine && state.car) html += searchHTML2(t);
@@ -2288,6 +2302,7 @@ function playerModal(pid, replace) {
   } else if (p.tid === -1 && state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP') left += `<button class="primary" data-action="sign" data-pid="${p.id}">Sign (${fmtMoney(p.ask)})</button>`;
   else if (p.tid >= 0) left += `<button data-action="tradeFor" data-pid="${p.id}">Trade for ${esc(p.last)}</button>`;
   left += '</div>';
+  if (p.rust) left += `<div class="small warn" style="margin-top:8px"><span class="pill warn">Rusty</span> Short of preseason work: a step slow until he has played a game or two.</div>`;
   { const w = typeof stWord === 'function' ? stWord(p) : null, sg = stGrade(p.stats); if (w) left += `<div class="section-title">Special teams</div><div class="small"><span class="pill ${w[1]}">${w[0]}</span>${p.stats && p.stats.sts ? ` <span class="muted">${p.stats.sts} snaps · ${p.stats.stk || 0} tackles this season</span> ${sg !== null ? gradeChip(sg) : ''}` : ''}</div>`; }
   if (p.awards && p.awards.length) left += `<div class="section-title">Awards</div>${p.awards.map(x => `<div class="small">🏅 ${esc(x)}</div>`).join('')}`;
   // ---- right: at a glance ----
@@ -2553,7 +2568,7 @@ function pregameModal() {
   };
   openModal(`<div class="muted small">${m.po ? m.po : `Week ${state.week}`} · ${home ? 'Home' : 'Away'}</div>
     <h2 style="margin:4px 0">${T(m.a).abbr} @ ${T(m.h).abbr}</h2>
-    ${state.phase === 'PRESEASON' ? `<div class="small muted" style="margin-bottom:12px">Exhibition. Your plan: ${{ sit: 'starters sit', series: 'starters play the opening series', quarter: 'starters play the first quarter', half: 'starters play the first half' }[prePlanFor(u).mode]}. Change it on the Roster tab. The result does not count; the film does.</div>` : `<div class="row small" style="margin-bottom:12px"><span>Line: <b>${T(fav).abbr} −${(Math.round(sp * 2) / 2).toFixed(1)}</b></span><span class="muted">·</span><span>Your win chance ≈ <b>${Math.round(pUser * 100)}%</b></span></div>`}
+    ${state.phase === 'PRESEASON' ? `<div class="small muted" style="margin-bottom:12px">Exhibition. Playing time by group is set on the Roster tab. The result does not count; the film does.</div>` : `<div class="row small" style="margin-bottom:12px"><span>Line: <b>${T(fav).abbr} −${(Math.round(sp * 2) / 2).toFixed(1)}</b></span><span class="muted">·</span><span>Your win chance ≈ <b>${Math.round(pUser * 100)}%</b></span></div>`}
     <div class="grid g2">${side(u)}${side(opp)}</div>
     <div class="row" style="margin-top:14px"><button class="primary" data-action="playGame" data-recap="1">▶ Sim game</button><button data-action="playGame" data-recap="0">Sim without recap</button><span class="spacer"></span><button class="sm" data-action="popupsOff">Turn off game popups</button></div>`);
 }
@@ -2709,7 +2724,7 @@ const actions = {
       if (short.length && !await ask(`You are short-handed at ${short.join(', ')}. Nobody will be promoted or signed for you. Play anyway?`)) return;
     }
     if (state.phase === 'REG' || state.phase === 'PLAYOFFS' || state.phase === 'PRESEASON') {
-      if (state.phase === 'PRESEASON' && !state.pre) { startPreseason(); ui.campTab = 'battles'; view = 'camp'; save(); render(); window.scrollTo(0, 0); return; } // camp opens with a week of practice before any game
+      if (state.phase === 'PRESEASON' && !state.pre) { if (!await ask({ title: 'Open training camp?', body: 'Two weeks of practice are run before the first exhibition, and every coach will have a camp report for you. Other clubs fill their camp rosters now.', yes: 'Open camp', no: 'Not yet' })) return; startPreseason(); ui.staffTid = null; ui.staffSel = T(state.userTid).hc; view = 'coaches'; save(); render(); window.scrollTo(0, 0); return; }
       if (state.settings.gamePopups !== false && userMatchup()) { pregameModal(); return; }
       playWeek(false);
     } else { stepContinue(); save(); render(); if (ui.udfaResult) { const r = ui.udfaResult; ui.udfaResult = null; udfaResultModal(r); } if (ui.wvResult) { const r = ui.wvResult; ui.wvResult = null; waiverResultModal(r); } }
@@ -2890,6 +2905,7 @@ const changes = {
   negYrs: v => { ui.neg.yrs = +v; ui.neg.gtd = Math.min(ui.neg.gtd, ui.neg.yrs); negModal(); },
   negGtd: v => { ui.neg.gtd = +v; negModal(); },
   preStarters: v => { state.prePlan.starters = v; save(); },
+  preShare: (v, el) => { const pl = state.prePlan; pl.share = pl.share || {}; if (+v < 0) delete pl.share[el.dataset.pos]; else pl.share[el.dataset.pos] = +v; save(); },
   xtSet: (v, el) => { setCrossTrain(+el.dataset.pid, v || null); save(); if (el.dataset.card) playerModal(+el.dataset.pid, true); render(); },
   udfaOffer: (v, el) => { const err = udfaOffer(+el.dataset.pid, v === '' ? null : +v); if (err) toast(err); save(); render(); },
   faF: (v, el) => { (ui.faF || (ui.faF = Object.assign({}, FA_DEF)))[el.dataset.f] = v; },

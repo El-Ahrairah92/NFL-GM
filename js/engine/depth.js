@@ -9,6 +9,7 @@ const TUNE = {
   spread: 0.5,         // how much talent gaps matter: attributes are compressed toward the league mean on every snap
   spreadQBlow: 0.65,   // ...but the worst starters are still professionals: the bottom is not stretched
   spreadQB: 1.03,      // quarterbacking is not compressed: it is the most leveraged job on the field
+  rust: 1.2,           // attribute points a man gives up in his first game if he did not play in August (half of it in his second)
   hfa: 0.3,            // home-field bonus, attribute points on every snap
   teamForm: 0.4,       // sd of team game-day form
   fatFree: 3.0,        // fatigue tolerated before it costs anything
@@ -323,6 +324,7 @@ function ea(g, e, k) {
   const pool = ATTRS[k] ? ATTRS[k][3] : null;
   v = 70 + (v - 70) * (pool === 'pass' ? (v < 70 ? TUNE.spreadQBlow : TUNE.spreadQB) : TUNE.spread);
   v += p._gs || 0;
+  if (p.rust) v -= p.rust * TUNE.rust;
   const grp = ATTRS[k] ? ATTRS[k][2] : null;
   if (grp === 'T' || grp === 'M') v -= e.pen;
   if (grp === 'M') v -= (100 - pbOf(p)) * 0.05; // still thinking instead of playing

@@ -766,3 +766,11 @@ input, textarea, select, .selectable { -webkit-user-select: text; user-select: t
   .fut-who .link { font-size: 16px; padding: 10px 6px; }
   .fut-row > button { align-self: flex-end; min-height: 40px; padding: 8px 16px; }
 }
+
+/* ---------- staff briefings ---------- */
+.brief { margin-top: 12px; border-top: 2px solid var(--brass); }
+.brief-s { margin-top: 12px; }
+.brief-s p { margin: 4px 0; line-height: 1.5; font-size: 13.5px; }
+.pre-shares { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.pre-shares label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.pre-shares label span { font-weight: 700; width: 24px; }
