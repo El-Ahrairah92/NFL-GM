@@ -247,6 +247,7 @@ function preGrade(p) { return p.preS && p.preS.snp >= 15 ? overallGrade(p.preS.a
 function countsOn53(p) { return !(p.injury && p.injury.weeks >= IR_WEEKS); } // long-term injuries open on IR
 // the staff's recommendation: who they'd release to reach 53, and who is on the bubble
 function cutPreview(tid) {
+  if (typeof foCutPlan === 'function' && FO.on !== false) { const plan = foCutPlan(tid, ROSTER_MAX); return { cuts: plan.cuts, bubble: plan.bubble }; }
   const ro = rosterOf(tid).filter(countsOn53);
   const counts = {}; ro.forEach(p => counts[p.pos] = (counts[p.pos] || 0) + 1);
   const sorted = ro.slice().sort((a, b) => cutValue(a) - cutValue(b));

@@ -395,6 +395,8 @@ function cutSavings(p) { const d = deadIfCut(p); return p.contract.yrs > 0 ? p.c
 function cutValue(p) { return playerValue(p, p.tid) - (cutSavings(p) - MIN_SALARY) * 0.4 + (p.draft && p.exp <= 1 ? 3 : 0) + stRosterValue(p); } // the last spots go to men who cover kicks
 function autoCut(tid, limit, activeOnly) {
   const cuts = [];
+  // getting to 53 is the front office's call: the men whose loss hurts the club's lineups least go first
+  if (limit === ROSTER_MAX && typeof foCutPlan === 'function' && FO.on !== false && (!FO.only || FO.only(tid))) { for (const id of foCutPlan(tid, limit).order) { const p = P(id); if (p && p.tid === tid) { releasePlayer(id); cuts.push(p); } } }
   while (true) {
     const ro = rosterOf(tid).filter(p => !activeOnly || !onIR(p));
     if (ro.length <= limit) break;
@@ -663,3 +665,5 @@ function ensureDraftClass(year) {
   if (Object.values(state.players).some(p => p.tid === -2 && p.draftYear === year)) return;
   for (let i = 0; i < 256; i++) genProspect(year);
 }
+// Newer modules are pulled in from here rather than listed in index.html, so a browser holding an older copy of that page still loads a complete game.
+if (typeof document !== 'undefined' && typeof foCutPlan === 'undefined') document.write('<script src="js/frontoffice.js?v=' + Date.now() + '"></script>');

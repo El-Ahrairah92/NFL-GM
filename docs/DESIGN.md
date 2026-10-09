@@ -529,3 +529,21 @@ A spot he does not know yet costs him in the drills, by the same comfort penalty
 **Headers and sub-pages.** Six headers, each with its own row of pages: Home (Overview, News), Team (Roster, Roster Planner, Depth Chart, Practice), Staff (Coaches, Playbook), League (Schedule, Standings, League Stats, History, Season Review), Players (Free Agents, Trade, Player Search, Draft, Waiver Wire) and Settings. A header reopens on the page you last used there, or on the page where the current phase happens. That page carries a brass dot, as does its header when you are somewhere else. Pages that only exist in a phase (Roster Planner, Waiver Wire, Season Review) appear inside their header instead of adding tabs. On a phone the six headers are the bottom bar and the header's pages sit under the top bar.
 
 **Cutdown day lives in the Roster Planner.** On cutdown day every planner row carries Keep, Cut and Practice squad, the 53-man count and the coaches' objections sit above every tab, and a Cut list tab holds the full table with the staff's reasoning. The separate Cutdown Day page is gone.
+
+## 31. Front office valuation (behind the curtain)
+
+Nothing in this section is shown to the player. It is how clubs, and your own staff's recommendations, judge a roster.
+
+**The question.** How much better are this club's lineups with a player than without him?
+
+**Jobs.** Built from what the club runs: starters for its personnel groupings and front, rotation jobs that play real snaps when everyone is healthy (second back, fourth receiver, third edge, third and fourth interior linemen, fourth corner, third safety), and situational jobs a man already on the field can also hold (passing-down back, short-yardage back, edge and interior rush specialists). Each job is weighted by how much the club uses it and by the value of the position.
+
+**The read.** What the club thinks a player is at a spot: the film through its own eyes, his size, the scheme, and how well he knows the spot. A club doubts its own players half as much as anyone else's, reads a spot he has not played less surely, and a better front office reads more truly. Every club has a hidden front office rating; the league is sharp with a real spread.
+
+**Scenarios.** Each unit (quarterback, skill players, offensive line, front seven, secondary) is scored healthy, with each starter missing, and with each pair missing, weighted by how likely that is and by how much clubs fear it. In every case the best lineup is found with anyone free to move. A flexible backup is the answer to many single injuries but only one at a time, so a second good backup still earns his place.
+
+**Worth.** What the unit loses without him, plus what he may become (a club carries a project or two at a position, not six), what he does in the kicking game, less what he costs, with a nod to this year's draft picks.
+
+**Cutdown** is the first decision that uses it: the man the club would miss least goes, his unit is re-scored, and it repeats. Two thin safety nets remain: a floor and a ceiling of bodies at each position.
+
+Measured against the old logic (cut the lowest-rated man anywhere, down to a floor): rosters keep 8 to 11 offensive linemen (was 7 to 13), 2 or 3 quarterbacks (was up to 5) and one kicker and punter; a usable sixth lineman exists at 61% of line spots (was 43%); and with half the league cutting each way, the clubs using it averaged 8.9 wins to 8.1 over 384 team-seasons.
