@@ -162,6 +162,10 @@ function fillSlots(g, s, slots, table, opts = {}) {
   // everybody who starts somewhere in this grouping: the man who rotates in is the first one listed who is not already on the field
   const firsts = new Set();
   if (chart) for (const [name, slot] of slots) { const l = listFor(opts.keyOf(name, slot)); if (l) { const id = l.find(i => !firsts.has(i) && T_.roster.some(p => p.id === i)); if (id !== undefined) firsts.add(id); } }
+  // exhibitions off your chart: each spot's man for the string on the field is spoken for first, so a player listed second at one spot
+  // and third at another plays the first of those in the first half and the other after it
+  const preOn = !!(g.pre && chart && !g.preview), prePos = (slot, grp) => grp === 'DB' ? (['FS', 'SS', 'BIGN'].includes(slot) ? 'S' : 'CB') : slot === 'FB' ? 'RB' : grp, preFeat = preOn ? prePlanFor(g.tids[s]).feat : {}, resv = new Map();
+  if (preOn) for (const [name, slot] of slots) { const l = listFor(opts.keyOf(name, slot)); if (!l) continue; const str = preString(g.tids[s], g, prePos(slot, table[slot][1])), id = l[str]; if (id !== undefined && !resv.has(id) && (str === 0 || !firsts.has(id)) && T_.roster.some(p => p.id === id)) resv.set(id, name); }
   for (const [name, slot, x, depth] of slots) {
     const [spot, grp] = table[slot];
     let best = null, bs = -1e9;
@@ -171,16 +175,21 @@ function fillSlots(g, s, slots, table, opts = {}) {
     // a package can have its own order at a spot (your nickel linebacker need not be your base one); otherwise the base order
     const list = listFor(key);
     let rotHit = false, rotId = null;
+    const preStr = preOn && list ? preString(g.tids[s], g, prePos(slot, grp)) : null;
     if (list) {
       const listed = list.map(id => T_.roster.find(p => p.id === id)).filter(Boolean).filter(p => !cands.some(c => c.p === p)).map(p => ({ p, r: slotRating(p, spot) }));
       if (listed.length) cands = [...listed, ...cands];
-      rotHit = g.preview ? false : opts.rot ? opts.rot(key) : rand() < rotOf(chart, ROT_BAND[key] || !opts.rotKeyOf ? key : opts.rotKeyOf(name)); // a preview shows the order as set, never a random rotation snap
+      rotHit = g.preview || g.pre ? false : opts.rot ? opts.rot(key) : rand() < rotOf(chart, ROT_BAND[key] || !opts.rotKeyOf ? key : opts.rotKeyOf(name)); // a preview shows the order as set, never a random rotation snap
       if (rotHit) rotId = list.find((id, i) => i >= 1 && !firsts.has(id) && !used.has(id) && T_.roster.some(p => p.id === id));
     }
     for (const c of cands) {
       if (used.has(c.p.id)) continue;
       let sc = c.r * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp);
-      if (list) { const i = list.indexOf(c.p.id); if (i >= 0) sc = 300 - i * 14 * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp) + (c.p.id === rotId ? 30 + i * 14 * (ROT_GAP[grp] || 1) : 0); }
+      if (list) { const i = list.indexOf(c.p.id);
+        if (i >= 0 && preStr !== null) { const j = preFeat[c.p.id] ? Math.max(i, preStr) : i, sits = j < preStr || (preStr > 0 && firsts.has(c.p.id) && !preFeat[c.p.id]); sc = (sits ? 15 - j : 300 - (j - preStr) * 20) - fatPenalty(g, c.p, grp); } // exhibitions: the man listed for this string, then deeper; men above it only if nobody else can line up
+        else if (i >= 0) sc = 300 - i * 14 * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp) + (c.p.id === rotId ? 30 + i * 14 * (ROT_GAP[grp] || 1) : 0);
+        else if (preStr !== null && preStr > 0 && firsts.has(c.p.id)) sc -= 200;
+        if (preStr !== null && resv.has(c.p.id) && resv.get(c.p.id) !== name) sc -= 400; } // a starter does not fill in somewhere else while he is supposed to be sitting
       if (T_.rest && T_.rest.has(c.p.id)) sc -= 40; // a planned series off
       if (g.pbNeed && slot !== 'QB' && c.p.a) { const k = pbOf(c.p), need = g.pbNeed[s]; if (k < need) sc -= (need - k) * 0.3; } // he does not know this call
       if (g.ps[c.p.id] && g.ps[c.p.id].last === name) sc += 1.5; // continuity: no needless shuffling
