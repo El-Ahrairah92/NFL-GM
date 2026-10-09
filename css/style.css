@@ -780,3 +780,22 @@ input, textarea, select, .selectable { -webkit-user-select: text; user-select: t
 .work-sel select { max-width: 150px; }
 .rg { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; }
 .rg i { font-style: normal; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+
+/* ---------- headers and their sub-pages ---------- */
+.subnav { display: flex; gap: 0; padding: 0 10px; overflow-x: auto; background: var(--ink); border-top: 1px solid var(--ink-line); scrollbar-width: none; }
+.subnav::-webkit-scrollbar { display: none; }
+.subnav button { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; color: var(--ink-muted); font-size: 12px; padding: 6px 12px; white-space: nowrap; }
+.subnav button:hover:not(:disabled) { color: var(--ink-text); background: rgba(255, 255, 255, .04); border-color: transparent; }
+.subnav button.on { color: var(--ink-text); border-bottom-color: var(--brass); }
+.nav-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--brass); margin-left: 6px; vertical-align: middle; }
+@media (max-width: 760px) {
+  .mnav { grid-template-columns: repeat(6, 1fr); }
+  .subnav { padding: 0 6px; }
+  .subnav button { padding: 9px 12px; font-size: 13px; }
+}
+
+.pl-cut { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 7px; }
+
+.pl-act { flex-wrap: wrap; justify-content: flex-end; align-content: flex-start; }
+.pl-act .pl-cut { flex-basis: 100%; flex-direction: column; align-items: flex-end; gap: 4px; margin: 0 0 6px; }
+@media (max-width: 760px) { .pl-act .pl-cut { flex-direction: row; align-items: center; justify-content: flex-start; flex-wrap: wrap; } .pl-act { justify-content: flex-start; } }

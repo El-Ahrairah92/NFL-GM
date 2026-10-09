@@ -523,3 +523,9 @@ A spot he does not know yet costs him in the drills, by the same comfort penalty
 **One row, four views.** The roster planner's player row has switchable views: Camp (coach's rank, reps, camp grade, drills, games), Scouting (build, scheme fit, development track, the scouting line and what he becomes, strengths and weaknesses), Contract (salary, years, guaranteed, savings and dead money if cut, waiver risk) and Special teams (tag, grade, snaps, tackles, units, return ability). Camp, exhibition, season and practice grades also appear on the depth chart editor and in the practice order.
 
 **Whole-chart edits.** From any personnel grouping or package you can push one spot's order, or the whole chart, into every other look on that side of the ball.
+
+## 30. Navigation and cutdown day
+
+**Headers and sub-pages.** Six headers, each with its own row of pages: Home (Overview, News), Team (Roster, Roster Planner, Depth Chart, Practice), Staff (Coaches, Playbook), League (Schedule, Standings, League Stats, History, Season Review), Players (Free Agents, Trade, Player Search, Draft, Waiver Wire) and Settings. A header reopens on the page you last used there, or on the page where the current phase happens. That page carries a brass dot, as does its header when you are somewhere else. Pages that only exist in a phase (Roster Planner, Waiver Wire, Season Review) appear inside their header instead of adding tabs. On a phone the six headers are the bottom bar and the header's pages sit under the top bar.
+
+**Cutdown day lives in the Roster Planner.** On cutdown day every planner row carries Keep, Cut and Practice squad, the 53-man count and the coaches' objections sit above every tab, and a Cut list tab holds the full table with the staff's reasoning. The separate Cutdown Day page is gone.

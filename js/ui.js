@@ -197,7 +197,7 @@ function render() {
   if (state.phase === 'PRESEASON' && !state.pre && !state.settings.autoUser && ui.prepSeen !== state.season) { ui.prepSeen = state.season; ui.staffTid = null; ui.staffSel = T(state.userTid).hc; view = 'coaches'; } // rookie free agency is over: meet with the staff before camp
   let page;
   try { page = pageHTML(); } catch (e) { showError(e, `drawing the ${view} page`); page = `<div class="callout bad">This page hit an error (details at the bottom of the screen).</div>`; }
-  const SC = '.tbl-wrap, .scroll, .dc-cands, .dc-side, nav.tabs, .subtabs, .msheet-card', keep = [...app.querySelectorAll(SC)].map(e => [e.scrollLeft, e.scrollTop]), wy = window.scrollY, same = app.dataset.view === view;
+  const SC = '.tbl-wrap, .scroll, .dc-cands, .dc-side, nav.tabs, .subnav, .subtabs, .msheet-card', keep = [...app.querySelectorAll(SC)].map(e => [e.scrollLeft, e.scrollTop]), wy = window.scrollY, same = app.dataset.view === view;
   app.innerHTML = topbarHTML() + `<main>${page}</main>` + mobileNavHTML();
   app.dataset.view = view;
   if (same) { [...app.querySelectorAll(SC)].forEach((e, i) => { if (keep[i]) { e.scrollLeft = keep[i][0]; e.scrollTop = keep[i][1]; } }); if (Math.abs(window.scrollY - wy) > 2) window.scrollTo(0, wy); }
@@ -262,18 +262,37 @@ function topbarHTML() {
     <button class="primary" data-action="continue">${continueLabel()}</button>
     ${sim2}
     <button data-action="simYear" title="Auto-manages your team through the rest of this season and the offseason">⏭ Sim to Next Season</button>
-  </div><nav class="tabs">${(state.phase === 'RECAP' ? [['season', '🏆 Season Review'], ...PAGES] : state.phase === 'CUTDOWN' ? [['cutdown', '✂ Cutdown Day'], ['camp', '📋 Roster Planner'], ...PAGES] : planOn() ? [['camp', '📋 Roster Planner'], ...PAGES] : state.phase === 'WAIVERS' ? [['waivers', '📋 Waiver Wire'], ...PAGES] : PAGES).map(([k, l]) => `<button class="${view === k ? 'on' : ''}" data-action="nav" data-view="${k}">${l}</button>`).join('')}</nav></div>`;
+  </div>${navHTML()}</div>`;
 }
 // phones: a bottom bar with the pages you live in, and a sheet with everything else
 const MNAV_ICON = { home: '⌂', roster: '☰', depth: '▦', practice: '◔', coaches: '♜', playbook: '✎', schedule: '▤', standings: '≡', stats: '∑', trade: '⇄', fa: '✚', search: '⌕', draft: '◆', news: '✉', history: '★', settings: '⚙', cutdown: '✂', waivers: '☑' };
+// ---------- navigation: six headers, each with its own row of pages ----------
+function navTree() {
+  const hist = state.history && state.history.length;
+  return [
+    ['home', 'Home', [['home', 'Overview'], ['news', 'News']]],
+    ['team', 'Team', [['roster', 'Roster'], ...(planOn() ? [['camp', 'Roster Planner']] : []), ['depth', 'Depth Chart'], ['practice', 'Practice']]],
+    ['staff', 'Staff', [['coaches', 'Coaches'], ['playbook', 'Playbook']]],
+    ['league', 'League', [['schedule', 'Schedule'], ['standings', 'Standings'], ['stats', 'League Stats'], ['history', 'History'], ...(hist ? [['season', 'Season Review']] : [])]],
+    ['players', 'Players', [['fa', 'Free Agents'], ['trade', 'Trade'], ['search', 'Player Search'], ['draft', 'Draft'], ...(state.phase === 'WAIVERS' ? [['waivers', 'Waiver Wire']] : [])]],
+    ['settings', 'Settings', [['settings', 'Settings']]],
+  ];
+}
+// the page where this phase's business is done
+function navHot() { return { RECAP: 'season', COACHES: 'coaches', RESIGN: 'roster', FA: 'fa', DRAFT: 'draft', UDFA: 'fa', PRESEASON: state.pre ? 'camp' : 'coaches', CUTDOWN: 'camp', WAIVERS: 'waivers' }[state.phase] || null; }
+function navHeadOf(v, tree) { v = v === 'cutdown' ? 'camp' : v; const h = (tree || navTree()).find(x => x[2].some(y => y[0] === v)); return h ? h[0] : 'home'; }
+const NAV_ICON = { home: '⌂', team: '☰', staff: '♜', league: '≡', players: '✚', settings: '⚙' };
+function navHTML() {
+  const tree = navTree(), cur = navHeadOf(view, tree), hot = navHot(), v = view === 'cutdown' ? 'camp' : view, dot = '<i class="nav-dot" title="This is where the current phase happens"></i>';
+  (ui.navLast = ui.navLast || {})[cur] = v;
+  const head = tree.find(x => x[0] === cur);
+  return `<nav class="tabs">${tree.map(([k, l, subs]) => `<button class="${k === cur ? 'on' : ''}" data-action="navHead" data-h="${k}">${l}${hot && k !== cur && subs.some(y => y[0] === hot) ? dot : ''}</button>`).join('')}</nav>${head[2].length > 1 ? `<nav class="subnav">${head[2].map(([k, l]) => `<button class="${k === v ? 'on' : ''}" data-action="nav" data-view="${k}">${l}${k === hot && k !== v ? dot : ''}</button>`).join('')}</nav>` : ''}`;
+}
+// phones: the six headers along the bottom; the pages of the one you are in sit under the top bar
 function mobileNavHTML() {
   if (!state) return '';
-  const special = state.phase === 'PRESEASON' ? [['camp', 'Planner']] : state.phase === 'CUTDOWN' ? [['cutdown', 'Cutdown']] : state.phase === 'WAIVERS' ? [['waivers', 'Waivers']] : state.phase === 'DRAFT' ? [['draft', 'Draft']] : state.phase === 'FA' || state.phase === 'UDFA' ? [['fa', 'Free agents']] : [];
-  const main = [['home', 'Home'], ['roster', 'Roster'], ['depth', 'Depth'], ...(special.length ? special : [['coaches', 'Staff']])];
-  const all = [...(state.phase === 'CUTDOWN' ? [['cutdown', 'Cutdown Day'], ['camp', 'Roster Planner']] : planOn() ? [['camp', 'Roster Planner']] : state.phase === 'WAIVERS' ? [['waivers', 'Waiver Wire']] : []), ...PAGES];
-  const b = ([k, l]) => `<button class="${view === k && !ui.more ? 'on' : ''}" data-action="nav" data-view="${k}"><i>${MNAV_ICON[k] || '•'}</i><span>${l}</span></button>`;
-  const sheet = ui.more ? `<div class="msheet" data-action="more"><div class="msheet-card"><div class="msheet-h">All pages</div><div class="msheet-grid">${all.map(([k, l]) => `<button class="${view === k ? 'on' : ''}" data-action="nav" data-view="${k}"><i>${MNAV_ICON[k] || '•'}</i><span>${l.replace(/^[^A-Za-z]+/, '')}</span></button>`).join('')}</div></div></div>` : '';
-  return `${sheet}<nav class="mnav">${main.map(b).join('')}<button class="${ui.more || !main.some(m => m[0] === view) ? 'on' : ''}" data-action="more"><i>⋯</i><span>More</span></button></nav>`;
+  const tree = navTree(), cur = navHeadOf(view, tree), hot = navHot();
+  return `<nav class="mnav">${tree.map(([k, l, subs]) => `<button class="${k === cur ? 'on' : ''}" data-action="navHead" data-h="${k}"><i>${NAV_ICON[k]}</i><span>${l}${hot && k !== cur && subs.some(y => y[0] === hot) ? ' •' : ''}</span></button>`).join('')}</nav>`;
 }
 function pageHTML() {
   switch (view) {
@@ -288,7 +307,7 @@ function pageHTML() {
     case 'practice': return practiceHTML();
     case 'fa': return faHTML();
     case 'search': return searchHTML();
-    case 'cutdown': return state.phase === 'CUTDOWN' ? cutdownHTML() : homeHTML();
+    case 'cutdown': return state.phase === 'CUTDOWN' ? campHTML() : homeHTML(); // cutdown day now lives in the roster planner
     case 'waivers': return state.phase === 'WAIVERS' ? waiversHTML() : homeHTML();
     case 'draft': return draftHTML();
     case 'coaches': return coachesHTML();
@@ -440,6 +459,9 @@ const PLAN_VIEWS = [['camp', 'Camp'], ['scout', 'Scouting'], ['contract', 'Contr
 function planRowHTML(p, bub, rank, g, i) {
   const view = PLAN_VIEWS.some(v => v[0] === ui.planView) ? ui.planView : 'camp', x = campPlayerBits(p), cat = bub[p.id] ? CAMP_CAT[bub[p.id].cat] : null, wl = workLabel(p), cell = (k, body) => `<div class="pl-c"><span class="camp-k">${k}</span>${body}</div>`;
   let mid = '', foot = '';
+  // cutdown day: the call, and whether he would get through waivers, sit under his name
+  const cutDay = state.phase === 'CUTDOWN' && state.cut && p.tid === state.userTid && countsOn53(p), risk = cutDay ? claimRiskIfCut(p) : '';
+  const cutCtl = !cutDay ? '' : `<div class="pl-cut"><span class="seg">${[['keep', 'Keep'], ['cut', 'Cut'], ['ps', 'Practice squad']].map(([k, l]) => `<button class="sm ${(state.cut.plan[p.id] || 'keep') === k ? (k === 'keep' ? 'primary' : k === 'cut' ? 'danger' : 'on') : ''}" data-action="cutSet" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span><span class="small ${/Will be/.test(risk) ? 'bad' : /Could/.test(risk) ? 'warn' : 'muted'}" title="The staff's read on what happens if you waive him. A player who is claimed cannot come back to your practice squad.">If waived: <b>${risk}</b></span></div>`;
   if (view === 'camp') {
     mid = cell('Coach has him', rank ? `<b>${rank[0]}</b> <span class="small muted">of ${rank[1]}</span>` : '—') + cell('Reps', x.reps) + cell('Camp', `${x.grade}<div class="camp-wks" title="Practice blocks, oldest first">${x.weeks}</div>`) + cell('Drills', `${x.drills}<div class="small muted">vs ones ${x.vs1}</div>`)
       + `<div class="pl-c pl-game">${!x.snaps && x.lastYr ? `<span class="camp-k">Last season</span>${gradeChip(x.lastYr.adv ? x.lastYr.adv.g : null)} <span class="small muted">${x.lastYr.snp || 0} snaps · ${x.lastYr.gs || 0} starts</span><div class="small">${p.pos === 'OL' ? '' : esc(statSummary(x.lastYr, p.pos))}</div>` : `<span class="camp-k">Games</span>${x.pre} <span class="small muted">${x.snaps ? x.snaps + ' snaps' : 'no snaps'}</span>${x.when ? `<div class="small muted">${x.when}</div>` : ''}${x.line ? `<div class="small">${esc(x.line)}</div>` : ''}`}</div>`;
@@ -460,14 +482,22 @@ function planRowHTML(p, bub, rank, g, i) {
   }
   return `<div class="pl-r"><div class="pl-who">${g ? `<span class="pl-n">${i + 1}</span>` : ''}<div><div>${playerLink(p)} <span class="small muted">${esc(p.lbl)} · ${p.age} · ${p.exp === 0 ? 'R' : p.exp + 'y'}${view !== 'contract' && p.contract ? ` · ${fmtMoney(p.contract.amt)}${p.expiring ? ', <span class="warn">expiring</span>' : ''}` : ''}</span></div><div class="pl-pills"><span class="pill">${tierOf(p)}</span>${upsidePill(p)}${cat ? ` <span class="pill ${cat[1]}" title="Where his position coach has him today">${cat[0]}</span>` : ''}${wl ? ` <span class="pill on" title="Where he is working">at ${esc(wl)}</span>` : ''}</div></div></div>
     ${mid}<div class="pl-note">${foot}</div>
-    <div class="pl-act">${g ? `<button class="sm" data-action="planMove" data-gid="${g.id}" data-pid="${p.id}" data-dir="-1" title="Move up" ${i === 0 ? 'disabled' : ''}>▲</button><button class="sm" data-action="planMove" data-gid="${g.id}" data-pid="${p.id}" data-dir="1" title="Move down" ${i === g.pids.length - 1 ? 'disabled' : ''}>▼</button><button class="sm" data-action="planRemove" data-gid="${g.id}" data-pid="${p.id}" title="Take him out of this group">✕</button>` : ''}</div></div>`;
+    <div class="pl-act">${cutCtl}${g ? `<button class="sm" data-action="planMove" data-gid="${g.id}" data-pid="${p.id}" data-dir="-1" title="Move up" ${i === 0 ? 'disabled' : ''}>▲</button><button class="sm" data-action="planMove" data-gid="${g.id}" data-pid="${p.id}" data-dir="1" title="Move down" ${i === g.pids.length - 1 ? 'disabled' : ''}>▼</button><button class="sm" data-action="planRemove" data-gid="${g.id}" data-pid="${p.id}" title="Take him out of this group">✕</button>` : ''}</div></div>`;
 }
 function campHTML() {
   const u = state.userTid;
   if (!planOn()) return '<div class="pagehead"><div><h1>Roster planner</h1></div></div><div class="card"><p class="muted">The roster planner opens when the season ends and stays through the coaching search, free agency, the draft and camp, until your cuts are final.</p></div>';
-  const camp = campOn(), cm = camp ? state.camp : { battles: [], blocks: 0 }, tab = ui.campTab === 'bubble' || (ui.campTab === 'report' && camp) ? ui.campTab : 'plan', ro = rosterOf(u), on = ro.filter(countsOn53), games = state.pre ? state.pre.wk : PRESEASON_GAMES;
+  const cutDay = state.phase === 'CUTDOWN' && !!state.cut;
+  const camp = campOn(), cm = camp ? state.camp : { battles: [], blocks: 0 }, tab = ui.campTab === 'bubble' || (ui.campTab === 'report' && camp) || (ui.campTab === 'cut' && cutDay) ? ui.campTab : 'plan', ro = rosterOf(u), on = ro.filter(countsOn53), games = state.pre ? state.pre.wk : PRESEASON_GAMES;
   let html = `<div class="pagehead"><div><h1>Roster planner</h1><div class="sub">${camp ? `${esc(cm.label || 'Camp')} · practice week ${cm.blocks} of ${CAMP_BLOCKS} · ${games} of ${PRESEASON_GAMES} exhibitions played · ` : `${PHASE_LABEL[state.phase]} · camp has not opened, so practice and game columns are empty · `}${on.length} on the roster, ${on.length > ROSTER_MAX ? on.length - ROSTER_MAX + ' over ' + ROSTER_MAX : ROSTER_MAX - on.length + ' under ' + ROSTER_MAX}</div></div></div>
-    <div class="subtabs">${[['plan', 'Squad planner'], ['bubble', 'The bubble'], ...(camp ? [['report', 'Practice report']] : [])].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="campTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
+    <div class="subtabs">${[['plan', 'Squad planner'], ...(cutDay ? [['cut', 'Cut list']] : []), ['bubble', 'The bubble'], ...(camp ? [['report', 'Practice report']] : [])].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="campTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
+  if (tab === 'cut') return html + cutdownHTML();
+  if (cutDay) { // the count that matters today, on every tab
+    const plan = state.cut.plan, gone = v => v === 'cut' || v === 'ps', keeps = on.filter(p => !gone(plan[p.id])), need = keeps.length - ROSTER_MAX, psN = on.filter(p => plan[p.id] === 'ps').length;
+    html += `<div class="card" style="margin-bottom:12px"><div class="row"><div><div class="big ${need > 0 ? 'bad' : 'good'}">${keeps.length} / ${ROSTER_MAX}</div><div class="small muted">${need > 0 ? `Cut ${need} more to get to ${ROSTER_MAX}` : need < 0 ? `${-need} open spot${need === -1 ? '' : 's'}: nobody will be signed for you` : 'Roster is set'} · practice squad ${psN}/${PS_MAX} marked · ${ro.length - on.length} heading to IR</div></div>
+      <span class="spacer"></span><button data-action="cutStaff">Use the staff's recommendations</button><button data-action="cutClear">Clear my cuts</button></div>
+      <div class="small muted" style="margin-top:8px"><b>Cutdown day.</b> Make each call right on the player's row: Keep, Cut or Practice squad. The Cut list tab has every player in one table with the staff's reasoning. Press <b>Finalize Roster</b> at the top when the count is right.</div></div>` + campObjectionsHTML(u, plan);
+  }
   if (tab === 'plan') {
     const pl = ensurePlan(), bub = campBubble(u), room = PLAN_ROOMS.find(r => r[0] === ui.campRoom) || PLAN_ROOMS[0], [rk, rname, poss] = room;
     const all = ro.filter(p => p.a && poss.includes(cpos(p))), groups = (pl.groups[rk] || []);
@@ -1259,7 +1289,7 @@ function practiceHTML() {
   let html = `<div class="row" style="margin-bottom:10px"><h2 style="margin:0">Practice report <span class="small muted" style="font-weight:400">· ${when}</span></h2><span class="spacer"></span></div>
     <details class="fold" ${foldAttr(`prachelp`)} style="margin-bottom:14px"><summary>How practice works</summary><div class="small muted" style="margin-top:6px">A strong week is a small edge on game day and a poor one a small drag. Work Ethic and Discipline drive it, the veterans in each room set the tone (for better or worse), and Consistency keeps a player from having bad weeks.
     Players learn the playbook through reps: inside a room, use the arrows to set who gets the first-team reps. A player who does not know a call loses that snap to someone who does when possible, and can blow the assignment when he has to play it.
-    <b>Cross-train</b> teaches a player a second position (weeks to months, quicker for nearby jobs and quick learners, and it costs him a little at his own).</div></details>`;
+    <b>Working at</b> sets the spot a player practices at. A second spot takes a share of his reps and is where his comfort grows (weeks to months, quicker for nearby jobs and quick learners).</div></details>`;
   // the week's standouts
   const line = p => `<div class="row" style="gap:8px;padding:3px 0"><span class="small muted" style="width:34px">${esc(p.lbl)}</span>${playerLink(p, true)}<span class="spacer"></span>${pracChip(p)}</div>`;
   const top = all.slice().sort((a, b) => b.prac.g - a.prac.g).slice(0, 5), low = all.slice().sort((a, b) => a.prac.g - b.prac.g).filter(p => p.prac.g < 42).slice(0, 5);
@@ -2700,7 +2730,7 @@ function stepContinue() {
     case 'FA': advanceFA(); break;
     case 'DRAFT': { const pk = currentPick(); if (pk && pk.owner === state.userTid) simDraftPick(); else simDraftToUser(); break; }
     case 'UDFA': { const res = resolveUdfaRound(); if (!state.settings.autoUser) ui.udfaResult = res; break; }
-    case 'PRESEASON': simPreseasonWeek(); if (state.phase === 'CUTDOWN' && !state.settings.autoUser) view = 'cutdown'; break;
+    case 'PRESEASON': simPreseasonWeek(); if (state.phase === 'CUTDOWN' && !state.settings.autoUser) { view = 'camp'; ui.campTab = 'plan'; } break;
     case 'CUTDOWN': beginWaivers(); if (state.settings.autoUser) resolveWaivers(); else view = 'waivers'; break;
     case 'WAIVERS': { const r = resolveWaivers(); if (!state.settings.autoUser) ui.wvResult = r; if (view === 'waivers') view = 'home'; break; }
   }
@@ -2712,6 +2742,7 @@ function phaseLabel() {
 // ---------- actions ----------
 const actions = {
   nav: d => { view = d.view; ui.more = false; render(); window.scrollTo(0, 0); },
+  navHead: d => { const h = navTree().find(x => x[0] === d.h); if (!h) return; const last = (ui.navLast || {})[d.h], hot = navHot(), ok = v => h[2].some(y => y[0] === v); view = navHeadOf(view) === d.h ? view : ok(hot) ? hot : ok(last) ? last : h[2][0][0]; ui.more = false; render(); window.scrollTo(0, 0); },
   more: () => { ui.more = !ui.more; render(); },
   dchUp: d => { const k = d.key, i = +d.i, list = (ensureChart(state.userTid).lists[k] || []); if (i > 0 && list[i]) { setChart(state.userTid, k, i - 1, list[i]); save(); render(); } },
   newLeague: d => { busy('Building league…'); setTimeout(() => { newLeague(+d.tid); save(); view = 'home'; busy(null); render(); }, 10); },
