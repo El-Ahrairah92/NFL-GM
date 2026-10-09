@@ -103,7 +103,12 @@ function genVeteran(spotOrGroup, tier) {
 // out-select the league's established talent level over a decade (measured in a 10-season drift test).
 const DRAFT_Q_ADJ = { QB: -1.3, RB: -0.5, FB: -0.3, WRX: -0.6, WRZ: -0.6, SLOT: -0.6, TEY: -0.95, TEH: -0.95, LT: 0.05, LG: 0.05, C: 0.05, RG: 0.05, RT: 0.05,
   NT: -0.1, DT: -0.1, DE: -0.1, EDGE: -0.15, MLB: -0.55, WLB: -0.55, CB: -0.3, NCB: -0.3, FS: -0.3, SS: -0.3, K: 0, P: 0 };
-const DRAFT_Q = { mean: -0.9, sd: 1.2, bust: 0.24, bustF: 0.3, boom: 0.09, boomF: 1.6, raw: 3.8, udfa: -2.1, udfaSd: 0.75, slope: 0.25 };
+const DRAFT_Q = { mean: -0.9, sd: 1.2, bust: 0.24, bustF: 0.3, boom: 0.09, boomF: 1.6, raw: 3.8, udfa: -1.8, udfaSd: 0.85, slope: 0.25 };
+// The class is two populations on one board: the men every club has a draftable grade on, and the far larger group behind them
+// who will mostly go undrafted. Nobody is told which is which: a club can draft from the second group and a draftable man can slide out.
+const CLASS_DRAFT = 256, CLASS_DEPTH = 500;
+// the depth of a class is shaped like a camp roster, not like a draft board: fewer passers, more backs, linebackers, linemen and legs
+const DEPTH_MIX = { QB: 0.4, RB: 1.8, WRX: 1.2, WRZ: 1.2, SLOT: 1.2, TEY: 0.6, TEH: 0.6, LT: 1.5, LG: 1.5, C: 1.5, RG: 1.5, RT: 1.5, NT: 0.75, DT: 0.75, DE: 0.75, EDGE: 0.7, MLB: 2.1, WLB: 2, CB: 1.5, NCB: 1.5, FS: 0.9, SS: 0.9, K: 4, P: 1.4 };
 // every rookie (drafted or not) is made the same way: raw on arrival, with a hidden amount of growth in him
 function rookiePlayer(spot, qMean, qSd, maxAge) {
   const r = rand(), gf = r < DRAFT_Q.bust ? DRAFT_Q.bustF : r < DRAFT_Q.bust + DRAFT_Q.boom ? DRAFT_Q.boomF : 1;
@@ -115,8 +120,12 @@ function rookiePlayer(spot, qMean, qSd, maxAge) {
   p.qz = round1((q - DRAFT_Q.mean - (DRAFT_Q_ADJ[spot] || 0)) / DRAFT_Q.sd); // how far above his class he stands
   return p;
 }
-function genProspect(draftYear) {
-  const spot = weightedPick(Object.keys(DRAFT_SPOT_W), Object.values(DRAFT_SPOT_W));
+function genProspect(draftYear, depth) {
+  const spot = weightedPick(Object.keys(DRAFT_SPOT_W), depth ? Object.keys(DRAFT_SPOT_W).map(k => DRAFT_SPOT_W[k] * (DEPTH_MIX[k] || 1)) : Object.values(DRAFT_SPOT_W));
+  if (depth) { const p = rookiePlayer(spot, DRAFT_Q.mean + DRAFT_Q.udfa, DRAFT_Q.udfaSd, 24); setTid(p, -2); p.exp = 0; initPerception(p, 'prospect'); p.draftYear = draftYear;
+    // without the pedigree, a flash on tape is discounted by everyone: half of anything he shows above a rotation grade is believed
+    const t = th(p), lim = t.rotation - 3; if (p.per.b > lim) p.per.b = round1(lim + (p.per.b - lim) * 0.5);
+    p.per.g = round1(Math.min(p.per.g * 0.6, Math.max(2, t.starter - 2 - p.per.b))); return p; }
   // some prospects never develop and a few have far more in them than anyone can see: nobody knows which on draft day
   const p = rookiePlayer(spot, DRAFT_Q.mean, DRAFT_Q.sd, 23);
   setTid(p, -2); // draft prospect

@@ -15,6 +15,7 @@ function startPreseason() {
   }
   for (const id in state.players) { const p = state.players[id]; if (p.preS && p.preS.gp) { (p.preCar = p.preCar || []).push(Object.assign({ season: p.preS.season || state.season - 1, tid: p.tid, snp: p.preS.snp }, p.preS.st)); if (p.preCar.length > 8) p.preCar.shift(); } delete p.preS; } // last summer's exhibitions go into the record
   state.prePlan = { starters: 'auto', share: (state.prePlan && state.prePlan.share) || {}, feat: {}, hold: {} };
+  if (typeof foShop === 'function') foShop('camp'); // first the veterans who fix a hole, then the bodies
   for (const t of shuffle(state.teams.slice())) if (isAI(t.id)) campSignings(t.id); // your camp roster is yours to build
   devSummer('camp');
   openCamp(); // the staff names the open jobs and the first week of practice is in the books
@@ -22,6 +23,8 @@ function startPreseason() {
 // every team brings extra bodies to camp: undrafted rookies and street free agents on minimum, non-guaranteed deals
 const CAMP_TARGET = { QB: 4, RB: 6, WR: 12, TE: 6, OL: 16, DL: 16, LB: 9, CB: 11, S: 7, K: 2, P: 1 }; // 90
 function campSignings(tid) {
+  // the front office fills the camp roster for the jobs that are open, not just with the best bodies at a position
+  if (typeof foCampSignings === 'function' && FO.on !== false && (!FO.extra || FO.extra(tid))) { const n = foCampSignings(tid); if (n && tid === state.userTid) addNews(`${T(tid).abbr} signed ${n} undrafted and street free agents to fill out the camp roster.`, [tid], 'sign'); return; }
   const counts = {}; rosterOf(tid).forEach(p => counts[p.pos] = (counts[p.pos] || 0) + 1);
   const pool = Object.values(state.players).filter(p => p.tid === -1 && !p.injury && p.age <= 27 && p.exp <= 4 && p.ask <= MIN_SALARY * 1.3)
     .sort((a, b) => viewCeil(b, tid) - viewCeil(a, tid));
@@ -29,7 +32,7 @@ function campSignings(tid) {
   for (const pos of POSITIONS) {
     while ((counts[pos] || 0) < CAMP_TARGET[pos] && rosterOf(tid).length < OFFSEASON_MAX) {
       let p = pool.find(x => x.tid === -1 && x.pos === pos);
-      if (!p) { p = genVeteran(pos, 'fringe'); p.age = randInt(22, 24); p.exp = 0; }
+      if (!p) p = campBody(pos);
       setTid(p, tid); p.contract = makeContract(p, MIN_SALARY, 1, 0); delete p.ask;
       counts[pos] = (counts[pos] || 0) + 1; n++;
     }
@@ -42,7 +45,18 @@ function campSignings(tid) {
 //  bonus on a minimum deal. The player picks his spot on money, his path to a roster place, and personal preference.
 //  Nobody is signed for you: what you do not go and get, you do not have in camp.
 // =====================================================================
-const UDFA_ROUNDS = 3, UDFA_KEEP = 460;
+const UDFA_ROUNDS = 3, UDFA_KEEP = 540;
+// young men kept on the street from one summer to the next, by position (about 320)
+const STREET_AGE = 25, STREET_KEEP = { QB: 8, RB: 30, WR: 48, TE: 14, OL: 60, DL: 44, LB: 40, CB: 52, S: 22, K: 10, P: 4 };
+// 32 teams passed on him seven times: nobody sees a starter here, whatever he really is
+function undraftedView(p) { const t = th(p); p.per.b = Math.min(p.per.b, t.rotation - 1 - rand() * 5); p.per.h = Math.min(p.per.h || 0, 0); p.per.g = Math.min(p.per.g, Math.max(1, t.mid - p.per.b - rand() * 4)); }
+// when the street really is empty at a position, the body a club finds is an undrafted-type rookie, no better than the ones it passed on
+function campBody(pos) {
+  const spot = SPOTS[pos] ? pos : spotForGroup(pos), kick = spot === 'K' || spot === 'P';
+  const p = kick ? genVeteran(spot, 'fringe') : rookiePlayer(spot, DRAFT_Q.mean + DRAFT_Q.udfa - 0.4, DRAFT_Q.udfaSd, 24);
+  if (kick) { p.age = randInt(22, 24); delete p.draft; } else { initPerception(p, 'prospect'); undraftedView(p); }
+  p.exp = 0; if (typeof ensureST === 'function') ensureST(p); return p;
+}
 const UDFA_BONUS = [0, 0.02, 0.05, 0.1, 0.2]; // $M guaranteed
 function fmtBonus(b) { return b ? '$' + Math.round(b * 1000) + 'K' : 'no bonus'; }
 function isUdfa(p) { return p.tid === -1 && p.udfa === state.season + 1; }
@@ -52,9 +66,7 @@ function genUdfaClass(year, n) {
     const spot = weightedPick(Object.keys(DRAFT_SPOT_W), Object.values(DRAFT_SPOT_W));
     const p = rookiePlayer(spot, DRAFT_Q.mean + DRAFT_Q.udfa, DRAFT_Q.udfaSd, 24); // the players nobody drafted: a clear step below the class
     p.exp = 0; initPerception(p, 'prospect'); p.draftYear = year; p.udfa = year;
-    // 32 teams passed on him seven times: nobody sees a starter here, whatever he really is
-    const t = th(p); p.per.b = Math.min(p.per.b, t.rotation - 1 - rand() * 5); p.per.h = Math.min(p.per.h || 0, 0);
-    p.per.g = Math.min(p.per.g, Math.max(1, t.mid - p.per.b - rand() * 4));
+    undraftedView(p);
     setTid(p, -1); p.ask = MIN_SALARY; p.contract = { amt: MIN_SALARY, yrs: 0 };
   }
 }

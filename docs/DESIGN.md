@@ -547,3 +547,62 @@ Nothing in this section is shown to the player. It is how clubs, and your own st
 **Cutdown** is the first decision that uses it: the man the club would miss least goes, his unit is re-scored, and it repeats. Two thin safety nets remain: a floor and a ceiling of bodies at each position.
 
 Measured against the old logic (cut the lowest-rated man anywhere, down to a floor): rosters keep 8 to 11 offensive linemen (was 7 to 13), 2 or 3 quarterbacks (was up to 5) and one kicker and punter; a usable sixth lineman exists at 61% of line spots (was 43%); and with half the league cutting each way, the clubs using it averaged 8.9 wins to 8.1 over 384 team-seasons.
+
+**Bringing men in** uses the same sum from the other side: what the lineups gain with him, across the same injury scenarios. Three decisions use it.
+- *Camp roster.* Each room is filled to its camp number with the candidates who add the most, with extra weight for a job nobody on the roster has won (weak incumbent, candidate within reach), up to two challengers per job.
+- *Waivers.* A club claims a man only when he adds clearly more than the man it would miss least, who is the one released.
+- *Injuries.* When the injury list changes, the club looks at the free agents at that position and signs the one who repairs the most of what the lineups lost, releasing its least-missed man if the roster is full. Two moves at most per change.
+
+Measured with every club cutting the new way and half the league also signing the new way (576 team-seasons a side): 8.67 wins against 8.33, point difference ahead in all six runs. A small edge, well short of the cutdown's.
+
+## 32. The player pool
+
+Every club shops from the same supply, so the supply has to be deep enough that choosing matters.
+
+**One class, two depths.** The 256 men with draftable grades are on the board all season. When the season ends the rest of the class declares: 500 more, a clear step below, shaped like a camp roster (more backs, linebackers, linemen, corners and legs, fewer passers). Nobody is told which group a man is in. Everyone discounts a flash from a man without the pedigree (half of what he shows above a rotation grade, and a capped projection), so they go on day three or not at all: none in rounds one and two, a handful in round three, about half of rounds five to seven.
+
+**Undrafted means not picked.** Whoever is left after round seven is an undrafted free agent: about 540 a year. The league then reads all of them the same sceptical way.
+
+**The street carries over.** At the end of an offseason the street keeps its 160 best veterans as before, plus about 330 young men (25 or younger, two seasons or fewer) by position, and always a few kickers and punters. They are next summer's camp bodies.
+
+**Made-up bodies are a last resort** and are now undrafted-type rookies, slightly worse than the real ones, not veterans who rated higher than the men clubs had passed on.
+
+Measured over five seasons, four leagues, before and after:
+- camp bodies made up on the spot: 153 a year to 34 (mostly second kickers)
+- young free agents against camp openings at each position: 1.2 to 1.6 for every position, where running back, corner and kicker used to run out
+- the front office's own camp fill: median 54 overall with nobody made up; the weaker camp men are rookies won in the bidding, misread through the fog
+- undrafted men on a roster three seasons later: 14 a class to 54; rated 70 or better: 2 to 8
+- draft outcomes level: round one 62 at the draft and 68 three seasons on (was 62 and 68), rounds two and three 58 and 62 (was 59 and 63), later rounds 54 and 54 (was 53 and 54); drafted men reaching 75: 25 a class (was 24)
+- league talent level unchanged (best 24 on a roster average 76.6, was 76.7); save size 6.4 to 6.7 MB
+
+## 33. The street market, and the cap out of season
+
+**One routine for every signing window.** Each club names the one free agent who would add the most to its lineups for what he costs. A player wanted by several goes where he adds the most. Then everyone looks again, until nobody left is worth a roster spot to anyone. There is no limit on how many a club signs: each signing fills the hole the next man would have filled, every spot taken is one somebody else loses, and the money runs out. A club keeps a few million back.
+
+The windows:
+- *After the draft* (before camp bodies): veterans of any age for the holes the spring and the draft left.
+- *After cutdown*: open places on the 53 go to the best man available, and the bottom of the roster is turned over where a better man cleared waivers. The old head counts remain only as a backstop.
+- *During the season*: each club looks every third week, and only a clear upgrade is worth the churn.
+- *When a man is hurt*: the fix may come from the street or from the club's own practice squad.
+
+At a position where a club already carries all it wants (one kicker, three quarterbacks), a signing means one of those men goes. Not in camp, where rooms are meant to be full.
+
+**Open jobs.** A job is open when the man who actually holds it in the club's best lineup grades below the bar for that job: 66 for a starting job, 60 for a depth job, 62 on the specialist's skill for a situational one. (It used to be measured against the best man in the whole unit, so nothing ever looked open.)
+
+**Cap cuts** take the men whose loss costs the lineups least for each dollar freed. **The practice squad** leans toward jobs the 53 is thin at.
+
+**The cap counts the 51 biggest contracts until the season starts**, as in the real league: camp bodies are free to carry. From week one every contract counts. Clubs must be under when the league year opens, before re-signing and free agency, and again at cutdown and at week one. This applies to you too: your camp cap room is larger than it was, and you are told if week one puts you over.
+
+Audit, eight seasons, three leagues each way (old = cutdown on the valuation, everything else the old rules):
+- starting jobs held by a man graded under 62: 0.80 a club to 0.34; under 66: 2.9 to 2.2
+- free agents who would clearly improve a club that can afford them, at week one: 27 to 4.5; rated 70 or better on the street: 13.5 to 2.5
+- signings a club: spring 5.0 to 6.5, veterans after the draft 2.0 (most by one club in a year: 5), after cutdown 2.7 (8), off the street in season 2.3 (9), injury moves 9.3, in-season releases 0.7 to 11
+- who they sign: rated 64 to 66, aged 28 to 29
+- week-one rosters: 53 everywhere, one kicker and one punter, 8 to 11 offensive linemen; average roster age 26.6 to 27.0; league talent level 76.5 to 76.6; spread of wins unchanged (2.9)
+- camp bodies made up on the spot: 18 a year to 10
+- half the league on the new rules against half on the old, same league: 8.86 wins to 8.14 over 336 team-seasons a side (two runs of three ahead; four earlier runs, before one fix, all ahead)
+
+Known limits:
+- **The cap does not bind.** In both old and new leagues no club was ever over, the median club has about 45M of room at week one and the loosest over 130M. Cap cuts never fired. Money has to be made scarce in the free agency step before cap logic can do real work.
+- **No specialists to sign.** Third-down and short-yardage jobs are open at six or seven clubs a year and nobody on the street grades better than the low 50s at them. Role targeting shows at depth jobs (dime back, fourth corner, third edge, interior rotation); it cannot show at specialist jobs until such players exist.
+- A club whose room is already at its camp number does not bring in a challenger for an open job there.

@@ -107,9 +107,13 @@ function migrateState(st) {
 }
 
 function teamName(tid) { const t = T(tid); return t.region + ' ' + t.name; }
+// Out of season only the 51 biggest contracts count (camp bodies are free to carry); once the games start, every one does.
+const CAP_TOP = 51; let CAP_ALL = false;
+function capCountsAll() { return CAP_ALL || !state || state.phase === 'REG' || state.phase === 'PLAYOFFS'; }
 function payroll(tid) {
-  let s = T(tid).dead || 0;
-  for (const p of rosterOf(tid)) if (p.contract.yrs > 0) s += p.contract.amt;
+  let s = T(tid).dead || 0; const ro = rosterOf(tid);
+  if (!capCountsAll() && ro.length > CAP_TOP) { const a = []; for (const p of ro) if (p.contract.yrs > 0) a.push(p.contract.amt); a.sort((x, y) => y - x); for (let i = 0; i < a.length && i < CAP_TOP; i++) s += a[i]; }
+  else for (const p of ro) if (p.contract.yrs > 0) s += p.contract.amt;
   for (const p of psOf(tid)) s += p.contract.amt;
   return round2(s);
 }

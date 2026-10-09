@@ -194,7 +194,7 @@ function startOffseason() {
   }
   psOffseason();
   devCheckpoint('off'); // the staff re-reads everyone after a winter of work
-  ensureDraftClass(year);
+  ensureDraftClass(year, true);
   coachOffseason();
   state.phase = 'COACHES';
   startCarousel();
@@ -241,6 +241,7 @@ function leaveResign() {
   autoOptions(state.userTid); // undecided options get the staff's recommendation
   if (!isAI(state.userTid)) releaseUserPS(); // practice squad players you did not sign to a futures deal move on
   for (const t of state.teams) {
+    if (isAI(t.id)) fixCap(t.id); // the league year opens: every club has to be under the cap before it does business
     const exp = rosterOf(t.id).filter(p => p.expiring).sort((a, b) => viewOvr(b, t.id) - viewOvr(a, t.id));
     for (const p of exp) {
       if (isAI(t.id) && aiWantsResign(p) && p.ask <= capRoom(t.id) - 4) {
@@ -379,7 +380,7 @@ function simDraftToUser() {
 function finishDraft() {
   const left = prospects().sort((a, b) => perOvr(b) + b.per.g * 0.5 - perOvr(a) - a.per.g * 0.5);
   left.forEach((p, i) => {
-    if (i < UDFA_KEEP) { setTid(p, -1); p.ask = MIN_SALARY; p.contract = { amt: MIN_SALARY, yrs: 0 }; p.udfa = state.draft.year; }
+    if (i < UDFA_KEEP) { setTid(p, -1); p.ask = MIN_SALARY; p.contract = { amt: MIN_SALARY, yrs: 0 }; p.udfa = state.draft.year; undraftedView(p); }
     else delete state.players[p.id]; rostersDirty();
   });
   state.picks = state.picks.filter(pk => pk.season !== state.draft.year);
@@ -430,7 +431,8 @@ function fixCap(tid) {
     if (capRoom(tid) >= 0) break;
     restructure(p, Math.min(-capRoom(tid) + 1, p.contract.amt * 0.4));
   }
-  // then cut the worst value per dollar saved
+  // then the men whose loss costs the lineups least for each dollar it frees
+  if (capRoom(tid) < 0 && typeof foCapCuts === 'function' && FO.on !== false && (!FO.extra || FO.extra(tid))) foCapCuts(tid);
   let guard = 0;
   while (capRoom(tid) < 0 && guard++ < 20) {
     const cand = rosterOf(tid).filter(p => cutSavings(p) > 1).sort((a, b) => (playerValue(a, tid) / cutSavings(a)) - (playerValue(b, tid) / cutSavings(b)))[0];
@@ -470,6 +472,8 @@ function waiverScore(p, tid) { return viewOvr(p, tid) + (p.age <= 24 ? viewGrowt
 function waiverDrop(p, tid) { // the player a claiming team would let go, or null if he would not make their roster
   const room = rosterOf(tid).filter(x => x.pos === p.pos && !onIR(x)).sort((a, b) => waiverScore(a, tid) - waiverScore(b, tid));
   if (!room.length || room.length <= ROSTER_MIN[p.pos] - 1) return null;
+  // a quick look first (is he anywhere near our depth?), then the real question: do our lineups get better, and who makes way
+  if (typeof foWaiverDrop === 'function' && FO.on !== false && (!FO.extra || FO.extra(tid)) && p.a) return waiverScore(p, tid) > waiverScore(room[0], tid) - 2 ? foWaiverDrop(p, tid) : null;
   return waiverScore(p, tid) > waiverScore(room[0], tid) + 3 ? room[0] : null;
 }
 function aiWaiverClaims() {
@@ -534,17 +538,29 @@ function resolveWaivers() {
     for (const id in wv.want) { const p = P(+id); if (!p || p.tid !== -1) { if (p) out.psLost.push({ p, why: 'claimed off waivers' }); continue; }
       if (rand() < 0.55 && !signToPS(p.id, u)) out.ps.push(p); else out.psLost.push({ p, why: 'chose to stay with ' + (p.lastTid != null && p.lastTid >= 0 ? T(p.lastTid).abbr : 'another club') }); }
   }
-  for (const t of state.teams) if (isAI(t.id)) fillRoster(t.id, ROSTER_TEMPLATE); // open spots get minimum-salary bodies. Not yours: you fill your own roster.
+  // every club shops the cuts that cleared: open places are filled and the bottom of the 53 is turned over where a better man is free.
+  // The old head counts remain only as a backstop. Not yours: you fill your own roster.
+  const foOn = typeof foShop === 'function' && FO.on !== false;
+  if (foOn) foShop('cut');
+  for (const t of state.teams) if (isAI(t.id)) fillRoster(t.id, foOn && (!FO.extra || FO.extra(t.id)) ? ROSTER_MIN : ROSTER_TEMPLATE);
+  if (foOn) foShop('cut');
   for (const t of shuffle(state.teams.slice())) if (isAI(t.id)) fillPS(t.id); // nobody is signed to your practice squad for you
+  CAP_ALL = true; // from here every contract counts
   for (const t of state.teams) if (isAI(t.id)) fixCap(t.id);
+  CAP_ALL = false;
   refreshChart(u);
   state.wv = null;
 
   // trim free agent pool
-  const fas = Object.values(state.players).filter(p => p.tid === -1).sort((a, b) => perOvr(b) - perOvr(a));
-  fas.forEach((p, i) => { if (i >= 160 || perOvr(p) < 45 || p.age >= 36) delete state.players[p.id]; rostersDirty(); });
+  // The street keeps its best veterans, and the young men who went to a camp and did not stick: they are next summer's camp bodies.
+  const fas = Object.values(state.players).filter(p => p.tid === -1).sort((a, b) => perOvr(b) - perOvr(a)), keep = new Set(), yq = {};
+  fas.forEach((p, i) => { if (i < 160 && perOvr(p) >= 45 && p.age < 36) keep.add(p.id); });
+  for (const p of fas.filter(p => p.age <= STREET_AGE && p.exp <= 2).sort((a, b) => perOvr(b) + (b.per ? b.per.g : 0) * 0.5 - perOvr(a) - (a.per ? a.per.g : 0) * 0.5)) { if ((yq[p.pos] || 0) < STREET_KEEP[p.pos]) { yq[p.pos] = (yq[p.pos] || 0) + 1; keep.add(p.id); } }
+  for (const pos of ['K', 'P']) fas.filter(p => p.pos === pos && p.age < 38).slice(0, 6).forEach(p => keep.add(p.id)); // there is always a leg to bring in
+  fas.forEach(p => { if (!keep.has(p.id)) delete state.players[p.id]; }); rostersDirty();
   state.season++;
   state.week = 1; state.phase = 'REG';
+  if (!isAI(u) && capRoom(u) < 0) addNews(`Every contract counts against the cap now that the season is here, and you are ${fmtMoney(-capRoom(u))} over. You cannot add anyone until you clear room.`, [u]);
   updateSystems();
   state.games = {}; state.playoffs = null; state.draft = null;
   for (const p of Object.values(state.players)) { p.stats = {}; }
@@ -561,11 +577,13 @@ function resolveWaivers() {
 // ---------- in-season AI ----------
 function inSeasonMoves() {
   psPoaching();
+  if (typeof foShop === 'function') foShop('week', tid => (tid + state.week) % 3 === 0); // each club takes a look at the street every third week
   psPromotions(state.userTid);
   for (const t of state.teams) {
     if (!isAI(t.id)) continue;
     psPromotions(t.id);
     if (psOf(t.id).length < PS_MAX - 3) fillPS(t.id);
+    if (typeof foInjuryMoves === 'function' && FO.on !== false && (!FO.extra || FO.extra(t.id))) foInjuryMoves(t.id); // the man who fixes the hole an injury left, from the street or the practice squad
     for (const pos of POSITIONS) {
       const healthy = rosterOf(t.id).filter(p => p.pos === pos && !p.injury).length;
       const need = LINEUP_NEED[pos] + (pos === 'QB' ? 1 : 0);
@@ -661,9 +679,10 @@ function spotNeedBonus(tid, p) {
 }
 
 // the draft class for a given spring (created once; visible and scouted all season)
-function ensureDraftClass(year) {
-  if (Object.values(state.players).some(p => p.tid === -2 && p.draftYear === year)) return;
-  for (let i = 0; i < 256; i++) genProspect(year);
+function ensureDraftClass(year, deep) {
+  const have = Object.values(state.players).filter(p => p.tid === -2 && p.draftYear === year).length;
+  for (let i = have; i < CLASS_DRAFT; i++) genProspect(year);
+  if (deep) for (let i = Math.max(have, CLASS_DRAFT); i < CLASS_DRAFT + CLASS_DEPTH; i++) genProspect(year, true); // the rest of the class declares once the season is over
 }
 // Newer modules are pulled in from here rather than listed in index.html, so a browser holding an older copy of that page still loads a complete game.
 if (typeof document !== 'undefined' && typeof foCutPlan === 'undefined') document.write('<script src="js/frontoffice.js?v=' + Date.now() + '"></script>');

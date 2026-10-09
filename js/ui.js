@@ -1426,11 +1426,13 @@ function preSnapReport(b) {
 // post-draft bidding for undrafted rookies
 function udfaHTML() {
   const u = state.userTid, s = state.udfa, n = rosterOf(u).length, offers = Object.keys(s.offers).length;
-  const ps = Object.values(state.players).filter(isUdfa).filter(p => inFamily(p, ui.faPos));
+  const mine = !!ui.udfaMine && offers > 0;
+  const ps = Object.values(state.players).filter(isUdfa).filter(p => mine ? s.offers[p.id] !== undefined : inFamily(p, ui.faPos));
   const committed = Object.values(s.offers).reduce((a, b) => a + MIN_SALARY + b, 0);
   let html = `<div class="callout"><b>Round ${s.round + 1} of ${UDFA_ROUNDS}.</b> Offer a guaranteed signing bonus on a three-year minimum deal (${fmtMoney(MIN_SALARY)}/yr). When you send offers, each player picks a team: the money matters, but so does whether he sees a job to win and where he simply wants to be. The bonus is dead money if you cut him.
     Camp roster <b>${n}/${OFFSEASON_MAX}</b> · offers out <b>${offers}</b> · committed ${fmtMoney(committed)} of ${fmtMoney(capRoom(u))} cap room.${s.round === UDFA_ROUNDS - 1 ? ' <b>Last round:</b> after this, camp opens with whoever you have.' : ''}</div>
-    <div class="subtabs">${famTabs(ui.faPos, 'faPos')}</div>`;
+    <div class="row" style="margin-bottom:8px"><span class="seg"><button class="sm ${mine ? '' : 'on'}" data-action="udfaMine" data-v="">The whole class</button><button class="sm ${mine ? 'on' : ''}" data-action="udfaMine" data-v="1" ${offers ? '' : 'disabled'}>My offers (${offers})</button></span></div>
+    ${mine ? '' : `<div class="subtabs">${famTabs(ui.faPos, 'faPos')}</div>`}`;
   const offerCell = p => {
     const cur = s.offers[p.id];
     return `<select data-change="udfaOffer" data-pid="${p.id}" class="${cur !== undefined ? 'on' : ''}"><option value="">No offer</option>${UDFA_BONUS.map(b => `<option value="${b}" ${cur === b ? 'selected' : ''}>${b ? fmtBonus(b) + ' guaranteed' : 'Offer, no bonus'}</option>`).join('')}</select>`;
@@ -2878,6 +2880,7 @@ const actions = {
   pracRoom: d => { ui.pracRoom = d.pos === ui.pracRoom && d.toggle ? null : d.pos; render(); const el = document.getElementById('pracDetail'); if (el && d.toggle) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
   faReset: () => { ui.faF = null; render(); },
   faPos: d => { ui.faPos = d.pos; render(); },
+  udfaMine: d => { ui.udfaMine = !!d.v; render(); },
   faView: d => { ui.faView = d.v; render(); },
   repMove: d => { moveReps(+d.pid, +d.d); save(); render(); },
   udfaOfferBtn: d => { const err = udfaOffer(+d.pid, d.b === '' ? null : +d.b); if (err) toast(err); save(); playerModal(+d.pid, true); render(); },

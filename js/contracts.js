@@ -244,12 +244,13 @@ function fillPS(tid) {
   const counts = {}; psOf(tid).forEach(p => counts[p.pos] = (counts[p.pos] || 0) + 1);
   const score = p => viewCeil(p, tid) + (p.lastTid === tid ? 2 : 0) - p.age * 0.3;
   const pool = Object.values(state.players).filter(p => p.tid === -1 && !p.waiver && p.exp <= 6 && !p.injury && p.age <= 28).sort((a, b) => score(b) - score(a));
+  if (typeof foPsOrder === 'function' && FO.on !== false && (!FO.extra || FO.extra(tid)) && psRoom(tid)) { const o = foPsOrder(tid, pool, score); pool.length = 0; pool.push(...o); }
   for (let guard = 0; psRoom(tid) && guard < 40; guard++) {
     const open = POSITIONS.filter(x => x !== 'K' && x !== 'P' && (counts[x] || 0) < cap(x));
     if (!open.length) break;
     let p = pool.find(x => x.tid === -1 && open.includes(x.pos) && psRoom(tid, x));
     if (!p) { // nobody left on the street: an undrafted-type rookie
-      p = genVeteran(pick(open), 'fringe'); p.age = randInt(22, 24); p.exp = randInt(0, 1); setTid(p, -1); p.ask = MIN_SALARY;
+      p = campBody(pick(open)); setTid(p, -1); p.ask = MIN_SALARY;
     }
     if (!signToPS(p.id, tid)) counts[p.pos] = (counts[p.pos] || 0) + 1;
   }
