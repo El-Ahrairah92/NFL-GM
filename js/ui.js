@@ -1903,8 +1903,8 @@ function searchHTML2(t) {
     { k: 'g', l: 'His people', f: c => { const g = guysOf(c, role, t); return g.length ? `<span class="small muted">${g.length} he would bring</span>` : '<span class="small muted">comes alone</span>'; } },
     { k: 't', l: 'Ties', f: c => `<span class="small muted wrapcell">${esc(tiesTo(c, t))}</span>` },
     { k: 'ask', l: 'Asking', v: c => coachAsk(c, role), f: c => `<span class="small">${fmtMoney(coachAsk(c, role))}</span>`, num: 1 },
-    { k: 'x', l: '', f: c => car.blocked && car.blocked[c.id] ? '<span class="small muted">Staying put</span>' : coachKnown(c) ? `<button class="sm primary" data-action="negOpen" data-cid="${c.id}" data-role="${role}">Negotiate</button>` : `<button class="sm" data-action="interview" data-cid="${c.id}" data-role="${role}" ${ivN <= 0 ? 'disabled title="No interviews left for this job"' : ''}>Interview</button>` },
-  ], pool, { sort: 'rep', limit: 40 }) + '</div>';
+    { k: 'x', l: '', f: c => car.blocked && car.blocked[c.id] ? '<span class="small muted">Staying put</span>' : coachKnown(c) ? `<button class="sm primary" data-action="negOpen" data-cid="${c.id}" data-role="${role}">Negotiate</button>` : `<span class="row" style="gap:4px;flex-wrap:nowrap"><button class="sm" data-action="interview" data-cid="${c.id}" data-role="${role}" ${ivN <= 0 ? 'disabled title="No interviews left for this job"' : ''}>Interview</button><button class="sm" data-action="negOpen" data-cid="${c.id}" data-role="${role}" title="Make an offer on his reputation alone, without sitting down with him first">Offer</button></span>` },
+  ], pool, { sort: 'rep', limit: 400 }).replace('<div class="tbl-wrap"', '<div class="tbl-wrap longlist"') + '</div>';
   return html;
 }
 // other clubs asking for your coaches: answer before you advance
@@ -1918,8 +1918,9 @@ function negModal() {
   const n = ui.neg, c = C(n.cid), t = T(state.userTid), d = demandsOf(c, n.role), j = judgeOffer(c, n), [il, ic] = interestLabel(j);
   const cur = staffCoach(t, n.role), side = callSide(c, n.role), held = side ? callHeldBy(t, side) : null;
   const chk = (on, act, extra, label, dis) => `<label class="row small" style="margin:5px 0;gap:8px"><input type="checkbox" data-change="${act}" ${extra || ''} ${on ? 'checked' : ''} ${dis ? 'disabled' : ''}> <span>${label}</span></label>`;
-  let h = `<div class="row"><h2 style="margin:0">${esc(cname(c))}</h2><span class="pill">${roleName(n.role)}</span><span class="pill ${ic}">${il}</span><span class="spacer"></span><button class="sm" data-action="coach" data-cid="${c.id}">His card</button></div>
+  let h = `<div class="row"><h2 style="margin:0">${esc(cname(c))}</h2><span class="pill">${roleName(n.role)}</span>${coachKnown(c) ? `<span class="pill ${ic}">${il}</span>` : '<span class="pill warn">Not interviewed</span>'}<span class="spacer"></span><button class="sm" data-action="coach" data-cid="${c.id}">His card</button></div>
     <div class="muted small" style="margin:4px 0 10px">${repLabel(c)} · age ${c.age}${schemeLabel(c) ? ' · ' + esc(schemeLabel(c)) : ''}${c.role !== n.role ? ' · this would be a promotion' : ''}${cur ? ` · replaces ${esc(cname(cur))}${owedIfFired(cur) ? ' (owed ' + fmtMoney(owedIfFired(cur)) + ')' : ''}` : ''}</div>`;
+  if (!coachKnown(c)) h += '<div class="callout small"><b>You have not sat down with him.</b> You are offering on his reputation alone: you do not know what he is really good at, and he will not tell you how he feels about the offer until you make it.</div>';
   h += '<div class="grid card-cols"><div>';
   h += '<div class="section-title" style="margin-top:0">Play-calling</div>';
   if (d.call === 'none') h += '<div class="small muted">He has no wish to call plays.</div>';

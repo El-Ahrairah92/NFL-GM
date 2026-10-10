@@ -811,3 +811,8 @@ input, textarea, select, .selectable { -webkit-user-select: text; user-select: t
 @media (max-width: 900px) { .dc-pool { position: static; max-height: none; } .dc-pool .dc-cands { max-height: 60vh; } }
 .dc-left .dc-row, .dc-pool .dc-row { grid-template-columns: 26px minmax(130px, 1fr) minmax(0, auto); padding: 7px 10px; }
 .dc-pool .dc-row.cand { grid-template-columns: minmax(130px, 1fr) minmax(0, auto); }
+
+/* ---------- long lists that scroll inside their own box ---------- */
+.tbl-wrap.longlist { max-height: 62vh; overflow-y: auto; }
+.tbl-wrap.longlist thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); }
+@media (max-width: 760px) { .tbl-wrap.longlist { max-height: 58vh; } }
