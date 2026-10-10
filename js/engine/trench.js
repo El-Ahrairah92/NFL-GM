@@ -79,7 +79,8 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
   for (const a of assign) if (!a.blockers.length && free.length) { const b = byDist(a)[0]; a.blockers.push(b); free.splice(free.indexOf(b), 1); }
   // spare linemen double the most dangerous rusher near them; spare backs chip edges
   for (const b of free) {
-    const near = assign.filter(a => a.blockers.length === 1 && Math.abs(a.e.x - b.x) <= 1.6);
+    // his neighbours, and also an edge rusher further out whose tackle cannot handle him alone: the protection slides that way
+    const near = assign.filter(a => a.blockers.length === 1 && (Math.abs(a.e.x - b.x) <= 1.6 || (!a.e.blitz && Math.abs(a.e.x) >= 2.4 && rushVsBlock(g, a.e, a.blockers[0], 0) >= TUNE.slideAt)));
     if (!near.length) continue;
     near.sort((x, y) => rushVsBlock(g, y.e, y.blockers[0], 0) - rushVsBlock(g, x.e, x.blockers[0], 0));
     near[0].blockers.push(b); near[0].doubled = true;

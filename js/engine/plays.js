@@ -112,6 +112,7 @@ function resolveRun(g, off, def, oc, dc) {
   const fronts = blk.filter(r => r.lvl === 1), seconds = blk.filter(r => r.lvl === 2);
   const nearPOA = r => Math.abs(r.e.x - target) <= (outside ? 1.8 : 1.4);
   let lane = 'designed';
+  const burstD = ea(g, carrier, 'bur') - 72; // how much quicker than an ordinary back he is to the line
   // vision: zone runners bounce to the cutback if the playside is jammed
   const jammed = fronts.filter(nearPOA).some(r => r.win > 0.55);
   if (oc.scheme === 'ZONE' && jammed && rand() < lgt((ea(g, carrier, 'vis') * 0.7 + ea(g, carrier, 'agi') * 0.3 - 62) * 0.06)) lane = 'cutback'; // see it, then make the cut
@@ -125,6 +126,7 @@ function resolveRun(g, off, def, oc, dc) {
     if (oc.wide) w *= 0.88;                          // the stretch gets the line moving and cuts off pursuit
     if (oc.tight && outside) w *= 0.92;              // receivers in close seal the edge
     if (draw && r.state !== 'free') w *= bites(g, r.e, 0.6) ? 0.35 : 1.1;
+    if (r.state !== 'free') w *= clamp(1 - burstD * TUNE.burHole, 0.75, 1.25); // a blocked defender has to get off the block before the back is through: burst is how long he has
     if (r.state === 'free' && r.backside && lane === 'designed') continue;
     if (rand() < w) {
       const pen = r.state === 'free' || rand() < r.pen / Math.max(0.05, w);
@@ -151,7 +153,7 @@ function resolveRun(g, off, def, oc, dc) {
     r.won = true;
     let readOK = rand() < lgt(0.9 + (ea(g, r.e, 'prec') - 65) * 0.05 + g.key * 0.8 - (motion ? 0.3 : 0) - (draw ? 0.5 : 0) - (oc.counter ? 0.6 : 0) - (trickHit === 'fooled' ? 2 : 0));
     const depthAt = (r.rotated ? 4 : 3) + (readOK ? randInt(0, 2) : randInt(3, 6)) + (draw ? 1 : 0) + (dc.cov === 'T2' && r.e.slot === 'MLB' ? 1 : 0);
-    levels.push({ e: r.e, at: depthAt, bonus: readOK ? (oc.duo ? 0.45 : 0) : -0.4 }); // duo leaves the linebackers for the back
+    levels.push({ e: r.e, at: Math.max(1, depthAt + burstD * TUNE.burGet), bonus: readOK ? (oc.duo ? 0.45 : 0) : -0.4 }); // duo leaves the linebackers for the back
   }
   // deep help: safeties
   const deepS = def.filter(e => (e.slot === 'FS' || e.slot === 'SS') && !blk.some(b => b.e === e));
@@ -398,7 +400,7 @@ function resolvePass(g, off, def, oc, dc) {
     if (dc.soft) w += r.band === 'S' ? 0.35 : r.band === 'D' ? -0.35 : 0.12; // prevent: everything underneath is there
     w += help + sepNet - g.key * 0.35 + gauss(0, 0.55);
     if (g.down >= 3 && r.depth >= g.togo && g.togo <= 15) w -= 0.22; // money down: the defense sits on the sticks
-    r.w = w; r.def = defE; if (e === star) r.shade = shade; // film credits beating the extra attention
+    r.w = w; r.w0 = w; r.def = defE; // w0: how open he came on his own, before the quarterback's time in the pocket added to it if (e === star) r.shade = shade; // film credits beating the extra attention
   }
   // ---- the QB's read ----
   const proc = ea(g, qb, 'proc'), dec = ea(g, qb, 'dec'), pkt = ea(g, qb, 'pkt');
@@ -601,7 +603,7 @@ function screen(g, off, def, oc, dc, res, qb) {
     const win = lgt(0.4 + ((rbScreen ? ea(g, b, 'rbk') * 0.4 + ea(g, b, 'agi') * 0.3 + ea(g, b, 'spd') * 0.3 : ea(g, b, 'rbk') * 0.5 + ea(g, b, 'str') * 0.5) + bod(b).w * 1.5 * TUNE.size - (ea(g, t0, 'shed') * 0.5 + ea(g, t0, 'spd') * 0.5) - bod(t0).w * 1.0 * TUNE.size) * 0.05);
     if (rand() < win) tacklers.shift();
   }
-  const lead = TUNE.screenLead + (rbScreen ? 3 : 0);
+  const lead = Math.max(1, TUNE.screenLead + (rbScreen ? 3 : 0) + (ea(g, tgt, 'bur') - 72) * TUNE.burScreen); // a screen is a race to get upfield behind the blockers before the defense turns and runs
   const levels = tacklers.slice(0, 3).map((e, i) => ({ e, at: res2.air + lead + randInt(0, 3) + i * randInt(3, 6) }));
   if (sniffed) levels.unshift({ e: sniffed, at: res2.air + randInt(0, 3) });
   const rr = runToContact(g, tgt, levels, { start: res2.air, pursuit: droppers.filter(e => e.slot === 'FS' || e.slot === 'CB') });

@@ -115,7 +115,7 @@ function chartPlay(g, oc, dc, res, before, off, def) {
     // receivers: every route run counts; targets get the real credit
     for (const r of res.routes || []) {
       const rp = r.e.p;
-      avInc(g, rp, 'routes');
+      avInc(g, rp, 'routes'); avInc(g, rp, 'sepR', sepYards((r.w0 !== undefined ? r.w0 : r.w) - (r.band === 'S' ? TUNE.shortOpen : r.band === 'D' ? TUNE.deepCov : TUNE.midCov) - 0.35)); // with the route's own depth taken out: a deep route is covered by design
       if (res.target && r.e === res.target) {
         avInc(g, rp, 'sep', sepYards(r.w)); avInc(g, rp, 'sepN'); avInc(g, rp, 'adot', r.depth); avInc(g, rp, 'epaTgt', epa);
         if (res.contested) { avInc(g, rp, 'cAtt'); avInc(g, rp, 'cWon', comp); }
@@ -134,9 +134,9 @@ function chartPlay(g, oc, dc, res, before, off, def) {
       for (const e of off) if (OL_SLOTS.includes(e.slot)) avInc(g, e.p, 'pbSnaps');
       for (const a of res.prot.rushers) {
         const rp = a.e.p, beat = a.free || a.t < WIN_T;
-        avInc(g, rp, 'prSnaps'); if (beat) avInc(g, rp, 'prWins'); if (a.blockers.length > 1) avInc(g, rp, 'dbl');
+        avInc(g, rp, 'prSnaps'); if (beat) avInc(g, rp, 'prWins'); if (a.blockers.length > 1 || a.chip) avInc(g, rp, 'dbl'); if (a.chip && a.blockers.length <= 1) avInc(g, rp, 'chip');
         const sacked = res.kind === 'sack' && res.sacker === a.e;
-        grade(g, rp, 'pr', (beat ? 0.45 : -0.08) + (pressers.has(a.e) ? 0.25 : 0) + (sacked ? 1.0 : 0) - (a.blockers.length > 1 && !beat ? -0.05 : 0), [a.blockers.length > 1 ? 'dbl' : 'sgl']);
+        grade(g, rp, 'pr', (beat ? 0.45 : -0.08) + (pressers.has(a.e) ? 0.25 : 0) + (sacked ? 1.0 : 0) - (a.blockers.length > 1 && !beat ? -0.05 : 0), [a.blockers.length > 1 || a.chip ? 'dbl' : 'sgl']);
         const b = a.blockers[0];
         if (b) {
           const bp = b.p;
@@ -253,7 +253,8 @@ function advMetrics(a, spot) {
     add('PA EPA/db', a.paDb ? r2((a.paEpa || 0) / a.paDb) : '—', 'on play-action');
   } else if (['WRX', 'WRZ', 'SLOT', 'TEY', 'TEH'].includes(spot) || (a.routes || 0) > (a.rush || 0)) {
     add('Routes', a.routes || 0);
-    add('Separation', a.sepN ? r1(a.sep / a.sepN) + ' yds' : '—', 'at the catch point, on targets');
+    add('Separation', a.sepR && a.routes ? r1(a.sepR / a.routes) + ' yds' : a.sepN ? r1(a.sep / a.sepN) + ' yds' : '—', 'on every route he runs, thrown to or not');
+    add('Separation when targeted', a.sepN ? r1(a.sep / a.sepN) + ' yds' : '—', 'at the catch point: partly a measure of where his quarterback goes with the ball');
     add('aDOT', a.sepN ? r1(a.adot / a.sepN) : '—');
     add('Tgt / route', pctM(a.sepN || 0, a.routes));
     add('Contested', a.cAtt ? `${a.cWon || 0}/${a.cAtt}` : '—', 'contested catches won');
@@ -316,7 +317,7 @@ function gradeRanks() {
 }
 
 // compact season record for career history: grades plus the raw sums the role's key metrics need
-const CAREER_ADV_KEYS = ['recs', 'mtfRec', 'db', 'epaDb', 'att', 'cmp', 'xc', 'air', 'ttt', 'tttN', 'prsd', 'routes', 'sep', 'sepN', 'adot', 'rush', 'ybc', 'yaco', 'mtf', 'stuff', 'explR',
+const CAREER_ADV_KEYS = ['recs', 'mtfRec', 'db', 'epaDb', 'att', 'cmp', 'xc', 'air', 'ttt', 'tttN', 'prsd', 'routes', 'sep', 'sepN', 'sepR', 'chip', 'adot', 'rush', 'ybc', 'yaco', 'mtf', 'stuff', 'explR',
   'pbSnaps', 'pbLoss', 'prsA', 'sackA', 'rbSnaps', 'rbWins', 'prSnaps', 'prWins', 'rdSnaps', 'rdWins', 'stops', 'tgtA', 'cmpA', 'ydsA', 'tdA', 'intA', 'covSnaps', 'mt', 'tkAtt'];
 function careerAdv(a, spot) {
   const out = { g: overallGrade(a, spot) };

@@ -17,6 +17,7 @@ const TUNE = {
   passProMedian: 5.5,  // seconds for an average rusher to beat an average blocker 1v1
   rushScale: 0.029,
   insideRush: 1.1,     // interior rushers take longer to get home than edges (crowded path, more double teams)    // how strongly the rush/block gap moves win time
+  slideAt: 12,         // how badly a tackle has to be overmatched before the protection slides a guard out to help him
   doubleBonus: 17,     // pass-block points added by a second blocker
   chipBonus: 7,
   pickupMiss: 0.13,    // blitz/sim pickup failure for an average protection
@@ -46,7 +47,8 @@ const TUNE = {
   // tackling
   tackleBase: 2.3,
   tackleScale: 0.03,
-  eluMiss: 0.012, eluMid: 70, burMiss: 0.016, visMiss: 0.014, // how much a carrier's elusiveness (and burst at the line) makes a tackler miss
+  eluMiss: 0.012, eluMid: 70, burMiss: 0.016, visMiss: 0.014,
+  burHole: 0.005, burGet: 0.035, burScreen: 0.1, // burst: the hole stays open for a quick back, he is on the linebackers sooner, and a screen is upfield before the defense turns // how much a carrier's elusiveness (and burst at the line) makes a tackler miss
   runAfter: 0.8,        // yards a back typically adds after first contact
   carryLoad: 3.8,      // how much more a carry tires a back than an ordinary snap
   pocketOpen: 1.2,

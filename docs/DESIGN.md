@@ -678,3 +678,21 @@ Punts moved into the real range (3.7 a game) as a result.
 
 **Attributes.** See docs/ATTRIBUTES.md: every attribute is connected and none works backwards; a running back's elusiveness, agility and vision were close to dead and now work; rating weights were refitted to the retuned engine (version 5; saves re-rate on load).
 
+## 38. Burst, the trenches as they stand, and the advanced stats audit
+
+**Burst.** A quick back gets through the hole before a blocked defender is off his block, is on the linebackers a little deeper, and gets a screen upfield before the defense turns. A 30-point gap moves yards per carry by 0.30, the same as speed and elusiveness.
+
+**How the trenches are decided today.**
+- *Who rushes.* Everyone on the line rushes, down to four; the weakest edge drops out for a three-man rush or a simulated pressure. Blitzers are picked from the linebackers and slot defenders by rush skill.
+- *Who blocks whom.* Linemen take the rushers nearest them, tackles on the edges first. A tight end kept in takes the edge on his side. A spare lineman slides to a blitzer, otherwise a back has to pick him up. Any lineman left over doubles the most dangerous rusher next to him, or slides out to an edge whose tackle is clearly overmatched. Backs kept in chip the most dangerous edge.
+- *One on one.* The rusher wins by speed (rush skill, burst, agility, length) or by power (rush skill, strength, mass), whichever is better against that blocker's answer (pass blocking with feet and awareness, or with strength and mass). The gap sets how long the block holds; a double or a chip adds to it; the inside path is slower.
+- *Blitzes and stunts* test awareness: a missed pickup or a stunt that works sends a man free.
+- *Runs.* Linemen take the front by alignment; gap schemes pull the back-side guard; zone schemes combo and climb. Each defender at the point of attack beats his block or does not (shedding plus quickness against zone, strength against gap), and a winner may penetrate. Linebackers are blocked by climbers or fill by reading the play.
+
+What this model does not have: where a lineman lines up within a gap (technique), shifts before the snap, or slants. Alignment today is one of a few fixed fronts.
+
+**Advanced stats audit.**
+- *Separation* measured the quarterback: it counted only balls thrown to a receiver, so it followed where the quarterback went (-0.06 with the receiver's route running, +0.22 with the quarterback's rating). It is now charted on every route with the route's depth taken out, and follows route running (0.39) and not the quarterback (0.00). The old number is kept as 'separation when targeted'.
+- *Double-team rate* counted only a second lineman or tight end, so edge rushers who were chipped on a quarter of their rushes showed almost none. Chips now count.
+- Exact against the box score: attempts, completions, targets, rush yards before and after contact, missed tackles forced and made.
+
