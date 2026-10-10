@@ -23,7 +23,7 @@ function runToContact(g, carrier, levels, opts = {}) {
     // making a man miss is its own skill: elusiveness in the open field most of all, burst through the hole before the tackler is set
     const slip = (elu - TUNE.eluMid) * TUNE.eluMiss * (space ? 1.4 : 0.8) + ((space ? ea(g, carrier, 'agi') : ea(g, carrier, 'bur')) - 72) * TUNE.burMiss; // agility in the open field, burst at the line
     const read = opts.vis !== undefined && lv.at >= 2 ? (opts.vis - 70) * TUNE.visMiss : 0; // past the line, vision is setting up the next defender before he gets there
-    const make = lgt(TUNE.tackleBase - space * 0.55 + soft(tk - ev, 15) * TUNE.tackleScale - slip - read + (lv.bonus || 0) + (opts.tackleBonus || 0));
+    const make = lgt(TUNE.tackleBase - space * 0.55 + soft(tk - ev, 15) * TUNE.tackleScale - clamp(slip + read, -TUNE.slipCap, TUNE.slipCap) + (lv.bonus || 0) + (opts.tackleBonus || 0));
     if (rand() < make) {
       res.tackler = d;
       // yards after contact: little when hit in the backfield, more when met downhill at the second level
@@ -415,7 +415,7 @@ function resolvePass(g, off, def, oc, dc) {
     const seen = new Map(order.map(r => [r, TUNE.preKnow * r.w + (1 - TUNE.preKnow) * (r.wPre + gauss(0, TUNE.preNoise))]));
     const best = order.slice(0, -1).sort((a, b) => seen.get(b) - seen.get(a))[0]; if (best) order = [best, ...order.filter(x => x !== best)]; }
   if (boot) order = order.filter(r => Math.sign(r.endX) === oc.side || r.dir === 'IN' || r.role === 1).concat(order.filter(r => !(Math.sign(r.endX) === oc.side || r.dir === 'IN' || r.role === 1)));
-  const readStep = TUNE.readTime * (1.55 - proc / 100);
+  const readStep = TUNE.readTime * clamp(1.55 - 0.72 - (proc - 72) * TUNE.procRead, 0.35, 1.6); // a sharp quarterback is through his reads far sooner than a slow one
   // Decision-making = how accurately he reads each window: poor deciders force throws into coverage and miss open men
   const readNoise = clamp(0.44 - (dec - 50) * 0.006, 0.12, 0.6);
   for (const r of rlist) r.pw = r.w + gauss(0, readNoise) + (r.e === star ? TUNE.starLook : 0); // he looks for his best receiver, covered or not
@@ -429,6 +429,8 @@ function resolvePass(g, off, def, oc, dc) {
   for (let i = 0; i < order.length; i++) {
     const r = order[i];
     t = Math.max(t, r.tb * tbS) + (i ? readStep : 0);
+    // a slow processor stares down his first read when it is not there, and the clock runs
+    if (i === 1 && proc < 72 && rand() < (72 - proc) * TUNE.lockOn) t += readStep;
     if (t > tPress && !escaped) {
       pressured = true;
       // feel it and escape?
@@ -539,10 +541,11 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
     }
     // catch → yards after catch
     if (airY >= yardsToGoal) { Object.assign(res, { kind: 'comp', yds: yardsToGoal, yac: 0, desc: tag }); res.involved = [e.p]; return res; }
-    const cushion = Math.max(0, r.w) * 2.0 + (r.band === 'S' ? 1.0 : 0.3);
+    const place = clamp((acc - 72) * TUNE.placeYac, -0.35, 0.35); // where the ball arrives: in stride, or behind him
+    const cushion = Math.max(0, Math.max(0, r.w) * 2.0 + (r.band === 'S' ? 1.0 : 0.3) + place * 2.5);
     const rest = def.filter(x => x !== defE && !x.blitz && x.depth > 0);
     const levels = [];
-    if (defE) levels.push({ e: defE, at: airY + Math.max(0, gauss(cushion + (e.slot === 'RB' ? 2.2 : 0), 1.2)), bonus: (r.w > 1 ? -0.3 : 0.2) - (airY >= 20 ? TUNE.deepStride : 0) });
+    if (defE) levels.push({ e: defE, at: airY + Math.max(0, gauss(cushion + (e.slot === 'RB' ? 2.2 : 0), 1.2)), bonus: (r.w > 1 ? -0.3 : 0.2) - (airY >= 20 ? TUNE.deepStride : 0) - place });
     const n2 = nearestDef(rest.filter(x => x.slot === 'FS' || x.slot === 'SS' || x.slot.indexOf('LB') >= 0 || x.slot === 'MLB' || x.slot === 'WLB'), r.endX);
     if (n2 && rand() < (airY >= 15 ? TUNE.helpDeep : TUNE.helpShort)) levels.push({ e: n2, at: airY + randInt(3, 8) }); // sometimes it is one-on-one in space
     const rr = runToContact(g, e, levels, { start: airY, missGain: 6.5, pursuit: rest.filter(x => x.slot === 'CB' || x.slot === 'FS' || x.slot === 'SS') });

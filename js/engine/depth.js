@@ -22,7 +22,15 @@ const TUNE = {
   quickScale: 1.3,       // the same for the quick game
   tbScale: 0.72,          // how long routes take to break and the quarterback takes to set up (1 = as designed)
   holdMax: 0.3,        // the longest he will stand in a clean pocket waiting for a downfield route
-  sackBase: 0.235,     // chance a pressured quarterback goes down, before the matchup
+  procRead: 0.02,    // how much faster a sharp quarterback gets from one read to the next (per point of processing)
+  lockOn: 0.02,       // chance per point below average that he stares down a covered first read and loses a beat
+  placeYac: 0.028,     // ball placement: an accurate throw hits the receiver in stride, an off-target one makes him stop for it
+  slipCap: 0.3,          // the most a carrier's elusiveness, burst, agility and vision can add up to on one tackle attempt (logit)
+  lbRest: 0.22,           // how often the second linebacker sits out a series for the next man
+  assistRate: 0.21,    // how often a second man is credited on a tackle that had no assist yet
+  spill: 0.5,         // how often a run stopped by a lineman past the line is really finished by the second level
+  dimeLong: 0.8, dimeMid: 0.45, // how often a defense goes to six defensive backs on third and long, and third and medium
+  sackBase: 0.22,     // chance a pressured quarterback goes down, before the matchup
   sackShare: 0.4,      // how often two rushers who arrive together split the sack
   slideAt: 12,         // how badly a tackle has to be overmatched before the protection slides a guard out to help him
   doubleBonus: 17,     // pass-block points added by a second blocker
@@ -34,14 +42,14 @@ const TUNE = {
   comboBonus: 16,
   // coverage / passing
   openBase: -0.54,
-  accScale: 0.048,      // how much ball placement decides whether a throw is catchable
+  accScale: 0.042,      // how much ball placement decides whether a throw is catchable
   wrBlock: 12,         // receivers give up this many points to the corner they are blocking (they are not linemen)
   size: 1,             // master dial for every height and weight effect (0 switches them off)
   sizeFat: 0.02,       // extra fatigue per standard deviation of weight
   batBase: 0.017,      // chance a throw is batted at the line
   helpShort: 0.8, helpDeep: 0.12, // how often a second defender is close enough to clean up a missed tackle after the catch
   carrierW: 0.68,      // how much the runner's own skill moves a tackle attempt
-  recWeight: 0.78,     // how much the receiver's own skill moves the window
+  recWeight: 0.66,     // how much the receiver's own skill moves the window
   lbCover: 0.18,       // linebackers own zones that are open by design: their coverage skill moves the window less than a defensive back's
   openScale: 0.034,
   covWeight: 1.5,      // a defender's coverage skill counts this much more than the receiver's route skill
@@ -55,8 +63,8 @@ const TUNE = {
   tackleBase: 2.3,
   tackleScale: 0.03,
   eluMiss: 0.012, eluMid: 70, burMiss: 0.016, visMiss: 0.014,
-  burHole: 0.005, burGet: 0.035, burScreen: 0.1, // burst: the hole stays open for a quick back, he is on the linebackers sooner, and a screen is upfield before the defense turns // how much a carrier's elusiveness (and burst at the line) makes a tackler miss
-  runAfter: 0.8,        // yards a back typically adds after first contact
+  burHole: 0.004, burGet: 0.035, burScreen: 0.1, // burst: the hole stays open for a quick back, he is on the linebackers sooner, and a screen is upfield before the defense turns // how much a carrier's elusiveness (and burst at the line) makes a tackler miss
+  runAfter: 0.75,        // yards a back typically adds after first contact
   carryLoad: 3.8,      // how much more a carry tires a back than an ordinary snap
   pocketOpen: 1.2,
   shortOpen: 0.48,     // defenses give up the underneath
@@ -68,7 +76,7 @@ const TUNE = {
   starLook: 0.16,      // how much the quarterback favours his best receiver, covered or not
   redZone: 1.25,        // how much tighter the windows get inside the 20
   goalStand: 1,        // how much harder a run is to finish with no field behind the defense
-  safetyRun: -1.9,     // a safety coming down on a back who has cleared the second level: negative makes the tackle harder
+  safetyRun: -1.6,     // a safety coming down on a back who has cleared the second level: negative makes the tackle harder
   deepCatch: 2.3,     // how much harder a ball thrown 20+ yards is to put on a receiver
   deepCov: -0.3,      // deep routes start covered: they need time (or a beaten defender) to come open
   midCov: -0.8,     // separation a receiver gains per second the QB can hold the ball in a clean pocket

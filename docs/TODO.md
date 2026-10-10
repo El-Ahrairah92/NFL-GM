@@ -43,8 +43,8 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 
 ## Players and schemes
 
-- **Positional value is out of date.** The attribute test says defensive backs are worth more than the pay and draft scale assumes (safeties 7.0 points a game as a group, corners 7.6, against edge rushers 6.8). Decide in the free agency step.
-- Attributes still too small to measure: a back's burst and pass blocking, an edge rusher's straight-line speed, ball stripping everywhere, a tight end's blocking.
+- **Positional value is out of date** (see the known gaps below for the latest measurement). Decide in the free agency step.
+- Attributes still too small to measure: see the last section of ATTRIBUTES.md.
 - Kicking: 86% from 40 to 49 yards (real about 83%) and about 35 tries a season from 60+ at 56 to 63%.
 
 - Inline and move tight end decided by the play call.
@@ -61,8 +61,10 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 
 ## Football realism (known gaps)
 
-- After the timing retune: the best back averages 6.35 a carry (real 5.2 to 5.9) and 31 players a season make 120+ tackles (real 18 to 26).
-- Rating weights and positional value were fitted before the timing retune: receivers and edge rushers are now worth more, defensive backs less. Refit before the free agency work.
+- The best back still averages 6.2 a carry (real 5.2 to 5.9). The tackle leader is a little low (158, real 165 to 185) and the leading cornerback makes too many (112, real 80 to 100).
+- Passes defended are short at the top (fifth-best 14, real 15 to 17).
+- An interior lineman's pass rush moves sacks but barely the score (0.2 points); linebacker and safety coverage skills are too small to measure. Look at both in the trench and front work.
+- Positional value was fitted three retunes ago (rating weights are current, version 6). Latest measurement: quarterback 11.1, receivers 7.4, line 6.2, corners 6.0, edge 5.9, back 5.8, linebackers 5.3, interior 5.0, safeties 4.9, tight end 3.6. Refit in the free agency work.
 
 - **Yards before and after contact are inverted** (3.1 before and 1.6 after; real about 1.4 and 2.9): backs are first hit too deep and go down too soon after.
 - **Success rate is high** (50.5%, real 43 to 45%) and expected points per play average +0.03 instead of zero.

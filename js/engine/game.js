@@ -177,13 +177,14 @@ function fgProb(g, K, dist) {
 // Who gets the tackle on the stat sheet. Linemen who hold the point rarely finish the play themselves: the back
 // spills to a linebacker or a defensive back coming downhill. And most tackles draw a second man.
 const TKL_W = { MLB: 2.3, WLB: 2.3, SAM: 2.3, SS: 2, FS: 2, CB: 1.45, NCB: 1.7, DIME: 1.7, EDGE: 0.8, DE: 0.7, DT: 0.6, NT: 0.5 };
+const TKL_A = { MLB: 1, WLB: 1, SAM: 1, SS: 1.3, FS: 1.2, CB: 0.9, NCB: 1.0, DIME: 1.0, EDGE: 0.8, DE: 0.8, DT: 0.7, NT: 0.6 }; // who is second to the ball: the secondary rallies, the linebacker usually got there first
 const TKL_SPILL = 0.36, TKL_ASSIST = 0.07, TKL_SCRUM = 0.6, TKL_SAFETY = 0.48;
 function shareTackle(res, def) {
   if (!res.tackler || (res.kind !== 'run' && res.kind !== 'comp' && res.kind !== 'scramble')) return;
   res.noTkl = rand() < (res.kind === 'scramble' ? 0.45 : res.kind === 'comp' ? 0.11 : 0.06); // out of bounds, a slide, or he just goes down: nobody is credited
   const others = () => def.filter(e => e !== res.tackler && e !== res.assist && e.p && !e.blitz);
   const pickW = l => l.length ? weightedPick(l, l.map(e => TKL_W[e.slot] || 1)) : null;
-  if (res.tackler.depth === 0 && res.kind === 'run' && res.yds >= 1 && rand() < TKL_SPILL) {
+  if (res.tackler.depth === 0 && res.kind === 'run' && res.yds >= 1 && rand() < TUNE.spill) {
     const t = pickW(others().filter(e => e.depth > 0));
     if (t) { if (!res.assist && rand() < 0.5) res.assist = res.tackler; res.tackler = t; }
   }
@@ -201,7 +202,7 @@ function shareTackle(res, def) {
     const t = pickW(others().filter(e => e.depth > 0 && TKL_W[e.slot] === TKL_W.MLB));
     if (t) res.tackler = t;
   }
-  if (!res.assist && rand() < TKL_ASSIST) res.assist = pickW(others());
+  if (!res.assist && rand() < TUNE.assistRate) { const o = others(); res.assist = o.length ? weightedPick(o, o.map(e => TKL_A[e.slot] || 1)) : null; } // the second man in is whoever was nearest: spread more evenly than the first
   if (res.assist === res.tackler) res.assist = null;
   if (res.missed && res.missed.length && res.tackler) res.missed = res.missed.filter(m => m !== res.tackler && m !== res.assist); // the man who made the tackle did not also miss it
 }
@@ -705,6 +706,9 @@ function startPossession(g, side, ydl) {
     const rest = new Set();
     for (const e of offUnit(g, side, '11', null)) if (REST_P[e.slot] && e.p.id >= 0 && rand() < REST_P[e.slot]) rest.add(e.p.id);
     T_.rest = rest;
+    // the defense spells its linebackers by series too: the second one most, the man in the middle rarely (your own chart sets this for your club)
+    const dS = 1 - side, D_ = g.side[dS];
+    if (D_ && !userChart(g, dS, 'def')) { const dr = new Set(); for (const e of defUnit(g, dS, g.cx[dS].dt.front, 'NICKEL', false)) { const pr = e.slot === 'WLB' ? TUNE.lbRest : e.slot === 'MLB' ? TUNE.lbRest * 0.3 : 0; if (pr && e.p.id >= 0 && rand() < pr) dr.add(e.p.id); } D_.rest = dr; }
   }
 }
 function changePoss(g, newYdl, result) { endDrive(g, result); startPossession(g, 1 - g.poss, newYdl); }

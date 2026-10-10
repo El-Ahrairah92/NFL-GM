@@ -271,3 +271,21 @@ Still too small to measure: a back's burst and pass blocking, an edge rusher's s
 
 **Rating weights refitted (version 5).** Each attribute's weight is half the old weight and half what it is now measured to be worth, counting only what we can be confident of (the measured value less one standard error), so noise earns nothing. Every position is re-centred so its average rating does not move. A typical player moves under one rating point; the largest moves are about three (safeties, whose zone coverage now counts for more). Main shifts: a back's elusiveness and agility up and balance down; a quarterback's arm up; receivers' speed up and burst down; safeties' zone coverage up and speed down. Positional value (what a position is worth against another, which drives pay and draft value) was left alone: the test says defensive backs are worth more than it assumes, and that is a decision for the free agency work.
 
+
+## Re-audit after the timing and quarterback retunes (rating weights version 6)
+
+Same method, 2,400 games a row (noise about 0.3 points). See DESIGN section 40 for the group figures.
+
+No attribute works backwards. The largest single attributes, points a game for the 30-point gap:
+- Quarterback: short accuracy 3.0, processing 2.8, arm strength 1.2, agility 1.0, decision-making 0.8, pocket presence 0.8, deep accuracy 0.7.
+- Running back: burst 1.2, contact balance 0.8, speed 0.8, strength 0.7. Elusiveness, vision and agility each move yards per carry clearly (0.21, 0.14, 0.12) without showing in the score.
+- Receivers: route running 1.7, hands 1.6, speed 1.2, burst 1.0, agility 0.9.
+- Tight end: agility 0.9, run blocking 0.8, hands 0.6.
+- Offensive line: pass blocking 2.3, run blocking 2.3, agility 1.4, blocking awareness 1.2, strength 0.9.
+- Interior line: block shedding 2.0, strength 0.9. Pass rush moves sacks but only 0.2 in the score.
+- Edge: pass rush 1.7, burst 1.4, strength 1.3, block shedding 0.9.
+- Linebackers: speed 1.2, play recognition 0.8, tackling 0.7.
+- Cornerbacks: zone coverage 1.2, ball skills 1.2, speed 1.0, man coverage 1.0, burst 1.0.
+- Safeties: speed 1.4, ball skills 1.0.
+
+Too small to measure even at 2,400 games: a quarterback's throw on the run, a back's pass blocking, a receiver's release and strength, most of a tight end's skills taken one at a time, an edge rusher's speed and agility, linebacker and safety coverage skills, press, and ball stripping everywhere.

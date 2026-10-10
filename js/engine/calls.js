@@ -173,7 +173,7 @@ function defenseCall(g, oc) {
   const p = oc.pers;
   let pkg;
   if (p === '10') pkg = rand() < 0.7 ? 'DIME' : 'NICKEL';
-  else if (p === '11') pkg = rand() < dt.base * 0.35 * (1 + (runEst - 0.45) * pcF) ? 'BASE' : ((sit.b === 'D3L' || sit.hurry) && rand() < 0.36 ? 'DIME' : sit.b === 'D3M' && rand() < 0.12 ? 'DIME' : 'NICKEL');
+  else if (p === '11') pkg = rand() < dt.base * 0.35 * (1 + (runEst - 0.45) * pcF) ? 'BASE' : ((sit.b === 'D3L' || sit.hurry) && rand() < TUNE.dimeLong ? 'DIME' : sit.b === 'D3M' && rand() < TUNE.dimeMid ? 'DIME' : 'NICKEL');
   else if (p === '12') pkg = rand() < 0.25 + dt.base * 0.8 ? 'BASE' : 'NICKEL';
   else if (p === 'JUMBO' || ((p === '22' || p === '13') && (sit.gl || sit.short))) pkg = sit.gl || g.togo <= 1 ? 'GL' : 'BASE';
   else pkg = 'BASE';

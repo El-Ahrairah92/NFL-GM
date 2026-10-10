@@ -713,3 +713,28 @@ Result: throws held three seconds or more 61% to 24% (real about 25%); average t
 
 Not improved: completions of 20+ yards (2.4 a team-game, real 3.0 to 3.6).
 
+
+## 40. The quarterback over his receivers, the run after contact, and who makes the tackle
+
+After the timing retune a receiver room was worth more than the quarterback throwing to it (8.9 points a game against 7.4), the best back averaged 6.35 a carry, and 31 defenders a season made 120+ tackles.
+
+**Quarterback.**
+- Accuracy counts for more on every throw, and a well-placed ball lets the receiver run after the catch (and a poorly placed one lets the first tackler close).
+- Processing sets how fast he gets through his reads. A slow processor sometimes locks on to his first read and loses a beat.
+- A receiver's own skill counts for a little less in whether he comes open.
+
+**Running.** What a back's elusiveness, burst and vision can add to a missed tackle is capped, so no one attribute stacks into a back nobody can bring down. Safeties fill sooner against the run and less is gained after the first contact; burst through the hole was trimmed.
+
+**Tackles.**
+- Assists are shared by position (safeties and linebackers most, interior linemen least) and are a little rarer.
+- Fewer runs spill to the linebackers untouched.
+- Linebackers come off for a series now and then, as the line already did. A depth chart set by the user is left alone.
+- Dime is called less on long and middle distance, so a linebacker is on the field more.
+
+Result over 16 seasons: scoring 22.8, completion rate 64.8%, yards per attempt 7.16, yards per carry 4.37, interceptions 0.77, sack rate 7.2%. Defenders with 120+ tackles 31 to 21 (real 18 to 26); best back 6.35 to 6.2 a carry (real 5.2 to 5.9, still a little high). The quarterback is worth 11.1 points a game for the 30-point gap and the receiver room 7.4.
+
+Position groups, points a game (2,400 games a row): quarterback 11.1, receivers 7.4, offensive line 6.2, cornerbacks 6.0, edge rushers 5.9, running back 5.8, linebackers 5.3, interior line 5.0, safeties 4.9, tight end 3.6, kicker 1.0, punter 0.7. Per player an edge rusher is worth about 3.0 and a cornerback 2.0.
+
+**Rating weights refitted (version 6)** on that measurement, by the same rule as before (half old, half measured, noise earns nothing, every position re-centred). A typical player moves about one rating point, the largest under four. Main shifts: a quarterback's short accuracy and processing up and arm down; a back's burst and speed up and balance down; receivers' hands up; linebackers' and safeties' speed up; interior linemen's block shedding up and pass rush down. Positional value still left alone for the free agency work.
+
+Still outside the real range: completions of 20+ yards (2.4 a team-game, real 3.0 to 3.6), stuffed runs (21%), the best offense (34 points a game), the most-intercepted quarterback (21), the top deep threat's yards per catch (21), a cornerback's tackles (112 for the leader) and passes defended (the fifth-best has 14, real 15 to 17). The tackle leader is now a little low (158, real 165 to 185).
