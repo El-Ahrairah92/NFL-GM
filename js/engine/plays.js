@@ -271,6 +271,9 @@ function resolvePass(g, off, def, oc, dc) {
   const tpl = oc.rpoThrow ? 'QUICK' : oc.type === 'GADGET' ? 'DEEP' : boot ? 'BOOT' : pa ? 'PA' : oc.type;
   let routes = ROUTES[tpl];
   if (Array.isArray(routes[0][0])) routes = weightedPick(routes, [0.36, 0.3, 0.1, 0.24]);
+  // the same concept is run from different alignments: the wide receivers trade routes, so the deep one is not always the same man's
+  if (!oc.rpoThrow && rand() < TUNE.routeMix) { const wide = ['X', 'Z', 'SLOT'].filter(s => off.some(e => e.slot === s) && routes.some(r => r[0] === s));
+    if (wide.length > 1) { const from = wide.map(s => routes.find(r => r[0] === s)), to = shuffle(wide.slice()), swap = new Map(wide.map((s, i) => [s, [to[i], ...from[i].slice(1)]])); routes = routes.map(r => swap.has(r[0]) ? null : r).filter(Boolean).concat([...swap.values()]); } }
   // heavier personnel: the extra TE (or a fullback, on short routes) runs the route of the receiver he replaced,
   // so 12/13/21/22 sets still attack every level — a play-action seam to the third tight end is a real play
   const onField = new Set(off.map(e => e.slot));
@@ -317,7 +320,7 @@ function resolvePass(g, off, def, oc, dc) {
   const man = dc.cov === 'C1' || dc.cov === 'C0' || dc.cov === 'C2M';
   // the design: one receiver is the primary on this call (weighted toward the better/featured players, but it rotates)
   const featured = receivers.filter(e => e.slot !== 'FB');
-  const prim = featured.length ? weightedPick(featured, featured.map(e => (heirs.has(e.slot) ? 0.6 : { X: 1.0, Z: 0.95, SLOT: 0.85, SLOT2: 0.4, Y: 0.6, H: 0.35, Y2: 0.2, RB: 0.35 }[e.slot] || 0.3) * Math.pow(Math.max(40, slotRating(e.p, e.spot)) / 75, 1.7))) : null;
+  const prim = featured.length ? weightedPick(featured, featured.map(e => (heirs.has(e.slot) ? 0.6 : { X: 1.0, Z: 0.95, SLOT: 0.85, SLOT2: 0.4, Y: 0.6, H: 0.35, Y2: 0.2, RB: 0.35 }[e.slot] || 0.3) * Math.pow(Math.max(40, slotRating(e.p, e.spot)) / 75, TUNE.primPow))) : null;
   const rlist = routes.filter(rt => receivers.some(e => e.slot === rt[0])).map(rt => {
     const e = receivers.find(x => x.slot === rt[0]);
     const depth = randInt(rt[3][0], rt[3][1]);
@@ -347,7 +350,7 @@ function resolvePass(g, off, def, oc, dc) {
     if (man) {
       defE = mm.m.get(e) || null;
       if (!defE || defE.blitz) { hole = true; defE = nearestDef(mm.free, r.endX); }
-      const offC = deep ? rte * 0.35 + agi * 0.1 + spd * 0.55 : rte * 0.5 + agi * 0.2 + bur * 0.3;
+      const offC = deep ? rte * (0.9 - TUNE.deepSpeed) + agi * 0.1 + spd * TUNE.deepSpeed : rte * 0.5 + agi * 0.2 + bur * 0.3;
       const defC = defE ? (deep ? ea(g, defE, 'man') * 0.45 + ea(g, defE, 'agi') * 0.1 + ea(g, defE, 'spd') * 0.45 : ea(g, defE, 'man') * 0.6 + ea(g, defE, 'agi') * 0.15 + ea(g, defE, 'bur') * 0.25) : 30;
       const lbM = defE && ['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 0.35 : 1;
       const RB_ = bod(e), DF_ = defE ? bod(defE) : NO_BODY, zc = TUNE.size;
@@ -369,7 +372,7 @@ function resolvePass(g, off, def, oc, dc) {
       const area = areaOf(r, r.endX), owners = (zown[area] || []).filter(([x]) => !bit.has(x));
       if (!owners.length) { hole = true; defE = nearestDef(droppers, r.endX); }
       else { owners.sort((a, b) => b[1] - a[1]); defE = owners[0][0]; if (owners.length > 1) help -= 0.3 * owners[1][1]; }
-      const offC = deep ? rte * 0.4 + agi * 0.1 + spd * 0.5 : rte * 0.55 + agi * 0.15 + bur * 0.3;
+      const offC = deep ? rte * (0.9 - TUNE.deepSpeed * 0.95) + agi * 0.1 + spd * TUNE.deepSpeed * 0.95 : rte * 0.55 + agi * 0.15 + bur * 0.3;
       const own = owners.length ? owners[0][1] : 0.6;
       const defC = defE ? (deep ? ea(g, defE, 'zone') * 0.4 + ea(g, defE, 'prec') * 0.2 + ea(g, defE, 'spd') * 0.4 : ea(g, defE, 'zone') * 0.45 + ea(g, defE, 'prec') * 0.25 + ea(g, defE, 'spd') * 0.15 + ea(g, defE, 'agi') * 0.15) : 30;
       const lbZ = defE && ['MLB', 'WLB', 'SAM'].includes(defE.slot) ? TUNE.lbCover : 1, ZD = defE ? bod(defE) : NO_BODY, ZR = bod(e), zc = TUNE.size;
@@ -406,7 +409,7 @@ function resolvePass(g, off, def, oc, dc) {
   const readStep = TUNE.readTime * (1.55 - proc / 100);
   // Decision-making = how accurately he reads each window: poor deciders force throws into coverage and miss open men
   const readNoise = clamp(0.44 - (dec - 50) * 0.006, 0.12, 0.6);
-  for (const r of rlist) r.pw = r.w + gauss(0, readNoise) + (r.e === star ? 0.12 : 0); // he looks for his best receiver, covered or not
+  for (const r of rlist) r.pw = r.w + gauss(0, readNoise) + (r.e === star ? TUNE.starLook : 0); // he looks for his best receiver, covered or not
   const thr = 0.38;
   const trust = DEEP.base + clamp(((ea(g, qb, 'arm') + ea(g, qb, 'dacc')) / 2 - DEEP.ref) * DEEP.perPt, DEEP.lo, DEEP.hi); // how small a window he will throw the deep ball into
   // a shot play starts with the shot: on a deep call (and now and then off play-action) he looks downfield first, the more so the more he trusts his arm
@@ -551,6 +554,10 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
   return res;
 }
 function interception(g, def, res, qb, defE, airY, tag) {
+  // not every interception is the man in coverage: the safety over the top takes the overthrow, the man sitting underneath takes the ball thrown past him
+  { const drops = ((res.prot && res.prot.droppers) || []).filter(x => x !== defE), deep = airY >= 15;
+    const pool = deep ? drops.filter(x => x.slot === 'FS' || x.slot === 'SS') : drops.filter(x => ['MLB', 'WLB', 'SAM', 'NCB', 'DIME', 'SS'].includes(x.slot));
+    if (pool.length && rand() < TUNE.intHelp * (deep ? 0.45 : 1)) defE = nearestDef(pool, res.route ? res.route.endX : 0) || defE; }
   const spot = clamp(g.ydl + airY, 1, 109);
   const rest = def.filter(x => x !== defE);
   let ret = 0, td = false;

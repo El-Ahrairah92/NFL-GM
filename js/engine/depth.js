@@ -50,7 +50,12 @@ const TUNE = {
   carryLoad: 3.8,      // how much more a carry tires a back than an ordinary snap
   pocketOpen: 1.2,
   shortOpen: 0.48,     // defenses give up the underneath
-  deepStride: 1.65,       // a deep ball caught in stride: how much harder the trailing defender's tackle is
+  deepStride: 1.5,       // a deep ball caught in stride: how much harder the trailing defender's tackle is
+  routeMix: 0.75,       // how often the wide receivers trade routes on a call, so the deep route is not always the same man's
+  deepSpeed: 0.27,     // how much of getting open deep is pure speed (the rest is route craft)
+  intHelp: 0.45,        // share of interceptions made by a help defender (the safety over the top, the man sitting underneath)
+  primPow: 2.2,        // how strongly the call is designed for the better receivers
+  starLook: 0.16,      // how much the quarterback favours his best receiver, covered or not
   redZone: 1.25,        // how much tighter the windows get inside the 20
   goalStand: 1,        // how much harder a run is to finish with no field behind the defense
   safetyRun: -1.9,     // a safety coming down on a back who has cleared the second level: negative makes the tackle harder

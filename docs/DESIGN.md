@@ -660,3 +660,11 @@ Clean: downs, distance, clock and score never impossible; eleven men from the ri
 
 **What it cost.** The tails got worse: the top deep threat averages 24.6 yards a catch, interceptions pile up on a few defenders and on the worst quarterbacks, and the best offense scores more. League averages improved; who the plays go to did not.
 
+**Who the plays go to (follow-up).** Deep routes were tied to alignment, so one receiver ran the deep route every time and, once deep balls were thrown, caught little else (one had 72% of his targets deep). And every interception went to the man in coverage. Changed:
+- the wide receivers trade routes on three calls in four, so the deep route moves around
+- getting open deep is mostly route craft, with speed about a quarter of it (it was over half)
+- about a third of interceptions go to a help defender: mostly the man sitting underneath on short and intermediate throws, sometimes the safety over the top on deep ones
+- calls are designed a little more for the better receivers, and the quarterback looks for his best man a little more
+
+32 seasons: top deep threat 24.6 yards a catch to 20.5; defenders with 5+ interceptions 13.1 to 11.5; 100-catch receivers 4.5 to 7.9; the catch leader among backs back in range; the receiving-touchdown leader back in range. Scoring, completion rate and yards per attempt unchanged. Against the game before any of this, 13 of the 31 tracked stats are outside the real range, down from 17.
+

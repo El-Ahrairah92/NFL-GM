@@ -55,10 +55,9 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 
 ## Football realism (known gaps)
 
-- **After the deep-ball retune, the tails are off.** League averages are in range, but the top deep threat averages 24.6 yards a catch (real 16.5 to 19), 13 defenders a season get 5+ interceptions (real 5 to 10), the most-intercepted quarterback throws 21 (real 14 to 18), and the best offense scores 33.3 a game (real 28.5 to 31.5). Deep balls go to too few receivers and bad quarterbacks pay too much for them. This is the target-distribution work below.
+- Two tails are still a little outside the real range after the distribution work: the top deep threat averages 20.5 yards a catch (real 16.5 to 19) and 11.5 defenders a season get 5+ interceptions (real 5 to 10). The most-intercepted quarterback throws 21.7 (real 14 to 18).
 - Completions of 20+ yards are still short (2.6 a team-game, real 3.0 to 3.6) even though 40+ is now right: the 20 to 39 yard gain is what is missing.
 - Rushing touchdowns stay high (1.13, real 0.85 to 1.05) and a stiffer goal-line stand did not move them: look at goal-to-go play-calling and the quarterback sneak.
-- **Feed the star:** top receivers should draw a bigger share of targets, including harder ones (catch rate for high-volume receivers is 66%, real 61 to 65; few 100-catch and 1,400-yard seasons).
 - **Punts are low** (3.4 a game, real 3.7 to 4.3) with first downs a bit high: break down how drives end before changing anything.
 - Stuffed runs are still high (20.7%, real 16 to 19).
 - Rushing leader a bit low (about 1,475, real 1,550 to 1,950) and 300-carry backs rare (0.75 a season, real 1 to 4), even with back usage following the playbook.
