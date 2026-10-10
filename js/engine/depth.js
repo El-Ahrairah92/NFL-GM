@@ -14,9 +14,16 @@ const TUNE = {
   teamForm: 0.4,       // sd of team game-day form
   fatFree: 3.0,        // fatigue tolerated before it costs anything
   // trenches
-  passProMedian: 5.5,  // seconds for an average rusher to beat an average blocker 1v1
+  passProMedian: 4.4,  // seconds for an average rusher to beat an average blocker 1v1
   rushScale: 0.029,
   insideRush: 1.1,     // interior rushers take longer to get home than edges (crowded path, more double teams)    // how strongly the rush/block gap moves win time
+  preKnow: 0,          // 1: the pre-snap read knows which receiver will come open, luck included; 0: it knows the matchup only
+  preNoise: 0.3,       // how fuzzy that matchup read is
+  quickScale: 1.3,       // the same for the quick game
+  tbScale: 0.72,          // how long routes take to break and the quarterback takes to set up (1 = as designed)
+  holdMax: 0.3,        // the longest he will stand in a clean pocket waiting for a downfield route
+  sackBase: 0.235,     // chance a pressured quarterback goes down, before the matchup
+  sackShare: 0.4,      // how often two rushers who arrive together split the sack
   slideAt: 12,         // how badly a tackle has to be overmatched before the protection slides a guard out to help him
   doubleBonus: 17,     // pass-block points added by a second blocker
   chipBonus: 7,
@@ -26,7 +33,7 @@ const TUNE = {
   runScale: 0.12,
   comboBonus: 16,
   // coverage / passing
-  openBase: -0.6,
+  openBase: -0.54,
   accScale: 0.048,      // how much ball placement decides whether a throw is catchable
   wrBlock: 12,         // receivers give up this many points to the corner they are blocking (they are not linemen)
   size: 1,             // master dial for every height and weight effect (0 switches them off)
@@ -39,7 +46,7 @@ const TUNE = {
   openScale: 0.034,
   covWeight: 1.5,      // a defender's coverage skill counts this much more than the receiver's route skill
   holeBonus: 0.9,
-  readTime: 0.52,
+  readTime: 0.34,
   catchBase: 2.05,
   shade: 0.4, // how hard defenses roll coverage toward the best receiver
   dropBase: 0.041,
@@ -63,8 +70,8 @@ const TUNE = {
   goalStand: 1,        // how much harder a run is to finish with no field behind the defense
   safetyRun: -1.9,     // a safety coming down on a back who has cleared the second level: negative makes the tackle harder
   deepCatch: 2.3,     // how much harder a ball thrown 20+ yards is to put on a receiver
-  deepCov: -0.5,      // deep routes start covered: they need time (or a beaten defender) to come open
-  midCov: -0.88,     // separation a receiver gains per second the QB can hold the ball in a clean pocket
+  deepCov: -0.3,      // deep routes start covered: they need time (or a beaten defender) to come open
+  midCov: -0.8,     // separation a receiver gains per second the QB can hold the ball in a clean pocket
   paBite: -0.8,        // logit: how readily second-level defenders bite on play-action
   paOpen: 0.22,        // separation gained downfield when they do
   screenLead: 4,       // yards the screen's convoy buys before the first tackler arrives

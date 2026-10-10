@@ -696,3 +696,20 @@ What this model does not have: where a lineman lines up within a gap (technique)
 - *Double-team rate* counted only a second lineman or tight end, so edge rushers who were chipped on a quarter of their rushes showed almost none. Chips now count.
 - Exact against the box score: attempts, completions, targets, rush yards before and after contact, missed tackles forced and made.
 
+## 39. Pass-game timing
+
+The pass rush was slow and the ball was held too long: 61% of dropback throws took three seconds or more, and a blocked edge rusher reached the quarterback inside three seconds on 8% of rushes. Pressure and sack rates looked right only because the two errors cancelled.
+
+Retuned together, searched against the realism audit:
+- routes break sooner and each read is quicker, so receivers come open on time and no longer depend on the quarterback standing in a clean pocket (the longest he will wait dropped from 0.9 to 0.3 seconds)
+- the rush is faster to match
+- the quick game takes a beat longer
+- the pre-snap read knows where the matchup favours the offense, not how the snap will turn out
+- two rushers arriving together split a sack less often, and a pressured quarterback goes down a little more often, so the sack leaders stay where they were
+
+Result: throws held three seconds or more 61% to 24% (real about 25%); average time to throw 3.04 to 2.58; edge rusher home inside three seconds 8% to 17% (real about 15%), interior 3% to 10% (real about 8%); dropbacks pressured 35% to 36%; sack rate 6.7% to 7.0%. Scoring 22.8, completion rate 64.5%, yards per attempt 7.10, interceptions 0.79: all in range. Sack leaders 16.5 / 13.0 / 11.5 for first, fifth and tenth, with 19 players at ten or more.
+
+**What a position is worth changed.** For a 30-point gap across the group, points a game: cornerbacks 7.6 to 5.6, safeties 7.0 to 5.3, edge rushers 6.8 to 5.8, interior line 5.1 to 4.7, receivers 7.5 to 8.9, quarterback 8.3 to 7.4. Per player an edge rusher is now worth about 2.9 and a cornerback about 1.9. An edge's pass rush skill went from 1.5 to 2.0; a quarterback's processing from 1.2 to 1.8.
+
+Not improved: completions of 20+ yards (2.4 a team-game, real 3.0 to 3.6).
+

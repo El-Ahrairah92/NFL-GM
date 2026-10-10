@@ -398,18 +398,22 @@ function resolvePass(g, off, def, oc, dc) {
     w += (r.band === 'S' ? TUNE.shortOpen : r.band === 'D' ? TUNE.deepCov : TUNE.midCov) + (r.role === 3 ? (e.slot === 'RB' || e.slot === 'FB' ? 0.05 : 0.3) : 0); // defenses give up the underneath (checkdowns most of all), protect deep
     if (e.slot === 'Y' || e.slot === 'H') w += 0.13; // tight ends work the seams and the soft middle
     if (dc.soft) w += r.band === 'S' ? 0.35 : r.band === 'D' ? -0.35 : 0.12; // prevent: everything underneath is there
-    w += help + sepNet - g.key * 0.35 + gauss(0, 0.55);
+    const luck = gauss(0, 0.55);
+    w += help + sepNet - g.key * 0.35 + luck;
     if (g.down >= 3 && r.depth >= g.togo && g.togo <= 15) w -= 0.22; // money down: the defense sits on the sticks
-    r.w = w; r.w0 = w; r.def = defE; // w0: how open he came on his own, before the quarterback's time in the pocket added to it if (e === star) r.shade = shade; // film credits beating the extra attention
+    r.w = w; r.w0 = w; r.wPre = w - luck; r.def = defE; // w0: how open he came on his own, before the quarterback's time in the pocket added to it if (e === star) r.shade = shade; // film credits beating the extra attention
   }
   // ---- the QB's read ----
   const proc = ea(g, qb, 'proc'), dec = ea(g, qb, 'dec'), pkt = ea(g, qb, 'pkt');
   // pre-snap coverage read: the QB's processing vs. the coordinator's disguise
   const covID = rand() < lgt(0.6 + soft(proc - 70, 18) * 0.04 - clamp(designKnob(T(g.tids[d]), 'covD') - 55, -35, 35) * 0.0045 - (dc.disg ? 0.5 : 0) - (dc.cov === 'C6' ? 0.25 : 0) + (oc.tags.has('MOTION') ? 0.5 : 0));
-  const drop = (oc.type === 'QUICK' || oc.rpoThrow ? 1.05 : oc.type === 'DEEP' ? 2.25 : 1.75) + (pa ? 0.45 : 0) + (oc.form === 'UC' ? 0.15 : 0) + (oc.type === 'GADGET' ? 0.7 : 0);
+  const tbS = oc.type === 'QUICK' || oc.rpoThrow ? TUNE.quickScale : TUNE.tbScale; // the quick game has its own clock
+  const drop = ((oc.type === 'QUICK' || oc.rpoThrow ? 1.05 : oc.type === 'DEEP' ? 2.25 : 1.75) + (pa ? 0.45 : 0) + (oc.form === 'UC' ? 0.15 : 0) + (oc.type === 'GADGET' ? 0.7 : 0)) * tbS;
   let order = rlist.slice().sort((a, b) => a.role - b.role || a.tb - b.tb);
   if (oc.rpoThrow && oc.rpoVacated) order.sort((a, b) => b.w - a.w);
-  else if (covID) { const best = order.slice(0, -1).sort((a, b) => b.w - a.w)[0]; if (best) order = [best, ...order.filter(x => x !== best)]; }
+  else if (covID) { // he has read the coverage: he knows where the matchup favours him, not how the snap will turn out
+    const seen = new Map(order.map(r => [r, TUNE.preKnow * r.w + (1 - TUNE.preKnow) * (r.wPre + gauss(0, TUNE.preNoise))]));
+    const best = order.slice(0, -1).sort((a, b) => seen.get(b) - seen.get(a))[0]; if (best) order = [best, ...order.filter(x => x !== best)]; }
   if (boot) order = order.filter(r => Math.sign(r.endX) === oc.side || r.dir === 'IN' || r.role === 1).concat(order.filter(r => !(Math.sign(r.endX) === oc.side || r.dir === 'IN' || r.role === 1)));
   const readStep = TUNE.readTime * (1.55 - proc / 100);
   // Decision-making = how accurately he reads each window: poor deciders force throws into coverage and miss open men
@@ -424,7 +428,7 @@ function resolvePass(g, off, def, oc, dc) {
   const passDownSticks = g.down >= 3 ? g.togo : 0;
   for (let i = 0; i < order.length; i++) {
     const r = order[i];
-    t = Math.max(t, r.tb) + (i ? readStep : 0);
+    t = Math.max(t, r.tb * tbS) + (i ? readStep : 0);
     if (t > tPress && !escaped) {
       pressured = true;
       // feel it and escape?
@@ -438,7 +442,7 @@ function resolvePass(g, off, def, oc, dc) {
     // a clean pocket buys time for downfield routes to come open: he can hold on an intermediate or deep route
     // for as long as the protection lets him. This is what a good line is for.
     const margin = escaped ? 0 : tPress - t;
-    const hold = r.band !== 'S' && margin > 0.3 ? Math.min(margin - 0.3, 0.9) : 0;
+    const hold = r.band !== 'S' && margin > 0.3 ? Math.min(margin - 0.3, TUNE.holdMax) : 0;
     if (r.pw + hold * TUNE.pocketOpen > need) { choice = r; if (hold) { r.w += hold * TUNE.pocketOpen; r.pw += hold * TUNE.pocketOpen; t += hold * 0.5; r.held = hold; } break; }
     // nobody open and it is down to the outlet: with time left he works back through the progression instead of dumping it
     if (i === order.length - 1 && !choice && margin > 0.6) {
@@ -455,7 +459,7 @@ function resolvePass(g, off, def, oc, dc) {
     const best = order.slice().sort((a, b) => b.pw - a.pw)[0];
     const rushQ = ea(g, rusher.e, 'prsh') * 0.5 + ea(g, rusher.e, 'bur') * 0.5;
     const evade = pkt * 0.5 + ea(g, qb, 'agi') * 0.2 + ea(g, qb, 'spd') * 0.15 + ea(g, qb, 'bur') * 0.15;
-    const pSack = clamp(0.2 + soft(rushQ - evade, 14) * 0.006 + (rusher.free ? 0.15 : 0) - (escaped ? 0.08 : 0) - (bod(qb).w - bod(rusher.e).w * 0.5) * 0.014 * TUNE.size - (rusher.e.depth === 0 && Math.abs(rusher.e.x) < 2 ? 0.06 : -0.008), 0.06, 0.5); // a big quarterback shrugs off an arm; a big rusher finishes
+    const pSack = clamp(TUNE.sackBase + soft(rushQ - evade, 14) * 0.006 + (rusher.free ? 0.15 : 0) - (escaped ? 0.08 : 0) - (bod(qb).w - bod(rusher.e).w * 0.5) * 0.014 * TUNE.size - (rusher.e.depth === 0 && Math.abs(rusher.e.x) < 2 ? 0.06 : -0.008), 0.06, 0.5); // a big quarterback shrugs off an arm; a big rusher finishes
     const scrambleP = clamp(0.03 + (ea(g, qb, 'spd') - 55) * 0.018 + (ea(g, qb, 'agi') - 55) * 0.005, 0.03, 0.6) * (escaped ? 1.15 : pressured ? 0.7 : 0.35);
     if (pressured && rand() < pSack) {
       const loss = randInt(3, 10);
@@ -466,7 +470,7 @@ function resolvePass(g, off, def, oc, dc) {
       const sk = cand.length > 1 ? weightedPick(cand, cand.map(a => (a.e.blitz ? 1.1 : a.e.depth === 0 && Math.abs(a.e.x) < 2 ? 0.5 : 1))).e : rusher.e;
       // two men home together split it
       const skA = cand.find(a => a.e === sk), mates = cand.filter(a => a.e !== sk && skA && Math.abs(a.t - skA.t) <= 0.9);
-      const sk2 = mates.length && rand() < 0.75 ? pick(mates).e : null;
+      const sk2 = mates.length && rand() < TUNE.sackShare ? pick(mates).e : null;
       Object.assign(res, { kind: 'sack', yds: -loss, sacker: sk, sacker2: sk2, desc: `${pshort(qb.p)} sacked by ${pshort(sk.p)}${sk2 ? ' and ' + pshort(sk2.p) : ''}` });
       res.fumble = rand() < 0.11 * (1 + (ea(g, sk, 'strp') - 55) * 0.03) * (1 + (65 - ea(g, qb, 'bsec')) * 0.025);
       res.involved = [qb.p, sk.p];

@@ -61,10 +61,11 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 
 ## Football realism (known gaps)
 
-- **Pass-game timing (proposed retune).** Quarterbacks throw to the single most open receiver 77% of the time, because the pre-snap read is told which receiver will come open, luck included. Blocked rushers are slow: an edge beats his man inside 2.5 seconds on 3% of rushes (real about 15 to 18%), an interior rusher on 1%. Pressure happens at a real rate (36%) only because the ball is held long on dropbacks; time to throw is bunched at under 1.5 seconds and over 3. Fix together: reads that know the matchup but not the outcome, a faster rush, the ball out sooner. Expected to make pass rush worth more against coverage.
+- After the timing retune: the best back averages 6.35 a carry (real 5.2 to 5.9) and 31 players a season make 120+ tackles (real 18 to 26).
+- Rating weights and positional value were fitted before the timing retune: receivers and edge rushers are now worth more, defensive backs less. Refit before the free agency work.
+
 - **Yards before and after contact are inverted** (3.1 before and 1.6 after; real about 1.4 and 2.9): backs are first hit too deep and go down too soon after.
 - **Success rate is high** (50.5%, real 43 to 45%) and expected points per play average +0.03 instead of zero.
-- **Pass-rush win rate** uses three seconds and reads 7%; set the bar once the timing retune is done.
 
 - Two tails are still a little outside the real range after the distribution work: the top deep threat averages 20.5 yards a catch (real 16.5 to 19) and 11.5 defenders a season get 5+ interceptions (real 5 to 10). The most-intercepted quarterback throws 21.7 (real 14 to 18).
 - Completions of 20+ yards are still short (2.6 a team-game, real 3.0 to 3.6) even though 40+ is now right: the 20 to 39 yard gain is what is missing.
