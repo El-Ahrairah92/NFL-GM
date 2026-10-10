@@ -63,12 +63,13 @@ const TUNE = {
   slantWash: 6,         // run-block points against a man who slanted away from the play
   noContain: 0.55,      // how much less often the corner turns an outside run back when the beaten edge man was lined up inside the play
   tightEsc: 0.3,        // how much easier the quarterback gets out when no rusher is lined up wide of the tackles
+  lineBody: 1,          // how much each spot on the line asks for its own kind of player: mass and strength inside, burst and bend outside (0 switches it off)
   mugLate: 0.15,        // how much more open a route is when the man covering it started walked up in a gap
   levRun: 5,            // run-block points for a blocker who starts a full step between his man and the play (and against one who has to cross his face)
   kickOut: 4,           // what a puller or lead back gives up kicking out a man set in the hole
   twoGapPen: 0.7,       // a man head-up on his blocker holds two gaps: he gets into the backfield this much as often
   slantPen: 1.35,       // a man slanting toward the play, or shooting a gap from depth, gets into the backfield this much more often
-  reachRush: 2,         // pass-rush points per step a blocker has to travel beyond his first one to reach his man
+  reachRush: 4.5,         // pass-rush points per step a blocker has to travel beyond his first one to reach his man
   widePath: 0.12,       // seconds added per step a rusher lines up outside the tight end's spot
   deepPath: 0.02,       // seconds added per yard a blocked rusher starts off the ball
   offBall: 4,           // run-block points against a man who meets his blocker coming from off the line
@@ -274,6 +275,11 @@ function fillSlots(g, s, slots, table, opts = {}) {
     const [spot, grp] = table[slot];
     let best = null, bs = -1e9;
     let cands = T_.depth[spot].length ? T_.depth[spot] : sameSide(spot).map(p => ({ p, r: 30 }));
+    // a man on the defensive line is judged at the spot he is actually lining up in, not by the name of the job
+    const ax = grp === 'DL' && !(depth > 0) && x !== undefined ? Math.abs(x) : null;
+    if (ax !== null) { const lc = T_.lc || (T_.lc = {}), k = ax.toFixed(2);
+      if (!lc[k]) { const seen = new Set(), all = []; for (const s of LINE_SPOTS) for (const c of T_.depth[s] || []) if (!seen.has(c.p.id)) { seen.add(c.p.id); all.push({ p: c.p, r: lineSlotRating(c.p, ax) }); } lc[k] = all.sort((a, b) => b.r - a.r); }
+      if (lc[k].length) cands = lc[k]; }
     if (slot === 'QB' && !g.pre && !cands.some(c => c.p.pos === 'QB' && !used.has(c.p.id))) { const em = rosterOf(g.tids[s]).filter(p => p.pos === 'QB' && !p.injury && !onIR(p) && !T_.roster.includes(p)).sort((a, b) => b.ovr - a.ovr)[0];
       if (em) { T_.active.add(em.id); T_.roster.push(em); if (!g.ps[em.id]) g.ps[em.id] = { fat: 0, snp: 0, last: null }; const c = { p: em, r: slotRating(em, 'QB') }; T_.depth.QB = [c, ...T_.depth.QB]; cands = T_.depth.QB; if (g.pbp) g.pbp.push({ q: g.q || 1, c: Math.max(0, g.clock || 0), t: `${pshort(em)} comes in as the emergency quarterback`, s: g.score ? g.score.slice() : [0, 0] }); } }
     // your depth chart: listed players come first (in order); fatigue can still force a sub, and #2 gets his rotation share
@@ -304,8 +310,9 @@ function fillSlots(g, s, slots, table, opts = {}) {
     }
     if (!best) { const pool = sameSide(spot).filter(p => !used.has(p.id) && p.pos !== 'K' && p.pos !== 'P' && (slot === 'QB' || p.pos !== 'QB')).sort((a, b) => (b.a ? slotRating(b, spot) : 20) - (a.a ? slotRating(a, spot) : 20)); best = { p: pool[0] || T_.roster.find(p => !used.has(p.id)) || T_.roster[0], r: 30 }; }
     used.add(best.p.id);
-    const pen = best.p.a ? comfortPen(best.p, spot) : 0; // how well he knows this spot; his own attributes do the rest
-    out.push({ p: best.p, slot, name, spot, grp, x, depth: depth || 0, pen, s });
+    const pen = best.p.a ? (ax !== null ? linePen(best.p, ax) : comfortPen(best.p, spot)) : 0; // how well he knows this spot; his own attributes do the rest
+    const ent = { p: best.p, slot, name, spot, grp, x, depth: depth || 0, pen, s }; if (ax !== null) ent.lw = lineBlend(ax);
+    out.push(ent);
   }
   return out;
 }
@@ -469,7 +476,8 @@ function tickFatigue(g, units) {
     st.snp++;
     if (g.pre) { const sq = st.sq || (st.sq = [0, 0, 0]); sq[g.q <= 1 ? 0 : g.q === 2 ? 1 : 2]++; }
     st.last = e.name;
-    if (e.spot) { const sp = st.sp || (st.sp = {}); sp[e.spot] = (sp[e.spot] || 0) + 1; }
+    if (e.lw) { const sp = st.sp || (st.sp = {}); for (const [k, w] of e.lw) sp[k] = Math.round(((sp[k] || 0) + w) * 100) / 100; } // reps along the line count toward the points either side
+    else if (e.spot) { const sp = st.sp || (st.sp = {}); sp[e.spot] = (sp[e.spot] || 0) + 1; }
   }
   for (const id in g.ps) if (!on.has(+id)) { const st = g.ps[id]; st.fat = Math.max(0, st.fat - 1.25); }
 }

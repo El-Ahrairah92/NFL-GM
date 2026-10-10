@@ -913,3 +913,29 @@ Run looks are leaned on when the film says run; rush looks on passing downs. Bea
 
 Not built yet: scouting text by technique, season film on a coach's habits, disguised and overload pressure packages, and the same depth for offensive coaches.
 
+## 46. The defensive line is one line
+
+Nose, defensive tackle, 3-4 end and edge used to be four positions a player had or had not learned. They are now four points along one line: nose over the center, 3-technique on the guard, 5-technique on the tackle, wide edge.
+
+**Rating anywhere on the line** is read between the two points either side. A 2i asks for some of what a nose does and some of what a 3-technique does; no technique is its own position.
+
+**Comfort** works the same way, and never falls below what carries over from the spot he knows best: half a step along the line is nearly the same job, a full step is a different one. A career 3-technique is comfortable at the 2i and the 4i, decent at nose, raw out wide. Snaps count toward the points either side of where he actually lined up, so comfort grows where he plays.
+
+**The lineup follows the alignment.** Each man on the line is chosen and penalised for the spot he is lining up in on this snap, in this look, not for the name of the job. When a coach's look moves a tackle from the 3 to the 2i, the same man is judged as a 2i.
+
+**Each spot asks for its own kind of player** in the engine:
+- weight is judged against what the spot asks for (about 330 pounds at nose, 300 at the 3, 288 on the tackle, 256 wide), not against his listed position: too light gives ground against the run, most of all inside; too heavy cannot turn the corner
+- inside, strength counts for more and the rush is power; outside, burst and agility count for more and the rush is speed
+
+Every defense playing its linemen at the wrong end of the line (noses wide, edges inside) allows 3 more points a game: dropbacks pressured 36% to 30%, sacks 7.4% to 5.5%, runs stuffed 20% to 13%.
+
+**Knowing the looks.** A changeup look, a line slant or walked-up linebackers each make the call harder to know, so players still learning the book bust in them more. A bigger library is slower to learn: each look past a coach's home ones, and the more his line moves and his linebackers walk up. A simple coach gets young and new players up to speed faster.
+
+**Player card.** A lineman's card shows a strip from nose to wide: each spot against his own best one, with how at home he is there and whether he is light or heavy for it.
+
+Also: a wide alignment gives the rusher more of an angle than before, so the Wide look is a real trade (39% of dropbacks pressured to 40%, sacks 7.5% to 8.5%, against 5.8 a carry).
+
+**League, 24 seasons:** scoring 23.0, completion rate 64.9%, yards per attempt 7.25, sack rate 7.1%, yards per carry 4.53, stuffed runs 18.5%. The audit's clearly-off count is 7, the lowest it has been.
+
+Not done: the four points still exist as labels in cross-training, scouting text and the depth chart lists; the depth chart page built on roles is next.
+

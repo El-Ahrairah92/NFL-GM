@@ -2376,9 +2376,17 @@ function strengthsHTML(p) {
   return `<div class="grid g2" style="gap:10px"><div><div class="sw-h good">Strengths</div>${str.map(t => `<div class="sw good">+ ${esc(t)}</div>`).join('')}${str.length < 2 ? best.map(t => `<div class="sw" title="Relative to the rest of his game, not to a starter">◦ ${esc(t)}</div>`).join('') : ''}${!str.length && !best.length ? '<div class="muted small">Nothing that stands out.</div>' : ''}</div>
     <div><div class="sw-h bad">Weaknesses</div>${weak.length ? weak.map(t => `<div class="sw bad">− ${esc(t)}</div>`).join('') : '<div class="muted small">No glaring holes.</div>'}</div></div>`;
 }
+// where along the defensive line he can play: each spot against his own best one, with how at home he is there
+const LINE_POINTS = [['Nose', 0.1], ['Shade', 0.6], ['3-tech', 1.35], ['4i', 1.65], ['5-tech', 2.3], ['Wide', 3.3]];
+function lineStripHTML(p) {
+  if (!p.a || !SPOTS[p.spot] || SPOTS[p.spot].g !== 'DL') return '';
+  const v = LINE_POINTS.map(([l, ax]) => ({ l, r: lineSlotRating(p, ax), c: lineComfort(p, ax), m: lineMass(p, ax) })), top = Math.max(...v.map(x => x.r));
+  return `<div class="line-strip" title="How he plays at each spot on the line, against his own best spot. Comfort is what he has learned there; size is against what the spot asks for.">${v.map(x => { const d = Math.round(x.r - top), lv = d >= -1 ? 4 : d >= -4 ? 3 : d >= -8 ? 2 : d >= -13 ? 1 : 0;
+    return `<div class="ls-c ls-${lv}" title="${esc(comfortLabel(x.c))} there${x.m <= -1.5 ? ' · light for the spot' : x.m >= 1.5 ? ' · heavy for the spot' : ''}"><b>${x.l}</b><span>${d >= -1 ? 'best' : d}</span></div>`; }).join('')}</div>`;
+}
 function comfortHTML(p) {
   const cf = Object.entries(p.cf || {}).sort((a, b) => b[1] - a[1]);
-  return cf.map(([s, c]) => `<span class="pill ${CF_CLS[comfortLabel(c)]}" title="${trueOn() ? Math.round(c) : ''}">${SPOTS[s].l} · ${comfortLabel(c)}</span>`).join(' ') +
+  return lineStripHTML(p) + cf.map(([s, c]) => `<span class="pill ${CF_CLS[comfortLabel(c)]}" title="${trueOn() ? Math.round(c) : ''}">${SPOTS[s].l} · ${comfortLabel(c)}</span>`).join(' ') +
     ` <span class="small muted">· learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an average pace'}</span>`;
 }
 function playerModal(pid, replace) {

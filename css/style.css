@@ -231,6 +231,15 @@ svg.look .tech { fill: #fff; font-size: 10px; font-weight: 800; text-anchor: mid
 svg.look .slot { fill: var(--muted); font-size: 8.5px; text-anchor: middle; }
 svg.look .gap { fill: var(--muted); font-size: 8.5px; text-anchor: middle; opacity: .75; }
 svg.field .tq { fill: #ffd98a; font-size: 12px; font-weight: 700; text-anchor: middle; pointer-events: none; }
+/* a lineman's strip: nose to wide */
+.line-strip { flex: 0 0 100%; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; margin: 2px 0 8px; max-width: 460px; }
+.ls-c { border: 1px solid var(--line); border-radius: 6px; padding: 4px 2px; text-align: center; font-size: 12px; line-height: 1.25; }
+.ls-c b { display: block; font-weight: 600; } .ls-c span { color: var(--muted); }
+.ls-4 { background: color-mix(in srgb, var(--good) 34%, transparent); border-color: var(--good); } .ls-4 span { color: var(--text); font-weight: 700; }
+.ls-3 { background: color-mix(in srgb, var(--good) 16%, transparent); }
+.ls-2 { background: var(--panel2); }
+.ls-1 { background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.ls-0 { background: color-mix(in srgb, var(--bad) 14%, transparent); }
 .fv-grid { grid-template-columns: 1fr 1fr; }
 @media (max-width: 1400px) { .fv-grid { grid-template-columns: 1fr; } }
 .stars i { font-style: normal; }

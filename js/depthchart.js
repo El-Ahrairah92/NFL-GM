@@ -267,11 +267,14 @@ function pbArrive(p, tid) {
   p.pb = Math.round(clamp(v, 10, 100)); p.pbArch = arch;
   delete p.xt; // a new club has its own plans for him
 }
+// a bigger book takes longer to learn: every look past a coach's home ones, and the more his line moves and his linebackers walk up
+function libSize(lib) { return lib ? Math.max(0, lib.base.length + lib.sub.length - 2) * 0.05 + (lib.sl || 0) * 0.8 + (lib.mug || 0) * 0.8 : 0; }
+function libLearn(tid) { const t = T(tid), pk = t ? teamDefPk(t) : null; return 1 / (1 + libSize(pk && pk.lib)); }
 function pbLearn(p, reps, room, weeks) {
   if (!PB_RATE[p.pos] || pbOf(p) >= 100) return;
   ensureCharacter(p);
   const tid = p.tid >= 0 ? p.tid : p.psTid;
-  const f = (0.72 + p.h.work / 200 + (learnRate(p) - 1) * 0.4) * reps * (1 + room * 0.08) * (tid >= 0 && tid !== undefined ? teachMult(tid, p.pos) : 1);
+  const f = (0.72 + p.h.work / 200 + (learnRate(p) - 1) * 0.4) * reps * (1 + room * 0.08) * (tid >= 0 && tid !== undefined ? teachMult(tid, p.pos) : 1) * (tid >= 0 && tid !== undefined && PRAC_SIDE[p.pos] === 'D' ? libLearn(tid) : 1);
   let k = pbOf(p);
   for (let i = 0; i < (weeks || 1); i++) k += PB_RATE[p.pos] * Math.max(0.2, f) * (104 - k);
   p.pb = Math.min(100, Math.round(k * 10) / 10);
@@ -379,7 +382,7 @@ function offNeed(oc) {
   return Math.min(80, n);
 }
 function defNeed(dc) {
-  let n = 35 + ({ BLITZ: 12, SIM: 25, THREE: 8, FZ: 22 }[dc.pres] || 0) + (dc.stunt ? 10 : 0) + ({ C2M: 10, C4: 10, C0: 5, T2: 12, C6: 18 }[dc.cov] || 0) + (dc.subRush ? 5 : 0) + (dc.disg ? 8 : 0) + (dc.front === 'Bear' ? 10 : dc.front === 'Under' ? 4 : 0) + (dc.bign ? 5 : 0);
+  let n = 35 + ({ BLITZ: 12, SIM: 25, THREE: 8, FZ: 22 }[dc.pres] || 0) + (dc.stunt ? 10 : 0) + ({ C2M: 10, C4: 10, C0: 5, T2: 12, C6: 18 }[dc.cov] || 0) + (dc.subRush ? 5 : 0) + (dc.disg ? 8 : 0) + (dc.front === 'Bear' ? 10 : dc.front === 'Under' ? 4 : 0) + (dc.bign ? 5 : 0) + (dc.changeup ? 6 : 0) + (dc.plan && dc.plan.slant ? 8 : 0) + (dc.mug ? 8 : 0);
   return Math.min(80, n);
 }
 // after the huddle breaks: anyone on the field who does not know this call may blow his assignment

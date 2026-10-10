@@ -16,8 +16,9 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 
 ## Fronts and the trenches (agreed order)
 
-Done: the line of scrimmage is geometry and a front is data (DESIGN section 41). Each side has a move at the line, defenses that repeat themselves are punished, inside and outside runs are balanced (section 42). The pocket: stepping up, interior push, flushes (section 43). Where the ball is thrown (section 44). Coaches carry their own looks, line games and walked-up linebackers (section 45).
+Done: the line of scrimmage is geometry and a front is data (DESIGN section 41). Each side has a move at the line, defenses that repeat themselves are punished, inside and outside runs are balanced (section 42). The pocket: stepping up, interior push, flushes (section 43). Where the ball is thrown (section 44). Coaches carry their own looks, line games and walked-up linebackers (section 45). The defensive line is one continuous line; bigger libraries are slower to learn (section 46).
 
+0. **Depth chart by role (agreed, next).** The page lists the jobs that exist in the coach's system (about six on the line: nose, shade, 3-technique, tackle-side end, wide end, stand-up edge; run-down and pass-down versions for the line, linebackers and running back). Fill each once; the field view shows every look and formation; override any player in a specific look. No-huddle freezes substitutions so run-down personnel can be caught by a check to a pass. Existing charts convert on load; a new coordinator carries over roles that still exist. Defense first, offense when offensive coaches get libraries. Then the same continuous treatment for linebackers and safeties (box to deep) and receivers (outside to slot).
 1. **Season film.** Record each game's defensive tendencies (looks, slants, pressure) so opponents prepare for a coach's habits before kickoff.
 2. **Pressure packages and the offense's answers.** Disguised and overload pressures; protection calls as a choice the offense makes. Offensive coaches get the same depth.
 3. **Playbook page, scouting text, roster valuation by technique.**

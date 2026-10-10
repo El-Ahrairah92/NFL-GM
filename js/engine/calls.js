@@ -199,7 +199,7 @@ function defenseCall(g, oc) {
   if (lib && pkg !== 'GL' && call.front !== 'Bear' && call.front !== 'Under') {
     const fam = pkg === 'BASE' ? (odd ? 'odd' : 'even') : 'sub', list = fam === 'sub' ? lib.sub : lib.fam === fam ? lib.base : null;
     if (list) { const w = {}; for (const [k, v] of list) { const L = LOOKS[fam][k]; if (L) w[k] = v * (L.k === 'run' ? 0.4 + runEst * 1.4 : L.k === 'rush' ? (sit.passDown ? 2.2 : 1.3 - runEst) : 1); }
-      const k = wpick(w); if (k) { call.look = k; call.lookT = { t: LOOKS[fam][k].t }; } }
+      const k = wpick(w); if (k) { call.look = k; call.lookT = { t: LOOKS[fam][k].t }; call.changeup = k !== list[0][0]; } }
     if (pkg !== 'BASE' && lib.mug && rand() < lib.mug * (sit.passDown ? 2 : 0.6)) { call.lookT = Object.assign({}, call.lookT, { mug: true }); call.mug = true; }
   }
   // coverage

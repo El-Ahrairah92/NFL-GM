@@ -189,6 +189,31 @@ const SPOT_NEIGHBORS = {
 function comfortOf(p, s) { return p.cf ? (p.cf[s] || 0) : (s === p.spot ? 100 : 0); }
 function comfortLabel(c) { return c >= 85 ? 'Natural' : c >= 60 ? 'Comfortable' : c >= 30 ? 'Decent' : c > 0 ? 'Raw' : 'Unfamiliar'; }
 function comfortPen(p, s) { return Math.round(16 * Math.pow(1 - comfortOf(p, s) / 100, 1.6) * 10) / 10; }
+// ---------- the defensive line is one line ----------
+// Nose, 3-technique, 5-technique and wide edge are four points along it, not four positions. A man's rating and his comfort
+// anywhere on the line are read between the points on either side: a 2i asks for some of what a nose does and some of what a
+// 3-technique does. ax is how far from the center he lines up (the same scale the fronts use).
+const LINE_ANCHORS = [['NT', 0.2], ['DT', 1.3], ['DE', 2.0], ['EDGE', 2.7]];
+const LINE_SPOTS = new Set(LINE_ANCHORS.map(a => a[0]));
+function linePos(ax) {
+  const A = LINE_ANCHORS; if (ax <= A[0][1]) return 0;
+  for (let i = 1; i < A.length; i++) if (ax <= A[i][1]) return i - 1 + (ax - A[i - 1][1]) / (A[i][1] - A[i - 1][1]);
+  return A.length - 1;
+}
+function lineBlend(ax) { const u = linePos(ax), i = Math.min(LINE_ANCHORS.length - 2, Math.floor(u)), f = u - i; return f <= 0.001 ? [[LINE_ANCHORS[i][0], 1]] : f >= 0.999 ? [[LINE_ANCHORS[i + 1][0], 1]] : [[LINE_ANCHORS[i][0], 1 - f], [LINE_ANCHORS[i + 1][0], f]]; }
+// comfort: what he has learned at the points either side, and never less than what carries over from the spot he knows best
+// (a step along the line is a different job, half a step is nearly the same one)
+function lineComfort(p, ax) {
+  const u = linePos(ax); let lin = 0, best = 0;
+  LINE_ANCHORS.forEach(([s], i) => { const c = comfortOf(p, s), d = Math.abs(u - i); lin += Math.max(0, 1 - d) * c; best = Math.max(best, c * Math.max(0, 1 - 0.6 * d)); });
+  return clamp(Math.max(lin, best), 0, 100);
+}
+function penOfComfort(c) { return Math.round(16 * Math.pow(1 - c / 100, 1.6) * 10) / 10; }
+function linePen(p, ax) { return penOfComfort(lineComfort(p, ax)); }
+function lineRating(p, ax) { let r = 0; for (const [s, w] of lineBlend(ax)) r += w * spotRating(p, s); return r; }
+// how heavy he is for the spot, in steps of twelve pounds: a 256-pound edge at nose is six short, a 330-pound nose out wide is six over
+function lineMass(p, ax) { if (!p || !p.m) return 0; let w = 0; for (const [k, v] of lineBlend(ax)) w += v * SPOTS[k].body[2]; return clamp((p.m.wt - w) / 12, -4, 4); }
+function lineSlotRating(p, ax) { return p.a ? lineRating(p, ax) - linePen(p, ax) : p.ovr || 40; }
 // history at neighboring spots: most players have a little, veterans more; true utility men are rare
 // nearly the same job: most players at one have real reps at the other
 const CLOSE_PAIRS = new Set(['DT>DE', 'DE>DT', 'DT>NT', 'NT>DT', 'LG>RG', 'RG>LG', 'LT>RT', 'RT>LT', 'MLB>WLB', 'WLB>MLB', 'FS>SS', 'SS>FS', 'WRX>WRZ', 'WRZ>WRX', 'TEY>TEH', 'TEH>TEY', 'CB>NCB', 'NCB>CB']);

@@ -82,11 +82,17 @@ function rushVsBlock(g, r, b, oNet) {
   const R = bod(r), B = bod(b), z = TUNE.size;
   // a rusher: length wins the edge, mass wins the bull rush; heavy is slow around the corner, tall plays high
   const speed = ea(g, r, 'prsh') * 0.55 + ea(g, r, 'bur') * 0.25 + ea(g, r, 'agi') * 0.2 + (R.len * 1.8 - R.w * 0.5) * z;
-  const power = ea(g, r, 'prsh') * 0.55 + ea(g, r, 'str') * 0.45 + (R.w * 2.4 - R.h * 0.3) * z;
+  let power = ea(g, r, 'prsh') * 0.55 + ea(g, r, 'str') * 0.45 + (R.w * 2.4 - R.h * 0.3) * z;
+  // where he lines up decides which rush he has room for: wide, the corner belongs to burst and bend and a heavy man is wasted;
+  // over the center there is no corner to turn, only a man to move
+  let speedAdj = 0;
+  if (r.depth < ON_LINE && TUNE.lineBody) { const ax = Math.abs(r.x), wide = clamp((ax - 2) / 1.5, 0, 1), ins = clamp((1.4 - ax) / 1.2, 0, 1), m = lineMass(r.p, ax);
+    speedAdj = TUNE.lineBody * (wide * ((ea(g, r, 'bur') + ea(g, r, 'agi')) / 2 - 72) * 0.3 - Math.max(0, m) * (0.5 + wide * 1.5) - ins * 4);
+    power += TUNE.lineBody * (m * 1.5 * (1 - wide) + ins * (ea(g, r, 'str') - 76) * 0.25 - wide * 3); }
   // a blocker: long arms keep a speed rusher off him, mass anchors against power; heavy feet lose the edge, a tall man gets walked back
   const vsSpeed = ea(g, b, 'pbk') * 0.65 + ea(g, b, 'agi') * 0.2 + ea(g, b, 'bawr') * 0.15 + (B.len * 1.8 - B.w * 0.4) * z;
   const vsPower = ea(g, b, 'pbk') * 0.55 + ea(g, b, 'str') * 0.45 + (B.w * 2.6 - B.h * 0.3) * z;
-  return Math.max(speed - vsSpeed, power - vsPower) - oNet;
+  return Math.max(speed + speedAdj - vsSpeed, power - vsPower) - oNet;
 }
 // Returns { rushers: [{e, rx, t, blockers:[], free}], tPress, first }
 function passProtection(g, off, def, oc, dc, extraProtect) {
@@ -245,6 +251,10 @@ function runBlocking(g, off, def, oc, dc, target, carrierSlot) {
     const shedScore = ea(g, e, 'shed') * 0.5 + (zone ? (ea(g, e, 'bur') * 0.25 + ea(g, e, 'agi') * 0.25) : ea(g, e, 'str') * 0.5) + (zone ? E.len * 1.2 - E.w * 0.4 : E.w * 2.4 - E.h * 0.3 + E.len * 0.4) * zs;
     if (r.state === 'free') { r.win = 1; continue; }
     const b = r.blockers[0];
+    // the same on run downs: inside, the job is to hold ground (mass, strength); outside, to get off the ball and chase (burst, a lighter frame)
+    let spotFit = 0;
+    if (r.lvl === 1 && e.depth < ON_LINE && TUNE.lineBody) { const ax = Math.abs(e.x), wide = clamp((ax - 2) / 1.5, 0, 1), ins = clamp((1.4 - ax) / 1.2, 0, 1);
+      spotFit = TUNE.lineBody * (lineMass(e.p, ax) * (2.5 - 1.5 * wide) + ins * (ea(g, e, 'str') - 78) * 0.25 + wide * (ea(g, e, 'bur') - 76) * 0.2); } // too light for the spot gives ground, most of all inside
     const wideRun = Math.abs(target) >= 2.2; // reaching a defender on a run to the edge is a foot race
     let block = ea(g, b, 'rbk') * 0.5 + (zone ? ea(g, b, 'agi') : ea(g, b, 'str')) * 0.27 + ea(g, b, 'bawr') * 0.13 + ea(g, b, 'bur') * (wideRun ? 0.04 : 0.1) + (wideRun ? ea(g, b, 'spd') * 0.06 : 0) + dNet + (zone ? bod(b).len * 0.6 - bod(b).w * 0.3 : bod(b).w * 2.4 - bod(b).h * 0.3) * zs; // get-off, then feet or power; mass moves people, tall men lose leverage
     if (r.lvl === 1) {
@@ -255,7 +265,7 @@ function runBlocking(g, off, def, oc, dc, target, carrierSlot) {
       // the angle: a blocker already between his man and the play only has to stay there; one who has to get across his man's face has to win a race first
       r.lev = r.kick ? 0.4 : clamp(Math.tanh((target - r.px) / 0.5) * (b.x - r.px), -1, 1);
       block += r.lev * TUNE.levRun - (r.kick ? TUNE.kickOut : 0); // a kick-out is a back or a guard on the move against a man set in the hole
-      r.win = lgt(TUNE.runWin + soft(shedScore - block, 14) * TUNE.runScale);
+      r.win = lgt(TUNE.runWin + soft(shedScore + spotFit - block, 14) * TUNE.runScale);
       // getting into the backfield: a man slanting toward the play is already moving that way; a man head-up on his blocker is holding two gaps, not shooting one
       const toward = e.mv && Math.sign(e.mv) === Math.sign(target - e.x), twoGap = !e.mv && !e.blitz && Math.abs(b.x - e.x) < 0.2;
       r.pen = r.win * clamp((0.38 + (ea(g, e, 'bur') - 72) * 0.012) * (toward || e.blitz ? TUNE.slantPen : twoGap ? TUNE.twoGapPen : 1), 0.12, 0.8);
