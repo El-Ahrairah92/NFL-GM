@@ -124,6 +124,7 @@ const FAT_SLOPE = { QB: 1, OL: 1, RB: 1.6, WR: 1.8, TE: 2.6, DL: 4.0, LB: 1, DB:
 const REST_P = { X: 0.075, Z: 0.075, SLOT: 0.04, Y: 0.14 };
 const ROT_GAP = { DL: 0.5, WR: 0.55, TE: 0.5 }; // receivers and tight ends get series off too
 
+const GROUP_GUARD = { OL: 40, QB: 60 };
 // ---------- team game state ----------
 function slotRating(p, spot) {
   if (!p.a) return p.ovr || 40;
@@ -146,7 +147,8 @@ function initSide(g, s) {
   for (const spot of SPOT_KEYS) {
     // only men from that side of the ball: when a club runs out of tight ends the next body is a lineman, not a defensive tackle
     const sd = SPOTS[spot].side;
-    T_.depth[spot] = T_.roster.filter(p => !p.a || (SPOTS[p.spot] && SPOTS[p.spot].side === sd)).map(p => ({ p, r: slotRating(p, spot) })).filter(x => x.r > 25).sort((a, b) => b.r - a.r);
+    const guard = GROUP_GUARD[SPOTS[spot].g] || 0; // a tight end is not a tackle and only a quarterback is a quarterback, whatever the ratings say, while a real one is available
+    T_.depth[spot] = T_.roster.filter(p => !p.a || (SPOTS[p.spot] && SPOTS[p.spot].side === sd)).map(p => ({ p, r: slotRating(p, spot) - (guard && p.a && p.pos !== SPOTS[spot].g ? guard : 0) })).filter(x => x.r > 25 - guard).sort((a, b) => b.r - a.r);
   }
   for (const p of T_.roster) if (!g.ps[p.id]) g.ps[p.id] = { fat: 0, snp: 0, last: null };
 }
@@ -173,6 +175,8 @@ function fillSlots(g, s, slots, table, opts = {}) {
     const [spot, grp] = table[slot];
     let best = null, bs = -1e9;
     let cands = T_.depth[spot].length ? T_.depth[spot] : sameSide(spot).map(p => ({ p, r: 30 }));
+    if (slot === 'QB' && !g.pre && !cands.some(c => c.p.pos === 'QB' && !used.has(c.p.id))) { const em = rosterOf(g.tids[s]).filter(p => p.pos === 'QB' && !p.injury && !onIR(p) && !T_.roster.includes(p)).sort((a, b) => b.ovr - a.ovr)[0];
+      if (em) { T_.active.add(em.id); T_.roster.push(em); if (!g.ps[em.id]) g.ps[em.id] = { fat: 0, snp: 0, last: null }; const c = { p: em, r: slotRating(em, 'QB') }; T_.depth.QB = [c, ...T_.depth.QB]; cands = T_.depth.QB; if (g.pbp) g.pbp.push({ q: g.q || 1, c: Math.max(0, g.clock || 0), t: `${pshort(em)} comes in as the emergency quarterback`, s: g.score ? g.score.slice() : [0, 0] }); } }
     // your depth chart: listed players come first (in order); fatigue can still force a sub, and #2 gets his rotation share
     const key = chart ? opts.keyOf(name, slot) : null;
     // a package can have its own order at a spot (your nickel linebacker need not be your base one); otherwise the base order

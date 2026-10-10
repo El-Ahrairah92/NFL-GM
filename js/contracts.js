@@ -355,7 +355,7 @@ function irActivations() {
 // ---------- game day: 48 of the 53 dress ----------
 const GAMEDAY_MIN = { QB: 2, RB: 2, WR: 4, TE: 2, OL: 7, DL: 8, LB: 5, CB: 5, S: 3, K: 1, P: 1 };
 function gameDayActives(tid) {
-  const ro = rosterOf(tid).filter(p => !p.injury);
+  const ro = rosterOf(tid).filter(p => !p.injury && !onIR(p)); // a man still on injured reserve does not dress, healthy or not
   if (ro.length <= GAMEDAY_ACTIVE) return new Set(ro.map(p => p.id));
   const counts = {}; ro.forEach(p => counts[p.pos] = (counts[p.pos] || 0) + 1);
   const out = new Set();

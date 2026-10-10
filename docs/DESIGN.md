@@ -635,3 +635,14 @@ Audit (766 starter injuries, two seasons): the job's grade falls about eight poi
 
 Now exact: passing against receiving (yards, completions, touchdowns), interceptions thrown against caught, sacks taken against credited, team totals against player totals, turnovers against takeaways, the scoring summary against touchdowns, field goals and extra points, eleven legal men a side on every snap, and both clubs' snap totals. Snaps exceed counted plays by about two a game by definition (plays wiped out by penalty, kneel-downs, spikes).
 
+**Second pass** (two full seasons with playoffs, preseason and an offseason: about 87,000 plays, 8,300 kicking units, and the league's books at week one). It checked the situation every play starts from, who lines up where by position, every credit against the men on the field, every box score number, season totals against the sum of the box scores, standings, ages, draft picks, contracts, rosters, coaches and the cap. Found and fixed:
+- *A tight end at tackle.* A tight end could rate above a backup lineman playing out of position and take his place on the line (about 400 plays a season). Only a lineman plays the line, and only a quarterback plays quarterback, while a real one is available.
+- *Healthy men on injured reserve were dressing.* A player whose injury had healed but who was still on injured reserve could play.
+- *Both quarterbacks hurt in one game* put a tight end under center even when a third quarterback was on the roster. He now comes in.
+- *Punts inside the 20 were never credited* (the test was written backwards).
+- *A kneel-down at the one* put the ball on the goal line.
+- *A hail mary on third or fourth down* could count a conversion without an attempt.
+- *A defender could be charged a missed tackle on a play he then made the tackle on*, and once in a long while got the tackle and the assist.
+
+Clean: downs, distance, clock and score never impossible; eleven men from the right club on each side; no injured, practice squad or wrong-club players in a game; season totals equal the box scores; every club plays 17; points for equal points against; every player ages one year; draft picks unique; no player on two rosters; every club under the cap with a quarterback, kicker and punter at week one.
+

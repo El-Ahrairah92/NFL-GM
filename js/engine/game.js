@@ -202,6 +202,8 @@ function shareTackle(res, def) {
     if (t) res.tackler = t;
   }
   if (!res.assist && rand() < TKL_ASSIST) res.assist = pickW(others());
+  if (res.assist === res.tackler) res.assist = null;
+  if (res.missed && res.missed.length && res.tackler) res.missed = res.missed.filter(m => m !== res.tackler && m !== res.assist); // the man who made the tackle did not also miss it
 }
 
 function runPlay(g, oc, dc) {
@@ -483,8 +485,9 @@ function kneel(g) {
   runClock(g, 2);
   g.running = true;
   pbpLog(g, `${qb ? pshort(qb) : 'QB'} kneels`);
-  g.ydl -= 1; if (g.drive) { g.drive.plays++; g.drive.yds--; }
-  g.down++; g.togo++;
+  if (g.ydl > 1) { g.ydl -= 1; g.togo++; if (g.drive) g.drive.yds--; } // he does not kneel himself into his own end zone
+  if (g.drive) g.drive.plays++;
+  g.down++;
   if (g.down > 4) changePoss(g, 100 - g.ydl, 'Downs');
   else if (g.q >= 4) { const d = 1 - o; if (g.to[d] > 0 && g.score[d] < g.score[o] && g.score[o] - g.score[d] <= 8) callTimeout(g, d); }
 }
@@ -503,7 +506,7 @@ function hailPlay(g) {
   const o = g.poss, d = 1 - o;
   const off = offUnit(g, o, '10', null), def = defUnit(g, d, g.cx[d].dt.front, 'DIME', false);
   if (g.pbp) g.pendingDD = `${ordinal(g.down)} & ${g.ydl + g.togo >= 100 ? 'Goal' : g.togo} at ${spotTxt(g)}`;
-  g.ts[o].plays++;
+  g.ts[o].plays++; if (g.down === 3) g.ts[o].d3a++; else if (g.down === 4) g.ts[o].d4a++;
   applyResult(g, hailMary(g, off, def), { tags: new Set(), type: 'HAIL', isRun: false, pers: '10', form: 'SG' }, { pkg: 'DIME', cov: 'C3', pres: 'THREE' }, off, def, { downB: g.down, togoB: g.togo, ydlB: g.ydl });
 }
 
@@ -604,7 +607,7 @@ function punt(g) {
       if (recv >= 100) { pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds — ${pshort(ret.p)} RETURNS IT FOR A TOUCHDOWN`); endDrive(g, 'Punt'); g.drive = null; g.poss = d; inc(g, ret.p, 'prTD'); touchdown(g, d, `${pshort(ret.p)} ${land} yd punt return`); return; }
     }
   }
-  if (100 - recv <= 20 && text !== 'touchback') inc(g, Pn.p, 'pi20');
+  if (recv < 20 && text !== 'touchback') inc(g, Pn.p, 'pi20'); // the receiving club takes over inside its own 20
   inc(g, Pn.p, 'pntY', gross);
   pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds, ${text}`);
   changePoss(g, clamp(recv, 1, 99), 'Punt');

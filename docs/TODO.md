@@ -62,6 +62,9 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 - **Runs are too bunched** (few long ones, too many stuffs): look at what happens past the second level.
 - Rushing leader a bit low (about 1,475, real 1,550 to 1,950) and 300-carry backs rare (0.75 a season, real 1 to 4), even with back usage following the playbook.
 - A safety is credited to nobody, and two-point conversions are not on anyone's stat line.
+- Kick return yards are really the yard line the return reached, not yards gained from the catch.
+- Kicking looks generous: about half the league's kickers hit from 60+ in a season, and 46% of punts end inside the 20 (real: about 38%). Only 28% of punts are returned (real: about 40%).
+- A club with two quarterbacks that loses both in a game still plays a tight end there (about ten plays a season): decide whether every club should name an emergency passer.
 
 - Quarterback completion percentage: spread between best and worst.
 - Catch percentage for high-volume receivers.
