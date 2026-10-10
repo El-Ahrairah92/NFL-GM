@@ -16,14 +16,13 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 
 ## Fronts and the trenches (agreed order)
 
-Done: the line of scrimmage is geometry and a front is data (DESIGN section 41). Each side has a move at the line, defenses that repeat themselves are punished, inside and outside runs are balanced (section 42).
+Done: the line of scrimmage is geometry and a front is data (DESIGN section 41). Each side has a move at the line, defenses that repeat themselves are punished, inside and outside runs are balanced (section 42). The pocket: stepping up, interior push, flushes (section 43).
 
-1. **Interior pressure.** A tackle's pass rush moves his sacks but barely the score: pressure up the middle should collapse the pocket and move the quarterback off his spot.
-2. **Coach front libraries.** Each defensive coach generates his own fronts, shifts, slants and stunts from his scheme and traits. Generated fronts have to be sound (every gap owned). Record each game's defensive tendencies into season film so opponents prepare for them.
-3. **Pressure packages and the offense's answers.** Disguised and overload pressures; protection calls as a choice the offense makes. Offensive coaches get the same depth.
-4. **Playbook page, scouting text, roster valuation by technique.**
+1. **Coach front libraries.** Each defensive coach generates his own fronts, shifts, slants and stunts from his scheme and traits. Generated fronts have to be sound (every gap owned). Record each game's defensive tendencies into season film so opponents prepare for them.
+2. **Pressure packages and the offense's answers.** Disguised and overload pressures; protection calls as a choice the offense makes. Offensive coaches get the same depth.
+3. **Playbook page, scouting text, roster valuation by technique.**
 
-Left open by the pre-snap work: the run flip is nearly worthless against ordinary fronts; too many players reach 100 tackles (back-seven starters never leave the field); runs of 10+ a little common (14%); yards before and after contact still to check.
+Left open by the pre-snap work: the run flip is nearly worthless against ordinary fronts; too many players reach 100 tackles (back-seven starters never leave the field); runs of 10+ a little common (14%); completions of 20+ yards still short (2.4 a team-game): the gap is in the clean pocket (8.6 throws in 100 gain 20+), not on broken plays.
 
 After the trench work: re-measure attribute values and refit rating weights.
 

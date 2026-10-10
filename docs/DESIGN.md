@@ -828,3 +828,30 @@ Still open:
 - every rusher beyond four leaves every receiver a little more open (and every man dropped beyond seven a little less)
 
 Forced shells now sit within a point of each other and of mixing them. Five rushing every snap allows 26.0 against the club's 26.6. League averages re-centred: scoring 23.0, completion rate 65.6%, yards per attempt 7.21, yards per carry 4.48, stuffed runs 17.1%. Runs of 10+ went up a little (14%, real 10.5 to 12.5).
+
+## 43. The pocket, and contact on runs
+
+**The pocket.** A rusher used to be only a clock: whoever got home first decided the play, wherever he came from. Now where the pressure comes from matters.
+- *Stepping up.* When the first man home is an edge rusher and no interior rusher is close behind him, the quarterback steps up and buys time (more with pocket presence). An edge rusher's win is worth the most when the tackles next to him are winning too.
+- *Push up the middle* takes the step-up away, as before makes him harder to escape, and now flushes him into the ends: if he slips an interior rusher, the nearest edge man is on him sooner. The sack then goes to the end.
+- *A crowded throw.* An interior rusher nearly home as the ball comes out costs a little accuracy downfield, hit or not.
+
+The rush was made slightly faster to keep pressure (38% of dropbacks) and sacks (7.0%) where they were.
+
+What it is worth, measured on 1,200 games a row with the model off and on: the interior line as a group 3.8 to 5.1 points a game, edge rushers 5.5 to 4.8; a tackle's pass rush 1.1 either way, an end's 1.0 to 1.7. Noise is about 0.4 on each, so the group shift is likely real and the single-attribute ones are not proven. The trench rewrite had already lifted a tackle's pass rush from the 0.2 measured before it.
+
+**Contact on runs.** Backs were first touched 2.9 yards downfield and gained 1.7 after it (real about 1.4 and 2.9). Past the line, tacklers now make first contact two yards sooner and the runner carries them: the play ends at the same spot, with more of it after contact. Now 2.2 before and 2.6 after, with 0.18 missed tackles forced a carry.
+
+**League, 24 seasons:** scoring 22.7, completion rate 65.3%, yards per attempt 7.11, interceptions 0.72, sack rate 7.0%, yards per carry 4.46, stuffed runs 18.7%, runs of 10+ 12.7%, rushing touchdowns 1.07.
+
+**The scramble drill.** A quarterback who slipped the rush used to keep reading the same routes against the same coverage, so buying time created nothing. Now, once he is out:
+- receivers break off their routes and work to open grass, the deeper ones going deeper; how much comes open is his speed and agility, and man coverage (backs turned to him) suffers most
+- the short outlets get harder, because the defenders who were sitting on them come up at him
+- he takes the first man he sees come open and throws on the move (throw-on-the-run accuracy, as before)
+
+Broken plays are 9% of dropbacks. Before and after: completion rate 63% to 53%, yards per attempt 5.9 to 6.1, interceptions 2.3% to 3.8%, completions of 20+ per 100 throws 4.0 to 7.4, with more sacks and more scrambles. Feast or famine, as it should be.
+
+It does not close the gap in 20+ yard completions (2.3 to 2.4 a team-game, real 3.0 to 3.6): broken plays are too few. The gap is in the clean pocket, where 8.6 throws in 100 gain 20+ against a real rate near 10 for all throws.
+
+League after it, 24 seasons: scoring 22.9, completion rate 64.7%, yards per attempt 7.14, interceptions 0.75, sack rate 7.0%, yards per carry 4.50.
+

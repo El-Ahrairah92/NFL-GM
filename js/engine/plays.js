@@ -27,7 +27,7 @@ function runToContact(g, carrier, levels, opts = {}) {
     if (rand() < make) {
       res.tackler = d;
       // yards after contact: little when hit in the backfield, more when met downhill at the second level
-      const ab = (opts.afterBase || 1.2) * (lv.at <= 0 ? 0.25 : lv.at <= 2 ? 0.7 : 1);
+      const ab = (opts.afterBase || 1.2) * (lv.at <= 0 ? 0.25 : lv.at <= 2 ? 0.7 : 1) + (lv.far ? TUNE.meet : 0); // past the line the tackler meets him sooner and he carries him: same spot, more of it after contact
       const after = Math.max(0, gauss(ab + (bal - ea(g, d, 'tkl')) * 0.03 + (cs - ea(g, d, 'str')) * 0.015 + (CB_.w - DB_.w) * 0.12 * zz, 0.4 + ab * 0.45));
       res.yds = Math.round(pos + after);
       // gang tackle / assist
@@ -155,11 +155,11 @@ function resolveRun(g, off, def, oc, dc) {
     r.won = true;
     let readOK = rand() < lgt(0.9 + (ea(g, r.e, 'prec') - 65) * 0.05 + g.key * 0.8 - (motion ? 0.3 : 0) - (draw ? 0.5 : 0) - (oc.counter ? 0.6 : 0) - (trickHit === 'fooled' ? 2 : 0));
     const depthAt = (r.rotated ? 4 + TUNE.rotDepth : 3 - (outside ? TUNE.outsideFill : TUNE.insideFill)) + (readOK ? randInt(0, 2) : randInt(3, 6)) + (draw ? 1 : 0) + (dc.cov === 'T2' && r.e.slot === 'MLB' ? 1 : 0);
-    levels.push({ e: r.e, at: Math.max(1, depthAt + burstD * TUNE.burGet), bonus: readOK ? (oc.duo ? 0.45 : 0) : -0.4 }); // duo leaves the linebackers for the back
+    levels.push({ e: r.e, at: Math.max(1, depthAt + burstD * TUNE.burGet - TUNE.meet), far: true, bonus: readOK ? (oc.duo ? 0.45 : 0) : -0.4 }); // duo leaves the linebackers for the back
   }
   // deep help: safeties
   const deepS = def.filter(e => (e.slot === 'FS' || e.slot === 'SS') && !blk.some(b => b.e === e));
-  for (const s of deepS) levels.push({ e: s, at: randInt(7, 12), bonus: TUNE.safetyRun });
+  for (const s of deepS) levels.push({ e: s, at: randInt(7, 12) - TUNE.meet, far: true, bonus: TUNE.safetyRun });
   levels.sort((a, b) => a.at - b.at);
   if (trickHit === 'read') levels.unshift({ e: lineMen(def)[0], at: -randInt(3, 7) });
   const pursuit = def.filter(e => e.slot === 'CB' || e.slot === 'FS' || e.slot === 'SS' || e.slot === 'NCB');
@@ -321,7 +321,7 @@ function resolvePass(g, off, def, oc, dc) {
   if (oc.maxp) for (const a of prot.rushers) a.t += 0.4; // seven men in protection
   prot.rushers.sort((a, b) => a.t - b.t);
   tPress = prot.rushers.length ? prot.rushers[0].t : 9;
-  const rusher = prot.rushers[0];
+  let rusher = prot.rushers[0];
   // coverage
   const droppers = prot.droppers;
   const man = dc.cov === 'C1' || dc.cov === 'C0' || dc.cov === 'C2M';
@@ -411,6 +411,15 @@ function resolvePass(g, off, def, oc, dc) {
   const proc = ea(g, qb, 'proc'), dec = ea(g, qb, 'dec'), pkt = ea(g, qb, 'pkt');
   // pre-snap coverage read: the QB's processing vs. the coordinator's disguise
   const covID = rand() < lgt(0.6 + soft(proc - 70, 18) * 0.04 - clamp(designKnob(T(g.tids[d]), 'covD') - 55, -35, 35) * 0.0045 - (dc.disg ? 0.5 : 0) - (dc.cov === 'C6' ? 0.25 : 0) + (oc.tags.has('MOTION') ? 0.5 : 0));
+  // The pocket. Pressure off the edge can be stepped up from as long as the middle is holding; push up the middle takes that away.
+  // So an edge rusher's win is worth the most when the tackles next to him are winning too.
+  const isIn = a => a.e.depth < ON_LINE && Math.abs(a.rx !== undefined ? a.rx : a.e.x) < 2;
+  const tIn = Math.min(9, ...prot.rushers.filter(isIn).map(a => a.t));
+  if (rusher && !isIn(rusher) && !rusher.free && !boot && tIn > tPress + TUNE.pocketGap) {
+    rusher.t += Math.min(clamp(TUNE.stepUp + (pkt - 65) * 0.006, 0, 0.5), tIn - tPress - TUNE.pocketGap + 0.1); rusher.steppedUp = true;
+    prot.rushers.sort((a, b) => a.t - b.t); rusher = prot.rushers[0]; tPress = rusher.t;
+  }
+  const tOut = Math.min(9, ...prot.rushers.filter(a => !isIn(a)).map(a => a.t));
   const tbS = oc.type === 'QUICK' || oc.rpoThrow ? TUNE.quickScale : TUNE.tbScale; // the quick game has its own clock
   const drop = ((oc.type === 'QUICK' || oc.rpoThrow ? 1.05 : oc.type === 'DEEP' ? 2.25 : 1.75) + (pa ? 0.45 : 0) + (oc.form === 'UC' ? 0.15 : 0) + (oc.type === 'GADGET' ? 0.7 : 0)) * tbS;
   let order = rlist.slice().sort((a, b) => a.role - b.role || a.tb - b.tb);
@@ -439,9 +448,23 @@ function resolvePass(g, off, def, oc, dc) {
       pressured = true;
       // feel it and escape?
       const rushE = rusher.e;
-      const inside = Math.abs(rushE.x) < 2 && !rushE.blitz; // pressure up the middle: he cannot step up, and it comes with a hand in his face
+      const inside = isIn(rusher); // pressure up the middle: he cannot step up, and it comes with a hand in his face
       const esc = lgt(-0.15 + (pkt * 0.55 + ea(g, qb, 'agi') * 0.2 + ea(g, qb, 'spd') * 0.1 + ea(g, qb, 'bur') * 0.15 - (ea(g, rushE, 'prsh') * 0.5 + ea(g, rushE, 'bur') * 0.5)) * 0.045 - (rusher.free ? 0.7 : 0) - bod(qb).w * 0.04 * TUNE.size - (inside ? 0.45 + (ea(g, rushE, 'prsh') - 70) * 0.02 : 0));
-      if (rand() < esc) { escaped = true; tPress = t + 0.8 + rand() * 0.6; }
+      if (rand() < esc) { escaped = true; tPress = t + 0.8 + rand() * 0.6; if (inside) tPress = Math.max(t + 0.3, Math.min(tPress, tOut + TUNE.flush)); } // flushed out of the middle, he runs into the ends
+      if (escaped) {
+        // The scramble drill. The play is off script: receivers break off their routes and work to open grass, the deep ones going deeper,
+        // and coverage that was sound for three seconds has to hold for five. How much he creates is his legs; man coverage, with its
+        // backs turned to him, suffers most. He throws whatever he finds on the move.
+        const buy = clamp(TUNE.scrBuy + ((ea(g, qb, 'spd') + ea(g, qb, 'agi')) / 2 - 65) * 0.012, 0.1, 0.9);
+        for (const x of rlist) {
+          const up = x.band !== 'S';
+          // downfield it is feast or famine; underneath, the defenders who were sitting on the short stuff are now coming up at him
+          const b = (up ? buy * TUNE.scrOpen * (man ? 1.25 : 1) + (ea(g, x.e, 'agi') * 0.5 + ea(g, x.e, 'rte') * 0.5 - 70) * 0.006 : -TUNE.scrShort) + gauss(0, up ? 0.45 : 0.25);
+          x.w += b; x.pw += b;
+          if (up && rand() < Math.min(1, buy * 1.3)) { x.depth += randInt(4, 12); x.broke = true; }
+        }
+        order = [...order.slice(0, i + 1), ...order.slice(i + 1).sort((p, q) => q.pw - p.pw)]; // he takes the first man he sees come open
+      }
       else break;
     }
     const need = r.role === 3 || i === order.length - 1 ? (r.e.slot === 'RB' || r.e.slot === 'FB' ? -0.2 : -0.45) : thr + (r.band === 'D' ? 0.2 - trust : r.band === 'I' ? 0.1 - trust * DEEP.mid : 0) - (r.depth < passDownSticks ? -0.35 : 0);
@@ -458,6 +481,7 @@ function resolvePass(g, off, def, oc, dc) {
     }
   }
   const stats = { pressured: pressured || t > tPress - 0.2, rushers: prot.rushers };
+  res.escaped = escaped;
   res.prot = prot; res.routes = rlist; res.ttt = Math.min(t, escaped ? t : tPress + 0.1);
   res.pressure = stats.pressured; res.rushers = prot.rushers.filter(a => a.t < t + 0.3);
   // ---- no throw yet: pressure decides between a sack, a hot/hurried throw, a throwaway or a scramble ----
@@ -496,6 +520,7 @@ function resolvePass(g, off, def, oc, dc) {
     else { Object.assign(res, { kind: 'inc', throwaway: true, target: null, desc: `${pshort(qb.p)} throws it away` }); return res; }
   }
   if (stats.pressured && !hurry && t > tPress - 0.15) hurry = true;
+  res.crowd = !escaped && !boot && tIn - t < TUNE.crowdGap; // a tackle in his lap as he lets it go: no room to step into the throw
   return throwBall(g, off, def, oc, dc, res, qb, choice, hurry, boot || escaped, covID);
 }
 
@@ -507,6 +532,7 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
   const QH = bod(qb).h * TUNE.size, middle = Math.abs(r.endX) < 2.2 && air < 20 && !onRun;
   if (middle) acc += QH * 1.6; // he has to see it and throw it over the line
   if (onRun) acc = acc * 0.4 + ea(g, qb, 'tor') * 0.6;
+  if (res.crowd && !hurry) acc -= TUNE.crowdAcc * (air >= 10 ? 1 : 0.4);
   if (hurry) acc -= 13 - ea(g, qb, 'pkt') * 0.08 - (arm - 70) * 0.12 + (res.rushers && res.rushers[0] && Math.abs(res.rushers[0].e.x) < 2 && !res.rushers[0].e.blitz ? 3 + (ea(g, res.rushers[0].e, 'prsh') - 70) * 0.15 : 0); // a big arm can still drive it off his back foot
   const yardsToGoal = 100 - g.ydl;
   const airY = Math.min(air, yardsToGoal);

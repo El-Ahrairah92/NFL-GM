@@ -14,7 +14,7 @@ const TUNE = {
   teamForm: 0.4,       // sd of team game-day form
   fatFree: 3.0,        // fatigue tolerated before it costs anything
   // trenches
-  passProMedian: 4.41,  // seconds for an average rusher to beat an average blocker 1v1
+  passProMedian: 4.26,  // seconds for an average rusher to beat an average blocker 1v1
   rushScale: 0.029,
   insideRush: 1.1,     // interior rushers take longer to get home than edges (crowded path, more double teams)    // how strongly the rush/block gap moves win time
   preKnow: 0,          // 1: the pre-snap read knows which receiver will come open, luck included; 0: it knows the matchup only
@@ -37,7 +37,7 @@ const TUNE = {
   chipBonus: 7,
   pickupMiss: 0.13,    // blitz/sim pickup failure for an average protection
   stuntMiss: 0.22,
-  runWin: -0.4,        // logit: front defender beats his run block (average vs average)
+  runWin: -0.38,        // logit: front defender beats his run block (average vs average)
   runScale: 0.12,
   comboBonus: 16,
   checkRate: 1,         // how freely quarterbacks change the play at the line (0 switches it off)
@@ -50,6 +50,14 @@ const TUNE = {
   thinCover: 0.07,         // how much more open every receiver is for each rusher beyond four (and less open for each man dropped beyond seven)
   oneHigh: 0.12,           // how much more open anything past the sticks is against man coverage with one deep safety
   edgeNear: 0.9,        // on an outside run, how close to the hole a first-level man has to be to make the play without penetrating
+  stepUp: 0.25,         // seconds an average quarterback buys by stepping up from edge pressure when the middle is holding
+  pocketGap: 0.5,       // the middle is holding if no interior rusher is within this of the edge man
+  flush: 0.4,           // flushed out of the middle, how soon after the nearest edge man would have arrived he is on him
+  crowdGap: 0.5, crowdAcc: 1.5, // an interior rusher this close at the throw costs this much accuracy downfield
+  meet: 2,              // yards sooner a second-level tackler makes first contact, carried by the runner after it (moves yards from before contact to after)
+  scrBuy: 0.45,         // how much an average quarterback creates once he has slipped the rush (his speed and agility move it)
+  scrShort: 0.3,        // how much less open the short outlets are once defenders come up at a scrambling quarterback
+  scrOpen: 0.5,         // how much that opens receivers who break off their routes
   levRun: 5,            // run-block points for a blocker who starts a full step between his man and the play (and against one who has to cross his face)
   kickOut: 4,           // what a puller or lead back gives up kicking out a man set in the hole
   twoGapPen: 0.7,       // a man head-up on his blocker holds two gaps: he gets into the backfield this much as often
@@ -85,7 +93,7 @@ const TUNE = {
   tackleScale: 0.03,
   eluMiss: 0.012, eluMid: 70, burMiss: 0.016, visMiss: 0.014,
   burHole: 0.004, burGet: 0.035, burScreen: 0.1, // burst: the hole stays open for a quick back, he is on the linebackers sooner, and a screen is upfield before the defense turns // how much a carrier's elusiveness (and burst at the line) makes a tackler miss
-  runAfter: 0.75,        // yards a back typically adds after first contact
+  runAfter: 0.3,        // yards a back typically adds after first contact
   carryLoad: 3.8,      // how much more a carry tires a back than an ordinary snap
   pocketOpen: 1.2,
   shortOpen: 0.48,     // defenses give up the underneath
