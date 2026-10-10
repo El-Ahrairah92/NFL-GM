@@ -193,7 +193,9 @@ function trackOf(p) {
   if (dv.sg && cp - dv.sg < 3) return 'surge';
   if (p.lateTo) return 'late';
   const growing = isDeveloping(p);
-  if (growing && dv.e !== undefined && dv.e !== null) return dv.e >= 0.95 ? 'ahead' : dv.e >= 0.68 ? 'on' : dv.e >= 0.45 ? 'behind' : 'stalled';
+  // The label is about the player, not the room: a great teacher lifts everyone he coaches (and that growth is real), but
+  // 'ahead of schedule' means ahead of what you would expect of a man in this building, so the coach's share is set aside.
+  if (growing && dv.e !== undefined && dv.e !== null) { const e = dv.e - 0.4 * (nCoach(p) - 0.74) * DEV.scale; return e >= 0.90 ? 'ahead' : e >= 0.64 ? 'on' : e >= 0.50 ? 'behind' : 'stalled'; }
   if (growing) return 'on';
   if (p.age >= declStart(p, 'E') - 1 && dv.d !== undefined) return dv.d <= -3 ? 'fall' : dv.d <= -1 ? 'slip' : 'steady';
   return p.age >= 26 ? 'steady' : 'done';

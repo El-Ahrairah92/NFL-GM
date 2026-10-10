@@ -329,9 +329,22 @@ function irActivations() {
     if (state.week - p.ir.wk < IR_MIN_WEEKS) continue;
     const t = T(p.tid);
     if ((t.irRet || 0) >= IR_RETURNS) { p.ir.season = true; continue; } // out of designations: done for the year
+    if (activeCount(p.tid) >= ROSTER_MAX && !isAI(p.tid)) {
+      delete p.ir; t.irRet = (t.irRet || 0) + 1;
+      addNews(`${p.lbl} ${pname(p)} is off injured reserve. That puts you at ${activeCount(p.tid)} on a ${ROSTER_MAX}-man roster: make a move before your next game.`, [p.tid], 'inj');
+      continue;
+    }
     if (activeCount(p.tid) >= ROSTER_MAX) {
-      const cut = rosterOf(p.tid).filter(x => !onIR(x) && x.id !== p.id && cutSavings(x) >= 0).sort((a, b) => cutValue(a) - cutValue(b))[0];
-      if (!cut || cutValue(cut) > cutValue(p)) continue; // stays on IR until there's a spot worth opening
+      let cut = null;
+      if (typeof foLeast === 'function' && FO.on !== false && isAI(p.tid) && (!FO.extra || FO.extra(p.tid)) && p.a) {
+        // the front office's call: he comes back when the lineups are better with him than with the man they would miss least
+        const M = foModel(p.tid, rosterOf(p.tid).filter(x => x.a && !x.injury && (!onIR(x) || x.id === p.id))), least = foLeast(M, new Set([p.id])), mine = foWorths(M, (FO_UNIT[p.pos] || 'SKILL'))[p.id];
+        if (least && mine !== undefined && least.worth < mine) cut = least.p;
+      } else {
+        cut = rosterOf(p.tid).filter(x => !onIR(x) && x.id !== p.id && cutSavings(x) >= 0).sort((a, b) => cutValue(a) - cutValue(b))[0];
+        if (cut && cutValue(cut) > cutValue(p)) cut = null;
+      }
+      if (!cut) continue; // stays on IR until there's a spot worth opening
       releasePlayer(cut.id);
     }
     delete p.ir; t.irRet = (t.irRet || 0) + 1;

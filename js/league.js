@@ -165,7 +165,9 @@ function genSchedule() {
     }
     weeks.push(wk);
   }
-  shuffle(weeks);
+  // the order of the weeks is random, but the two meetings with a division rival are kept apart
+  const tooClose = () => { const last = {}; for (let w = 0; w < weeks.length; w++) for (const m of weeks[w]) { const k = key(m.h, m.a); if (last[k] !== undefined && w - last[k] < 4) return true; last[k] = w; } return false; };
+  for (let tries = 0; tries < 400; tries++) { shuffle(weeks); if (!tooClose()) break; }
   return weeks.map(wk => shuffle(wk).map(m => ({ h: m.h, a: m.a, gid: null, score: null })));
 }
 function matchAll(divOf, met, key) {
@@ -292,7 +294,11 @@ function injuryTick() {
     if (!p.injury) continue;
     if (p.injury.fresh) { p.injury.fresh = false; continue; }
     p.injury.weeks--;
-    if (p.injury.weeks <= 0) p.injury = null;
+    if (p.injury.weeks <= 0) {
+      // your own men: you hear when one is cleared (a man on injured reserve still has to be activated)
+      if (typeof addNews === 'function' && state.phase === 'REG' && (p.tid === state.userTid || (p.tid === -3 && p.psTid === state.userTid))) addNews(`${p.lbl} ${pname(p)} is healthy again${p.ir ? ' and can come off injured reserve when his stay is up' : ' and back at practice'}.`, [state.userTid], 'inj');
+      p.injury = null;
+    }
   }
 }
 

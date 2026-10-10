@@ -460,8 +460,7 @@ function beginWaivers() {
   for (const id in plan) { const p = P(+id); if (!p || p.tid !== u || (plan[id] !== 'cut' && plan[id] !== 'ps')) continue; if (plan[id] === 'ps') state.wv.ps.push(p.id); releasePlayer(p.id); }
   for (const t of state.teams) {
     if (isAI(t.id)) fixCap(t.id);
-    const cuts = autoCut(t.id, ROSTER_MAX, true);
-    if (!isAI(t.id) && cuts.length) addNews(`Cutdown day: the staff made the last ${cuts.length} cut(s) to reach ${ROSTER_MAX}.`, [t.id]);
+    if (isAI(t.id)) autoCut(t.id, ROSTER_MAX, true); // your cuts are yours: the screen does not let you past cutdown day over the limit
   }
   aiWaiverClaims();
   state.phase = 'WAIVERS';
@@ -581,9 +580,9 @@ function inSeasonMoves() {
   psPromotions(state.userTid);
   for (const t of state.teams) {
     if (!isAI(t.id)) continue;
-    psPromotions(t.id);
     if (psOf(t.id).length < PS_MAX - 3) fillPS(t.id);
     if (typeof foInjuryMoves === 'function' && FO.on !== false && (!FO.extra || FO.extra(t.id))) foInjuryMoves(t.id); // the man who fixes the hole an injury left, from the street or the practice squad
+    psPromotions(t.id); // then the old head counts, as a backstop: nobody lines up short
     for (const pos of POSITIONS) {
       const healthy = rosterOf(t.id).filter(p => p.pos === pos && !p.injury).length;
       const need = LINEUP_NEED[pos] + (pos === 'QB' ? 1 : 0);

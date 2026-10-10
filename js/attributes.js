@@ -359,6 +359,11 @@ function rasOf(p, peers) {
 // Create a player at `spot` with peak talent q (0 = average starter, +1 ≈ +5 OVR) and current age.
 // gf: hidden growth factor (prospects only): how much of the usual room is really there
 // raw: extra polish a prospect still lacks on draft day (he is further from his peak than his age alone says)
+// Skills that do not follow a player's overall quality as closely as the rest: [how far quality moves them, how wide the individual roll is].
+// A back's hands, routes, pass protection and strength are his own: a modest runner can catch and block, a feature back may not.
+// That spread is what gives the league its passing-down backs and its short-yardage backs, with every shade in between.
+// Skills in the same family share one roll per player (a back is a receiver or he is not), plus a smaller roll of their own.
+const GEN_LOOSE = { RB: { hnd: [2.5, 6, 'rec'], rte: [2.5, 6, 'rec'], pbk: [2.5, 6, 'rec'], str: [1.5, 9] } }, GEN_BENT = { rec: 15 };
 function genPlayer(spot, q, age, gf, raw) {
   const S = SPOTS[spot];
   const [first, last] = randomName();
@@ -366,7 +371,7 @@ function genPlayer(spot, q, age, gf, raw) {
   const wt = Math.round(gauss(S.body[2], S.body[3]));
   const arm = Math.round((S.body[4] + (ht - S.body[0]) * 0.35 + gauss(0, 0.6)) * 8) / 8;
   const dw = (wt - S.body[2]) / S.body[3];
-  const a = {};
+  const a = {}, bent = {};
   for (const pool of SIDE_POOLS[S.side]) for (const k in ATTRS) {
     if (ATTRS[k][3] !== pool) continue;
     const t = S.t[k], ath = pool === 'ath';
@@ -374,8 +379,9 @@ function genPlayer(spot, q, age, gf, raw) {
     if (k === 'st') v = genST(spot, q); // its own skill: tied to the position, barely to how good he is from scrimmage
     else if (t === undefined) v = gauss(30, 8);
     else {
-      const [mean, sd] = Array.isArray(t) ? t : [t, ath ? 6 : 5];
-      v = mean + q * (ath ? 3 : 6) + gauss(0, sd);
+      const [mean, sd] = Array.isArray(t) ? t : [t, ath ? 6 : 5], L = GEN_LOOSE[spot] && GEN_LOOSE[spot][k];
+      v = mean + q * (L ? L[0] : ath ? 3 : 6) + gauss(0, L ? L[1] : sd);
+      if (L && L[2]) v += bent[L[2]] !== undefined ? bent[L[2]] : (bent[L[2]] = gauss(0, GEN_BENT[L[2]]));
     }
     a[k] = v;
   }

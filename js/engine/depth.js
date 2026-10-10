@@ -144,7 +144,9 @@ function initSide(g, s) {
   }
   T_.depth = {};
   for (const spot of SPOT_KEYS) {
-    T_.depth[spot] = T_.roster.map(p => ({ p, r: slotRating(p, spot) })).filter(x => x.r > 25).sort((a, b) => b.r - a.r);
+    // only men from that side of the ball: when a club runs out of tight ends the next body is a lineman, not a defensive tackle
+    const sd = SPOTS[spot].side;
+    T_.depth[spot] = T_.roster.filter(p => !p.a || (SPOTS[p.spot] && SPOTS[p.spot].side === sd)).map(p => ({ p, r: slotRating(p, spot) })).filter(x => x.r > 25).sort((a, b) => b.r - a.r);
   }
   for (const p of T_.roster) if (!g.ps[p.id]) g.ps[p.id] = { fat: 0, snp: 0, last: null };
 }
@@ -158,6 +160,7 @@ function fatPenalty(g, p, grp) {
 function fillSlots(g, s, slots, table, opts = {}) {
   const T_ = g.side[s], used = new Set(opts.exclude || []), out = [];
   const chart = opts.chart;
+  const sameSide = spot => { const sd = SPOTS[spot] && SPOTS[spot].side, l = T_.roster.filter(p => !p.a || (SPOTS[p.spot] && SPOTS[p.spot].side === sd)); return l.length ? l : T_.roster; };
   const listFor = key => { if (!key) return null; for (const pk of opts.pkgKeys || []) { const l = chart.lists[pk + ':' + key]; if (l) return l; } return chart.lists[key] && chart.lists[key].length ? chart.lists[key] : null; };
   // everybody who starts somewhere in this grouping: the man who rotates in is the first one listed who is not already on the field
   const firsts = new Set();
@@ -169,7 +172,7 @@ function fillSlots(g, s, slots, table, opts = {}) {
   for (const [name, slot, x, depth] of slots) {
     const [spot, grp] = table[slot];
     let best = null, bs = -1e9;
-    let cands = T_.depth[spot].length ? T_.depth[spot] : T_.roster.map(p => ({ p, r: 30 }));
+    let cands = T_.depth[spot].length ? T_.depth[spot] : sameSide(spot).map(p => ({ p, r: 30 }));
     // your depth chart: listed players come first (in order); fatigue can still force a sub, and #2 gets his rotation share
     const key = chart ? opts.keyOf(name, slot) : null;
     // a package can have its own order at a spot (your nickel linebacker need not be your base one); otherwise the base order
@@ -196,13 +199,15 @@ function fillSlots(g, s, slots, table, opts = {}) {
       if (opts.score && !list) sc += opts.score(c.p, slot);
       if (sc > bs) { bs = sc; best = c; }
     }
-    if (!best) best = { p: T_.roster.find(p => !used.has(p.id)) || T_.roster[0], r: 30 };
+    if (!best) { const pool = sameSide(spot).filter(p => !used.has(p.id) && p.pos !== 'K' && p.pos !== 'P' && (slot === 'QB' || p.pos !== 'QB')).sort((a, b) => (b.a ? slotRating(b, spot) : 20) - (a.a ? slotRating(a, spot) : 20)); best = { p: pool[0] || T_.roster.find(p => !used.has(p.id)) || T_.roster[0], r: 30 }; }
     used.add(best.p.id);
     const pen = best.p.a ? comfortPen(best.p, spot) : 0; // how well he knows this spot; his own attributes do the rest
     out.push({ p: best.p, slot, name, spot, grp, x, depth: depth || 0, pen, s });
   }
   return out;
 }
+// how much a playbook spreads the backfield work: 0 = one workhorse, 1 = a full committee
+function rbLean(g, s) { const ot = g.cx && g.cx[s] && g.cx[s].ot; return clamp((0.8 - (ot && ot.rb1 !== undefined ? ot.rb1 : 0.65)) / 0.3, 0, 1); }
 // Offensive eleven for a personnel grouping
 function offUnit(g, s, pers, call) {
   const T_ = g.side[s];
@@ -215,12 +220,16 @@ function offUnit(g, s, pers, call) {
     if ((slot === 'Y' || slot === 'H' || slot === 'Y2') && p.spot === 'FB') return -13; // a fullback is not your tight end
     if (slot !== 'RB' || !p.a) return 0;
     if (p.spot !== 'RB') return p.spot === 'FB' ? -14 : -8; // a receiver in the backfield is a gadget, not a feature back
-    if (call && call.passDown) return (ea0(p, 'hnd') + ea0(p, 'pbk') + ea0(p, 'rte') - 180) * 0.12;
-    if (!T_.rb2Turn) return 0;
+    // the right back for the down: hands and protection on passing downs, strength and balance on short yardage
+    // How readily he is swapped out follows the playbook: a system built around one back keeps him in unless the other man is far better at it; a committee system swaps freely.
+    const lean = rbLean(g, s);
+    const sit = call && call.passDown ? ((ea0(p, 'hnd') + ea0(p, 'pbk') + ea0(p, 'rte')) / 3 - 60) * (0.45 + lean * 0.9) : g.togo <= 2 && (g.down >= 3 || g.ydl >= 98) ? ((ea0(p, 'str') + ea0(p, 'bal')) / 2 - 70) * (0.5 + lean * 2.0) : 0;
+    if (!T_.rb2Turn) return sit;
     // committee series: the No. 2 back gets his drive unless he's hopelessly outclassed
     const backs = T_.depth.RB.filter(x => x.p.spot === 'RB');
     const rb2 = backs[T_.rb3Turn && backs[2] && backs[1].r - backs[2].r <= 14 ? 2 : 1]; // the third back gets the odd series
-    return rb2 && p.id === rb2.p.id && backs[0].r - rb2.r <= 45 ? backs[0].r - rb2.r + 2 : 0; // even a star gets spelled
+    // even a star gets spelled, and the series that belongs to the next man stays his on passing downs too: a workhorse does not come back in for every third and long
+    return sit + (rb2 && p.id === rb2.p.id && backs[0].r - rb2.r <= 45 ? backs[0].r - rb2.r + 2 : 0);
   };
   const chart = userChart(g, s, 'off');
   if (!chart) return fillSlots(g, s, slots, OFF_SLOT, { score: rbScore });

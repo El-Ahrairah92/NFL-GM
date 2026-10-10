@@ -43,7 +43,7 @@ function foJobs(tid) {
     J('QB', 'QB', 'QB', 1),
     J('RB', 'SKILL', 'RB', 0.7), J('RB2', 'SKILL', 'RB', 0.3), J('WR4', 'SKILL', 'WRX', 0.26), J('X', 'SKILL', 'WRX', 1), J('Z', 'SKILL', 'WRZ', 0.95), J('SLOT', 'SKILL', 'SLOT', slot), J('Y', 'SKILL', 'TEY', 0.85), J('H', 'SKILL', 'TEH', te2), ...(fb >= 0.06 ? [J('FB', 'SKILL', 'FB', fb * 0.6)] : []),
     // situational: a man already on the field can hold these too, so only a real specialist earns anything here
-    J('RB3D', 'SKILL', 'RB', 0.28, p => ((a(p, 'hnd') + a(p, 'pbk') + a(p, 'rte')) / 3 - 58) * 0.4, true), J('RBSY', 'SKILL', 'RB', 0.08, p => ((a(p, 'str') + a(p, 'bal')) / 2 - 66) * 0.4, true),
+    J('RB3D', 'SKILL', 'RB', 0.28, p => ((a(p, 'hnd') + a(p, 'pbk') + a(p, 'rte')) / 3 - 60) * 0.9, true), J('RBSY', 'SKILL', 'RB', 0.08, p => ((a(p, 'str') + a(p, 'bal')) / 2 - 70) * 1.6, true),
     J('LT', 'OL', 'LT', 1), J('LG', 'OL', 'LG', 1), J('C', 'OL', 'C', 1), J('RG', 'OL', 'RG', 1), J('RT', 'OL', 'RT', 1),
     J('EDGE1', 'FRONT', 'EDGE', 1), J('EDGE2', 'FRONT', 'EDGE', 1), J('EDGE3', 'FRONT', 'EDGE', 0.4), J('IDL3', 'FRONT', 'DT', 0.45), J('IDL4', 'FRONT', odd ? 'DE' : 'DT', 0.28), // the line plays in waves
     ...(odd ? [J('NT', 'FRONT', 'NT', 0.55 + 0.4 * base), J('DE1', 'FRONT', 'DE', 0.95), J('DE2', 'FRONT', 'DE', 0.5 + 0.5 * base)] : [J('DT1', 'FRONT', 'DT', 0.95), J('DT2', 'FRONT', 'NT', 0.55 + 0.4 * base)]),
@@ -188,6 +188,20 @@ function foCampSignings(tid) {
       counts[pos] = (counts[pos] || 0) + 1; n++;
     }
   }
+  // a job nobody has won, in a room that is already full: the challenger takes the place of the camp body the club would miss least
+  const body = p => p.a && p.contract && p.contract.amt <= MIN_SALARY * 1.05 && !(p.contract.gtd > 0) && !(p.draft && p.exp === 0), grade = p => viewOvr(p, tid) + viewCeil(p, tid);
+  let swaps = 0;
+  for (const pos of POSITIONS) {
+    if (swaps >= 3 || pos === 'K' || pos === 'P') continue;
+    let pick = null, bs = 0.25, pj = null;
+    for (const p of byPos[pos] || []) { if (p.tid !== -1) continue; const g = foGain(M, p), oj = foOpenJob(M, p); if (!oj) continue; const sc = g + oj.v; if (sc > bs) { bs = sc; pick = p; pj = oj; } }
+    if (!pick) continue;
+    const out = rosterOf(tid).filter(p => p.pos === pos && body(p) && grade(p) < grade(pick) - 2).sort((a, b) => grade(a) - grade(b))[0];
+    if (!out) continue;
+    releasePlayer(out.id); foRemove(M, out);
+    setTid(pick, tid); pick.contract = makeContract(pick, MIN_SALARY, 1, 0); delete pick.ask;
+    foAdd(M, pick); M.comp[pj.job.key] = (M.comp[pj.job.key] || 0) + 1; swaps++;
+  }
   return n;
 }
 // ---------- waivers: would this man make the club better than the man he would replace? ----------
@@ -203,25 +217,40 @@ function foWaiverDrop(p, tid) {
   M.least = M.least || foLeast(M); // the one man this club would let go
   return M.least && g - M.least.worth > 0.35 && M.least.p.id !== p.id ? M.least.p : null;
 }
-// ---------- during the season: when a man goes down, find the player who fixes the hole it leaves ----------
+// ---------- during the season: when a man goes down ----------
+// The question is asked over the rest of the season, not for this week alone. A replacement helps a lot while the starter
+// is out and little once he is back; the man released to make room is gone for good. So a club weighs the weeks of help
+// against the weeks of loss, and lets a player go only when the roster is better for it across the whole stretch.
 // The answer may be on the street or on the club's own practice squad.
+const FO_CHURN = 0.15; // what it costs to turn a roster spot over: a new man learning the room, an old one gone
 function foInjuryMoves(tid) {
-  const ro = rosterOf(tid), hurt = ro.filter(p => p.injury && p.injury.weeks >= 2 && p.a);
+  const ro = rosterOf(tid), hurt = ro.filter(p => p.injury && p.injury.weeks >= 1 && p.a);
   if (!hurt.length) return 0;
   const key = hurt.map(p => p.id).sort().join(','), t = T(tid); if (t.foHurt === key) return 0; t.foHurt = key; // only when the injury list has changed
-  const M = foModel(tid, ro.filter(p => p.a && !p.injury)), poss = new Set(hurt.map(p => p.pos));
+  const left = Math.max(2, (typeof SEASON_WEEKS === 'number' ? SEASON_WEEKS : 18) - (state.week || 1) + 1); // weeks still to play
+  const back = hurt.filter(p => p.injury.weeks < left); // the men who will be back this season
+  const now = foModel(tid, ro.filter(p => p.a && !p.injury)), full = foModel(tid, ro.filter(p => p.a && (!p.injury || back.includes(p))));
+  const poss = new Set(hurt.map(p => p.pos));
   let moves = 0;
   for (const pos of poss) {
+    const out = Math.min(left, Math.max(...hurt.filter(p => p.pos === pos).map(p => p.injury.weeks))), share = out / left; // the part of what is left that he misses
     const room = capRoom(tid);
     const fa = Object.values(state.players).filter(p => p.tid === -1 && p.a && p.pos === pos && !p.injury && !p.waiver && p.ask <= room).sort((a, b) => viewOvr(b, tid) - viewOvr(a, tid)).slice(0, 8);
     const own = typeof psOf === 'function' ? psOf(tid).filter(p => p.a && p.pos === pos && !p.injury) : [];
+    const over = g => share * g[0] + (1 - share) * g[1]; // value across the rest of the season
     let pick = null, bg = 0;
-    for (const p of [...fa, ...own]) { const g = foGain(M, p) + (p.tid === -3 ? 0.15 : -Math.max(0, p.ask - MIN_SALARY) * FO.money); if (g > bg) { bg = g; pick = p; } } // his own man knows the system and costs the minimum
-    if (!pick || bg < 0.3) continue;
-    if (activeCount(tid) >= ROSTER_MAX) { const d = foLeast(M); if (!d || bg - d.worth < 0.4) continue; releasePlayer(d.p.id); foRemove(M, d.p); }
+    for (const p of [...fa, ...own]) { const g = over([foGain(now, p), foGain(full, p)]) + (p.tid === -3 ? 0.1 : -Math.max(0, p.ask - MIN_SALARY) * FO.money * 0.5); if (g > bg) { bg = g; pick = p; } } // his own man knows the system and costs the minimum
+    if (!pick || bg < 0.2) continue;
+    let drop = null;
+    if (activeCount(tid) >= ROSTER_MAX) { // someone has to go: the man the club will miss least over the same stretch
+      const wn = foWorths(now), wf = foWorths(full); let low = 1e9;
+      for (const id in wn) { const p = now.byId[id]; if ((now.counts[p.pos] || 0) <= (FO.floor[p.pos] || 1)) continue; const w = over([wn[id], wf[id] !== undefined ? wf[id] : wn[id]]); if (w < low) { low = w; drop = p; } }
+      if (!drop || bg - Math.max(0, low) - FO_CHURN < 0.25) continue; // not worth losing a man over
+    }
+    if (drop) { releasePlayer(drop.id); foRemove(now, drop); foRemove(full, drop); }
     const err = pick.tid === -3 ? promoteFromPS(pick.id, tid, pos + ' injuries') : signFA(pick.id, tid, 1);
     if (err) continue;
-    foAdd(M, pick); moves++;
+    foAdd(now, pick); foAdd(full, pick); moves++;
     if (moves >= 2) break;
   }
   return moves;

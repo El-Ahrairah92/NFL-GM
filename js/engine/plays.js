@@ -469,6 +469,8 @@ function resolvePass(g, off, def, oc, dc) {
     }
     const awayP = pressured ? clamp(0.14 + (pkt + dec - 140) * 0.004 - (best ? best.pw : -1) * 0.25, 0.1, 0.8) : clamp(0.05 - (best ? best.pw : -1) * 0.1, 0.01, 0.4);
     if (best && rand() > awayP) { choice = best; hurry = pressured; }
+    // under pressure, more often than not the ball is thrown at somebody: it is charged to him as a target even though he had no chance at it
+    else if (best && pressured && rand() < 0.55) { Object.assign(res, { kind: 'inc', target: best.e, air: Math.min(best.depth, 100 - g.ydl), route: best, hurry: true, uncatch: true, xc: 0.1, desc: `${pshort(qb.p)} pass incomplete under pressure, intended for ${pshort(best.e.p)}` }); return res; }
     else { Object.assign(res, { kind: 'inc', throwaway: true, target: null, desc: `${pshort(qb.p)} throws it away` }); return res; }
   }
   if (stats.pressured && !hurry && t > tPress - 0.15) hurry = true;
@@ -495,7 +497,7 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
       const reach = front.reduce((s, a) => s + bod(a.e).len, 0) / front.length;
       if (rand() < TUNE.batBase * clamp(1 + reach * 0.35, 0.4, 2) * clamp(1 - QH * 0.3, 0.4, 1.9) * (middle ? 1.4 : 0.8)) {
         const who = weightedPick(front, front.map(a => Math.max(0.2, 1 + bod(a.e).len * 0.5 + (ea(g, a.e, 'bsk') - 40) * 0.01)));
-        Object.assign(res, { kind: 'inc', batted: true, pbu: who.e, target: null, desc: `${pshort(qb.p)} pass batted down at the line by ${pshort(who.e.p)}` });
+        Object.assign(res, { kind: 'inc', batted: true, pbu: who.e, xc: pCatchable * 0.9, desc: `${pshort(qb.p)} pass batted down at the line by ${pshort(who.e.p)}` });
         return res;
       }
     }
@@ -567,7 +569,7 @@ function screen(g, off, def, oc, dc, res, qb) {
   // does someone smell it out?
   const readers = rbScreen ? droppers.filter(e => ['MLB', 'WLB', 'SAM'].includes(e.slot)).slice(0, 1).concat(rushers.slice(0, 1)) : droppers.filter(e => ['CB', 'NCB', 'DIME'].includes(e.slot) && Math.sign(e.x) === Math.sign(tgt.x || 1));
   const sniffed = readers.find(e => !bites(g, e, rbScreen ? 0.9 : 0.6));
-  const res2 = Object.assign(res, { target: tgt, air: rbScreen ? -randInt(1, 3) : randInt(-2, 1), ttt: 0.9, xc: 0.85 });
+  const res2 = Object.assign(res, { target: tgt, air: rbScreen ? -randInt(1, 3) : randInt(-2, 1), ttt: 0.9, xc: 0.94 });
   const tag = `${pshort(qb.p)} ${rbScreen ? 'screen' : 'bubble screen'} to ${pshort(tgt.p)}`;
   // pressing or squatting corners blow up the bubble; aggressive rushes feed the RB screen
   if (!rbScreen && (dc.cov === 'C2' || dc.cov === 'C1' || dc.cov === 'C0') && rand() < 0.3) { const c = nearestDef(droppers, tgt.x); if (c) { const rr = runToContact(g, tgt, [{ e: c, at: res2.air + randInt(0, 2), bonus: 0.4 }], { start: res2.air }); Object.assign(res2, { kind: 'comp', yds: rr.yds, yac: rr.yds - res2.air, tackler: rr.tackler, desc: tag }); res2.involved = [tgt.p]; return res2; } }

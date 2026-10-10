@@ -226,6 +226,8 @@ function runPlay(g, oc, dc) {
   if (g.down === 3) g.ts[o].d3a++; else if (g.down === 4) g.ts[o].d4a++;
   g.ts[o].plays++;
   const res = oc.isRun ? resolveRun(g, off, def, oc, dc) : resolvePass(g, off, def, oc, dc);
+  // no play gains more than the field that is left: everything downstream (box score, charting, grades) sees the same number
+  if (typeof res.yds === 'number' && res.yds > 100 - g.ydl) { res.yds = 100 - g.ydl; if (res.ybc !== undefined && res.ybc > res.yds) res.ybc = res.yds; }
   if (globalThis.__calib) globalThis.__calib(g, oc, dc, res, off, def);
   // fatigue: a carry costs a back extra
   if (res.carrier && res.kind === 'run') res.carrier.extraLoad = TUNE.carryLoad;
@@ -261,11 +263,11 @@ function flagOn(entries) { const es = entries.filter(e => e.p && e.p.h); return 
 function assessPenalty(g, onOffense, yards, name, who, opts = {}) {
   const o = g.poss, side = onOffense ? o : 1 - o, dd = g.pbp ? `${ordinal(g.down)} & ${g.ydl + g.togo >= 100 ? 'Goal' : g.togo} at ${spotTxt(g)}` : '';
   let y = yards;
-  if (onOffense) { if (g.ydl - y < 1) y = Math.max(1, Math.floor(g.ydl / 2)); g.ydl -= y; g.togo += y; }
+  if (onOffense) { if (g.ydl - y < 1) y = g.ydl > 1 ? Math.max(1, Math.floor(g.ydl / 2)) : 0; g.ydl -= y; g.togo += y; }
   else {
     const toGoal = 100 - g.ydl;
-    if (y >= toGoal) y = opts.spot ? Math.max(1, toGoal - 1) : Math.max(1, Math.floor(toGoal / 2));
-    g.ydl += y; g.togo -= y;
+    if (y >= toGoal) y = toGoal <= 1 ? 0 : opts.spot ? toGoal - 1 : Math.max(1, Math.floor(toGoal / 2)); // half the distance: from the one, the ball stays at the one
+    g.ydl = Math.min(99, g.ydl + y); g.togo -= y;
     if (opts.autoFirst || g.togo <= 0) { g.down = 1; g.togo = Math.min(10, 100 - g.ydl); g.ts[o].fd++; }
   }
   g.ts[side].pen = (g.ts[side].pen || 0) + 1; g.ts[side].penY = (g.ts[side].penY || 0) + y;
@@ -588,7 +590,7 @@ function punt(g) {
     if (rand() < 0.0075 * (1 + (pspn - 60) / 60) * (1 + (60 - ea(g, ret, 'hnd')) / 60)) {
       // muffed punt
       pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds — MUFFED by ${pshort(ret.p)}`);
-      if (rand() < 0.5) { inc(g, ret.p, 'fum'); g.ts[d].to++; endDrive(g, 'Punt'); g.poss = d; startPossession(g, o, clamp(land, 1, 99)); return; }
+      if (rand() < 0.5) { inc(g, ret.p, 'fum'); g.ts[d].to++; { const cov = PU.filter(p => p.id >= 0); if (cov.length) inc(g, pick(cov), 'fr'); } endDrive(g, 'Punt'); g.poss = d; startPossession(g, o, clamp(land, 1, 99)); return; }
     }
     if (rand() < fair) { recv = 100 - land; text = 'fair catch'; }
     else {
@@ -599,7 +601,7 @@ function punt(g) {
       stShare(g, PU, clamp(expR - r, -15, 8)); stShare(g, PRU, clamp(r - expR, -8, 15)); if (r < land) stTackle(g, PU);
       inc(g, ret.p, 'prA'); inc(g, ret.p, 'prY', r);
       recv = 100 - land + r; text = `returned ${r} yds by ${pshort(ret.p)}`;
-      if (recv >= 100) { pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds — ${pshort(ret.p)} RETURNS IT FOR A TOUCHDOWN`); endDrive(g, 'Punt'); g.drive = null; g.poss = d; touchdown(g, d, `${pshort(ret.p)} ${land} yd punt return`); return; }
+      if (recv >= 100) { pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds — ${pshort(ret.p)} RETURNS IT FOR A TOUCHDOWN`); endDrive(g, 'Punt'); g.drive = null; g.poss = d; inc(g, ret.p, 'prTD'); touchdown(g, d, `${pshort(ret.p)} ${land} yd punt return`); return; }
     }
   }
   if (100 - recv <= 20 && text !== 'touchback') inc(g, Pn.p, 'pi20');
@@ -628,7 +630,7 @@ function kickoff(g, kickSide, safetyKick) {
       startPossession(g, recv, 100); if (g.over) return;
       endDrive(g, 'Kick Return TD');
       pbpLog(g, `${pshort(ret.p)} returns the kickoff for a TOUCHDOWN`, false);
-      touchdown(g, recv, `${pshort(ret.p)} kickoff return`);
+      inc(g, ret.p, 'krTD'); touchdown(g, recv, `${pshort(ret.p)} kickoff return`);
       return;
     }
     pbpLog(g, `${pshort(K.p)} ${safetyKick ? 'free kick' : 'kicks off'}, ${pshort(ret.p)} returns to the ${start < 50 ? T(g.tids[recv]).abbr + ' ' + start : start === 50 ? '50' : T(g.tids[kickSide]).abbr + ' ' + (100 - start)}`, false);
@@ -687,7 +689,7 @@ function startPossession(g, side, ydl) {
   // committee backs: some series go to the No. 2
   const rb1 = g.cx[side].ot.rb1;
   const ch = userChart(g, side, 'off');
-  g.side[side].rb2Turn = ch ? rand() < rotOf(ch, 'RB') : rand() < clamp((0.97 - clamp(rb1, 0.5, 0.8)) * 1.35, 0.26, 0.56);
+  g.side[side].rb2Turn = ch ? rand() < rotOf(ch, 'RB') : rand() < clamp(0.18 + rbLean(g, side) * 0.5, 0.18, 0.58); // the playbook's lean: a workhorse system gives away fewer series
   g.side[side].rb3Turn = g.side[side].rb2Turn && rand() < 0.24;
   // series off for receivers and tight ends (never in the two-minute drill or late in a game)
   const T_ = g.side[side]; T_.rest = null;

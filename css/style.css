@@ -799,3 +799,15 @@ input, textarea, select, .selectable { -webkit-user-select: text; user-select: t
 .pl-act { flex-wrap: wrap; justify-content: flex-end; align-content: flex-start; }
 .pl-act .pl-cut { flex-basis: 100%; flex-direction: column; align-items: flex-end; gap: 4px; margin: 0 0 6px; }
 @media (max-width: 760px) { .pl-act .pl-cut { flex-direction: row; align-items: center; justify-content: flex-start; flex-wrap: wrap; } .pl-act { justify-content: flex-start; } }
+
+/* ---------- depth chart: order under the picture, the pool and a small card on the right ---------- */
+.dc-left { min-width: 0; }
+.dc-pool { position: sticky; top: 112px; display: flex; flex-direction: column; max-height: calc(100vh - 128px); }
+.dc-pool .dc-cands { flex: 1 1 auto; min-height: 220px; max-height: none; }
+.dc-mini { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; background: var(--panel2); }
+.dc-mini .row { gap: 6px; flex-wrap: wrap; }
+.dc-row.picked { outline: 2px solid var(--brass); outline-offset: -2px; }
+.dc-row[data-action] { cursor: pointer; }
+@media (max-width: 900px) { .dc-pool { position: static; max-height: none; } .dc-pool .dc-cands { max-height: 60vh; } }
+.dc-left .dc-row, .dc-pool .dc-row { grid-template-columns: 26px minmax(130px, 1fr) minmax(0, auto); padding: 7px 10px; }
+.dc-pool .dc-row.cand { grid-template-columns: minmax(130px, 1fr) minmax(0, auto); }

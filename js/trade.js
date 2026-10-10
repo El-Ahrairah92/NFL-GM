@@ -65,6 +65,7 @@ function executeTrade(tidA, tidB, aAssets, bAssets) {
   move(aAssets, tidB); move(bAssets, tidA);
   // rosters must still be legal: an incoming body over 53 means a cut
   for (const tid of [tidA, tidB]) {
+    if (!isAI(tid)) { if (rosterCount(tid) > rosterLimit()) addNews(`The trade leaves you at ${rosterCount(tid)} on a ${rosterLimit()}-man roster: make a move before you carry on.`, [tid]); continue; } // your cuts are yours to make
     const lim = rosterLimit();
     while (rosterCount(tid) > lim) {
       const c = autoCut(tid, lim, state.phase === 'REG' || state.phase === 'PLAYOFFS');

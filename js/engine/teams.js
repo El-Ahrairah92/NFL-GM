@@ -22,8 +22,10 @@ function stGun(p) { return stv_(p, 'st') * 0.4 + stv_(p, 'spd') * 0.35 + stv_(p,
 function stJam(p) { return stv_(p, 'st') * 0.4 + stv_(p, 'spd') * 0.3 + Math.max(stv_(p, 'man'), stv_(p, 'rbk')) * 0.3; }
 function stRush(p) { return stv_(p, 'st') * 0.35 + stv_(p, 'bur') * 0.3 + stv_(p, 'spd') * 0.2 + stv_(p, 'prsh') * 0.15; }
 function stRole(p, key) { return key === 'KO' ? stCover(p) : key === 'KRU' ? stBlock(p) : key === 'PU' ? stCover(p) * 0.6 + stBlock(p) * 0.4 : stBlock(p) * 0.6 + stRush(p) * 0.4; }
-// one word for the planner, the depth chart and the scouts
-function stWord(p) { if (!p.a || !ST_OK.has(p.spot)) return null; const v = stCover(p); return v >= 72 ? ['Core special teamer', 'good'] : v >= 65 ? ['Helps on special teams', ''] : v >= 56 ? ['Can fill in on teams', 'muted'] : ['Little special teams value', 'muted']; }
+// what your staff believes about a man's special teams value: close on your own players, vaguer on everyone else's
+function stSeen(p, v) { const mine = typeof state !== 'undefined' && state && (p.tid === state.userTid || (p.tid === -3 && p.psTid === state.userTid)); return v + hashGauss(p.id, 4141, 7) * (mine ? 1.5 : 4); }
+// one word for the planner, the depth chart and the scouts (for one unit when a key is given)
+function stWord(p, key) { if (!p.a || !ST_OK.has(p.spot)) return null; const v = stSeen(p, key && ST_UNIT[key] ? stRole(p, key) : stCover(p)); return v >= 72 ? ['Core special teamer', 'good'] : v >= 65 ? ['Helps on special teams', ''] : v >= 56 ? ['Can fill in on teams', 'muted'] : ['Little special teams value', 'muted']; }
 // what a spot at the back of the roster is worth because of the kicking game
 function stRosterValue(p) { return p.a && ST_OK.has(p.spot) ? clamp((stCover(p) - 63) * 0.4, 0, 5) : 0; }
 function stStarters(roster) {

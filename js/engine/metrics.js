@@ -60,7 +60,7 @@ function chartPlay(g, oc, dc, res, before, off, def) {
   else if (g.poss !== o) epA = -epState(1, 10, g.ydl);
   else epA = epState(g.down, g.togo, g.ydl);
   const epa = epA - epB;
-  const yds = res.kind === 'sack' ? res.yds : (res.yds || 0);
+  const yds = Math.min(res.yds || 0, 100 - before.ydl); // a play cannot gain more than the field left: the box score stops at the goal line and so does the chart
   const td = sd >= 6;
   const success = td || (before.down === 1 ? yds >= before.togo * 0.4 : before.down === 2 ? yds >= before.togo * 0.6 : yds >= before.togo);
   const isPass = !oc.isRun || res.kind === 'pass' || res.kind === 'comp' || res.kind === 'inc' || res.kind === 'int' || res.kind === 'sack' || (res.kind === 'scramble');
@@ -120,7 +120,7 @@ function chartPlay(g, oc, dc, res, before, off, def) {
         avInc(g, rp, 'sep', sepYards(r.w)); avInc(g, rp, 'sepN'); avInc(g, rp, 'adot', r.depth); avInc(g, rp, 'epaTgt', epa);
         if (res.contested) { avInc(g, rp, 'cAtt'); avInc(g, rp, 'cWon', comp); }
         const ow = r.w + (r.shade || 0); // graded against his man, not the bracket
-        const c = comp ? 0.45 + (res.yac || 0) / 12 + (res.contested ? 0.6 : 0) + Math.max(0, epa) * 0.15 + (r.shade || 0) * 0.5 : res.drop ? -1.3 : ow > 0.7 ? 0.08 : ow > 0.2 ? -0.03 : -0.3; // an off-target throw to an open man is on the QB
+        const c = res.batted || res.uncatch ? clamp((ow - 0.45) * 0.3, -0.25, 0.25) : comp ? 0.45 + (res.yac || 0) / 12 + (res.contested ? 0.6 : 0) + Math.max(0, epa) * 0.15 + (r.shade || 0) * 0.5 : res.drop ? -1.3 : ow > 0.7 ? 0.08 : ow > 0.2 ? -0.03 : -0.3; // an off-target throw to an open man is on the QB
         grade(g, rp, 'rec', c, [r.pressAtt ? 'press' : null, res.contested ? 'ctd' : null]);
       } else { const ow = r.w + (r.shade || 0); grade(g, rp, 'rec', clamp((ow - 0.45) * 0.3, -0.25, 0.25), [r.pressAtt ? 'press' : null]); } // every route won or lost counts
     }
@@ -152,7 +152,7 @@ function chartPlay(g, oc, dc, res, before, off, def) {
       // coverage
       for (const e of res.prot.droppers) {
         avInc(g, e.p, 'covSnaps');
-        if (res.def === e && res.target) {
+        if (res.def === e && res.target && !res.batted && !res.uncatch) {
           avInc(g, e.p, 'tgtA'); avInc(g, e.p, 'cmpA', comp); avInc(g, e.p, 'ydsA', comp ? yds : 0); if (comp && td) avInc(g, e.p, 'tdA');
           if (res.kind === 'int' && res.intBy === e) avInc(g, e.p, 'intA');
           const c = res.kind === 'int' && res.intBy === e ? 1.5 : comp ? -(0.3 + yds / 15) - (td ? 0.6 : 0) : res.pbu === e ? 0.8 : 0.35;
@@ -167,7 +167,7 @@ function chartPlay(g, oc, dc, res, before, off, def) {
   // ---- runs (designed) and ball carriers ----
   const carrier = res.kind === 'run' || res.kind === 'scramble' ? res.carrier : res.kind === 'comp' ? res.target : null;
   if (res.kind === 'run' || (res.kind === 'scramble')) {
-    const cp = res.carrier.p, ybc = res.ybc !== undefined ? res.ybc : yds;
+    const cp = res.carrier.p, ybc = Math.min(res.ybc !== undefined ? res.ybc : yds, yds);
     avInc(g, cp, 'rush'); avInc(g, cp, 'ybc', ybc); avInc(g, cp, 'yaco', yds - ybc); avInc(g, cp, 'epaRush', epa);
     if (yds <= 0) avInc(g, cp, 'stuff'); if (yds >= 10) avInc(g, cp, 'explR'); if (success) avInc(g, cp, 'succR');
     grade(g, cp, 'run', clamp(epa * 0.3, -1, 1) + (yds - ybc - 1.6) * 0.15 + (res.missed || []).length * 0.45 - (res.fumble ? 1.5 : 0));
@@ -175,13 +175,12 @@ function chartPlay(g, oc, dc, res, before, off, def) {
   if (carrier && res.missed) {
     if (res.kind === 'comp') { avInc(g, carrier.p, 'mtfRec', res.missed.length); avInc(g, carrier.p, 'recs'); }
     avInc(g, carrier.p, 'mtf', res.missed.length);
-    for (const m of res.missed) { avInc(g, m.p, 'mt'); grade(g, m.p, 'tk', -0.7); }
+    for (const m of res.missed) { avInc(g, m.p, 'mt'); avInc(g, m.p, 'tkAtt'); grade(g, m.p, 'tk', -0.7); } // a miss is an attempt whether or not anyone got him down in the end
   }
   if (res.tackler && carrier) {
     avInc(g, res.tackler.p, 'tkAtt');
     grade(g, res.tackler.p, 'tk', 0.15);
     if (!success) { avInc(g, res.tackler.p, 'stops'); grade(g, res.tackler.p, oc.isRun ? 'rd' : 'cov', 0.25); }
-    if (res.missed) for (const m of res.missed) avInc(g, m.p, 'tkAtt');
   }
   if (res.blk) {
     for (const r of res.blk) {

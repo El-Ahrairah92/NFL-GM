@@ -353,7 +353,7 @@ function practiceTeam(tid) {
       if (p.injury) { p.prac = { g: null, t: tier, wk, dnp: 1 }; pbLearn(p, 0.35, eff); continue; } // meetings only
       let noise = gauss(0, 10);
       if (noise < 0) noise *= clamp(1.3 - p.h.cons / 90, 0.3, 1.25); // steady players rarely have a bad week
-      const xt = p.xt && p.tid === tid ? 1 : 0; // splitting his week between two jobs
+      const xt = p.xt && (p.tid === tid || (onPS && p.psTid === tid)) ? 1 : 0; // splitting his week between two jobs
       const g = clamp(46 + (cd - 52) * 0.12 - xt * 3 + (p.h.work - 55) * 0.42 + (p.h.disc - 55) * 0.28 + eff * 9 + (pbOf(p) - 75) * 0.14 + (cul - 50) * 0.08 + noise, 5, 99);
       p.prac = { g: Math.round(g), t: tier, wk };
       (p.pracH = p.pracH || []).push(Math.round(g)); if (p.pracH.length > 6) p.pracH.shift();

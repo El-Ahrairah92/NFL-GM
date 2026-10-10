@@ -4,17 +4,15 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 
 ## Up next (agreed order)
 
-1. **Full rooms block challengers.** When a job is open and the room is already at its camp number, the challenger replaces the least-valued camp body in that room.
-2. **In-season churn.** Release-and-sign for an injury only when the man is out four weeks or more (line still to be confirmed); shorter absences are covered from the practice squad or the bench.
-3. **Player profiles (specialists).** At creation, push one or two skill clusters up and others down by about 8 to 12 points with overall held. Today a back's third-down skill follows his overall at 0.86 and short-yardage at 0.94, so no specialist can exist. Same for pass-rush specialists, slot-only receivers, coverage linebackers.
-4. **Re-run the audits.** The eight-season front office audit, then the 120-stat football realism audit (not re-run since the pool and market work).
-5. **Free agency and re-signing on the valuation** (this is what makes the cap bind):
+1. **Free agency and re-signing on the valuation** (this is what makes the cap bind):
    - clubs re-sign only when the player is worth his price to them (today 161 of 177 expiring players rated 75+ are kept)
    - steeper pay at the top for non-quarterbacks (85+ averages 5% of the cap; real stars take 8 to 12%)
    - a spending floor so cheap clubs bid (league spends 88% of the cap, lowest club 68%)
    - multi-year money needs cap logic that looks ahead
    - decide whether unsigned veterans' asking prices sag toward the minimum after the draft
-6. **Draft and trades.** Dial in draft pick value exactly; go deep on trades. Trades in the offseason.
+   - young players who are still improving price themselves on where they are heading, or bet on themselves with a short deal (a starting quarterback at the end of his rookie contract should not ask backup money)
+   - proven backups in their prime want a starting job or to test the market (a 26-year-old swing tackle who has graded 80+ filling in should expect a real chance somewhere)
+2. **Draft and trades.** Dial in draft pick value exactly; go deep on trades. Trades in the offseason.
 
 ## Computer front offices (behind the curtain)
 
@@ -27,6 +25,8 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 - Twenty-season audit with an "exploiter" club that plays the market as hard as a person would.
 - Odd roster extremes at week one (4 quarterbacks, 13 defensive linemen): confirm it is injury cover.
 - Injured reserve runs light: about 2 a club at season's end.
+- Trades only to fill a job on the depth chart: no arbitrary moves.
+- Practice squad poaching during the season: review how it works for and against you.
 
 ## Coaches
 
@@ -37,41 +37,50 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 - Exotic packages.
 - Sort coaches by under contract.
 - A living "coach input system" (later; the camp meeting is the first piece).
+- Fire a coach during the season, not only in the carousel.
 
 ## Players and schemes
 
 - Inline and move tight end decided by the play call.
+- Loosen skill ties at other positions the way running backs were (pass-rush-only linemen, slot-only receivers, coverage linebackers), if wanted.
+- A low-rated power back cannot exist: balance and strength are over half of a back's rating. Would need short yardage to reward mass and strength differently from open-field running.
 - Size outliers.
 - Scheme fit pass.
 - Practice habits balance pass.
 - ST+ and ST++ tags.
 - Kick return as its own attribute? (undecided)
+- **Bug: special teams slots are teaching positions.** A receiver on special teams shows as raw at corner, H tight end, strong safety and running back. Comfort at a position must not come from kicking-game snaps.
+- What moves a player's perceived upside over time: review the inputs.
+- More names, balanced for how common each one is.
 
 ## Football realism (known gaps)
+
+- **Explosive plays are short of real life, and the old audit hid it.** It counted yardage a play 'would have gained' past the goal line. Counted honestly: 40+ yard completions 0.32 a team-game (real 0.45 to 0.65), 20+ yard runs 0.42 (real 0.6 to 0.85). Ties to the deep-shot play-calling and run-distribution items below.
+- **Deep shots:** a coordinator should call more of them when he has the arm and the receivers. Expected to lower the best completion rates and raise long completions, the touchdown leader and 30-touchdown passers together.
+- **Feed the star:** top receivers should draw a bigger share of targets, including harder ones (catch rate for high-volume receivers is 66%, real 61 to 65; few 100-catch and 1,400-yard seasons).
+- **Punts are low** (3.4 a game, real 3.7 to 4.3) with first downs a bit high: break down how drives end before changing anything.
+- **Runs are too bunched** (few long ones, too many stuffs): look at what happens past the second level.
+- Rushing leader a bit low (about 1,475, real 1,550 to 1,950) and 300-carry backs rare (0.75 a season, real 1 to 4), even with back usage following the playbook.
+- A safety is credited to nobody, and two-point conversions are not on anyone's stat line.
 
 - Quarterback completion percentage: spread between best and worst.
 - Catch percentage for high-volume receivers.
 - Sack leaders' tail (a 29.5-sack season happened). You said not to touch pass rush for now.
+- **Third-down back sometimes gets no snaps?** Check every specialist role against snap counts.
+- **The league's best edge/end hybrid shows a 0% double-team rate** while leading in sacks and tackles for loss by a lot. Check how doubles are assigned and charted for hybrids.
+- **Grades should sit on the same scale at every position**, so one position does not average 54 while another averages 72.
+- **Advanced stats deep dive, possibly a full overhaul.** Start with whether receiver separation is just a readout of quarterback play.
 
 ## Screens
 
 - Playbook page redesign.
 - In-season practice rooms by working position, not listed position.
 - Consolidating depth chart, practice and planner further.
+- Overhaul the specialist page and roles.
 
-## Play-through notes (2026-10-09)
+## Football realism, from the advanced stats audit
 
-Bugs:
-- **Same division opponent in back-to-back weeks.** The schedule shuffles its weeks at random, so the two meetings can land next to each other. Keep them apart.
-- **Special teams candidates are sorted by true ability but labelled by your read.** Sort and show everything by your own perception.
-- **Card toggles jump to the top.** Season/playoffs, stats/ratings, working-at and every other toggle or button on a player card should leave the scroll where it is.
-- **Practice squad players cannot be cross-trained.** The working-at control only appears for the 53.
-
-Screens:
-- **Special teams depth chart layout.** The available-players box shrinks to a sliver once a unit has seven or more men. Move the unit order beneath the graphic; on the right, the available players and a miniature card for the selected player.
-- **Special teams stats as their own block** in box scores and every other stat view, with special teams tackles separated from defensive tackles.
-
-Needs a look before changing:
-- **Ahead of schedule is too common.** Every lineman showed it in the preseason. Check the label's bar (today: 95% of expected growth) and whether line development itself runs hot.
-- **Advanced stats accuracy.** Audit each one against the play-by-play.
-- **Linebackers do not rotate.** By design today: the default share for the next man is zero (you can set up to 10% at middle and 20% at weak side), and sub packages take a linebacker off instead. Confirm against snap counts that this matches real usage.
+- Missed tackle rate runs a little high (about 14% of attempts; the real league is 10 to 12%).
+- Only 42% of sacks and 48% of pressured dropbacks are charged to a blocker; the rest are unblocked rushers, missed assignments and coverage sacks. Decide whether more should be charged.
+- Pass-block win rate (95%) and pass-rush win rate (7%) sit outside the published real ranges (about 88 to 90% and 10 to 15%). The definition (beaten inside three seconds) may want tuning. Touches pass rush, which is on hold.
+- About 7% of attempts have no target (throwaways and passes batted at the line together). Check the split against the real league (throwaways about 3%).

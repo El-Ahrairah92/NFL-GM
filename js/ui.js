@@ -258,7 +258,7 @@ function topbarHTML() {
     <div class="phase"><b>${state.season}</b> · ${PHASE_LABEL[state.phase]}${wk}</div>
     <div class="spacer"></div>
     <div class="teambadge"><span class="dot" style="background:${t.color}"></span>${esc(t.region + ' ' + t.name)} <span class="muted">${recOf(t.id, recs)}</span></div>
-    <span class="muted small">Cap ${fmtMoney(capRoom(t.id))}</span>
+    <span class="muted small">Cap ${fmtMoney(capRoom(t.id))}</span>${rosterOver() && !['CUTDOWN', 'WAIVERS'].includes(state.phase) ? `<button class="sm danger" data-action="nav" data-view="roster" title="You are over the roster limit: make a move before the next game">Roster ${rosterCount(t.id)}/${rosterLimit()}</button>` : ''}
     <button class="primary" data-action="continue">${continueLabel()}</button>
     ${sim2}
     <button data-action="simYear" title="Auto-manages your team through the rest of this season and the offseason">⏭ Sim to Next Season</button>
@@ -752,7 +752,7 @@ function dcPlayerMeta(p, key, spot, job) {
   const cf = comfortLabel(comfortOf(p, spot));
   // his level at this particular job, when it is not his overall level (a run-stuffing nose asked to rush the passer)
   const here = job && job !== tierOf(p) ? `<span class="pill ${THIN_TIERS.has(job) ? 'bad' : OK_TIERS.has(job) ? 'warn' : 'good'}" title="How he grades at this job in this look: what the spot asks for, not his overall level">${job} here</span>` : '';
-  return `<span class="dc-meta">${['K', 'P', 'KR', 'PRET'].includes(key) ? '' : ST_UNIT[key] ? (stWord(p) ? `<span class="pill ${stWord(p)[1]}">${stWord(p)[0]}</span>` : '<span class="pill muted">Not a special teams body</span>') : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p)}${rowGrades(p)}${here}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
+  return `<span class="dc-meta">${['K', 'P', 'KR', 'PRET'].includes(key) ? '' : ST_UNIT[key] ? (stWord(p, key) ? `<span class="pill ${stWord(p, key)[1]}" title="Your staff's read of him on this unit">${stWord(p, key)[0]}</span>` : '<span class="pill muted">Not a special teams body</span>') : `<span class="pill ${CF_CLS[cf]}">${cf} at ${SPOTS[spot].l}</span>`}${tierPill(p)}${rowGrades(p)}${here}${starHTML(starsOf(p))}${p.injury ? ` <span class="pill inj">${onIR(p) ? 'IR' : 'INJ'} ${p.injury.weeks}w</span>` : ''}</span>`;
 }
 const THIN_TIERS = new Set(['Depth', 'Project', 'Fringe', 'Washed']), OK_TIERS = new Set(['Rotation', 'Backup']);
 // how he grades at this job in this package (his level, his comfort at the spot, and what the package asks of it)
@@ -780,7 +780,7 @@ function depthChartHTML() {
     key = ui.dchKey && DC_PKG_BOARD.some(x => x[0] === ui.dchKey) ? ui.dchKey : 'RB3D'; editKey = key; spot = CHART_SPOT[key];
     label = CHART_SECTIONS.map(x => x.rows.find(r => r[0] === key)).find(Boolean)[1];
     boxes = DC_PKG_BOARD.map(([k, col, row]) => { const ids = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === u); return `<div style="grid-column:${col};grid-row:${row}">${dcBox2({ key: k, spot: CHART_SPOT[k], label: chartName(k) }, ids, null, key, null, ids.length ? null : 'empty')}</div>`; }).join('');
-    html += `<div class="dc-wrap"><div class="card"><div class="dc-board pkg">${boxes}</div><div class="small muted" style="margin-top:10px">Click a role to set its order. An empty situational role just means the regular starter stays in. The four special teams units take ten men each: the staff weighs what a man does on the unit against the risk of putting a starter out there.</div><div class="row small" style="margin-top:8px">${c.auto.st ? '<span class="muted">The staff is setting the kickers, returners and special teams units.</span> <button class="sm primary" data-action="dchAuto" data-unit="st" data-on="0">Take control</button>' : '<span class="muted">You are setting special teams. An empty place on a unit is filled for that game only.</span> <button class="sm" data-action="dchAuto" data-unit="st" data-on="1">Give it back to the staff</button>'}</div></div><div class="dc-side">`;
+    html += `<div class="dc-wrap"><div class="dc-left"><div class="card"><div class="dc-board pkg">${boxes}</div><div class="small muted" style="margin-top:10px">Click a role to set its order. An empty situational role just means the regular starter stays in. The four special teams units take ten men each: the staff weighs what a man does on the unit against the risk of putting a starter out there.</div><div class="row small" style="margin-top:8px">${c.auto.st ? '<span class="muted">The staff is setting the kickers, returners and special teams units.</span> <button class="sm primary" data-action="dchAuto" data-unit="st" data-on="0">Take control</button>' : '<span class="muted">You are setting special teams. An empty place on a unit is filled for that game only.</span> <button class="sm" data-action="dchAuto" data-unit="st" data-on="1">Give it back to the staff</button>'}</div></div>`;
   } else {
     const views = dcViews(t, tab); ui.dchView = ui.dchView || {};
     vid = views.some(v => v.id === ui.dchView[tab]) ? ui.dchView[tab] : views[0].id; view = views.find(v => v.id === vid);
@@ -798,10 +798,10 @@ function depthChartHTML() {
     const others = views.filter(v => v.id !== vid);
     html += `<div class="subtabs" style="margin:0 0 10px">${views.map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dchView" data-v="${v.id}">${esc(v.label)}${v.share ? ` <span class="small" style="opacity:.7">${Math.round(v.share * 100)}%</span>` : ''}${probs.some(p => p.tab === tab && p.view === v.id) ? ' <span class="bad">●</span>' : ''}</button>`).join('')}</div>
       ${mine.length ? `<div class="callout small"><b class="bad">This chart is not complete.</b> ${mine.map(p => esc(p.text.replace(view.label + ': ', ''))).join(' · ')}. If you play a game like this, the staff fills the gap for that game only; your chart is not changed.</div>` : ''}
-      <div class="dc-wrap"><div class="card"><div class="dc-board ${tab}">${boxes}</div>
+      <div class="dc-wrap"><div class="dc-left"><div class="card"><div class="dc-board ${tab}">${boxes}</div>
       <div class="small muted" style="margin-top:10px">${auto ? `The staff's lineup for <b>${esc(view.label)}</b>. Take control to set it yourself.` : `<b>${esc(view.label)}</b> has its own chart. What you see is exactly what you set: changing one position never touches another, and nothing is filled in for you.`} <span class="cfdot warn">●</span> Decent / <span class="cfdot bad">●</span> Raw at the spot · <span class="cfdot bad">✚</span> injured. A box turns amber or red when its starter grades below starting level <b>at that position in this look</b>, which can differ from his overall tier.</div>
       ${thin.length ? `<div class="small" style="margin-top:8px"><b class="bad">Below starting level at these jobs:</b> ${thin.join(' · ')} <span class="muted">(graded on what the spot asks for in this look)</span></div>` : ''}
-      ${!auto && others.length ? `<div class="row small" style="margin-top:10px"><span class="muted">Copy every matching position into this chart from</span> <select id="dchCopyFrom">${others.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('')}</select> <button class="sm" data-action="dchCopy" data-to="${vid}">Copy</button></div><div class="row small" style="margin-top:6px;gap:6px"><span class="muted">Or push from here:</span> <button class="sm" data-action="dchSpotAll" data-tab="${tab}" data-vid="${vid}" data-key="${key}" title="This spot's order replaces the same spot in every other grouping">${esc(label || 'This spot')} → every look</button> <button class="sm" data-action="dchChartAll" data-tab="${tab}" data-vid="${vid}" title="Every spot in this grouping replaces the same spot in every other grouping">This whole chart → every look</button></div>` : ''}</div><div class="dc-side">`;
+      ${!auto && others.length ? `<div class="row small" style="margin-top:10px"><span class="muted">Copy every matching position into this chart from</span> <select id="dchCopyFrom">${others.map(v => `<option value="${v.id}">${esc(v.label)}</option>`).join('')}</select> <button class="sm" data-action="dchCopy" data-to="${vid}">Copy</button></div><div class="row small" style="margin-top:6px;gap:6px"><span class="muted">Or push from here:</span> <button class="sm" data-action="dchSpotAll" data-tab="${tab}" data-vid="${vid}" data-key="${key}" title="This spot's order replaces the same spot in every other grouping">${esc(label || 'This spot')} → every look</button> <button class="sm" data-action="dchChartAll" data-tab="${tab}" data-vid="${vid}" title="Every spot in this grouping replaces the same spot in every other grouping">This whole chart → every look</button></div>` : ''}</div>`;
   }
   ui.dchEdit = editKey;
   // ---- right: the selected job ----
@@ -809,7 +809,7 @@ function depthChartHTML() {
   const list = ((tab === 'pkg' || !auto ? c.lists[editKey] : c.lists[key]) || []).filter(id => P(id) && P(id).tid === u);
   const isUnit = !!ST_UNIT[key], isRet = key === 'KR' || key === 'PRET';
   const lvl = p => { if (isUnit) return 4; const cc = comfortOf(p, spot); return cc >= 85 ? 4 : cc >= 60 ? 3 : cc >= 30 ? 2 : cc > 0 ? 1 : 0; };
-  const val = p => isUnit ? stRole(p, key) : sel ? roleValue(p, sel, vid) : chartValue(p, spot);
+  const val = p => isUnit ? (ST_OK.has(p.spot) ? stSeen(p, stRole(p, key)) : 0) : sel ? roleValue(p, sel, vid) : chartValue(p, spot);
   const fam = (FAMILIES.find(f => f[1].includes(spot)) || [null, []])[1];
   const all = ro.filter(p => (isUnit ? ST_OK.has(p.spot) || ui.dchAll : isRet ? returnScore(p) > -1e8 : SPOTS[p.spot].side === SPOTS[spot].side) && !list.includes(p.id));
   const related = all.filter(p => isUnit || isRet || ['K', 'P'].includes(key) || lvl(p) > 0 || fam.includes(p.spot));
@@ -819,16 +819,24 @@ function depthChartHTML() {
   const roleNote = sel && sel.type && DEF_SLOT[sel.type] && DEF_SLOT[sel.type][1] === 'LB' ? (['NICKEL', 'DIME', 'BIGN'].includes(vid) ? 'In sub packages this job is mostly coverage: range and zone or man skills matter more than taking on blocks.' : 'In base and heavy looks this job is mostly run defense: tackling, shedding blocks and strength matter more than coverage.') : '';
   // where else he already is in this look, so you can see a clash before you make it
   const elsewhere = p => { if (tab === 'pkg' || auto) return ''; const hit = dcLayout(t, tab, vid).find(b => b.key !== key && (c.lists[vid + ':' + b.key] || [])[0] === p.id); return hit ? ` <span class="pill warn" title="He is listed first at ${hit.label} in this look">starts at ${hit.label}</span>` : ''; };
-  const rowTxt = p => `<span class="small muted" style="margin-left:6px">${esc(scoutProfile(p, true))}</span>`;
   const scope = tab === 'pkg' ? '' : auto ? '<div class="small muted" style="margin:2px 0 8px">The staff\'s order. Changing it takes control of this unit: every grouping starts as a copy of the staff\'s chart and is yours from then on.</div>' : `<div class="small muted" style="margin:2px 0 8px">This order is for <b>${esc(view.label)}</b> only.</div>`;
-  html += `<div class="card"><div class="row" style="margin-bottom:2px"><h3 style="margin:0">${esc(label)} <span class="small muted" style="font-weight:400">· ${SPOTS[spot].l}${view ? ' · ' + esc(view.label) : ''}</span></h3><span class="spacer"></span>${rot}</div>${scope}${roleNote ? `<div class="small muted" style="margin-bottom:8px">${roleNote}</div>` : ''}
+  const pickP = ui.dchPid && ro.some(p => p.id === ui.dchPid) ? P(ui.dchPid) : list.length ? P(list[0]) : cands[0] || null, pk = p => ` data-action="dchPick" data-pid="${p.id}"`, pkOn = p => pickP && p.id === pickP.id ? ' picked' : '';
+  html += `<div class="card" style="margin-top:12px"><div class="row" style="margin-bottom:2px"><h3 style="margin:0">${esc(label)} <span class="small muted" style="font-weight:400">· ${SPOTS[spot].l}${view ? ' · ' + esc(view.label) : ''}</span></h3><span class="spacer"></span>${rot}</div>${scope}${roleNote ? `<div class="small muted" style="margin-bottom:8px">${roleNote}</div>` : ''}
     <div class="section-title" style="margin-top:6px">Depth order <span class="small muted">· drag to reorder</span></div><div class="dc-order" data-dckey="${editKey}">
-    ${list.map((id, i) => { const p = P(id); return `<div class="dc-row" draggable="true" data-dcpid="${id}" data-dcfrom="${i}" data-dcdrop="${i}"><span class="n">${i + 1}</span><span>${esc(p.lbl)} ${playerLink(p)}${i === 0 ? elsewhere(p) : ''}${rowTxt(p)}</span><span class="dc-meta">${dcPlayerMeta(p, key, spot, sel ? tierOf(p, val(p)) : null)}${i > 0 ? `<button class="sm" data-action="dchUp" data-key="${editKey}" data-i="${i}" title="Move up one spot">▲</button>` : ''}<button class="sm" data-action="dchRemove" data-key="${editKey}" data-i="${i}" title="Remove">✕</button></span></div>`; }).join('')}
-    <div class="dc-drop" data-dcdrop="${list.length}">${list.length < n ? `Drop a player here for No. ${list.length + 1}` : `Drop here to make him No. ${n} (bumps the last man)`}</div></div>
-    <div class="row" style="margin:16px 0 8px"><span class="section-title" style="margin:0">Available · ${ST_UNIT[key] ? 'by what he does on this unit' : key === 'KR' || key === 'PRET' ? 'by return ability' : `by comfort at ${SPOTS[spot].l}, then fit for this job`}</span><span class="spacer"></span>
+    ${list.map((id, i) => { const p = P(id); return `<div class="dc-row${pkOn(p)}" draggable="true" data-dcpid="${id}" data-dcfrom="${i}" data-dcdrop="${i}"${pk(p)}><span class="n">${i + 1}</span><span>${esc(p.lbl)} ${playerLink(p)}${i === 0 ? elsewhere(p) : ''}</span><span class="dc-meta">${dcPlayerMeta(p, key, spot, sel ? tierOf(p, val(p)) : null)}${i > 0 ? `<button class="sm" data-action="dchUp" data-key="${editKey}" data-i="${i}" title="Move up one spot">▲</button>` : ''}<button class="sm" data-action="dchRemove" data-key="${editKey}" data-i="${i}" title="Remove">✕</button></span></div>`; }).join('')}
+    <div class="dc-drop" data-dcdrop="${list.length}">${list.length < n ? `Drop a player here for No. ${list.length + 1}` : `Drop here to make him No. ${n} (bumps the last man)`}</div></div></div></div>
+    <div class="card dc-pool">${pickP ? dcMiniCard(pickP, key, spot) : ''}<div class="row" style="margin:4px 0 8px"><span class="section-title" style="margin:0">Available · ${ST_UNIT[key] ? 'by what he does on this unit' : key === 'KR' || key === 'PRET' ? 'by return ability' : `by comfort at ${SPOTS[spot].l}, then fit for this job`}</span><span class="spacer"></span>
       <label class="small muted"><input type="checkbox" data-change="dchAll" ${ui.dchAll ? 'checked' : ''}> Show everyone (+${all.length - related.length})</label></div>
-    <div class="dc-cands">${cands.map(p => `<div class="dc-row cand" draggable="true" data-dcpid="${p.id}"><span>${esc(p.lbl)} ${playerLink(p)} <span class="muted small">${p.age}y</span>${elsewhere(p)}${rowTxt(p)}</span><span class="dc-meta">${dcPlayerMeta(p, key, spot, sel ? tierOf(p, val(p)) : null)}<button class="sm primary" data-action="dchAdd" data-key="${editKey}" data-pid="${p.id}" title="Add to the depth order">+</button></span></div>`).join('') || '<div class="muted small">Nobody else can play here.</div>'}</div></div>`;
-  return html + '</div></div>';
+    <div class="dc-cands">${cands.map(p => `<div class="dc-row cand${pkOn(p)}" draggable="true" data-dcpid="${p.id}"${pk(p)}><span>${esc(p.lbl)} ${playerLink(p)} <span class="muted small">${p.age}y</span>${elsewhere(p)}</span><span class="dc-meta">${dcPlayerMeta(p, key, spot, sel ? tierOf(p, val(p)) : null)}<button class="sm primary" data-action="dchAdd" data-key="${editKey}" data-pid="${p.id}" title="Add to the depth order">+</button></span></div>`).join('') || '<div class="muted small">Nobody else can play here.</div>'}</div></div>`;
+  return html + '</div>';
+}
+// a small card for the man you have selected on the depth chart, so you can judge him without leaving the page
+function dcMiniCard(p, key, spot) {
+  const stw = typeof stWord === 'function' ? stWord(p, ST_UNIT[key] ? key : null) : null, cf = Object.keys(p.cf || {}).filter(sp => sp !== p.spot && comfortOf(p, sp) >= 30).sort((a, b) => comfortOf(p, b) - comfortOf(p, a)).slice(0, 4);
+  return `<div class="dc-mini"><div class="row"><b style="font-size:16px">${playerLink(p)}</b><span class="pill">${esc(p.lbl)}</span>${statusPills(p)}${tierPill(p)}${upsidePill(p)}${starHTML(starsOf(p))}<span class="spacer"></span><button class="sm" data-action="player" data-pid="${p.id}">Full card</button></div>
+    <div class="small muted" style="margin:4px 0">Age ${p.age} · ${fmtHeight(p.m.ht)}, ${p.m.wt} lb · ${p.exp} yr${p.exp === 1 ? '' : 's'} · ${fmtContract(p)}${p.injury ? ` · <span class="bad">out ${p.injury.weeks} wk</span>` : ''}</div>
+    <div class="small">${esc(scoutProfile(p, true))}</div>
+    <div class="row small" style="margin-top:6px">${rowGrades(p)}${stw ? `<span class="pill ${stw[1]}">${stw[0]}</span>` : ''}${cf.map(sp => `<span class="pill muted" title="${comfortLabel(comfortOf(p, sp))}">${SPOTS[sp].l}</span>`).join('')}</div></div>`;
 }
 // ---------- playbook (view only) ----------
 const PERS_LABEL = { '10': '10 (1 RB, 0 TE, 4 WR)', '11': '11 (1 RB, 1 TE, 3 WR)', '12': '12 (1 RB, 2 TE, 2 WR)', '13': '13 (1 RB, 3 TE, 1 WR)', '21': '21 (2 RB, 1 TE, 2 WR)', '22': '22 (2 RB, 2 TE, 1 WR)', JUMBO: 'Jumbo (6 OL)' };
@@ -1055,7 +1063,8 @@ const STAT_CATS = {
   rushing: { min: s => (s.rushA || 0) >= 1, sort: 'rushY', cols: [['rushA', 'Car'], ['rushY', 'Yds'], ['ypc', 'Avg', s => s.rushA ? round1(s.rushY / s.rushA) : 0], ['rushTD', 'TD'], ['rushLng', 'Lng'], ['fum', 'Fum']] },
   receiving: { min: s => (s.tgt || 0) >= 1, sort: 'recY', cols: [['tgt', 'Tgt'], ['rec', 'Rec'], ['recY', 'Yds'], ['ypr', 'Avg', s => s.rec ? round1(s.recY / s.rec) : 0], ['recTD', 'TD'], ['recLng', 'Lng'], ['yac', 'YAC'], ['drp', 'Drops']] },
   defense: { pos: DEF_POS, min: s => (s.tkl || 0) + (s.pd || 0) + (s.prs || 0) >= 1, sort: 'tkl', cols: [['tkl', 'Tkl'], ['tfl', 'TFL'], ['sck', 'Sck'], ['prs', 'Pressures'], ['dint', 'Int'], ['pd', 'PD'], ['ff', 'FF'], ['fr', 'FR'], ['dtd', 'TD']] },
-  returns: { min: s => (s.krA || 0) + (s.prA || 0) >= 1, sort: 'krY', cols: [['krA', 'KR'], ['krY', 'KR Yds'], ['kravg', 'KR Avg', s => s.krA ? round1(s.krY / s.krA) : 0], ['prA', 'PR'], ['prY', 'PR Yds'], ['pravg', 'PR Avg', s => s.prA ? round1(s.prY / s.prA) : 0]] },
+  returns: { min: s => (s.krA || 0) + (s.prA || 0) >= 1, sort: 'krY', cols: [['krA', 'KR'], ['krY', 'KR Yds'], ['kravg', 'KR Avg', s => s.krA ? round1(s.krY / s.krA) : 0], ['prA', 'PR'], ['prY', 'PR Yds'], ['pravg', 'PR Avg', s => s.prA ? round1(s.prY / s.prA) : 0], ['rtd', 'TD', s => (s.krTD || 0) + (s.prTD || 0)]] },
+  special: { min: s => (s.sts || 0) >= 20, sort: 'stk', cols: [['sts', 'ST snaps'], ['stk', 'ST tkl'], ['stg', 'ST grade', s => stGrade(s) || 0], ['snp', 'Scrimmage snaps']] },
   kicking: { pos: ['K', 'P'], min: s => (s.fga || 0) + (s.pnt || 0) >= 1, sort: 'fgm', cols: [['fgm', 'FGM'], ['fga', 'FGA'], ['fgp', 'FG%', s => s.fga ? round1(100 * s.fgm / s.fga) : 0], ['fgLng', 'Lng'], ['xpm', 'XPM'], ['xpa', 'XPA'], ['pnt', 'Punts'], ['pavg', 'P Avg', s => s.pnt ? round1(s.pntY / s.pnt) : 0], ['pi20', 'In 20']] },
 };
 const ADV_GROUPS = {
@@ -1259,7 +1268,7 @@ function pracChip(p) {
 }
 function pracTrend(p) { const h = (p.pracH || []).slice(-5); return h.map(g => `<i class="pdot" style="background:${g >= 59 ? 'var(--good)' : g < 42 ? 'var(--bad)' : 'var(--muted)'}" title="${pracGradeLabel(g)}"></i>`).join(''); }
 function crossTrainSelect(p, card) { // where he is working: his own spot, another one, or a split of the two
-  if (p.tid !== state.userTid || !p.a) return '';
+  if ((p.tid !== state.userTid && !(p.tid === -3 && p.psTid === state.userTid)) || !p.a) return '';
   const opts = workSpots(p); if (opts.length < 2) return card ? '<span class="small muted">He only plays one spot.</span>' : '';
   const w = workOf(p), lab = sp => `${SPOTS[sp].l}${sp === p.spot ? '' : ' (' + comfortLabel(comfortOf(p, sp)).toLowerCase() + ')'}`, cd = card ? ' data-card="1"' : '';
   return `<span class="work-sel"><select data-change="workSet" data-part="a" data-pid="${p.id}"${cd} class="${w.a !== p.spot ? 'on' : ''}" title="The spot he practices and competes at">${opts.map(sp => `<option value="${sp}" ${w.a === sp ? 'selected' : ''}>${lab(sp)}</option>`).join('')}</select><select data-change="workSet" data-part="b" data-pid="${p.id}"${cd} class="${w.b ? 'on' : ''}" title="A second spot that takes a share of his reps"><option value="">+ second spot</option>${opts.filter(sp => sp !== w.a).map(sp => `<option value="${sp}" ${w.b === sp ? 'selected' : ''}>${lab(sp)}</option>`).join('')}</select>${w.b ? `<select data-change="workSet" data-part="sb" data-pid="${p.id}"${cd} title="Share of his reps at the second spot">${[0.2, 0.3, 0.4, 0.5].map(v => `<option value="${v}" ${Math.abs(w.sb - v) < 0.05 ? 'selected' : ''}>${Math.round(v * 100)}% there</option>`).join('')}</select>` : ''}</span>`;
@@ -2194,9 +2203,11 @@ let modalStack = [];
 function openModal(html, replace) {
   const m = $('#modal'), body = $('#modal-body');
   if (!m.classList.contains('hidden') && body.dataset.raw && !replace) modalStack.push({ html: body.dataset.raw, y: m.scrollTop });
+  const keepY = replace && !m.classList.contains('hidden') ? m.scrollTop : 0, inner = replace ? [...m.querySelectorAll('.tbl-wrap, .scroll')].map(e => [e.scrollLeft, e.scrollTop]) : [];
   body.dataset.raw = html;
   body.innerHTML = (modalStack.length ? '<button class="sm" data-action="closeModal" style="margin-bottom:10px">← Back</button>' : '') + html;
-  m.classList.remove('hidden'); m.scrollTop = 0;
+  m.classList.remove('hidden'); m.scrollTop = keepY;
+  if (replace) [...m.querySelectorAll('.tbl-wrap, .scroll')].forEach((e, i) => { if (inner[i]) { e.scrollLeft = inner[i][0]; e.scrollTop = inner[i][1]; } });
 }
 function closeModal(all) {
   const m = $('#modal'), body = $('#modal-body');
@@ -2211,13 +2222,16 @@ function closeModal(all) {
 
 const CAREER_COLS = {
   QB: [['passC', 'Cmp'], ['passA', 'Att'], ['pct', 'Pct', s => s.passA ? round1(100 * s.passC / s.passA) : 0], ['passY', 'Yds'], ['passTD', 'TD'], ['passInt', 'Int'], ['rtg', 'Rtg', s => round1(passerRating(s.passC || 0, s.passA || 0, s.passY || 0, s.passTD || 0, s.passInt || 0))], ['ypa', 'Y/A', s => s.passA ? round1(s.passY / s.passA) : 0], ['sacked', 'Sck'], ['passLng', 'Lng'], ['rushA', 'Car'], ['rushY', 'RuYds'], ['rushTD', 'RuTD'], ['fum', 'Fum']],
-  RB: [['snp', 'Snaps'], ['rushA', 'Car'], ['rushY', 'Yds'], ['ypc', 'Avg', s => s.rushA ? round1(s.rushY / s.rushA) : 0], ['rushTD', 'TD'], ['rushLng', 'Lng'], ['tgt', 'Tgt'], ['rec', 'Rec'], ['recY', 'RecYds'], ['recTD', 'RecTD'], ['fum', 'Fum'], ['stk', 'ST tkl']],
-  WR: [['snp', 'Snaps'], ['tgt', 'Tgt'], ['rec', 'Rec'], ['cpct', 'Catch%', s => s.tgt ? round1(100 * s.rec / s.tgt) : 0], ['recY', 'Yds'], ['ypr', 'Avg', s => s.rec ? round1(s.recY / s.rec) : 0], ['recTD', 'TD'], ['recLng', 'Lng'], ['rushA', 'Car'], ['rushY', 'RuYds'], ['fum', 'Fum'], ['stk', 'ST tkl']],
+  RB: [['snp', 'Snaps'], ['rushA', 'Car'], ['rushY', 'Yds'], ['ypc', 'Avg', s => s.rushA ? round1(s.rushY / s.rushA) : 0], ['rushTD', 'TD'], ['rushLng', 'Lng'], ['tgt', 'Tgt'], ['rec', 'Rec'], ['recY', 'RecYds'], ['recTD', 'RecTD'], ['fum', 'Fum']],
+  WR: [['snp', 'Snaps'], ['tgt', 'Tgt'], ['rec', 'Rec'], ['cpct', 'Catch%', s => s.tgt ? round1(100 * s.rec / s.tgt) : 0], ['recY', 'Yds'], ['ypr', 'Avg', s => s.rec ? round1(s.recY / s.rec) : 0], ['recTD', 'TD'], ['recLng', 'Lng'], ['rushA', 'Car'], ['rushY', 'RuYds'], ['fum', 'Fum']],
   OL: [['snp', 'Snaps'], ['pen', 'Pen']],
-  DEF: [['snp', 'Snaps'], ['pen', 'Pen'], ['stk', 'ST tkl'], ['tkl', 'Tkl'], ['tfl', 'TFL'], ['sck', 'Sck'], ['prs', 'Prs'], ['dint', 'Int'], ['pd', 'PD'], ['ff', 'FF'], ['fr', 'FR'], ['dtd', 'TD']],
+  DEF: [['snp', 'Snaps'], ['pen', 'Pen'], ['tkl', 'Tkl'], ['tfl', 'TFL'], ['sck', 'Sck'], ['prs', 'Prs'], ['dint', 'Int'], ['pd', 'PD'], ['ff', 'FF'], ['fr', 'FR'], ['dtd', 'TD']],
   K: [['fgm', 'FGM'], ['fga', 'FGA'], ['fgp', 'FG%', s => s.fga ? round1(100 * s.fgm / s.fga) : 0], ['fgLng', 'Lng'], ['xpm', 'XPM'], ['xpa', 'XPA'], ['xpp', 'XP%', s => s.xpa ? round1(100 * s.xpm / s.xpa) : 0]],
   P: [['pnt', 'Punts'], ['pntY', 'Yds'], ['pavg', 'Avg', s => s.pnt ? round1(s.pntY / s.pnt) : 0], ['pi20', 'In 20'], ['ptb', 'TB']],
 };
+// the kicking game, kept apart from what a man does from scrimmage
+const ST_COLS = [['sts', 'ST snaps'], ['stk', 'ST tkl'], ['krA', 'KR'], ['krY', 'KR yds'], ['kravg', 'KR avg', s => s.krA ? round1(s.krY / s.krA) : 0], ['prA', 'PR'], ['prY', 'PR yds'], ['pravg', 'PR avg', s => s.prA ? round1(s.prY / s.prA) : 0], ['rtd', 'Ret TD', s => (s.krTD || 0) + (s.prTD || 0)]];
+const stAny = r => (r.sts || 0) + (r.stk || 0) + (r.krA || 0) + (r.prA || 0) > 0;
 function careerCols(pos) { return pos === 'TE' ? CAREER_COLS.WR : DEF_POS.includes(pos) ? CAREER_COLS.DEF : CAREER_COLS[pos]; }
 
 // ---------- player card: an at-a-glance read ----------
@@ -2344,7 +2358,7 @@ function playerModal(pid, replace) {
   left += '<div class="row" style="margin-top:12px">';
   if (p.tid === u && optionDue(p) && state.phase === 'RESIGN') left += `<button class="primary" data-action="option" data-pid="${p.id}" data-v="1">Exercise option (${fmtMoney(optionAmount(p))})</button><button data-action="option" data-pid="${p.id}" data-v="0">Decline option</button>`;
   if (p.tid === u && canTag(p)) left += `<button data-action="tag" data-pid="${p.id}">Franchise tag (${fmtMoney(tagAmount(p))})</button>`;
-  if (p.tid === u && p.a && workSpots(p).length > 1) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Where he is working <span title="Sets the room he sits in during camp, the drills he takes, what the reports say about him, and where his comfort at a new spot grows.">ⓘ</span></div>${crossTrainSelect(p, true)}</div>`;
+  if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && p.a && workSpots(p).length > 1) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Where he is working <span title="Sets the room he sits in during camp, the drills he takes, what the reports say about him, and where his comfort at a new spot grows.">ⓘ</span></div>${crossTrainSelect(p, true)}</div>`;
   if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && PRAC_SIDE[p.pos]) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">In the building${p.seenW ? ` · ${p.seenW} week${p.seenW === 1 ? '' : 's'} with your staff` : ''}</div><div class="small" style="margin-bottom:4px">Playbook ${pbBar(pbOf(p))} <span class="muted">${pbLabel(pbOf(p))}</span> · this week ${pracChip(p)}</div><div class="row small" style="gap:6px">${charPill(p, 'work')}${charPill(p, 'disc')}${charPill(p, 'lead')}</div>${p.tid === u && crossTrainSpots(p).length ? `<div class="small" style="margin-top:6px">Cross-train at ${crossTrainSelect(p).replace('data-pid=', 'data-card="1" data-pid=')}${p.xt ? ` <span class="muted">now ${comfortLabel(comfortOf(p, p.xt)).toLowerCase()} (${Math.round(comfortOf(p, p.xt))}/100)</span>` : ''}</div>` : ''}</div>`;
   if (p.tid === u && extensionDue(p)) left += termButtons(p, 'extend');
   if (p.tid === u && state.phase === 'PRESEASON' && state.prePlan && p.pos !== 'K' && p.pos !== 'P') { const pl = state.prePlan, cur = pl.feat[p.id] ? 'feat' : pl.hold[p.id] ? 'hold' : ''; left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Preseason playing time${p.preS ? ` · ${p.preS.snp} snaps so far` : ''}</div><span class="seg">${[['', 'Normal'], ['feat', 'Feature'], ['hold', 'Hold out']].map(([k, l]) => `<button class="sm ${cur === k ? 'on' : ''}" data-action="preFeat" data-card="1" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span></div>`; }
@@ -2389,7 +2403,11 @@ function playerModal(pid, replace) {
     ...cc.map(([k, l, fn]) => ({ k, l, num: 1, f: r => fn ? fn(r) : (r[k] || 0) }))];
     const cv = ui.cardView === 'ratings' ? 'ratings' : 'stats';
     html += `<div class="row" style="margin:18px 0 8px"><span class="section-title" style="margin:0">Career</span>${scopeTabs}<div class="subtabs" style="margin:0">${[['stats', 'Stats'], ['ratings', 'Ratings']].map(([k, l]) => `<button class="${k === cv ? 'on' : ''}" data-action="cardView" data-v="${k}" data-pid="${p.id}">${l}</button>`).join('')}</div></div>`;
-    if (cv === 'stats' || scope !== 'reg') html += table('career', cols, [...rows, Object.assign(tot, { tot: true })], { nosort: 1 });
+    if (cv === 'stats' || scope !== 'reg') {
+      html += table('career', cols, [...rows, Object.assign(tot, { tot: true })], { nosort: 1 });
+      if (rows.some(stAny)) html += `<div class="section-title" style="margin-top:14px">Special teams</div>` + table('careerST', [{ k: 's', l: 'Season', f: r => r.tot ? '<b>Career</b>' : r.season + (r.cur ? '*' : '') }, { k: 't', l: 'Tm', f: r => r.tot ? '' : (r.tid >= 0 ? T(r.tid).abbr : 'FA') },
+        { k: 'gr', l: 'Grade', num: 1, f: r => r.tot ? '' : gradeChip(stGrade(r)) }, ...ST_COLS.map(([k, l, fn]) => ({ k, l, num: 1, f: r => fn ? fn(r) : (r[k] || 0) }))], [...rows.filter(stAny), tot], { nosort: 1 });
+    }
     else {
       // grades every season, plus how your staff rated him at the end of each year
       const ga = r => r.cur ? (p.advS ? careerAdv(p.advS, p.spot) : {}) : (r.adv || {});
@@ -2489,9 +2507,11 @@ function boxModal(gid) {
     ['Defense', l => (l.tkl || 0) + (l.pd || 0) + (l.dint || 0) + (l.prs || 0), [['Snaps', l => l.snp || 0], ['Tkl', l => l.tkl || 0], ['TFL', l => l.tfl || 0], ['Sck', l => l.sck || 0], ['Prs', l => l.prs || 0], ['Int', l => l.dint || 0], ['PD', l => l.pd || 0], ['FF', l => l.ff || 0]], l => (l.tkl || 0) + (l.sck || 0) * 3 + (l.dint || 0) * 4 + (l.prs || 0)],
     ['Kicking', l => (l.fga || 0) + (l.xpa || 0), [['FG', l => `${l.fgm || 0}/${l.fga || 0}`], ['Lng', l => l.fgLng || 0], ['XP', l => `${l.xpm || 0}/${l.xpa || 0}`]], l => l.fga || 0],
     ['Punting', l => l.pnt, [['No', l => l.pnt], ['Yds', l => l.pntY], ['Avg', l => round1(l.pntY / l.pnt)], ['In 20', l => l.pi20 || 0], ['TB', l => l.ptb || 0]], l => l.pnt],
-    ['Returns', l => (l.krA || 0) + (l.prA || 0), [['KR', l => l.krA || 0], ['KR Yds', l => l.krY || 0], ['PR', l => l.prA || 0], ['PR Yds', l => l.prY || 0]], l => (l.krY || 0) + (l.prY || 0)],
+    ['Returns', l => (l.krA || 0) + (l.prA || 0), [['KR', l => l.krA || 0], ['KR Yds', l => l.krY || 0], ['PR', l => l.prA || 0], ['PR Yds', l => l.prY || 0], ['TD', l => (l.krTD || 0) + (l.prTD || 0)]], l => (l.krY || 0) + (l.prY || 0)],
+    ['Coverage and return units', l => (l.stk || 0) > 0 || (l.sts || 0) >= 8, [['ST snaps', l => l.sts || 0], ['ST tkl', l => l.stk || 0]], l => (l.stk || 0) * 100 + (l.sts || 0)],
   ];
   for (const [name, has, cols, sortv] of cats) {
+    if (name === 'Kicking') html += `<h3 style="margin:22px 0 0">Special teams</h3>`;
     html += `<div class="section-title">${name}</div><div class="grid g2">`;
     for (const tid of [a, h]) {
       const rows = lines.filter(x => x.l.tid === tid && has(x.l)).sort((x, y) => sortv(y.l) - sortv(x.l)).slice(0, name === 'Defense' ? 30 : 12); // everyone who recorded a stat
@@ -2741,6 +2761,15 @@ function phaseLabel() {
   return state.phase === 'PRESEASON' ? 'Playing preseason…' : state.phase === 'REG' ? `Simulating week ${state.week}…` : state.phase === 'PLAYOFFS' ? `Playing ${ROUND_NAMES[state.playoffs.round]}…` : `${PHASE_LABEL[state.phase]}…`;
 }
 
+// You may sit over the roster limit between games (a man back from injured reserve, a trade), but not play one.
+// Nothing is cut for you: this just sends you to the roster to make the move yourself.
+function rosterOver() { if (!state || state.settings.autoUser) return 0; const u = state.userTid; return Math.max(0, rosterCount(u) - rosterLimit()); }
+function rosterBlock() {
+  const n = rosterOver(); if (!n || ['CUTDOWN', 'WAIVERS'].includes(state.phase)) return false;
+  ask({ title: 'Roster over the limit', body: `You have ${rosterCount(state.userTid)} players on a ${rosterLimit()}-man roster. Release, trade or move ${n === 1 ? 'one player' : n + ' players'} to injured reserve or the practice squad before you carry on. Nobody is cut for you.`, yes: 'Go to the roster', no: 'Close' }).then(go => { if (go) { view = 'roster'; render(); } });
+  return true;
+}
+
 // ---------- actions ----------
 const actions = {
   nav: d => { view = d.view; ui.more = false; render(); window.scrollTo(0, 0); },
@@ -2753,6 +2782,7 @@ const actions = {
   export: () => exportSave(),
   newGame: async () => { if (await ask({ title: 'Start a new league?', body: 'Your current league will be overwritten. Export it first if you want to keep it.', yes: 'Start over', no: 'Keep this league', danger: true })) { state = null; deleteSave(); render(); } },
   continue: async () => {
+    if (rosterBlock()) return;
     if (state.phase === 'RESIGN' && !state.settings.autoUser) {
       const n = rosterOf(state.userTid).filter(p => p.expiring).length;
       if (n && !await ask(`${n} expiring player(s) will leave in free agency. Continue?`)) return;
@@ -2766,7 +2796,7 @@ const actions = {
       const short = rosterShortfalls(state.userTid), have = rosterOf(state.userTid).filter(p => countsOn53(p) && !gone(state.cut.plan[p.id])).length;
       if ((short.length || have < ROSTER_MAX) && !await ask(`${have < ROSTER_MAX ? `You only have ${have} of ${ROSTER_MAX} roster spots filled. ` : ''}${short.length ? `You are short at: ${short.join(', ')}. ` : ''}Nobody will be signed for you. Start the season anyway?`)) return;
       const left = have - ROSTER_MAX;
-      if (left > 0 && !await ask(`You still need to cut ${left} more player${left === 1 ? '' : 's'}. Let the staff make the remaining cuts?`)) return;
+      if (left > 0) { await ask({ title: 'Roster is not set', body: `You still need to cut ${left} more player${left === 1 ? '' : 's'} to reach ${ROSTER_MAX}. Nobody is cut for you: make the calls on the Roster Planner, or press "Use the staff's recommendations" there.`, yes: 'Go to the planner', no: 'Close' }); view = 'camp'; ui.campTab = 'plan'; render(); return; }
     }
     if (state.phase === 'COACHES' && !state.settings.autoUser && state.car && state.car.raids && state.car.raids.length) {
       if (!await ask({ title: 'Unanswered offers', body: 'These coaches leave your staff if you advance without answering:', list: state.car.raids.map(r => `${cname(C(r.cid))} → ${T(r.tid).abbr} ${roleName(r.role).toLowerCase()}`), yes: 'Let them go', no: 'Go back', danger: true })) { view = 'coaches'; render(); return; }
@@ -2790,6 +2820,7 @@ const actions = {
   popupsOff: () => { state.settings.gamePopups = false; save(); closeModal(); playWeek(false); toast('Game popups off. Turn them back on in Settings.'); },
   simPlayoffs: async () => {
     const ph = state.phase;
+    if (rosterBlock()) return;
     if (!await ask(ph === 'REG' ? { title: 'Sim to the playoffs?', body: `The rest of the regular season is played back to back${state.week ? ` (from week ${state.week})` : ''}. In between games you will not get to:`, list: ['Adjust your depth chart or game plan', 'Replace injured players or work the waiver wire', 'Change the practice plan'], yes: 'Sim to the playoffs', no: 'Keep playing' } : { title: 'Finish the playoffs?', body: 'Every remaining playoff game is played without stopping, yours included.', yes: 'Finish the playoffs', no: 'Keep playing' })) return;
     if (ph === 'REG') runSteps(simWeek, () => state.phase !== 'REG', phaseLabel);
     else runSteps(simPlayoffRound, () => state.phase !== 'PLAYOFFS', phaseLabel);
@@ -2869,6 +2900,7 @@ const actions = {
   dchView: d => { (ui.dchView = ui.dchView || {})[ui.dchTab || 'off'] = d.v; render(); },
   dchCopy: d => { const from = document.getElementById('dchCopyFrom'); if (from) { copyView(state.userTid, ui.dchTab || 'off', from.value, d.to); save(); render(); } },
   dchTab: d => { ui.dchTab = d.tab; ui.dchKey = null; render(); },
+  dchPick: d => { ui.dchPid = +d.pid; render(); },
   dchRemove: d => { setChart(state.userTid, d.key, +d.i, 0); save(); render(); },
   dchAdd: d => { const blocked = !ui.dchAll && chartBlocked(state.userTid, d.key, +d.pid); if (blocked) { toast(blocked); return; } const cc = ensureChart(state.userTid); if (cc.auto[CHART_UNIT(d.key)]) setChartAuto(state.userTid, CHART_UNIT(d.key), false); const l = cc.lists[d.key] || []; setChart(state.userTid, d.key, l.length, +d.pid); save(); render(); },
   dchAuto: d => { setChartAuto(state.userTid, d.unit, d.on === '1'); save(); render(); },

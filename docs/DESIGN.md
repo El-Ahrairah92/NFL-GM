@@ -606,3 +606,32 @@ Known limits:
 - **The cap does not bind.** In both old and new leagues no club was ever over, the median club has about 45M of room at week one and the loosest over 130M. Cap cuts never fired. Money has to be made scarce in the free agency step before cap logic can do real work.
 - **No specialists to sign.** Third-down and short-yardage jobs are open at six or seven clubs a year and nobody on the street grades better than the low 50s at them. Role targeting shows at depth jobs (dime back, fourth corner, third edge, interior rotation); it cannot show at specialist jobs until such players exist.
 - A club whose room is already at its camp number does not bring in a challenger for an open job there.
+
+## 34. Injuries over time, roster limits between games, and backs for the down
+
+**Injury moves are judged over the rest of the season.** A replacement helps a lot while the starter is out and little once he is back; the man released to make room is gone for good. A club weighs the weeks of help against the weeks of loss, with a small cost for the churn itself, and lets a player go only when the roster is better for it across the whole stretch. The fix may come from the street or from the club's own practice squad. A man coming off injured reserve displaces the player the lineups would miss least, or waits if he is that player. The old head counts run afterwards, as a backstop.
+
+Audit (766 starter injuries, two seasons): the job's grade falls about eight points to the next man up (about 68), who is far better than anything available (about 58). A clearly better option went unused in 1 to 2% of cases. Clubs made a move after 34% of short injuries and 76% of the longest. Depth through the season is the same or better than under the old rules.
+
+**You may sit over the roster limit between games, but not play one.** A man back from injured reserve or arriving in a trade simply joins your roster. Nothing is cut for you anywhere: the advance button sends you to the roster until it is legal, and cutdown day will not finalize over 53.
+
+**Backs for the down.** A back's hands, routes, pass protection and strength are no longer tied closely to how good a runner he is: the three receiving skills share one roll per player, strength has a wider one. The spread is continuous, with no archetypes. About 8% of lesser backs now catch and protect better than the average starter, and about a quarter of starters are below 50 at it. Staff-run lineups (every computer club, and yours when the staff sets the offense) use the right back for the down: hands and protection on passing downs, strength and balance on short yardage. Before this, they almost never did. On passing downs the back on the field averages 62 at the receiving skills against 53 on other downs; lesser backs who can catch get about twice the snaps and three and a half times the catches of those who cannot.
+
+**Charting fixes.** Yards before and after contact stop at the goal line like the box score; a missed tackle counts as an attempt whether or not anyone got him down; screens are expected to complete 94%, not 85%. 'Ahead of schedule' sets the coach's share aside so a great teacher does not put his whole room over the bar.
+
+**Audits after all of the above.** Front office, eight seasons, two leagues: every club at 53, 0.33 weak starting jobs a club, about 4 free agents worth signing left at week one, league talent 76.5, 7.8 injury moves and 8.9 in-season releases a club. Football realism, 16 seasons: 3 stats clearly off (was 4), the same known ones: best and worst quarterback completion rates, and catch rate for high-volume receivers. The most catches by a back sits at the top of the real range (90).
+
+## 35. Back usage follows the playbook, and an engine reconciliation
+
+**Back usage** is one lean, set by the offensive system (how much it rides its lead back). It decides how many series the next back gets (18% to 58%), and how readily the lead back is swapped out on passing downs and short yardage. A workhorse system keeps him in unless the other man is far better at it; a committee system swaps freely. A series that belongs to the next back stays his on passing downs. On your own chart, the series share and whether you list a passing-down or short-yardage back say the same thing.
+
+**Every play and every box score in a season was checked against itself** (about 35,600 plays, 272 games). Found and fixed:
+- *A phantom touchdown.* A defensive penalty at the one-yard line moved the ball onto the goal line, and the next snap scored whatever happened, credited to nobody. Penalties can no longer put the ball on either goal line.
+- *Defenders playing offense.* When a club ran out of tight ends in a heavy set, the next body could be a defensive tackle (about 100 plays a season), and now and then a lineman at nose tackle. Each side's depth is now its own players: the extra tight end is a lineman.
+- *Return touchdowns* were on the scoreboard but not on the returner's stat line.
+- *A muffed punt lost* was a turnover with no recovery credited.
+- *Raw yardage ran past the goal line* (a 141-yard completion existed internally). It is capped where the play is resolved, so the box score, the charting and the grades all see the same number.
+- *Targets.* 6.9% of attempts were charged to no receiver (real: about 3 to 4%). Under pressure the ball is now usually thrown at somebody and charged to him, and a pass batted at the line keeps its intended receiver. Now 3.9%. Neither counts against the receiver's grade or the coverage man's numbers.
+
+Now exact: passing against receiving (yards, completions, touchdowns), interceptions thrown against caught, sacks taken against credited, team totals against player totals, turnovers against takeaways, the scoring summary against touchdowns, field goals and extra points, eleven legal men a side on every snap, and both clubs' snap totals. Snaps exceed counted plays by about two a game by definition (plays wiped out by penalty, kneel-downs, spikes).
+
