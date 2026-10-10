@@ -21,17 +21,17 @@ const TUNE = {
   chipBonus: 7,
   pickupMiss: 0.13,    // blitz/sim pickup failure for an average protection
   stuntMiss: 0.22,
-  runWin: -0.2,        // logit: front defender beats his run block (average vs average)
+  runWin: -0.28,        // logit: front defender beats his run block (average vs average)
   runScale: 0.12,
   comboBonus: 16,
   // coverage / passing
   openBase: -0.6,
-  accScale: 0.06,      // how much ball placement decides whether a throw is catchable
+  accScale: 0.048,      // how much ball placement decides whether a throw is catchable
   wrBlock: 12,         // receivers give up this many points to the corner they are blocking (they are not linemen)
   size: 1,             // master dial for every height and weight effect (0 switches them off)
   sizeFat: 0.02,       // extra fatigue per standard deviation of weight
   batBase: 0.017,      // chance a throw is batted at the line
-  helpShort: 0.58, helpDeep: 0.25, // how often a second defender is close enough to clean up a missed tackle after the catch
+  helpShort: 0.8, helpDeep: 0.12, // how often a second defender is close enough to clean up a missed tackle after the catch
   carrierW: 0.68,      // how much the runner's own skill moves a tackle attempt
   recWeight: 0.78,     // how much the receiver's own skill moves the window
   lbCover: 0.18,       // linebackers own zones that are open by design: their coverage skill moves the window less than a defensive back's
@@ -39,19 +39,24 @@ const TUNE = {
   covWeight: 1.5,      // a defender's coverage skill counts this much more than the receiver's route skill
   holeBonus: 0.9,
   readTime: 0.52,
-  catchBase: 2.08,
+  catchBase: 2.05,
   shade: 0.4, // how hard defenses roll coverage toward the best receiver
   dropBase: 0.041,
-  intBase: 0.0092,
+  intBase: 0.0086,
   // tackling
-  tackleBase: 2.12,
+  tackleBase: 2.3,
   tackleScale: 0.03,
-  runAfter: 1.0,        // yards a back typically adds after first contact
+  runAfter: 0.8,        // yards a back typically adds after first contact
   carryLoad: 3.8,      // how much more a carry tires a back than an ordinary snap
   pocketOpen: 1.2,
   shortOpen: 0.48,     // defenses give up the underneath
-  deepCov: -0.95,      // deep routes start covered: they need time (or a beaten defender) to come open
-  midCov: -0.75,     // separation a receiver gains per second the QB can hold the ball in a clean pocket
+  deepStride: 1.65,       // a deep ball caught in stride: how much harder the trailing defender's tackle is
+  redZone: 1.25,        // how much tighter the windows get inside the 20
+  goalStand: 1,        // how much harder a run is to finish with no field behind the defense
+  safetyRun: -1.9,     // a safety coming down on a back who has cleared the second level: negative makes the tackle harder
+  deepCatch: 2.3,     // how much harder a ball thrown 20+ yards is to put on a receiver
+  deepCov: -0.5,      // deep routes start covered: they need time (or a beaten defender) to come open
+  midCov: -0.88,     // separation a receiver gains per second the QB can hold the ball in a clean pocket
   paBite: -0.8,        // logit: how readily second-level defenders bite on play-action
   paOpen: 0.22,        // separation gained downfield when they do
   screenLead: 4,       // yards the screen's convoy buys before the first tackler arrives
@@ -125,6 +130,10 @@ const REST_P = { X: 0.075, Z: 0.075, SLOT: 0.04, Y: 0.14 };
 const ROT_GAP = { DL: 0.5, WR: 0.55, TE: 0.5 }; // receivers and tight ends get series off too
 
 const GROUP_GUARD = { OL: 40, QB: 60 };
+// The deep ball. How often it is called and how readily it is thrown follow the quarterback's arm: a coordinator with a big,
+// accurate deep thrower calls more shots, and that quarterback lets it go to a man who is only a step open.
+const DEEP = { base: 0.12, perPt: 0.03, lo: -0.5, hi: 0.6, mid: 0.3, shot: 0.45, shotArm: 0.8, call: 0.02, callLo: 0.45, callHi: 1.5, ref: 70 };
+function deepArm(p, g) { if (!p || !p.a) return DEEP.ref; return g ? (ea(g, { p }, 'arm') + ea(g, { p }, 'dacc')) / 2 : ((p.a.arm || 60) + (p.a.dacc || 60)) / 2; }
 // ---------- team game state ----------
 function slotRating(p, spot) {
   if (!p.a) return p.ovr || 40;

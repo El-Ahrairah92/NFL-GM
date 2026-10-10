@@ -152,11 +152,11 @@ function resolveRun(g, off, def, oc, dc) {
   }
   // deep help: safeties
   const deepS = def.filter(e => (e.slot === 'FS' || e.slot === 'SS') && !blk.some(b => b.e === e));
-  for (const s of deepS) levels.push({ e: s, at: randInt(7, 12), bonus: -1.1 });
+  for (const s of deepS) levels.push({ e: s, at: randInt(7, 12), bonus: TUNE.safetyRun });
   levels.sort((a, b) => a.at - b.at);
   if (trickHit === 'read') levels.unshift({ e: def.filter(e => e.depth === 0)[0], at: -randInt(3, 7) });
   const pursuit = def.filter(e => e.slot === 'CB' || e.slot === 'FS' || e.slot === 'SS' || e.slot === 'NCB');
-  const r = runToContact(g, carrier, levels, { pursuit, fumbleMult: carrierSlot === 'QB' ? 1.2 : 1, afterBase: carrierSlot === 'QB' ? 1.6 : TUNE.runAfter + (oc.type === 'JET' ? 2.4 : 0), tackleBonus: 0.14 + (g.down >= 3 && g.togo <= 2 ? 0.45 : 0) + (100 - g.ydl <= 3 ? 0.5 : 100 - g.ydl <= 8 ? 0.2 : 0) }); // no room behind the defense at the goal line
+  const r = runToContact(g, carrier, levels, { pursuit, fumbleMult: carrierSlot === 'QB' ? 1.2 : 1, afterBase: carrierSlot === 'QB' ? 1.6 : TUNE.runAfter + (oc.type === 'JET' ? 2.4 : 0), tackleBonus: 0.14 + (g.down >= 3 && g.togo <= 2 ? 0.45 : 0) + (100 - g.ydl <= 3 ? 0.5 : 100 - g.ydl <= 8 ? 0.2 : 0) * TUNE.goalStand }); // no room behind the defense at the goal line
   res.yds = r.yds; res.tackler = r.tackler; res.assist = r.assist; res.fumble = res.fumble || r.fumble; res.breakaway = r.breakaway;
   res.tfl = res.yds < 0;
   res.blk = blk; res.ybc = r.contactAt !== undefined ? Math.min(r.contactAt, r.yds) : r.yds; res.missed = r.missed;
@@ -386,7 +386,7 @@ function resolvePass(g, off, def, oc, dc) {
     if (oc.optrt && r.band !== 'D') w += 0.25 * clamp((ea(g, qb, 'proc') + rte - 130) / 40, -0.6, 1); // right when both read it right, wrong when they do not
     // the field shrinks near the goal line: no room behind the defense, tighter windows
     const toGoal = 100 - g.ydl;
-    if (toGoal <= 20) w -= toGoal <= 10 ? 0.65 : 0.3;
+    if (toGoal <= 20) w -= (toGoal <= 10 ? 0.65 : 0.3) * TUNE.redZone;
     w += (r.band === 'S' ? TUNE.shortOpen : r.band === 'D' ? TUNE.deepCov : TUNE.midCov) + (r.role === 3 ? (e.slot === 'RB' || e.slot === 'FB' ? 0.05 : 0.3) : 0); // defenses give up the underneath (checkdowns most of all), protect deep
     if (e.slot === 'Y' || e.slot === 'H') w += 0.13; // tight ends work the seams and the soft middle
     if (dc.soft) w += r.band === 'S' ? 0.35 : r.band === 'D' ? -0.35 : 0.12; // prevent: everything underneath is there
@@ -408,6 +408,10 @@ function resolvePass(g, off, def, oc, dc) {
   const readNoise = clamp(0.44 - (dec - 50) * 0.006, 0.12, 0.6);
   for (const r of rlist) r.pw = r.w + gauss(0, readNoise) + (r.e === star ? 0.12 : 0); // he looks for his best receiver, covered or not
   const thr = 0.38;
+  const trust = DEEP.base + clamp(((ea(g, qb, 'arm') + ea(g, qb, 'dacc')) / 2 - DEEP.ref) * DEEP.perPt, DEEP.lo, DEEP.hi); // how small a window he will throw the deep ball into
+  // a shot play starts with the shot: on a deep call (and now and then off play-action) he looks downfield first, the more so the more he trusts his arm
+  { const pShot = oc.type === 'DEEP' || oc.type === 'GADGET' ? clamp(DEEP.shot + trust * DEEP.shotArm, 0.15, 0.95) : oc.type === 'DROP' && pa ? clamp(DEEP.shot + trust * DEEP.shotArm, 0.15, 0.95) * 0.4 : 0;
+    if (pShot && !oc.rpoThrow && rand() < pShot) { const shot = order.filter(r => r.band === 'D').sort((x, y) => y.pw - x.pw)[0]; if (shot && order[0] !== shot) order = [shot, ...order.filter(x => x !== shot)]; } }
   let t = drop, choice = null, pressured = false, escaped = false, hurry = false;
   const passDownSticks = g.down >= 3 ? g.togo : 0;
   for (let i = 0; i < order.length; i++) {
@@ -422,7 +426,7 @@ function resolvePass(g, off, def, oc, dc) {
       if (rand() < esc) { escaped = true; tPress = t + 0.8 + rand() * 0.6; }
       else break;
     }
-    const need = r.role === 3 || i === order.length - 1 ? (r.e.slot === 'RB' || r.e.slot === 'FB' ? -0.2 : -0.45) : thr + (r.band === 'D' ? 0.2 : r.band === 'I' ? 0.1 : 0) - (r.depth < passDownSticks ? -0.35 : 0);
+    const need = r.role === 3 || i === order.length - 1 ? (r.e.slot === 'RB' || r.e.slot === 'FB' ? -0.2 : -0.45) : thr + (r.band === 'D' ? 0.2 - trust : r.band === 'I' ? 0.1 - trust * DEEP.mid : 0) - (r.depth < passDownSticks ? -0.35 : 0);
     // a clean pocket buys time for downfield routes to come open: he can hold on an intermediate or deep route
     // for as long as the protection lets him. This is what a good line is for.
     const margin = escaped ? 0 : tPress - t;
@@ -488,7 +492,7 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
   if (hurry) acc -= 13 - ea(g, qb, 'pkt') * 0.08 - (arm - 70) * 0.12 + (res.rushers && res.rushers[0] && Math.abs(res.rushers[0].e.x) < 2 && !res.rushers[0].e.blitz ? 3 + (ea(g, res.rushers[0].e, 'prsh') - 70) * 0.15 : 0); // a big arm can still drive it off his back foot
   const yardsToGoal = 100 - g.ydl;
   const airY = Math.min(air, yardsToGoal);
-  const pCatchable = lgt(TUNE.catchBase + 0.2 + r.w * 0.95 + soft(acc - 72, 16) * TUNE.accScale - (air >= 20 ? 1.15 : air >= 10 ? 1.32 : air <= 2 ? -0.95 : 0) + (air >= 15 ? (arm - 70) * 0.01 : 0) + (r.w < 0.4 && air >= 5 ? (arm - 70) * 0.008 : 0) + (ea(g, e, 'hnd') - 70) * 0.022 + (r.role === 3 && air <= 5 ? 0.55 : 0) + (e.slot === 'RB' ? 0.55 : 0) - (yardsToGoal <= 5 ? 0.3 : yardsToGoal <= 12 ? 0.2 : 0));
+  const pCatchable = lgt(TUNE.catchBase + 0.2 + r.w * 0.95 + soft(acc - 72, 16) * TUNE.accScale - (air >= 20 ? TUNE.deepCatch : air >= 10 ? 1.32 : air <= 2 ? -0.95 : 0) + (air >= 15 ? (arm - 70) * 0.01 : 0) + (r.w < 0.4 && air >= 5 ? (arm - 70) * 0.008 : 0) + (ea(g, e, 'hnd') - 70) * 0.022 + (r.role === 3 && air <= 5 ? 0.55 : 0) + (e.slot === 'RB' ? 0.55 : 0) - (yardsToGoal <= 5 ? 0.3 : yardsToGoal <= 12 ? 0.2 : 0));
   res.target = e; res.air = airY; res.def = defE; res.hurry = hurry; res.route = r;
   // batted at the line: tall, long linemen with their hands up, and a short quarterback throwing through them
   if (!onRun && air < 20 && TUNE.size) {
@@ -526,7 +530,7 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
     const cushion = Math.max(0, r.w) * 2.0 + (r.band === 'S' ? 1.0 : 0.3);
     const rest = def.filter(x => x !== defE && !x.blitz && x.depth > 0);
     const levels = [];
-    if (defE) levels.push({ e: defE, at: airY + Math.max(0, gauss(cushion + (e.slot === 'RB' ? 2.2 : 0), 1.2)), bonus: r.w > 1 ? -0.3 : 0.2 });
+    if (defE) levels.push({ e: defE, at: airY + Math.max(0, gauss(cushion + (e.slot === 'RB' ? 2.2 : 0), 1.2)), bonus: (r.w > 1 ? -0.3 : 0.2) - (airY >= 20 ? TUNE.deepStride : 0) });
     const n2 = nearestDef(rest.filter(x => x.slot === 'FS' || x.slot === 'SS' || x.slot.indexOf('LB') >= 0 || x.slot === 'MLB' || x.slot === 'WLB'), r.endX);
     if (n2 && rand() < (airY >= 15 ? TUNE.helpDeep : TUNE.helpShort)) levels.push({ e: n2, at: airY + randInt(3, 8) }); // sometimes it is one-on-one in space
     const rr = runToContact(g, e, levels, { start: airY, missGain: 6.5, pursuit: rest.filter(x => x.slot === 'CB' || x.slot === 'FS' || x.slot === 'SS') });

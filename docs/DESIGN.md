@@ -646,3 +646,17 @@ Now exact: passing against receiving (yards, completions, touchdowns), intercept
 
 Clean: downs, distance, clock and score never impossible; eleven men from the right club on each side; no injured, practice squad or wrong-club players in a game; season totals equal the box scores; every club plays 17; points for equal points against; every player ages one year; draft picks unique; no player on two rosters; every club under the cap with a quarterback, kicker and punter at week one.
 
+## 36. The deep ball and the explosive-play retune
+
+**The arm decides.** A coordinator calls more shots for a quarterback with a big, accurate deep arm (0.45 to 1.5 times the system's rate). On a shot play that quarterback looks downfield first, and the more he trusts his arm the tighter the window he will throw into. A weak arm calls fewer and forces fewer.
+
+**Why that was not enough.** Deep routes almost never came open (about 6% of them were close), so willingness had nothing to act on. The fix was a joint retune of the passing and running balance, searched against the realism audit:
+- deep routes start less covered, and a deep ball is harder to put on a receiver (more attempts at a real completion rate)
+- a deep ball caught in stride is hard for the trailing defender to bring down, and a safety coming down on a back who has cleared the second level misses more (the long plays)
+- tackling is surer everywhere else, a second defender is closer after short catches, intermediate windows are a little tighter and the base catch a little harder (the cost: fewer methodical drives)
+- windows are tighter inside the 20, accuracy counts a little less, and interceptions are a little rarer per throw
+
+**Result, 32 seasons before and after.** Throws 20+ yards downfield: 6% of attempts to 10%, completed at 38%; big arms 12.8%, weak arms 9.5%. Completions of 40+ yards a team-game: 0.32 to 0.49. Runs of 20+: 0.43 to 0.75. Interceptions 0.68 to 0.77, first downs 22.0 to 21.5, points 23.6 to 23.4, yards per attempt 7.24 to 7.15, completion rate 64.9 to 63.8, rushing leader 1,463 to 1,618, best completion rate 74.7 to 72.4, catch rate for high-volume receivers 66.2 to 64.0. All of those are now inside the real range except the best completion rate, which is just outside.
+
+**What it cost.** The tails got worse: the top deep threat averages 24.6 yards a catch, interceptions pile up on a few defenders and on the worst quarterbacks, and the best offense scores more. League averages improved; who the plays go to did not.
+

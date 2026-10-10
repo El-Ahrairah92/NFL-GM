@@ -117,7 +117,8 @@ function offenseCall(g) {
   } else {
     const fd = defFilm(g.tids[d]), blitzy = fd.n > 20 ? fd.blitz / fd.n : 0.25, manny = fd.n > 20 ? fd.man / fd.n : 0.35;
     const quick = ot.quick, deep = ot.deep;
-    const w = { QUICK: quick * tilt('QUICK'), DROP: Math.max(0.1, 1 - quick - deep) * tilt('DROP'), DEEP: deep * tilt('DEEP'),
+    const armF = clamp(1 + (deepArm(qb) - DEEP.ref) * DEEP.call, DEEP.callLo, DEEP.callHi); // shots are called for the man who can make them
+    const w = { QUICK: quick * tilt('QUICK'), DROP: Math.max(0.1, 1 - quick - deep) * tilt('DROP'), DEEP: deep * tilt('DEEP') * armF,
       RBSCR: ot.screen * 0.5 * tilt('RBSCR'), WRSCR: ot.screen * 0.5 * tilt('WRSCR'), GADGET: ot.trick * 0.06 };
     if (sit.b === 'D3L') { w.DEEP *= 1.2; w.DROP *= 1.35; w.QUICK *= 0.55; }
     if (sit.b === 'D3S' || sit.b === 'D2S') { w.QUICK *= 1.8; w.DEEP *= 0.7; }
