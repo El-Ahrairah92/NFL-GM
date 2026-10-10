@@ -16,13 +16,13 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 
 ## Fronts and the trenches (agreed order)
 
-Done: the line of scrimmage is geometry and a front is data (DESIGN section 41). Each side has a move at the line, defenses that repeat themselves are punished, inside and outside runs are balanced (section 42). The pocket: stepping up, interior push, flushes (section 43).
+Done: the line of scrimmage is geometry and a front is data (DESIGN section 41). Each side has a move at the line, defenses that repeat themselves are punished, inside and outside runs are balanced (section 42). The pocket: stepping up, interior push, flushes (section 43). Where the ball is thrown (section 44). Coaches carry their own looks, line games and walked-up linebackers (section 45).
 
-1. **Coach front libraries.** Each defensive coach generates his own fronts, shifts, slants and stunts from his scheme and traits. Generated fronts have to be sound (every gap owned). Record each game's defensive tendencies into season film so opponents prepare for them.
+1. **Season film.** Record each game's defensive tendencies (looks, slants, pressure) so opponents prepare for a coach's habits before kickoff.
 2. **Pressure packages and the offense's answers.** Disguised and overload pressures; protection calls as a choice the offense makes. Offensive coaches get the same depth.
 3. **Playbook page, scouting text, roster valuation by technique.**
 
-Left open by the pre-snap work: the run flip is nearly worthless against ordinary fronts; too many players reach 100 tackles (back-seven starters never leave the field); runs of 10+ a little common (14%); completions of 20+ yards still short (2.4 a team-game): the gap is in the clean pocket (8.6 throws in 100 gain 20+), not on broken plays.
+Left open by the pre-snap work: the run flip is nearly worthless against ordinary fronts; too many players reach 100 tackles (back-seven starters never leave the field); runs of 10+ a little common (14%); throws behind the line are half the real share (7.7%).
 
 After the trench work: re-measure attribute values and refit rating weights.
 
@@ -82,7 +82,6 @@ After the trench work: re-measure attribute values and refit rating weights.
 - **Success rate is high** (50.5%, real 43 to 45%) and expected points per play average +0.03 instead of zero.
 
 - Two tails are still a little outside the real range after the distribution work: the top deep threat averages 20.5 yards a catch (real 16.5 to 19) and 11.5 defenders a season get 5+ interceptions (real 5 to 10). The most-intercepted quarterback throws 21.7 (real 14 to 18).
-- Completions of 20+ yards are still short (2.6 a team-game, real 3.0 to 3.6) even though 40+ is now right: the 20 to 39 yard gain is what is missing.
 - Rushing leader a bit low (about 1,475, real 1,550 to 1,950) and 300-carry backs rare (0.75 a season, real 1 to 4), even with back usage following the playbook.
 - A safety is credited to nobody, and two-point conversions are not on anyone's stat line.
 - Kick return yards are really the yard line the return reached, not yards gained from the catch.

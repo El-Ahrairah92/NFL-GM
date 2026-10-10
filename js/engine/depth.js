@@ -14,7 +14,7 @@ const TUNE = {
   teamForm: 0.4,       // sd of team game-day form
   fatFree: 3.0,        // fatigue tolerated before it costs anything
   // trenches
-  passProMedian: 4.26,  // seconds for an average rusher to beat an average blocker 1v1
+  passProMedian: 4.36,  // seconds for an average rusher to beat an average blocker 1v1
   rushScale: 0.029,
   insideRush: 1.1,     // interior rushers take longer to get home than edges (crowded path, more double teams)    // how strongly the rush/block gap moves win time
   preKnow: 0,          // 1: the pre-snap read knows which receiver will come open, luck included; 0: it knows the matchup only
@@ -49,6 +49,7 @@ const TUNE = {
   rotDepth: 1,          // yards deeper the safety rotated into the box meets a run than the old four
   thinCover: 0.07,         // how much more open every receiver is for each rusher beyond four (and less open for each man dropped beyond seven)
   oneHigh: 0.12,           // how much more open anything past the sticks is against man coverage with one deep safety
+  holeNear: 1.1,        // the same for a run between the tackles
   edgeNear: 0.9,        // on an outside run, how close to the hole a first-level man has to be to make the play without penetrating
   stepUp: 0.25,         // seconds an average quarterback buys by stepping up from edge pressure when the middle is holding
   pocketGap: 0.5,       // the middle is holding if no interior rusher is within this of the edge man
@@ -58,6 +59,11 @@ const TUNE = {
   scrBuy: 0.45,         // how much an average quarterback creates once he has slipped the rush (his speed and agility move it)
   scrShort: 0.3,        // how much less open the short outlets are once defenders come up at a scrambling quarterback
   scrOpen: 0.5,         // how much that opens receivers who break off their routes
+  mugHold: 0.7,         // how often a lineman with a linebacker standing in front of him is too late to double someone else
+  slantWash: 6,         // run-block points against a man who slanted away from the play
+  noContain: 0.55,      // how much less often the corner turns an outside run back when the beaten edge man was lined up inside the play
+  tightEsc: 0.3,        // how much easier the quarterback gets out when no rusher is lined up wide of the tackles
+  mugLate: 0.15,        // how much more open a route is when the man covering it started walked up in a gap
   levRun: 5,            // run-block points for a blocker who starts a full step between his man and the play (and against one who has to cross his face)
   kickOut: 4,           // what a puller or lead back gives up kicking out a man set in the hole
   twoGapPen: 0.7,       // a man head-up on his blocker holds two gaps: he gets into the backfield this much as often
@@ -67,6 +73,7 @@ const TUNE = {
   deepPath: 0.02,       // seconds added per yard a blocked rusher starts off the ball
   offBall: 4,           // run-block points against a man who meets his blocker coming from off the line
   headUp: 3,            // pass-rush points an interior man gives up playing head-up on a blocker
+  shadeRush: 3, tightRush: 2, // and shaded inside the guard, and lined up tight on the tackle
   slantHit: 0.3,        // chance a slant crosses an average blocker's face cleanly
   slantWin: 9, slantLose: 4, // pass-rush points when it does, and when he runs himself into the block
   // coverage / passing
@@ -96,8 +103,8 @@ const TUNE = {
   runAfter: 0.3,        // yards a back typically adds after first contact
   carryLoad: 3.8,      // how much more a carry tires a back than an ordinary snap
   pocketOpen: 1.2,
-  shortOpen: 0.48,     // defenses give up the underneath
-  deepStride: 1.5,       // a deep ball caught in stride: how much harder the trailing defender's tackle is
+  shortOpen: 0.3,     // defenses give up the underneath
+  deepStride: 1.3,       // a deep ball caught in stride: how much harder the trailing defender's tackle is
   routeMix: 0.75,       // how often the wide receivers trade routes on a call, so the deep route is not always the same man's
   deepSpeed: 0.27,     // how much of getting open deep is pure speed (the rest is route craft)
   intHelp: 0.45,        // share of interceptions made by a help defender (the safety over the top, the man sitting underneath)
@@ -107,8 +114,13 @@ const TUNE = {
   goalStand: 1,        // how much harder a run is to finish with no field behind the defense
   safetyRun: -1.6,     // a safety coming down on a back who has cleared the second level: negative makes the tackle harder
   deepCatch: 2.3,     // how much harder a ball thrown 20+ yards is to put on a receiver
+  shortCatch: 0.45,      // how much easier a ball thrown 3 to 9 yards is to complete
+  shortTight: 1.25,      // yards closer the defender is when a short ball is caught: completed more easily, tackled sooner
+  teOpen: 0.12,       // tight ends work the seams and the middle against linebackers and safeties: how much more open that leaves them
+  rbSpace: 3.6,       // extra yards of room a back has when he catches it: nobody is covering him tight
+  midCatch: 0.95,     // how much harder a ball thrown 10 to 19 yards is to complete than a short one
   deepCov: -0.3,      // deep routes start covered: they need time (or a beaten defender) to come open
-  midCov: -0.8,     // separation a receiver gains per second the QB can hold the ball in a clean pocket
+  midCov: -0.38,     // separation a receiver gains per second the QB can hold the ball in a clean pocket
   paBite: -0.8,        // logit: how readily second-level defenders bite on play-action
   paOpen: 0.22,        // separation gained downfield when they do
   screenLead: 4,       // yards the screen's convoy buys before the first tackler arrives
@@ -168,8 +180,21 @@ const LINES = {
 };
 // The eleven for a front and package, as [name, job, x, depth]. A front can also be handed in whole as { rows: [...] }:
 // any number of men on the line in any technique, anyone else anywhere behind them.
-function packageLayout(front, pkg) {
+function packageLayout(front, pkg, look) {
   if (front && front.rows) return frontRows(front.rows);
+  return lookRows(packageLayout0(front, pkg), look);
+}
+// a coach's look moves linemen to his techniques; walking the linebackers up puts them over the guards' inside gaps, a step off the ball
+function lookRows(rows, look) {
+  if (!look) return rows;
+  return rows.map(r => {
+    const t = look.t && look.t[r[0]];
+    if (t && r[3] === 0) return [r[0], r[1], techX(t[0], t.slice(1)), 0];
+    if (look.mug && (r[0] === 'MLB' || r[0] === 'WLB') && r[3] >= 4) return [r[0], r[1], r[0] === 'MLB' ? 0.55 : -0.55, 1.5];
+    return r;
+  });
+}
+function packageLayout0(front, pkg) {
   const DB2 = [['CB1', 'CB', -4, 7], ['CB2', 'CB', 4, 7], ['FS', 'FS', -0.5, 13], ['SS', 'SS', 1.5, 9]];
   const odd = front === '3-4' || front === 'Tite';
   if (pkg === 'GL') return frontRows([...LINES.GL, ['WLB', 'WLB', -1.6, 3], ['MLB', 'MLB', 0, 3], ['SAM', 'SAM', 2.4, 3], ['CB1', 'CB', -4, 5], ['CB2', 'CB', 4, 5], ['SS', 'SS', 1, 6]]);
@@ -349,8 +374,8 @@ function pkgRoleBias(p, slot, pkg) {
   return pkg === 'NICKEL' || pkg === 'DIME' ? (cov - run) * 0.3 : (run - cov) * 0.18;
 }
 // Defensive eleven for a package; sub-rush puts the best four pass rushers on the line
-function defUnit(g, s, front, pkg, subRush, bign) {
-  let layout = packageLayout(front, pkg);
+function defUnit(g, s, front, pkg, subRush, bign, look) {
+  let layout = packageLayout(front, pkg, look);
   if (bign) layout = layout.map(l => l[0] === 'NCB' ? ['NCB', 'BIGN', l[2], l[3]] : l);
   const fix = u => { for (const e of u) if (e.slot === 'BIGN') e.slot = 'NCB'; return u; }; // he plays the nickel's job
   // coaches keep players in their own rooms: a safety is not a linebacker just because he grades out close

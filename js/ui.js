@@ -868,10 +868,10 @@ function lineupFor(tid, pers) {
   initSide(g, 0);
   return offUnit(g, 0, pers, null);
 }
-function defLineup(tid, pkg) {
+function defLineup(tid, pkg, look) {
   const g = { tids: [tid, tid], side: [null, null], ps: {}, famPen: [0, 0], down: 1, togo: 10, ydl: 30 };
   initSide(g, 0);
-  return defUnit(g, 0, defTend(T(tid)).front, pkg, false);
+  return defUnit(g, 0, defTend(T(tid)).front, pkg, false, false, look);
 }
 function lineupHTML(units) {
   return units.map(e => `<span class="pill" title="${esc(SPOTS[e.spot] ? SPOTS[e.spot].l : e.spot)}"><b>${e.name}</b> ${e.p.a ? esc(pshort(e.p)) : 'Emergency'}${e.pen >= 3 ? ' <span class="warn">·' + comfortLabel(comfortOf(e.p, e.spot)) + '</span>' : ''}</span>`).join(' ');
@@ -904,9 +904,59 @@ function formationSVG(pts, side) {
     const px = clamp(cx + x * sx, 26, W - 26), py = off ? los + d * sy + 2 : los - Math.max(0.4, d) * sy - 2;
     const warn = e.p.a && e.pen >= 3;
     g += `<g ${e.p.a ? `data-action="player" data-pid="${e.p.id}"` : ''} class="dot ${off ? 'o' : 'd'} ${warn ? 'warn' : ''}"><title>${esc(e.p.a ? pname(e.p) + ' — ' + e.p.lbl + (warn ? ' (' + comfortLabel(comfortOf(e.p, e.spot)) + ' at ' + SPOTS[e.spot].l + ')' : '') : 'Emergency')}</title>
-      <circle cx="${px}" cy="${py}" r="19"/><text x="${px}" y="${py + 5}" class="sl">${e.name.replace(/[0-9]$/, '')}</text><text x="${px}" y="${py + (off ? 37 : -26)}" class="nm">${esc(e.p.a ? e.p.last : 'Sub')}</text></g>`;
+      <circle cx="${px}" cy="${py}" r="19"/><text x="${px}" y="${py + 5}" class="sl">${e.name.replace(/[0-9]$/, '')}</text><text x="${px}" y="${py + (off ? 37 : -26)}" class="nm">${esc(e.p.a ? e.p.last : 'Sub')}</text>${!off && d === 0 ? `<text x="${px}" y="${py + 33}" class="tq">${techOf(x)}</text>` : ''}</g>`;
   }
   return g + '</svg>';
+}
+// ---------- the play caller's fronts: one small diagram for every look he carries ----------
+const LOOK_NOTE = {
+  'Over': 'Tackle outside the strong guard, nose shaded weak. Balanced.',
+  'Weak shade': 'The line slides toward the weak side. Built to stop the run.',
+  'G': 'A tackle moves inside the guard to close the middle. Built to stop the run.',
+  'Wide': 'Ends line up wide of everyone for a running start at the passer. Softer against the run.',
+  'Double 3': 'Both tackles outside the guards: quick inside rush, linebackers own the middle.',
+  'Okie': 'Nose on the center, ends on the tackles, outside linebackers on the edges. Balanced.',
+  'Tite': 'Ends squeeze inside the tackles to choke inside runs; the edges belong to the outside linebackers.',
+  'Eagle': 'Nose shades the center and one end slides inside: a pass-rush look.',
+  'Heavy': 'Ends head-up on the tackles, each holding two gaps. Built to stop the run.',
+  'Even': 'Two tackles outside the guards, two ends outside the tackles. Balanced.',
+  'Tilt': 'One tackle shades the center. Firmer inside, a little less rush.',
+  'Pinch': 'Both tackles inside the guards and the ends tight. Stops the inside run; gives up rush and the edge.',
+};
+function lookFamily(front, pkg) { return pkg === 'BASE' ? (front === '3-4' || front === 'Tite' ? 'odd' : 'even') : 'sub'; }
+// the looks this caller carries for a package, home look first: [[name, share]]
+function looksFor(tid, pkg) {
+  const dt = defTend(T(tid)), lib = dt.pk && dt.pk.lib, fam = lookFamily(dt.front, pkg);
+  if (pkg === 'GL') return { fam, list: [] };
+  const list = lib ? (fam === 'sub' ? lib.sub : lib.fam === fam ? lib.base : null) : null;
+  return { fam, list: (list || [[fam === 'sub' ? 'Even' : LOOK_HOME[dt.front] || 'Over', 1]]).filter(x => LOOKS[fam][x[0]]) };
+}
+function lookSVG(front, pkg, fam, name) {
+  const W = 232, H = 92, cx = W / 2, sx = 26, yo = 62, yd = 34;
+  const rows = lookRows(packageLayout0(front, pkg), { t: LOOKS[fam][name].t }).filter(r => r[3] === 0);
+  let g = `<svg viewBox="0 0 ${W} ${H}" class="look" role="img" aria-label="${esc(name)} alignment">`;
+  for (const [gx, l] of [[0.5, 'A'], [1.5, 'B'], [2.5, 'C']]) for (const s of [-1, 1]) g += `<text x="${cx + s * gx * sx}" y="${H - 4}" class="gap">${l}</text>`;
+  for (let i = -2; i <= 2; i++) g += `<rect x="${cx + i * sx - 8}" y="${yo - 8}" width="16" height="16" rx="3" class="ol${i === 0 ? ' c' : ''}"/>`;
+  g += `<circle cx="${cx + 2.9 * sx}" cy="${yo}" r="8" class="te"/><text x="${cx + 2.9 * sx}" y="${yo + 3.5}" class="tel">TE</text>`;
+  for (const r of rows) { const x = cx + r[2] * sx;
+    g += `<circle cx="${x}" cy="${yd}" r="11" class="dl"/><text x="${x}" y="${yd + 3.5}" class="tech">${techOf(r[2])}</text><text x="${x}" y="${yd - 15}" class="slot">${esc(r[0].replace(/[0-9]$/, ''))}</text>`; }
+  return g + '</svg>';
+}
+function frontsHTML(tid, pkg, cur) {
+  const t = T(tid), dt = defTend(t), lib = dt.pk && dt.pk.lib, dc = defCaller(t);
+  const group = (title, p) => { const { fam, list } = looksFor(tid, p); if (!list.length) return '';
+    return `<div class="section-title">${title}</div><div class="look-row">${list.map(([k, v], i) => { const L = LOOKS[fam][k], on = cur && cur.fam === fam && cur.k === k;
+      return `<button class="look-tile ${on ? 'sel' : ''}" data-action="pbLook" data-pkg="${p}" data-k="${esc(k)}" title="Show it on the field above with your players"><div class="look-h"><b>${esc(k)}</b><span>${Math.round(v * 100)}%</span></div>${lookSVG(dt.front, p, fam, k)}<div class="look-n">${i === 0 ? '<span class="pill">home look</span> ' : L.k === 'run' ? '<span class="pill">run look</span> ' : L.k === 'rush' ? '<span class="pill">rush look</span> ' : ''}${esc(LOOK_NOTE[k] || '')}</div></button>`; }).join('')}</div>`; };
+  let games = '';
+  if (lib) {
+    const sd = lib.sd || {}, way = [['S', 'to the strength'], ['W', 'away from it'], ['P', 'both tackles pinching']].sort((a, b) => (sd[b[0]] || 0) - (sd[a[0]] || 0));
+    games = `<div class="section-title">Line games</div><div class="small"><b>Slants</b> on about ${Math.round(lib.sl * 100)}% of snaps${lib.sl >= 0.02 ? `, most often ${way[0][1]} (${way.map(w => `${w[1]} ${Math.round((sd[w[0]] || 0) * 100)}%`).join(' · ')})` : ''}.<br>
+      <b>Twists</b> on about ${Math.round((dt.stunt || 0) * 100)}% of rushes: ${lib.tt >= 0.6 ? 'usually the two tackles trading lanes' : lib.tt <= 0.4 ? 'usually a tackle and the end next to him' : 'tackle with tackle and tackle with end about equally'}.<br>
+      <b>Walked-up linebackers</b>: ${lib.mug >= 0.02 ? `about ${Math.round(lib.mug * 100)}% of nickel and dime snaps, more on passing downs. They may come or drop.` : 'almost never.'}</div>`;
+  }
+  return `<div class="card" style="margin-top:16px"><h3>Fronts · ${dc ? esc(cname(dc)) + "'s looks" : 'the looks'}</h3>
+    <div class="small muted" style="margin-bottom:6px">Where each lineman puts his hand down. The number is his technique: 0 on the center, 1 a shade of him; 2i, 2, 3 inside, on and outside the guard; 4i, 4, 5 the same on the tackle; 7, 6, 9 on the tight end's spot; W9 wide of everyone. Letters are the gaps. Run looks come out when a run is expected, rush looks on passing downs. Click one to see it with ${tid === state.userTid ? 'your' : 'their'} players.</div>
+    ${group(esc(dt.front || '') + ' base', 'BASE')}${group('Nickel and dime', 'NICKEL')}${games}</div>`;
 }
 function formationViewerHTML(tid) {
   const ot = offTend(T(tid)), dt = defTend(T(tid));
@@ -916,17 +966,19 @@ function formationViewerHTML(tid) {
   const form = ui.pbForm || 'SG', pkg = ui.pbPkg || 'NICKEL';
   const btn = (act, v, cur, l, dim) => `<button class="sm ${v === cur ? 'primary' : ''}" data-action="${act}" data-v="${v}" ${dim ? 'style="opacity:.6"' : ''}>${l}</button>`;
   const offPts = alignOffense(lineupFor(tid, pers), form);
-  const defPts = defLineup(tid, pkg).map(e => ({ e, x: e.x || 0, d: e.depth || 0 }));
+  // the look on the field: the one clicked below if this package has it, otherwise the caller's home look
+  const lk = looksFor(tid, pkg), lookName = lk.list.some(x => x[0] === ui.pbLook) ? ui.pbLook : lk.list.length ? lk.list[0][0] : null, cur = lookName ? { fam: lk.fam, k: lookName } : null;
+  const defPts = defLineup(tid, pkg, lookName ? { t: LOOKS[lk.fam][lookName].t } : null).map(e => ({ e, x: e.x || 0, d: e.depth || 0 }));
   return `<div class="grid fv-grid" style="margin-top:16px">
     <div class="card"><h3>Offense · ${esc(PERS_LABEL[pers] || pers)} · ${FORM_NAMES.find(f => f[0] === form)[1]}</h3>
       <div class="row" style="gap:4px;margin-bottom:6px">${allPers.map(k => btn('pbPers', k, pers, k, !persUsed.includes(k))).join('')}</div>
       <div class="row" style="gap:4px;margin-bottom:8px">${FORM_NAMES.map(([k, l]) => btn('pbForm', k, form, l)).join('')}</div>
       ${formationSVG(offPts, 'off')}
       <div class="small muted">Dimmed groupings aren't part of this play caller's usual mix. Orange rings: lined up away from a spot he's comfortable at. Click a player for his card.</div></div>
-    <div class="card"><h3>Defense · ${PKG_LABEL[pkg]} · ${esc(dt.front || '')} front</h3>
+    <div class="card"><h3>Defense · ${PKG_LABEL[pkg]} · ${lookName ? esc(lookName) + ' look' : esc(dt.front || '') + ' front'}</h3>
       <div class="row" style="gap:4px;margin-bottom:8px">${['BASE', 'NICKEL', 'DIME', 'GL'].map(k => btn('pbPkg', k, pkg, PKG_LABEL[k])).join('')}</div>
       ${formationSVG(defPts, 'def')}
-      <div class="small muted">Shown from the defense's side: the ball is at the bottom. Edges, tackles and nose line up by the front; corners, nickel and safeties by the package.</div></div></div>`;
+      <div class="small muted">Shown from the defense's side: the ball is at the bottom. Edges, tackles and nose line up by the front; corners, nickel and safeties by the package. The small number under a lineman is his technique.</div></div></div>${frontsHTML(tid, pkg, cur)}`;
 }
 function playbookHTML() {
   const u = state.userTid, nx = userMatchup();
@@ -1748,7 +1800,7 @@ function tendencySummary(c) {
     return `${a} on 4th down · ${ck}${c.t.caller ? ` · <b>calls the ${c.t.caller === 'O' ? 'offense' : 'defense'}</b>` : ''}`;
   }
   if (c.role === 'OC') { ensureOffPk(c); const t = c.t; return `<div style="margin-bottom:6px">${offPkHTML(t)}</div>${pctS(t.pass)} pass · zone ${pctS(t.zone)} · deep ${pctS(t.deep)} · PA ${pctS(t.pa)} · motion ${pctS(t.motion)} · RPO ${pctS(t.rpo)} · QB runs ${pctS(t.qbRun)} · RB1 ${pctS(t.rb1)} of carries`; }
-  if (c.role === 'DC' && c.pk) { const t = c.t; return `${t.front} front · base personnel ${pctS(t.base)}<div style="margin-top:6px"><b>Coverage packages:</b> ${pkList(c.pk.sh, SHELLS)}</div><div style="margin-top:4px"><b>Pressure packages:</b> ${pkList(c.pk.pr, PRESSURES)}</div><div style="margin-top:4px">Stunts ${pctS(c.pk.stunt)}${c.pk.disg ? ` · disguises the coverage ${pctS(c.pk.disg)} of the time` : ' · shows what he is playing'}</div>`; }
+  if (c.role === 'DC' && c.pk) { const t = c.t; return `${t.front} front · base personnel ${pctS(t.base)}<div style="margin-top:6px"><b>Coverage packages:</b> ${pkList(c.pk.sh, SHELLS)}</div><div style="margin-top:4px"><b>Pressure packages:</b> ${pkList(c.pk.pr, PRESSURES)}</div><div style="margin-top:4px">Stunts ${pctS(c.pk.stunt)}${c.pk.disg ? ` · disguises the coverage ${pctS(c.pk.disg)} of the time` : ' · shows what he is playing'}</div>${c.pk.lib ? `<div style="margin-top:4px"><b>Fronts:</b> ${c.pk.lib.base.map(x => `${esc(x[0])} ${Math.round(x[1] * 100)}%`).join(' · ')} in base; ${c.pk.lib.sub.map(x => `${esc(x[0])} ${Math.round(x[1] * 100)}%`).join(' · ')} in nickel and dime</div><div style="margin-top:4px">Line slants ${pctS(c.pk.lib.sl)}${c.pk.lib.mug >= 0.02 ? ` · walks linebackers up ${pctS(c.pk.lib.mug)}` : ''}</div>` : ''}`; }
   if (c.role === 'DC') { const t = c.t; return `${t.front} front · man ${pctS(t.man)} · two-high ${pctS(t.high)} · blitz ${pctS(t.blitz)} · sim pressure ${pctS(t.sim)} · stunts ${pctS(t.stunt)} · base pkg ${pctS(t.base)}`; }
   return '';
 }
@@ -2897,6 +2949,7 @@ const actions = {
   pbPers: d => { ui.pbPers = d.v; ui.pbPkg = { '10': 'DIME', '11': 'NICKEL', '12': 'BASE', '13': 'BASE', '21': 'BASE', '22': 'BASE', JUMBO: 'GL' }[d.v] || ui.pbPkg; render(); },
   pbForm: d => { ui.pbForm = d.v; render(); },
   pbPkg: d => { ui.pbPkg = d.v; render(); },
+  pbLook: d => { ui.pbLook = d.k; if (d.pkg === 'BASE') ui.pbPkg = 'BASE'; else if (ui.pbPkg !== 'NICKEL' && ui.pbPkg !== 'DIME') ui.pbPkg = 'NICKEL'; render(); },
   dchPick: d => { ui.dchKey = d.key; render(); },
   dchView: d => { (ui.dchView = ui.dchView || {})[ui.dchTab || 'off'] = d.v; render(); },
   dchCopy: d => { const from = document.getElementById('dchCopyFrom'); if (from) { copyView(state.userTid, ui.dchTab || 'off', from.value, d.to); save(); render(); } },

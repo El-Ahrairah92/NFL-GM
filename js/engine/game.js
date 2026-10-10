@@ -210,7 +210,7 @@ function shareTackle(res, def) {
 function runPlay(g, oc, dc) {
   const o = g.poss, d = 1 - o;
   g.pbNeed = [0, 0]; g.pbNeed[o] = offNeed(oc); g.pbNeed[d] = defNeed(dc);
-  const off = offUnit(g, o, oc.pers, oc), def = defUnit(g, d, dc.front, dc.pkg, dc.subRush, dc.bign);
+  const off = offUnit(g, o, oc.pers, oc), def = defUnit(g, d, dc.front, dc.pkg, dc.subRush, dc.bign, dc.lookT);
   g.pbNeed = null; // only real snaps are gated
   g.nohud = !!oc.nohud; if (oc.nohud) for (const e of def) e.extraLoad = 1.3; // no time to substitute or catch a breath
   { const need = [0, 0]; need[o] = offNeed(oc); need[d] = defNeed(dc); g.pbNeed = need; playbookBusts(g, [...off, ...def]); g.pbNeed = null; }
@@ -340,8 +340,9 @@ function playText(oc, dc, res) {
   const cov = { C0: 'Cover 0', C1: 'Cover 1', C2: 'Cover 2', C2M: '2-Man', C3: 'Cover 3', C4: 'Quarters', T2: 'Tampa 2', C6: 'Cover 6' }[dc.cov] + (dc.disg ? ' (disguised)' : '');
   const pres = { FOUR: '4-man rush', THREE: '3-man rush', BLITZ: 'blitz', SIM: 'sim pressure', FZ: 'fire zone' }[dc.pres] + (dc.stunt ? ' + stunt' : '');
   const looks = [oc.trips && 'trips', oc.bunch && 'bunch', oc.tight && 'tight splits', oc.counter && 'counter', oc.duo && 'duo', oc.wide && 'wide zone', oc.optrt && 'option routes', oc.maxp && 'max protect', oc.nohud && 'no-huddle', oc.checked && { pass: 'checks to a pass', run: 'checks to a run', flip: 'flips the run', hot: 'checks to a quick throw' }[oc.checked]].filter(Boolean).join(', ');
-  const fr = dc.front === 'Bear' ? 'Bear ' : dc.front === 'Under' ? 'under ' : '';
-  return { pre: `(${form}, ${oc.pers}${tags ? ', ' + tags : ''}${looks ? ', ' + looks : ''})`, post: `[${fr}${dc.bign ? 'big nickel' : dc.pkg.toLowerCase()}, ${cov}, ${pres}${dc.answer ? ', adjusts to the check' : ''}]` };
+  const fr = dc.front === 'Bear' ? 'Bear ' : dc.front === 'Under' ? 'under ' : dc.look ? dc.look.toLowerCase() + ' ' : '';
+  const games = dc.plan ? (dc.plan.slant ? ', line slant' : '') : '';
+  return { pre: `(${form}, ${oc.pers}${tags ? ', ' + tags : ''}${looks ? ', ' + looks : ''})`, post: `[${fr}${dc.bign ? 'big nickel' : dc.pkg.toLowerCase()}, ${cov}, ${pres}${games}${dc.mug ? ', linebackers walked up' : ''}${dc.answer ? ', adjusts to the check' : ''}]` };
 }
 
 // Apply a play result: stats, field position, downs, scoring, clock
@@ -673,7 +674,7 @@ function touchdown(g, side, text) {
       const save = { poss: g.poss, ydl: g.ydl, down: g.down, togo: g.togo, drive: g.drive };
       g.poss = side; g.ydl = 98; g.down = 4; g.togo = 2; g.drive = null;
       const oc = offenseCall(g), dc = defenseCall(g, oc);
-      const off = offUnit(g, side, oc.pers, oc), def = defUnit(g, 1 - side, dc.front, dc.pkg, dc.subRush, dc.bign);
+      const off = offUnit(g, side, oc.pers, oc), def = defUnit(g, 1 - side, dc.front, dc.pkg, dc.subRush, dc.bign, dc.lookT);
       const res = oc.isRun ? resolveRun(g, off, def, oc, dc) : resolvePass(g, off, def, oc, dc);
       const good = (res.kind === 'run' || res.kind === 'scramble' || res.kind === 'comp') && res.yds >= 2;
       if (good) { g.score[side] += 2; g.qs[side][Math.min(g.q, 5) - 1] += 2; entry.text += ' (2-pt good)'; } else entry.text += ' (2-pt failed)';

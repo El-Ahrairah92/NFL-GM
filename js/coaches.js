@@ -952,6 +952,45 @@ function genDefPk(arch) {
   const fr = { UNDER: !odd && rand() < 0.5 ? round2(0.1 + rand() * 0.25) : 0, BEAR: rand() < (odd ? 0.4 : 0.3) ? round2(0.05 + rand() * 0.14) : 0, BIGN: rand() < 0.35 ? round2(0.12 + rand() * 0.28) : 0 };
   return { fr, sh: top(jit(T_.sh), 4), pr: top(jit(T_.pr), 3, 'FOUR'), stunt: round2(clamp((DEF_ARCH[arch] ? DEF_ARCH[arch].t.stunt : 0.15) * Math.exp(gauss(0, 0.2)), 0, 0.5)), disg: round2(T_.disg ? clamp(T_.disg * Math.exp(gauss(0, 0.2)), 0, 0.6) : rand() < 0.15 ? 0.2 : 0) };
 }
+// ---------- a coach's own fronts ----------
+// A look is one sound way to line the front up: where each lineman puts his hand down ('S3' = strong side, 3 technique).
+// A slot a look does not mention stays where the base front has it. 'run' looks are leaned on when a run is expected,
+// 'rush' looks on passing downs. Every look keeps a man in or over every interior gap and an edge outside each tackle.
+const LOOKS = {
+  even: { // 4-3 base: LE, NT, DT, RE
+    'Over': { k: '', t: { LE: 'W7', NT: 'W1', DT: 'S3', RE: 'S7' } },
+    'Weak shade': { k: 'run', t: { LE: 'W5', NT: 'S1', DT: 'W3', RE: 'S6' } },
+    'G': { k: 'run', t: { LE: 'W7', NT: 'W2i', DT: 'S3', RE: 'S7' } },
+    'Wide': { k: 'rush', t: { LE: 'WW9', NT: 'W1', DT: 'S3', RE: 'SW9' } },
+    'Double 3': { k: 'rush', t: { LE: 'W7', NT: 'W3', DT: 'S3', RE: 'S7' } },
+  },
+  odd: { // 3-4 base: LOLB, LDE, NT, RDE, ROLB
+    'Okie': { k: '', t: { LOLB: 'W9', LDE: 'W5', NT: 'S0', RDE: 'S5', ROLB: 'S9' } },
+    'Tite': { k: '', t: { LOLB: 'W9', LDE: 'W4i', NT: 'S0', RDE: 'S4i', ROLB: 'S9' } },
+    'Eagle': { k: 'rush', t: { LOLB: 'W9', LDE: 'W4i', NT: 'S1', RDE: 'S5', ROLB: 'S9' } },
+    'Heavy': { k: 'run', t: { LOLB: 'W6', LDE: 'W4', NT: 'S0', RDE: 'S4', ROLB: 'S6' } },
+    'Wide': { k: 'rush', t: { LOLB: 'WW9', LDE: 'W4i', NT: 'S0', RDE: 'S4i', ROLB: 'SW9' } },
+  },
+  sub: { // nickel and dime: LE, DT1, DT2, RE
+    'Even': { k: '', t: {} },
+    'Tilt': { k: 'run', t: { DT1: 'W1', DT2: 'S3' } },
+    'Pinch': { k: 'run', t: { LE: 'W5', DT1: 'W2i', DT2: 'S2i', RE: 'S5' } },
+    'Wide': { k: 'rush', t: { LE: 'WW9', DT1: 'W3', DT2: 'S3', RE: 'SW9' } },
+  },
+};
+const LOOK_HOME = { '4-3': 'Over', 'Wide-9': 'Wide', '3-4': 'Okie', 'Tite': 'Tite' };
+// What a coach carries: his home look and a few changeups in base and in sub, how often his line slants and which way,
+// which twist he likes, and how often he walks linebackers up into the gaps. Generated once and kept with him.
+function genDefLib(arch) {
+  const A_ = DEF_ARCH[arch] || DEF_ARCH.C3, front = A_.t.front, fam = front === '3-4' || front === 'Tite' ? 'odd' : 'even';
+  const menu = (table, home, n) => { const rest = Object.keys(table).filter(k => k !== home); shuffle(rest); const w = 0.52 + rand() * 0.25, pick = rest.slice(0, n), ws = pick.map(() => 0.3 + rand());
+    const tot = ws.reduce((a, b) => a + b, 0) || 1; return [[home, round2(w)], ...pick.map((k, i) => [k, round2((1 - w) * ws[i] / tot)])]; };
+  const j = (m, s) => m * Math.exp(gauss(0, s));
+  const sl = { TWOHIGH: 0.06, C3: 0.08, WIDE9: 0.1, MANBLITZ: 0.12, TWOGAP: 0.04 }[arch] || 0.07, mug = { TWOHIGH: 0.1, MANBLITZ: 0.12 }[arch] || 0.03;
+  const sd = normShares({ S: 0.2 + rand(), W: 0.2 + rand(), P: 0.1 + rand() * 0.6 });
+  return { fam, base: menu(LOOKS[fam], LOOK_HOME[front] || Object.keys(LOOKS[fam])[0], 1 + randInt(0, 2)), sub: menu(LOOKS.sub, front === 'Wide-9' ? 'Wide' : 'Even', 1 + randInt(0, 2)),
+    sl: round2(clamp(j(sl, 0.45), 0, 0.3)), sd, tt: round2(clamp(0.2 + rand() * 0.6, 0, 1)), mug: rand() < 0.3 ? 0 : round2(clamp(j(mug, 0.5), 0, 0.25)) };
+}
 // a pass defense coordinator's own packages, by what he believes in
 const SPEC_PK_POOL = { PRESSURE: ['FZ', 'BLITZ', 'SIM', 'C0', 'STUNT'], MAN: ['C1', 'C2M', 'C0', 'BLITZ'], SHELL: ['T2', 'C6', 'C4', 'C2', 'DISG', 'BIGN'], PENETRATE: ['STUNT', 'UNDER'], TWOGAP: ['BEAR', 'BIGN'] };
 function genSpecPk(c) { const pool = (SPEC_PK_POOL[c.lean] || []).slice(); shuffle(pool); return pool.slice(0, c.role === 'DPC' ? 3 : 2); }
@@ -966,6 +1005,7 @@ function ensureDefPk(c) {
   if (c && c.pk) floorDefPk(c.pk);
   if (!c) return;
   if ((c.role === 'DC' || (c.role === 'HC' && c.t && c.t.caller === 'D')) && !c.pk) c.pk = genDefPk(c.arch);
+  if (c.pk && !c.pk.lib) c.pk.lib = genDefLib(c.arch);
   if ((c.role === 'DPC' || c.role === 'DRC') && !c.pks) c.pks = genSpecPk(c);
 }
 // the call sheet a team actually carries: the caller's packages (with the coordinator's when the head coach calls it),
@@ -974,7 +1014,7 @@ function teamDefPk(t) {
   const caller = defCaller(t), coord = C(t.dc);
   [caller, coord, asst(t, 'DPC'), asst(t, 'DRC')].forEach(ensureDefPk);
   const src = caller && caller.pk ? caller.pk : genDefPk('C3');
-  const pk = { sh: Object.assign({}, src.sh), pr: Object.assign({}, src.pr), fr: Object.assign({ UNDER: 0, BEAR: 0, BIGN: 0 }, src.fr || {}), stunt: src.stunt, disg: src.disg, by: {} };
+  const pk = { sh: Object.assign({}, src.sh), pr: Object.assign({}, src.pr), fr: Object.assign({ UNDER: 0, BEAR: 0, BIGN: 0 }, src.fr || {}), stunt: src.stunt, disg: src.disg, lib: src.lib || null, by: {} };
   if (caller && caller.role === 'HC' && coord && coord.pk) { for (const cat of ['sh', 'pr']) { for (const k in pk[cat]) pk[cat][k] *= 0.7; for (const k in coord.pk[cat]) pk[cat][k] = (pk[cat][k] || 0) + coord.pk[cat][k] * 0.3; } pk.stunt = pk.stunt * 0.7 + coord.pk.stunt * 0.3; pk.disg = pk.disg * 0.7 + coord.pk.disg * 0.3; }
   for (const r of ['DPC', 'DRC']) { const sp = asst(t, r); if (!sp || !sp.pks) continue; const b = 0.06 + sp.exp / 1000;
     for (const id of sp.pks) { if (SHELLS[id]) pk.sh[id] = (pk.sh[id] || 0) + b; else if (PRESSURES[id]) pk.pr[id] = (pk.pr[id] || 0) + b; else if (id === 'STUNT') pk.stunt = Math.min(0.6, pk.stunt + b); else if (id === 'DISG') pk.disg = Math.min(0.7, pk.disg + b * 2); else if (pk.fr[id] !== undefined) pk.fr[id] = round2(Math.min(0.5, pk.fr[id] + b * (id === 'BEAR' ? 1 : 2))); pk.by[id] = sp.id; } }

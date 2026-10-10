@@ -214,6 +214,23 @@ svg.field .dot.warn circle { stroke: var(--warn); stroke-width: 4; }
 svg.field .dot:hover circle { filter: brightness(1.25); }
 svg.field .sl { fill: #fff; font-size: 13px; font-weight: 800; text-anchor: middle; pointer-events: none; }
 svg.field .nm { fill: #e6edf3; font-size: 15px; font-weight: 600; text-anchor: middle; pointer-events: none; paint-order: stroke; stroke: #12301d; stroke-width: 3px; }
+/* the play caller's looks: small line diagrams */
+.look-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap: 10px; margin-bottom: 10px; }
+button.look-tile { text-align: left; padding: 8px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; display: block; width: 100%; }
+button.look-tile.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.look-h { display: flex; justify-content: space-between; align-items: baseline; }
+.look-h span { color: var(--muted); font-size: 13px; }
+.look-n { font-size: 12.5px; color: var(--muted); line-height: 1.35; white-space: normal; }
+svg.look { width: 100%; height: auto; display: block; margin: 2px 0 4px; }
+svg.look .ol { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+svg.look .ol.c { fill: var(--line); }
+svg.look .te { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; }
+svg.look .tel { fill: var(--muted); font-size: 7px; text-anchor: middle; }
+svg.look .dl { fill: #b23b3b; stroke: var(--panel); stroke-width: 1.5; }
+svg.look .tech { fill: #fff; font-size: 10px; font-weight: 800; text-anchor: middle; }
+svg.look .slot { fill: var(--muted); font-size: 8.5px; text-anchor: middle; }
+svg.look .gap { fill: var(--muted); font-size: 8.5px; text-anchor: middle; opacity: .75; }
+svg.field .tq { fill: #ffd98a; font-size: 12px; font-weight: 700; text-anchor: middle; pointer-events: none; }
 .fv-grid { grid-template-columns: 1fr 1fr; }
 @media (max-width: 1400px) { .fv-grid { grid-template-columns: 1fr; } }
 .stars i { font-style: normal; }

@@ -194,6 +194,14 @@ function defenseCall(g, oc) {
   if (dt.pk && dt.pk.fr) { const fr = dt.pk.fr, heavy = ['12', '13', '21', '22', 'JUMBO'].includes(p);
     if (pkg === 'BASE') { if (rand() < fr.BEAR * (sit.short || sit.gl ? 2.5 : heavy ? 1.6 : runEst > 0.55 ? 1.2 : 0.5)) call.front = 'Bear'; else if (rand() < fr.UNDER) call.front = 'Under'; }
     if (pkg === 'NICKEL' && rand() < fr.BIGN * (p === '12' ? 1.7 : runEst > 0.5 ? 1.2 : 0.8)) call.bign = true; }
+  // the coach's own look for this snap: his home alignment most of the time, a changeup that suits what he expects otherwise
+  const lib = dt.pk && dt.pk.lib, odd = call.front === '3-4' || call.front === 'Tite';
+  if (lib && pkg !== 'GL' && call.front !== 'Bear' && call.front !== 'Under') {
+    const fam = pkg === 'BASE' ? (odd ? 'odd' : 'even') : 'sub', list = fam === 'sub' ? lib.sub : lib.fam === fam ? lib.base : null;
+    if (list) { const w = {}; for (const [k, v] of list) { const L = LOOKS[fam][k]; if (L) w[k] = v * (L.k === 'run' ? 0.4 + runEst * 1.4 : L.k === 'rush' ? (sit.passDown ? 2.2 : 1.3 - runEst) : 1); }
+      const k = wpick(w); if (k) { call.look = k; call.lookT = { t: LOOKS[fam][k].t }; } }
+    if (pkg !== 'BASE' && lib.mug && rand() < lib.mug * (sit.passDown ? 2 : 0.6)) { call.lookT = Object.assign({}, call.lookT, { mug: true }); call.mug = true; }
+  }
   // coverage
   let man = dt.man, high = dt.high + 0.08, blitz = dt.blitz;
   if (sit.b === 'D3L') { high += 0.2; man -= 0.08; }
@@ -234,6 +242,17 @@ function defenseCall(g, oc) {
   const uc = userChart(g, d, 'def'), named = uc && (hasList(uc, 'RUSHE') || hasList(uc, 'RUSHI'));
   call.subRush = (pkg === 'NICKEL' || pkg === 'DIME') && sit.passDown && (named || rand() < 0.6);
   call.runBlitz = (call.pres === 'BLITZ' || call.pres === 'FZ') && runEst > 0.55;
+  // line games out of his library: a slant (to the strength, away from it, or both tackles pinching), and which twist when one is called
+  if (lib && pkg !== 'GL') {
+    const base = pkg === 'BASE', bear = call.front === 'Bear', under = call.front === 'Under';
+    const N = !base ? { e: ['LE', 'RE'], i: ['DT1', 'DT2'] } : bear ? { e: ['LE', 'RE'], i: ['LT', 'RT'], n: 'NT' } : under ? { e: ['LE', 'RE'], i: ['DT', 'NT'] } : odd ? { e: ['LOLB', 'ROLB'], i: ['LDE', 'RDE'], n: 'NT' } : { e: ['LE', 'RE'], i: ['NT', 'DT'] };
+    const plan = {};
+    if (rand() < lib.sl * (0.6 + runEst * 0.9)) { const d = wpick(lib.sd) || 'S';
+      if (d === 'P') plan.slant = { [N.i[0]]: 1, [N.i[1]]: -1 };
+      else { const v = d === 'S' ? 1 : -1; plan.slant = {}; for (const k of [...N.i, ...(N.n ? [N.n] : []), ...(base && odd ? [] : N.e)]) plan.slant[k] = v; } }
+    if (call.stunt) { const s = rand() < 0.5 ? 0 : 1; plan.twist = rand() < lib.tt ? [rand() < 0.5 ? [N.i[0], N.i[1]] : [N.i[1], N.i[0]]] : [[N.i[s], N.e[s]]]; }
+    if (plan.slant || plan.twist) call.plan = plan;
+  }
   return call;
 }
 

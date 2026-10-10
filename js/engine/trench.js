@@ -114,16 +114,19 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
     if (b) { a.blockers.push(b); helpers.splice(helpers.indexOf(b), 1); }
   }
   // spare linemen double the most dangerous rusher near them; spare backs chip edges
+  // a linebacker standing in a gap holds the lineman in front of him for a beat even if he drops out: that lineman is late to help anyone else
+  const mugs = def.filter(e => e.depth >= ON_LINE && e.depth < 2.2 && !rushers.includes(e));
   for (const b of free) {
+    if (mugs.some(e => Math.abs(e.x - b.x) <= 1.2) && rand() < TUNE.mugHold) continue;
     // his neighbours, and also an edge rusher further out whose tackle cannot handle him alone: the protection slides that way
-    const near = assign.filter(a => a.blockers.length === 1 && (Math.abs(a.rx - b.x) <= 1.6 || (!a.e.blitz && Math.abs(a.rx) >= 2.4 && rushVsBlock(g, a.e, a.blockers[0], 0) >= TUNE.slideAt)));
+    const near = assign.filter(a => a.blockers.length === 1 && (Math.abs(a.rx - b.x) <= 1.6 || (!a.e.blitz && Math.abs(a.e.x) >= 2 && rushVsBlock(g, a.e, a.blockers[0], 0) >= TUNE.slideAt)));
     if (!near.length) continue;
     near.sort((x, y) => rushVsBlock(g, y.e, y.blockers[0], 0) - rushVsBlock(g, x.e, x.blockers[0], 0));
     const a = near[0]; a.blockers.push(b); a.doubled = true;
     if (rushVsBlock(g, a.e, a.blockers[1], 0) < rushVsBlock(g, a.e, a.blockers[0], 0)) a.blockers.reverse(); // the better blocker has him, the other helps
   }
   for (const h of helpers) {
-    const edge = assign.filter(a => Math.abs(a.rx) >= 2.4 && a.blockers.length === 1).sort((x, y) => rushVsBlock(g, y.e, y.blockers[0], 0) - rushVsBlock(g, x.e, x.blockers[0], 0))[0];
+    const edge = assign.filter(a => Math.abs(a.e.x) >= 2 && a.blockers.length === 1).sort((x, y) => rushVsBlock(g, y.e, y.blockers[0], 0) - rushVsBlock(g, x.e, x.blockers[0], 0))[0];
     if (edge) edge.chip = h;
   }
   // pickup checks: blitzers, simulated pressure and stunts test the protection's awareness
@@ -173,8 +176,9 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
       // the angle: a blocker who has to go a long way to his man gives up the corner; a man head-up on a blocker is reading, not rushing
       diff += Math.max(0, Math.abs(b.x - a.rx) - 0.9) * TUNE.reachRush + (a.slant || 0);
       if (r.depth < ON_LINE && !r.mv && Math.abs(b.x - r.x) < 0.2 && Math.abs(r.x) < 2.2) diff -= TUNE.headUp;
+      else if (r.depth < ON_LINE && !r.mv) diff -= Math.abs(r.x) < 0.95 ? TUNE.shadeRush : Math.abs(r.x) >= 2 && Math.abs(r.x) < 2.45 ? TUNE.tightRush : 0; // shaded inside the guard he is lined up to stop the run; tight on the tackle he has no room to turn the corner
       const med = TUNE.passProMedian * Math.exp(-soft(diff, 14) * TUNE.rushScale);
-      a.t = med * Math.exp(gauss(0, 0.38)) * (Math.abs(a.rx) < 2 ? TUNE.insideRush : 1) + (a.chip ? 0.25 : 0) + (a.stuntDelay || 0) // the inside path to the QB is the crowded one
+      a.t = med * Math.exp(gauss(0, 0.38)) * (Math.abs(r.x) < 2 ? TUNE.insideRush : 1) + (a.chip ? 0.25 : 0) + (a.stuntDelay || 0) // the inside path to the QB is the crowded one
         + Math.max(0, Math.abs(a.rx) - 2.9) * TUNE.widePath + r.depth * TUNE.deepPath; // the widest path is the longest, and a man coming from depth has ground to cover first
     }
     a.t = Math.max(0.75, a.t);
@@ -246,7 +250,8 @@ function runBlocking(g, off, def, oc, dc, target, carrierSlot) {
     if (r.lvl === 1) {
       if (r.blockers.length > 1) block += TUNE.comboBonus;
       if (!zone && r.px * side > 0) block += 3; // down blocks have the angle
-      if (e.depth >= ON_LINE) block += TUNE.offBall; // he is not set on the line: the blocker meets him with a running start
+      if (e.depth >= ON_LINE) block += TUNE.offBall;
+      if (e.mv && Math.sign(e.mv) !== Math.sign(target - e.x)) block += TUNE.slantWash; // he slanted away from the play: the blocker just keeps him going // he is not set on the line: the blocker meets him with a running start
       // the angle: a blocker already between his man and the play only has to stay there; one who has to get across his man's face has to win a race first
       r.lev = r.kick ? 0.4 : clamp(Math.tanh((target - r.px) / 0.5) * (b.x - r.px), -1, 1);
       block += r.lev * TUNE.levRun - (r.kick ? TUNE.kickOut : 0); // a kick-out is a back or a guard on the move against a man set in the hole

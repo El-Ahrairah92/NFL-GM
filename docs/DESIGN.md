@@ -855,3 +855,61 @@ It does not close the gap in 20+ yard completions (2.3 to 2.4 a team-game, real 
 
 League after it, 24 seasons: scoring 22.9, completion rate 64.7%, yards per attempt 7.14, interceptions 0.75, sack rate 7.0%, yards per carry 4.50.
 
+## 44. Where the ball is thrown
+
+Completions of 20+ yards were short (2.4 a team-game, real 3.0 to 3.6) because the passing game was too short. Throws by depth, before:
+
+| Thrown | Share | Caught | Real share | Real caught |
+|---|---|---|---|---|
+| behind the line | 5.5% | 93% | about 15% | about 78% |
+| 0 to 9 | 73% | 72% | about 50% | about 74% |
+| 10 to 19 | 10.7% | 47% | about 22% | about 58% |
+| 20+ | 10.8% | 32% | about 12% | about 38% |
+
+Intermediate routes started far more covered than deep ones and were much harder to complete, so quarterbacks threw underneath.
+
+Changed:
+- intermediate routes are less covered and easier to complete
+- the short game is a little less open, completed a little more easily, and tackled sooner (a yard less after the catch)
+- backs' routes start a yard closer to the line and they catch the ball with more room
+- tight ends are a little more open; the primary read goes to a tight end or back slightly more often and to an outside receiver slightly less, so the extra intermediate yards did not all go to wideouts
+- deep catches run a little less after the catch; the rush is a touch slower to keep sacks at 7%
+
+Now: behind the line 7.7% (88% caught), 0 to 9 62.6% (70%), 10 to 19 20.0% (57%), 20+ 9.7% (37%). Completions of 20+ are 2.9 a team-game, with 1.2 of them coming from intermediate throws (was 0.5).
+
+League, 24 seasons: scoring 23.1, completion rate 64.8%, yards per attempt 7.27, interceptions 0.69, sack rate 7.0%, yards per carry 4.49, punts 3.67, third downs 39.8%. Receiving leaders are in range (first 1,851 yards; 25 with 1,000+; top tight end 949; top back 599).
+
+Still off: throws behind the line are half the real share; the lowest yards per catch among regulars is 5.0 (real 6.5 to 8) because backs catch it at the line.
+
+## 45. A coach's own fronts
+
+Every defensive play-caller carries a library, generated once and kept with him. You get it by hiring him; nothing about it is set by the user.
+
+**Looks.** A look is one sound way to line the front up: where each lineman puts his hand down. A coach has a home look he plays about half to three-quarters of the time and one to three changeups, in base and separately in nickel and dime.
+- 4-3 base: Over, Weak shade, G (a tackle inside the guard), Wide, Double 3 (both tackles outside the guards)
+- 3-4 base: Okie, Tite, Eagle, Heavy (ends head-up, two-gapping), Wide
+- nickel and dime: Even, Tilt (one tackle shaded on the center), Pinch (both tackles inside the guards, ends tight), Wide
+
+Run looks are leaned on when the film says run; rush looks on passing downs. Bear, Under and goal line are still their own fronts.
+
+**Line games.** How often his line slants (4% to about 25% of snaps) and which way he likes it: to the strength, away from it, or both tackles pinching. Which twist he prefers when one is called: tackle with tackle, or tackle with end.
+
+**Walked-up linebackers.** Some coaches walk both linebackers up into the gaps in sub packages, more on passing downs. They may come or drop.
+
+**What each thing does in the engine** (found by forcing it on every snap, and fixed until it was a trade and not a free lunch):
+- A man lined up a gap away from the hole who beats his block without getting upfield is chasing the play, not standing in it. (A pinched line had been stuffing 27% of runs because its ends counted as standing in every inside hole.)
+- Contain: when the widest man on a side is lined up inside the play and loses, nobody turns an outside run back and the linebackers are late. A quarterback also gets out more easily when no rusher is wide of the tackles.
+- Run-stopping alignments give up pass rush: a tackle shaded inside the guard, and an end tight on the tackle with no room to turn the corner.
+- Tight ends on the line can be chipped and slid to like any edge rusher (they could not before: an artifact of a fixed width).
+- A slant that guessed wrong is washed down the line.
+- An interior man is one who lined up inside, wherever his slant takes him (slanting outward had been turning tackles into edge rushers for the sack rules).
+- A linebacker standing in a gap holds the lineman in front of him even when he drops, so the four who rush get one-on-ones; the cost is that he is late getting out to cover.
+
+**Forced on every snap, yards allowed per play** (nickel and dime, where most snaps are): Even 5.39, Pinch 5.45 (4.7 a carry, 34% of dropbacks pressured), Tilt 5.53, Wide 5.62 (5.7 a carry, 39% pressured). Base looks sit within 0.3 of each other. Slanting one way every snap, walking linebackers up every snap and twisting every snap are each within 0.25 of doing none of them.
+
+**League, 24 seasons with libraries live:** scoring 23.2, completion rate 64.8%, yards per attempt 7.28, sack rate 7.2%, yards per carry 4.50, stuffed runs 18.9%. The most sacks by an interior lineman came into range (11.3, was about 15).
+
+**Where the user sees it.** The Playbook page has a Fronts card for whichever club is being viewed: a small line diagram for every look the caller carries (each lineman's technique against the five linemen and the tight end's spot, with the gaps lettered), how often he plays it, whether it is his home, run or rush look, and one line on what it is for. Under them: how often he slants and which way, the twist he prefers, and how often he walks linebackers up. Clicking a look puts it on the big field above with the club's actual players, each lineman's technique under him. A coordinator's card in the coaching search lists his looks and line games in a line.
+
+Not built yet: scouting text by technique, season film on a coach's habits, disguised and overload pressure packages, and the same depth for offensive coaches.
+
