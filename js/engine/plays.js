@@ -131,28 +131,30 @@ function resolveRun(g, off, def, oc, dc) {
     if (rand() < w) {
       const pen = r.state === 'free' || rand() < r.pen / Math.max(0.05, w);
       r.won = true; r.penetrated = pen;
-      levels.push({ e: r.e, at: pen ? -randInt(0, 3) : randInt(0, 2), pen });
+      // on a run to the edge, an inside man who beats his block without getting upfield is chasing the play, not standing in it
+      if (pen || !outside || Math.abs(r.px - target) <= TUNE.edgeNear) levels.push({ e: r.e, at: pen ? -randInt(0, 3) : randInt(0, 2), pen });
     } else r.won = false;
   }
   // outside runs: the edge must be set by someone
   if (outside && trickHit !== 'fooled') {
     const edgeR = fronts.filter(r => Math.sign(r.px) === Math.sign(target)).sort((a, b) => Math.abs(b.px) - Math.abs(a.px))[0];
-    const lost = edgeR && rand() > edgeR.win * (oc.wide ? 0.82 : 1);
-    if (edgeR) edgeR.won = !lost;
-    if (!lost && edgeR && !levels.some(l => l.e === edgeR.e)) levels.push({ e: edgeR.e, at: randInt(0, 3) });
+    // he gets one chance to set the edge: if the blocking already decided it above, that stands
+    if (edgeR && edgeR.won === undefined) edgeR.won = rand() < edgeR.win * (oc.wide ? 0.82 : 1);
+    const lost = !edgeR || !edgeR.won;
+    if (!lost && !levels.some(l => l.e === edgeR.e)) levels.push({ e: edgeR.e, at: randInt(0, 3) });
     // corner / force player
     const force = def.filter(e => e.slot.startsWith('CB') || e.slot === 'CB' || e.slot === 'NCB').sort((a, b) => Math.abs(a.x - target * 1.4) - Math.abs(b.x - target * 1.4))[0];
     // the receiver on that side has to block him: a willing, strong blocker springs the run; a poor one lets the corner make the play
     const wrB = off.filter(e => ['X', 'Z', 'SLOT', 'SLOT2', 'Y', 'H'].includes(e.slot) && Math.sign(e.x || 1) === Math.sign(target)).sort((a, b) => Math.abs(b.x) - Math.abs(a.x))[0];
     const edgeBlk = wrB && force ? clamp((ea(g, wrB, 'rbk') * 0.5 + ea(g, wrB, 'str') * 0.3 + ea(g, wrB, 'agi') * 0.2 + bod(wrB).w * 2 * TUNE.size) - (ea(g, force, 'shed') * 0.4 + ea(g, force, 'tkl') * 0.3 + ea(g, force, 'str') * 0.3 + bod(force).w * 1.5 * TUNE.size) + TUNE.wrBlock, -30, 30) * 0.02 : 0;
-    if (force && rand() < clamp((oc.wide || oc.tight ? 0.5 : 0.62) - edgeBlk, 0.25, 0.85)) levels.push({ e: force, at: Math.max(1, (lost ? randInt(4, 8) : randInt(3, 6)) + Math.round(edgeBlk * 5)), bonus: (lost ? -0.3 : 0) - edgeBlk * 0.5 }); // the corner has a receiver's block to beat first
+    if (force && rand() < clamp((oc.wide || oc.tight ? 0.5 : 0.62) * TUNE.force - edgeBlk, 0.2, 0.85)) levels.push({ e: force, at: Math.max(1, (lost ? randInt(4, 8) : randInt(3, 6)) + Math.round(edgeBlk * 5)), bonus: (lost ? -0.3 : 0) - edgeBlk * 0.5 }); // the corner has a receiver's block to beat first
   }
   // linebackers: blocked, or free to fill (if they read it)
   for (const r of seconds) {
     if (r.state === 'blocked' && rand() > r.win) { r.won = false; continue; }
     r.won = true;
     let readOK = rand() < lgt(0.9 + (ea(g, r.e, 'prec') - 65) * 0.05 + g.key * 0.8 - (motion ? 0.3 : 0) - (draw ? 0.5 : 0) - (oc.counter ? 0.6 : 0) - (trickHit === 'fooled' ? 2 : 0));
-    const depthAt = (r.rotated ? 4 : 3) + (readOK ? randInt(0, 2) : randInt(3, 6)) + (draw ? 1 : 0) + (dc.cov === 'T2' && r.e.slot === 'MLB' ? 1 : 0);
+    const depthAt = (r.rotated ? 4 + TUNE.rotDepth : 3 - (outside ? TUNE.outsideFill : TUNE.insideFill)) + (readOK ? randInt(0, 2) : randInt(3, 6)) + (draw ? 1 : 0) + (dc.cov === 'T2' && r.e.slot === 'MLB' ? 1 : 0);
     levels.push({ e: r.e, at: Math.max(1, depthAt + burstD * TUNE.burGet), bonus: readOK ? (oc.duo ? 0.45 : 0) : -0.4 }); // duo leaves the linebackers for the back
   }
   // deep help: safeties
@@ -295,7 +297,7 @@ function resolvePass(g, off, def, oc, dc) {
   // who blocks, who runs routes
   const keep = [];
   const rb = off.find(e => e.slot === 'RB'), fb = off.find(e => e.slot === 'FB'), y = off.find(e => e.slot === 'Y');
-  const blitzKnown = (dc.pres === 'BLITZ' || dc.pres === 'FZ') && rand() < lgt((ea(g, qb, 'proc') - 60) * 0.06);
+  const blitzKnown = oc.sawBlitz !== undefined ? oc.sawBlitz : (dc.pres === 'BLITZ' || dc.pres === 'FZ') && rand() < lgt((ea(g, qb, 'proc') - 60) * 0.06);
   if (oc.form !== 'EMP') {
     if (rb && (oc.type === 'DEEP' || oc.type === 'GADGET' || (oc.type === 'DROP' && (blitzKnown || rand() < 0.35)))) keep.push(rb);
     if (fb && rand() < 0.6) keep.push(fb);
@@ -399,6 +401,8 @@ function resolvePass(g, off, def, oc, dc) {
     if (e.slot === 'Y' || e.slot === 'H') w += 0.13; // tight ends work the seams and the soft middle
     if (dc.soft) w += r.band === 'S' ? 0.35 : r.band === 'D' ? -0.35 : 0.12; // prevent: everything underneath is there
     const luck = gauss(0, 0.55);
+    // every man sent after the quarterback is a man not in coverage, and in man with one safety deep he cannot be over the top of everybody
+    w += (7 - droppers.length) * TUNE.thinCover + (dc.cov === 'C1' && r.band !== 'S' ? TUNE.oneHigh : 0);
     w += help + sepNet - g.key * 0.35 + luck;
     if (g.down >= 3 && r.depth >= g.togo && g.togo <= 15) w -= 0.22; // money down: the defense sits on the sticks
     r.w = w; r.w0 = w; r.wPre = w - luck; r.def = defE; // w0: how open he came on his own, before the quarterback's time in the pocket added to it if (e === star) r.shade = shade; // film credits beating the extra attention

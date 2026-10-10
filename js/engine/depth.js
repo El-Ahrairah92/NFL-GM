@@ -26,9 +26,9 @@ const TUNE = {
   lockOn: 0.02,       // chance per point below average that he stares down a covered first read and loses a beat
   placeYac: 0.028,     // ball placement: an accurate throw hits the receiver in stride, an off-target one makes him stop for it
   slipCap: 0.3,          // the most a carrier's elusiveness, burst, agility and vision can add up to on one tackle attempt (logit)
-  lbRest: 0.22,           // how often the second linebacker sits out a series for the next man
+  lbRest: 0.34,           // how often the second linebacker sits out a series for the next man
   assistRate: 0.21,    // how often a second man is credited on a tackle that had no assist yet
-  spill: 0.5,         // how often a run stopped by a lineman past the line is really finished by the second level
+  spill: 0.6,         // how often a run stopped by a lineman past the line is really finished by the second level
   dimeLong: 0.8, dimeMid: 0.45, // how often a defense goes to six defensive backs on third and long, and third and medium
   sackBase: 0.22,     // chance a pressured quarterback goes down, before the matchup
   sackShare: 0.4,      // how often two rushers who arrive together split the sack
@@ -37,9 +37,19 @@ const TUNE = {
   chipBonus: 7,
   pickupMiss: 0.13,    // blitz/sim pickup failure for an average protection
   stuntMiss: 0.22,
-  runWin: -0.28,        // logit: front defender beats his run block (average vs average)
+  runWin: -0.4,        // logit: front defender beats his run block (average vs average)
   runScale: 0.12,
   comboBonus: 16,
+  checkRate: 1,         // how freely quarterbacks change the play at the line (0 switches it off)
+  answerRate: 1,        // how freely the defense answers a check
+  answerKey: 0.2,       // how far a defense that answered leans toward what it guessed
+  insideFill: 3.3, outsideFill: 1.85, // yards sooner than the old three a linebacker meets a run between the tackles, and one to the edge
+  force: 0.8,             // how often the corner gets off the receiver's block to turn an outside run back in
+  rotLast: 0.4,           // how often the blocking leaves the rotated safety, not a linebacker, as the unblocked man
+  rotDepth: 1,          // yards deeper the safety rotated into the box meets a run than the old four
+  thinCover: 0.07,         // how much more open every receiver is for each rusher beyond four (and less open for each man dropped beyond seven)
+  oneHigh: 0.12,           // how much more open anything past the sticks is against man coverage with one deep safety
+  edgeNear: 0.9,        // on an outside run, how close to the hole a first-level man has to be to make the play without penetrating
   levRun: 5,            // run-block points for a blocker who starts a full step between his man and the play (and against one who has to cross his face)
   kickOut: 4,           // what a puller or lead back gives up kicking out a man set in the hole
   twoGapPen: 0.7,       // a man head-up on his blocker holds two gaps: he gets into the backfield this much as often
@@ -49,10 +59,10 @@ const TUNE = {
   deepPath: 0.02,       // seconds added per yard a blocked rusher starts off the ball
   offBall: 4,           // run-block points against a man who meets his blocker coming from off the line
   headUp: 3,            // pass-rush points an interior man gives up playing head-up on a blocker
-  slantHit: 0.4,        // chance a slant crosses an average blocker's face cleanly
+  slantHit: 0.3,        // chance a slant crosses an average blocker's face cleanly
   slantWin: 9, slantLose: 4, // pass-rush points when it does, and when he runs himself into the block
   // coverage / passing
-  openBase: -0.54,
+  openBase: -0.575,
   accScale: 0.042,      // how much ball placement decides whether a throw is catchable
   wrBlock: 12,         // receivers give up this many points to the corner they are blocking (they are not linemen)
   size: 1,             // master dial for every height and weight effect (0 switches them off)

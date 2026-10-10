@@ -775,3 +775,56 @@ Known and left for the next steps:
 - Offenses do not check the play at the line. A loaded box is not thrown against and a light side is not run at, so a heavy front is not punished the way it should be. Base personnel against three receivers gives up 1.25 fewer yards a carry and only 0.4 more yards a pass attempt.
 - Stuffed runs (21%) and the small value of an interior pass rush are unchanged; both are the next step.
 - Attribute values and rating weights were measured on the old trench model. League results did not move, so they were left; re-measure after the trench work is finished.
+
+## 42. Before the snap, and inside against outside runs
+
+**Each side has one move at the line, then the ball is snapped.**
+
+*The quarterback's read.* He counts the box against his blockers, the bodies at the hole on each side, and the shell. What he sees can be wrong: a disguised shell fools him unless he reads through it (processing), and a poor processor miscounts now and then.
+
+*What he may do about it* (at most one):
+- a run into a box with two or more men he cannot block: check to a quick pass
+- a run at the side with more bodies waiting: flip it
+- a pass against a light box with both safeties deep: check to a run (a draw on a passing down), aimed at the lighter side
+- a pass with pressure showing: keep the back in, or get to a quick throw
+
+How often he actually does it is his licence: his processing, how well he knows the playbook, and whether he can be heard (less on the road). A quarterback still learning the offense does not check at all. Nothing is automatic: the best quarterbacks change about one play in ten, the worst one in forty.
+
+*Dummy calls.* When he is not changing anything he sometimes sounds as if he is.
+
+*The defense's answer.* The signal-caller (the linebacker or safety with the best play recognition) hears a check and may answer. He has to guess what it was: against a real check he is right more often than not, against a dummy it is a coin flip. Thinking pass, a safety backs out of the box; thinking run, one spins down. A right guess costs the offense about a yard a play; a wrong one gives up about half a yard. So answering is a gamble that favours smart defenders, and dummy calls are what keep it a gamble.
+
+**A defense that does one thing all afternoon stops surprising anyone.** The game used to read a defense's tendencies from film that was never recorded, so no offense ever adapted. Each game now tracks what the defense has shown (pressure, man coverage, slants each way, twists). The more it repeats itself:
+- the less often a blitz is missed, a twist comes free or a slant crosses a blocker's face
+- the more quick throws and screens it is called, and the fewer deep shots
+- the easier its pressure is to see coming
+
+**Inside against outside runs.** Runs to the edge were being stuffed 27% of the time and averaged 3.5 yards, against 17% and 5.3 between the tackles. Two causes, both fixed:
+- on an outside run, an interior lineman who beat his block without getting upfield was treated as standing in the hole. He is now chasing the play unless he penetrates.
+- linebackers met every run at the same depth. They now meet a run between the tackles sooner than one to the edge, and the corner turns the outside run back a little less often.
+
+Result: inside 4.6 a carry with 15% stuffed, outside 4.3 with 20%: the edge is the bigger gamble for about the same return.
+
+**League, 24 seasons:** scoring 22.5, completion rate 65.4%, yards per attempt 7.18, interceptions 0.74, sack rate 7.1%, yards per carry 4.41. Stuffed runs 21% to 16.8% (real 16 to 19), rushing touchdowns 1.04 (real 0.85 to 1.05), runs of 20+ now in range. 4.9% of plays are changed at the line; clubs range from 3% to 7%.
+
+**The front lab again** (one league for every front, 100 games each, points allowed by an ordinary club that allows 26.5):
+- its 4-3 on every down 27.4; a 3-3-5 stack 28.2
+- 46 Bear 29.4 (3.3 a carry, but 9.1 a pass attempt); six down linemen 29.2
+- two down and four standing 31.9; prevent 46.4
+- every lineman slanting the same way every snap 25.9; five rushing with a twist every snap 24.5
+- four linemen on one side 27.3 (3.1 a carry at them, 5.9 away)
+- forty fronts invented at random 32.0
+
+Heavy fronts stop the run and pay for it in the air. Nothing invented is better than playing the club straight by more than noise.
+
+Still open:
+- The flip is nearly worthless against ordinary fronts (4.35 a carry against 4.34 for running at the heavy side). It matters only against a lop-sided front. The count a quarterback can make is not what decides a run in this engine; the blocking angles are.
+- Too many players reach 100 tackles (77 a season, real 45 to 58): starters in the back seven never leave the field. The tackle leader is a little low (156).
+- Runs of 10+ are a little common (13.3%, real 10.5 to 12.5).
+
+**Light tune afterwards.** Forcing every defense into one shell for whole games showed man coverage with one deep safety was the best call in the game (about 1.5 points a game better than mixing) and a single-high safety was worth 0.85 yards a carry. Sending five every snap also cost nothing in coverage. Feathered, nothing else touched:
+- the blocking now more often leaves the late safety, not a linebacker, as the unblocked man, and he arrives a yard deeper: single-high is worth about 0.7 a carry
+- in man with one deep safety, anything past the sticks is a little more open
+- every rusher beyond four leaves every receiver a little more open (and every man dropped beyond seven a little less)
+
+Forced shells now sit within a point of each other and of mixing them. Five rushing every snap allows 26.0 against the club's 26.6. League averages re-centred: scoring 23.0, completion rate 65.6%, yards per attempt 7.21, yards per carry 4.48, stuffed runs 17.1%. Runs of 10+ went up a little (14%, real 10.5 to 12.5).

@@ -35,7 +35,7 @@ function simGame(hTid, aTid, opts = {}) {
     tids: [hTid, aTid], score: [0, 0], qs: [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]], q: 1, clock: 900,
     poss: 0, ydl: 25, down: 1, togo: 10, stats: {}, ts: [newTS(), newTS()], scoring: [], drives: [], injuries: [],
     playoff: !!opts.playoff, neutral: !!opts.neutral, pre: opts.pre || 0, over: false, ot: false, otStarted: [0, 0], drive: null,
-    side: [null, null], ps: {}, to: [3, 3], running: false, warned: {}, key: 0, liveFilm: [{}, {}], famStats: [{}, {}],
+    side: [null, null], ps: {}, to: [3, 3], running: false, warned: {}, key: 0, liveFilm: [{}, {}], dSeen: [newSeen(), newSeen()], famStats: [{}, {}],
     runY: [[0, 0], [0, 0]], runCred: [4.2, 4.2], pbp: opts.pbp ? [] : null, adv: {}, tadv: [{}, {}], first: [{}, {}], basePass: [0.57, 0.57], tilt: [0, 0], advEst: [{}, {}],
   };
   g.cx = [coachCtx(hTid, aTid), coachCtx(aTid, hTid)];
@@ -217,11 +217,12 @@ function runPlay(g, oc, dc) {
   if (oc.form === 'EMP') { const rb = off.find(e => e.slot === 'RB'); if (rb) rb.x = -1.8; }
   if (!g.first[o].off) { g.first[o].off = true; for (const e of off) ln(g, e.p).gs = 1; }
   if (!g.first[d].def) { g.first[d].def = true; for (const e of def) ln(g, e.p).gs = 1; }
+  preSnap(g, oc, dc, off, def); // each side's one move at the line
   // predictability: did the defense's film read match the call?
   const keyed = oc.isRun ? (dc.runEst - 0.5) * 2 : (0.5 - dc.runEst) * 2;
   const dcp = knob(C(T(g.tids[o]).oc), 'dcp');
   // the play-calling chess match: a sharper caller hides his tendencies and reads the other side's
-  g.key = clamp(keyed * (0.35 + g.cx[d].dpc / 99 * 0.45) * (1.25 - dcp / 200) * 0.6 + (g.cx[d].dpc - g.cx[o].pc) * 0.003, -0.55, 0.55);
+  g.key = clamp(keyed * (0.35 + g.cx[d].dpc / 99 * 0.45) * (1.25 - dcp / 200) * 0.6 + (g.cx[d].dpc - g.cx[o].pc) * 0.003 + (dc.answer ? (dc.answerRight ? TUNE.answerKey : -TUNE.answerKey) : 0), -0.55, 0.55); // a defense that answered a check is leaning the way it guessed
   if (preSnapPenalty(g, off, def)) return; // the flag comes out before the snap: no play
   recordFilm(g, o, oc.b, oc.pers, oc.isRun);
   const downB = g.down, togoB = g.togo, ydlB = g.ydl, before = { down: g.down, togo: g.togo, ydl: g.ydl, poss: o, score: [g.score[0], g.score[1]], q: g.q, clock: g.clock };
@@ -229,6 +230,7 @@ function runPlay(g, oc, dc) {
   if (g.down === 3) g.ts[o].d3a++; else if (g.down === 4) g.ts[o].d4a++;
   g.ts[o].plays++;
   const res = oc.isRun ? resolveRun(g, off, def, oc, dc) : resolvePass(g, off, def, oc, dc);
+  recordSeen(g, d, dc);
   // no play gains more than the field that is left: everything downstream (box score, charting, grades) sees the same number
   if (typeof res.yds === 'number' && res.yds > 100 - g.ydl) { res.yds = 100 - g.ydl; if (res.ybc !== undefined && res.ybc > res.yds) res.ybc = res.yds; }
   if (globalThis.__calib) globalThis.__calib(g, oc, dc, res, off, def);
@@ -337,9 +339,9 @@ function playText(oc, dc, res) {
   const tags = [...oc.tags].map(t => ({ MOTION: 'motion', PA: 'play-action', BOOT: 'boot', RUB: 'rub', RPO: 'RPO', SIDE: 'sideline', TRICK: 'trick' }[t])).join(', ');
   const cov = { C0: 'Cover 0', C1: 'Cover 1', C2: 'Cover 2', C2M: '2-Man', C3: 'Cover 3', C4: 'Quarters', T2: 'Tampa 2', C6: 'Cover 6' }[dc.cov] + (dc.disg ? ' (disguised)' : '');
   const pres = { FOUR: '4-man rush', THREE: '3-man rush', BLITZ: 'blitz', SIM: 'sim pressure', FZ: 'fire zone' }[dc.pres] + (dc.stunt ? ' + stunt' : '');
-  const looks = [oc.trips && 'trips', oc.bunch && 'bunch', oc.tight && 'tight splits', oc.counter && 'counter', oc.duo && 'duo', oc.wide && 'wide zone', oc.optrt && 'option routes', oc.maxp && 'max protect', oc.nohud && 'no-huddle'].filter(Boolean).join(', ');
+  const looks = [oc.trips && 'trips', oc.bunch && 'bunch', oc.tight && 'tight splits', oc.counter && 'counter', oc.duo && 'duo', oc.wide && 'wide zone', oc.optrt && 'option routes', oc.maxp && 'max protect', oc.nohud && 'no-huddle', oc.checked && { pass: 'checks to a pass', run: 'checks to a run', flip: 'flips the run', hot: 'checks to a quick throw' }[oc.checked]].filter(Boolean).join(', ');
   const fr = dc.front === 'Bear' ? 'Bear ' : dc.front === 'Under' ? 'under ' : '';
-  return { pre: `(${form}, ${oc.pers}${tags ? ', ' + tags : ''}${looks ? ', ' + looks : ''})`, post: `[${fr}${dc.bign ? 'big nickel' : dc.pkg.toLowerCase()}, ${cov}, ${pres}]` };
+  return { pre: `(${form}, ${oc.pers}${tags ? ', ' + tags : ''}${looks ? ', ' + looks : ''})`, post: `[${fr}${dc.bign ? 'big nickel' : dc.pkg.toLowerCase()}, ${cov}, ${pres}${dc.answer ? ', adjusts to the check' : ''}]` };
 }
 
 // Apply a play result: stats, field position, downs, scoring, clock

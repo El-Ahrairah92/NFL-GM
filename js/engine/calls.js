@@ -42,6 +42,18 @@ function recordFilm(g, s, b, pers, isRun) {
   live[isRun ? 0 : 1]++;
 }
 function defFilm(tid) { return T(tid).dfilm || { n: 0, man: 0, blitz: 0, high: 0 }; }
+// What this defense has shown so far today. The offense starts from what an ordinary defense does and believes its own eyes
+// more with every snap, so a defense that does one thing all afternoon stops surprising anyone.
+function newSeen() { return { n: 0, blitz: 0, man: 0, sl0: 0, sl1: 0, twist: 0 }; }
+function recordSeen(g, s, dc) {
+  const f = g.dSeen && g.dSeen[s]; if (!f) return;
+  const pl = dc.plan || {};
+  f.n++; if (pl.rush ? pl.rush.length >= 5 : dc.pres === 'BLITZ' || dc.pres === 'FZ') f.blitz++;
+  if (MAN_SHELLS.includes(dc.cov)) f.man++;
+  if (pl.slant) { const v = Object.values(pl.slant); if (v.some(x => x < 0)) f.sl0++; if (v.some(x => x > 0)) f.sl1++; }
+  if (pl.twist ? pl.twist.length : dc.stunt) f.twist++;
+}
+function seenShare(g, s, k, prior) { const f = g.dSeen && g.dSeen[s]; return f ? (f[k] + prior * 8) / (f.n + 8) : prior; }
 
 function wpick(obj) {
   const ks = Object.keys(obj).filter(k => obj[k] > 0);
@@ -115,7 +127,7 @@ function offenseCall(g) {
     call.dir = call.type === 'JET' ? 'OUT' : call.carrier === 'FB' || call.type === 'SNEAK' || call.duo ? 'IN' : rand() < (call.scheme === 'ZONE' ? (wide ? 0.72 : 0.32) : call.counter ? 0.5 : 0.36) ? 'OUT' : 'IN';
     call.side = rand() < 0.6 ? 1 : -1;
   } else {
-    const fd = defFilm(g.tids[d]), blitzy = fd.n > 20 ? fd.blitz / fd.n : 0.25, manny = fd.n > 20 ? fd.man / fd.n : 0.35;
+    const blitzy = seenShare(g, d, 'blitz', 0.25);
     const quick = ot.quick, deep = ot.deep;
     const armF = clamp(1 + (deepArm(qb) - DEEP.ref) * DEEP.call, DEEP.callLo, DEEP.callHi); // shots are called for the man who can make them
     const w = { QUICK: quick * tilt('QUICK'), DROP: Math.max(0.1, 1 - quick - deep) * tilt('DROP'), DEEP: deep * tilt('DEEP') * armF,
@@ -127,13 +139,14 @@ function offenseCall(g) {
     if (sit.backed) { w.DEEP *= 0.3; w.RBSCR *= 0.4; }
     if (call.form === 'EMP') { w.RBSCR = 0; w.DEEP *= 0.8; }
     if (g.togo >= 15) w.RBSCR *= 1.6;
+    // a defense that has been coming all day gets the ball out quick and the screen; one that never comes gets tested deep
+    { const b = clamp(blitzy - 0.25, -0.2, 0.6) * pcF; w.QUICK *= 1 + b * 1.6; w.RBSCR *= 1 + b * 2.4; w.WRSCR *= 1 + b * 1.2; w.DEEP *= Math.max(0.3, 1 - b * 0.9); }
     call.type = wpick(w) || 'DROP';
   }
   // --- tags (spec §7a compatibility; Motion + one other, PA+Boot, Rub+Sideline)
   const key = call.type === 'RUN' ? (call.carrier === 'QB' ? 'RUN_QB' : call.carrier === 'FB' ? 'RUN_FB' : call.dir === 'IN' ? 'RUN_RB_IN' : 'RUN_RB_OUT') : call.type;
   const ok = new Set(TAG_OK[key] || []);
-  const fdm = defFilm(g.tids[d]);
-  const manRate = fdm.n > 20 ? fdm.man / fdm.n : 0.35;
+  const manRate = seenShare(g, d, 'man', 0.35);
   if (ok.has('MOTION') && rand() < ot.motion * (sit.hurry ? 0.2 : 0.75)) call.tags.add('MOTION');
   if (call.type === 'JET') call.tags.add('MOTION');
   if (ok.has('PA') && !sit.hurry && (g.down <= 2 || g.togo <= 3) && call.form !== 'EMP' && rand() < ot.pa * (call.form === 'SG' ? 3.8 : 6.0) * Math.exp(clamp(adv.PA || 0, -1, 1) * 0.3 * pcF)) call.tags.add('PA');
@@ -222,6 +235,75 @@ function defenseCall(g, oc) {
   call.subRush = (pkg === 'NICKEL' || pkg === 'DIME') && sit.passDown && (named || rand() < 0.6);
   call.runBlitz = (call.pres === 'BLITZ' || call.pres === 'FZ') && runEst > 0.55;
   return call;
+}
+
+// ---------- before the snap ----------
+// Each side has one move at the line. The quarterback counts the box, the two sides and the shell he is shown (which may be a
+// disguise, and which he may simply miscount) and, as far as he is trusted to, gets out of a bad play. The defense's
+// signal-caller hears the check and may answer it, but he has to guess what it was, and quarterbacks make dummy calls,
+// so answering is always a gamble. Nobody gets a second move: the ball is snapped.
+function boxLook(off, def, dc) {
+  const single = dc.cov === 'C1' || dc.cov === 'C3' || dc.cov === 'C0';
+  const hats = off.filter(e => OL_SLOTS.includes(e.slot) || INLINE.has(e.slot) || e.slot === 'FB');
+  const box = def.filter(e => e.depth <= 5.5 && Math.abs(e.x) <= 3.6), down = box.some(e => e.slot === 'SS' || e.slot === 'FS');
+  const over = s => box.filter(e => e.x * s > 0.25).length - hats.filter(e => e.x * s > 0.25).length; // defenders he cannot block on that side
+  return { single, down, hats: hats.length, men: box.length, over: [over(-1), over(1)] };
+}
+// Bodies at the point of attack if this run went to that side: the men on the line near the hole and the linebackers behind it,
+// less the blockers who can get there. It is what a quarterback can count from under center.
+function runAim(oc, side) { const out = oc.dir === 'OUT', zone = oc.scheme === 'ZONE'; return side * (out ? (zone ? 2.9 : 2.3) : (zone ? 0.6 : 1.0)); }
+function holeCount(off, def, oc, side) {
+  const t = runAim(oc, side), near = (e, r) => Math.abs(e.x - t) <= r;
+  return def.filter(e => e.depth < ON_LINE ? near(e, 1.4) : e.depth <= 5.5 && near(e, 2)).length - off.filter(e => (OL_SLOTS.includes(e.slot) || INLINE.has(e.slot)) && near(e, 1.5)).length;
+}
+function preSnap(g, oc, dc, off, def) {
+  const o = g.poss, d = 1 - o, qb = off.find(e => e.slot === 'QB');
+  if (!qb || !qb.p.a || oc.simple || oc.type === 'SNEAK' || oc.type === 'GADGET' || oc.tags.has('TRICK')) return;
+  const sit = situation(g), proc = ea(g, qb, 'proc'), L = boxLook(off, def, dc);
+  // what he sees: a disguised shell fools him unless he reads through it, and a poor processor miscounts now and then
+  const fooled = dc.disg && rand() >= lgt((proc - 72) * 0.07 - 0.2);
+  const single = fooled ? !L.single : L.single;
+  const miss = rand() < clamp(0.22 - (proc - 50) * 0.005, 0.03, 0.3) ? (rand() < 0.5 ? -1 : 1) : 0;
+  const extra = L.men + (single && !L.down ? 1 : 0) + miss - L.hats; // defenders in the box beyond the blockers: 1 is ordinary
+  // how much he is allowed to change: his head, how well he knows the offense, and whether he can be heard
+  const lic = clamp(0.18 + (proc - 60) * 0.014, 0.04, 0.7) * clamp(pbOf(qb.p) / 85, 0.4, 1.1) * (o === 1 ? 0.85 : 1) * TUNE.checkRate;
+  const ot = g.cx[o].ot, keepTags = () => { oc.tags = new Set(oc.tags.has('MOTION') ? ['MOTION'] : []); };
+  if (oc.isRun) {
+    const plain = (oc.type === 'RUN' || oc.type === 'OPTION') && oc.carrier !== 'FB';
+    const lean = holeCount(off, def, oc, oc.side) - holeCount(off, def, oc, -oc.side); // how many more bodies are waiting on the side he is running at
+    if (plain && extra >= 2 && rand() < lic * (extra >= 3 ? 1.3 : 1) * (sit.short || sit.gl ? 0.3 : 1) * (sit.milk ? 0 : 1)) {
+      // too many to block: throw it
+      oc.type = rand() < 0.7 ? 'QUICK' : 'DROP'; oc.isRun = false; keepTags();
+      for (const k of ['carrier', 'scheme', 'counter', 'duo', 'wide', 'dir']) delete oc[k];
+      oc.checked = 'pass';
+    } else if (plain && lean >= 1 && rand() < lic * (lean >= 2 ? 1 : 0.5)) { oc.side = -oc.side; oc.checked = 'flip'; }
+  } else if (oc.type === 'QUICK' || oc.type === 'DROP' || oc.type === 'DEEP') {
+    // pressure showing: keep the back in (as before), or get the ball out
+    oc.sawBlitz = (dc.plan && dc.plan.rush ? dc.plan.rush.length >= 5 : dc.pres === 'BLITZ' || dc.pres === 'FZ') && !fooled && rand() < lgt((proc - 60) * 0.06 + (seenShare(g, d, 'blitz', 0.25) - 0.25) * 3); // easier to see coming from a defense that has been coming all day
+    const long = g.down >= 3 && g.togo >= 7;
+    if (oc.sawBlitz && oc.type !== 'QUICK' && rand() < lic * 0.5) { oc.type = 'QUICK'; delete oc.maxp; oc.checked = 'hot'; }
+    else if (extra <= 0 && !single && oc.form !== 'EMP' && !sit.hurry && rand() < lic * (extra < 0 ? 0.9 : 0.35) * (long ? 0.15 : 1)) {
+      // a light box with both safeties back: run it
+      oc.type = oc.form !== 'UC' && sit.passDown ? 'DRAW' : 'RUN'; oc.isRun = true; oc.carrier = 'RB'; oc.scheme = rand() < ot.zone ? 'ZONE' : 'GAP'; oc.dir = 'IN';
+      { const a = holeCount(off, def, oc, 1), b = holeCount(off, def, oc, -1); oc.side = a < b ? 1 : b < a ? -1 : rand() < 0.5 ? 1 : -1; } keepTags();
+      for (const k of ['optrt', 'maxp', 'sawBlitz']) delete oc[k];
+      oc.checked = 'run';
+    }
+  }
+  // a dummy call: it sounds like a check and changes nothing
+  if (!oc.checked && rand() < lic * 0.3) oc.dummy = true;
+  if (!oc.checked && !oc.dummy) return;
+  // the answer
+  const cap = def.filter(e => ['MLB', 'WLB', 'SAM', 'SS', 'FS'].includes(e.slot)).sort((a, b) => ea(g, b, 'prec') - ea(g, a, 'prec'))[0];
+  if (!cap || dc.pres === 'FZ') return;
+  const prec = ea(g, cap, 'prec');
+  if (rand() >= clamp(0.1 + (prec - 60) * 0.012 + (g.cx[d].dpc - 60) * 0.002, 0.03, 0.5) * (oc.nohud ? 0.6 : 1) * TUNE.answerRate) return;
+  const truth = oc.isRun ? 'run' : 'pass', right = oc.dummy ? rand() < 0.5 : rand() < clamp(0.55 + (prec - 65) * 0.01, 0.4, 0.8);
+  const think = right ? truth : truth === 'run' ? 'pass' : 'run';
+  const BACK = { C3: 'C4', C1: 'C2M', C0: 'C1' }, DOWN = { C2: 'C3', C4: 'C3', C6: 'C3', T2: 'C3', C2M: 'C1' };
+  if (think === 'pass') { if (BACK[dc.cov]) dc.cov = BACK[dc.cov]; dc.runBlitz = false; } // a safety backs out of the box
+  else if (DOWN[dc.cov]) dc.cov = DOWN[dc.cov]; // a safety spins down into it
+  dc.answer = think; dc.answerRight = right;
 }
 
 // Pre-game estimate of where each offense has an edge vs this opponent (what a good play caller would see on film)

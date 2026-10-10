@@ -128,13 +128,15 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
   }
   // pickup checks: blitzers, simulated pressure and stunts test the protection's awareness
   const design = clamp(designKnob(T(g.tids[d]), 'presD') - designKnob(T(g.tids[o]), 'passD'), -35, 35) * 0.0022;
+  // how much of a surprise each thing still is: something this defense has done on a quarter of today's snaps is the ordinary amount
+  const fresh = (k, usual) => clamp(1.45 - 1.8 * seenShare(g, d, k, usual), 0.15, 1.3) / clamp(1.45 - 1.8 * usual, 0.15, 1.3);
   // A man coming from depth is a surprise. A man standing up near the line is one only as far as the look lied: if everyone who showed came, the count was right.
   const standing = def.filter(e => e.depth >= ON_LINE && e.depth < 2.2), bluff = standing.length ? standing.filter(e => !rushers.includes(e)).length / standing.length : 0;
   for (const a of assign) {
     if (!a.blockers.length) { a.free = true; continue; }
     if (a.e.blitz) {
       const b = a.blockers[0];
-      const p = (standing.includes(a.e) ? bluff : 1) * lgt(lgtP(TUNE.pickupMiss) + design + (dc.pres === 'SIM' ? 0.45 : dc.pres === 'FZ' ? 0.12 : 0) - (ea(g, b, 'bawr') - 65) * 0.03 - (ea(g, qbE, 'proc') - 70) * 0.015);
+      const p = (standing.includes(a.e) ? bluff : 1) * fresh('blitz', 0.25) * lgt(lgtP(TUNE.pickupMiss) + design + (dc.pres === 'SIM' ? 0.45 : dc.pres === 'FZ' ? 0.12 : 0) - (ea(g, b, 'bawr') - 65) * 0.03 - (ea(g, qbE, 'proc') - 70) * 0.015);
       if (rand() < p) { a.free = true; a.missed = true; }
     }
   }
@@ -148,14 +150,14 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
   }
   for (const [pen, loop] of twists) {
     const aw = avg([pen, loop].map(a => ea(g, a.blockers[0], 'bawr')));
-    if (rand() < lgt(lgtP(TUNE.stuntMiss) + design - (aw - 65) * 0.04)) { loop.free = true; loop.stuntWin = true; }
+    if (rand() < fresh('twist', 0.22) * lgt(lgtP(TUNE.stuntMiss) + design - (aw - 65) * 0.04)) { loop.free = true; loop.stuntWin = true; }
     else { pen.stuntDelay = 0.15; loop.stuntDelay = 0.15; }
   }
   // slants: a rusher who crosses a blocker's face wins quickly if that blocker is slow to see it, and runs himself into the block if not
   for (const a of assign) {
     if (!a.e.mv || !blocked(a)) continue;
     const b = a.blockers[0];
-    a.slant = rand() < lgt(lgtP(TUNE.slantHit) + design - (ea(g, b, 'bawr') - 65) * 0.04) ? TUNE.slantWin : -TUNE.slantLose;
+    a.slant = rand() < fresh(a.e.mv < 0 ? 'sl0' : 'sl1', 0.15) * lgt(lgtP(TUNE.slantHit) + design - (ea(g, b, 'bawr') - 65) * 0.04) ? TUNE.slantWin : -TUNE.slantLose;
   }
   // time for each rusher to get home
   const oNet = cx.pb;
@@ -224,6 +226,8 @@ function runBlocking(g, off, def, oc, dc, target, carrierSlot) {
   for (const r of fronts) if (r.combo) climbers.push({ e: r.blockers[1], fromCombo: r });
   for (const b of blk) if (!b.used) climbers.push({ e: b.e, lead: b.e.slot === 'FB' || b.e.slot === 'RB' });
   if (puller && !puller.kicked) climbers.push({ e: puller.e, puller: true });
+  // blockers climb to the linebackers they counted before the snap; a safety who rotated down late is more often the man nobody has
+  if (rand() < TUNE.rotLast) seconds.sort((a, b) => (a.rotated ? 1 : 0) - (b.rotated ? 1 : 0));
   for (const r of seconds) {
     const c = climbers.filter(c => !c.used).sort((a, b) => Math.abs(a.e.x - r.px) - Math.abs(b.e.x - r.px))[0];
     if (!c) continue;
