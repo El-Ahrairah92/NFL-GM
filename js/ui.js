@@ -820,7 +820,7 @@ function depthChartHTML() {
   // where else he already is in this look, so you can see a clash before you make it
   const elsewhere = p => { if (tab === 'pkg' || auto) return ''; const hit = dcLayout(t, tab, vid).find(b => b.key !== key && (c.lists[vid + ':' + b.key] || [])[0] === p.id); return hit ? ` <span class="pill warn" title="He is listed first at ${hit.label} in this look">starts at ${hit.label}</span>` : ''; };
   const scope = tab === 'pkg' ? '' : auto ? '<div class="small muted" style="margin:2px 0 8px">The staff\'s order. Changing it takes control of this unit: every grouping starts as a copy of the staff\'s chart and is yours from then on.</div>' : `<div class="small muted" style="margin:2px 0 8px">This order is for <b>${esc(view.label)}</b> only.</div>`;
-  const pickP = ui.dchPid && ro.some(p => p.id === ui.dchPid) ? P(ui.dchPid) : list.length ? P(list[0]) : cands[0] || null, pk = p => ` data-action="dchPick" data-pid="${p.id}"`, pkOn = p => pickP && p.id === pickP.id ? ' picked' : '';
+  const pickP = ui.dchPid && ro.some(p => p.id === ui.dchPid) ? P(ui.dchPid) : list.length ? P(list[0]) : cands[0] || null, pk = p => ` data-action="dchMan" data-pid="${p.id}"`, pkOn = p => pickP && p.id === pickP.id ? ' picked' : '';
   html += `<div class="card" style="margin-top:12px"><div class="row" style="margin-bottom:2px"><h3 style="margin:0">${esc(label)} <span class="small muted" style="font-weight:400">· ${SPOTS[spot].l}${view ? ' · ' + esc(view.label) : ''}</span></h3><span class="spacer"></span>${rot}</div>${scope}${roleNote ? `<div class="small muted" style="margin-bottom:8px">${roleNote}</div>` : ''}
     <div class="section-title" style="margin-top:6px">Depth order <span class="small muted">· drag to reorder</span></div><div class="dc-order" data-dckey="${editKey}">
     ${list.map((id, i) => { const p = P(id); return `<div class="dc-row${pkOn(p)}" draggable="true" data-dcpid="${id}" data-dcfrom="${i}" data-dcdrop="${i}"${pk(p)}><span class="n">${i + 1}</span><span>${esc(p.lbl)} ${playerLink(p)}${i === 0 ? elsewhere(p) : ''}</span><span class="dc-meta">${dcPlayerMeta(p, key, spot, sel ? tierOf(p, val(p)) : null)}${i > 0 ? `<button class="sm" data-action="dchUp" data-key="${editKey}" data-i="${i}" title="Move up one spot">▲</button>` : ''}<button class="sm" data-action="dchRemove" data-key="${editKey}" data-i="${i}" title="Remove">✕</button></span></div>`; }).join('')}
@@ -2900,7 +2900,7 @@ const actions = {
   dchView: d => { (ui.dchView = ui.dchView || {})[ui.dchTab || 'off'] = d.v; render(); },
   dchCopy: d => { const from = document.getElementById('dchCopyFrom'); if (from) { copyView(state.userTid, ui.dchTab || 'off', from.value, d.to); save(); render(); } },
   dchTab: d => { ui.dchTab = d.tab; ui.dchKey = null; render(); },
-  dchPick: d => { ui.dchPid = +d.pid; render(); },
+  dchMan: d => { ui.dchPid = +d.pid; render(); }, // the small card on the depth chart follows the man you click
   dchRemove: d => { setChart(state.userTid, d.key, +d.i, 0); save(); render(); },
   dchAdd: d => { const blocked = !ui.dchAll && chartBlocked(state.userTid, d.key, +d.pid); if (blocked) { toast(blocked); return; } const cc = ensureChart(state.userTid); if (cc.auto[CHART_UNIT(d.key)]) setChartAuto(state.userTid, CHART_UNIT(d.key), false); const l = cc.lists[d.key] || []; setChart(state.userTid, d.key, l.length, +d.pid); save(); render(); },
   dchAuto: d => { setChartAuto(state.userTid, d.unit, d.on === '1'); save(); render(); },
