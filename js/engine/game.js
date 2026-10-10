@@ -245,7 +245,7 @@ function runPlay(g, oc, dc) {
   injuryCheck(g, (res.involved || []).filter(Boolean), res.kind === 'sack' ? 0.011 : 0.0042); // quarterbacks get hurt taking sacks
   // away from the ball: a hamstring on a route, a rolled ankle in coverage
   if (rand() < 0.0011) { const e = pick([...off, ...def].filter(e => e.slot !== 'QB' && e.depth !== 0 && !OL_SLOTS.includes(e.slot))); if (e && e.p.id >= 0 && !e.p.injury && rand() < durMult(e.p)) injure(g, e.p); }
-  if (rand() < 0.008) { const pool = [...off.filter(e => OL_SLOTS.includes(e.slot)), ...def.filter(e => e.depth === 0)]; const e = pick(pool); if (e && e.p.id >= 0 && !e.p.injury && rand() < durMult(e.p)) injure(g, e.p); }
+  if (rand() < 0.008) { const pool = [...off.filter(e => OL_SLOTS.includes(e.slot)), ...lineMen(def)]; const e = pick(pool); if (e && e.p.id >= 0 && !e.p.injury && rand() < durMult(e.p)) injure(g, e.p); }
 }
 
 // ---------- penalties ----------
@@ -282,7 +282,7 @@ function assessPenalty(g, onOffense, yards, name, who, opts = {}) {
 // before the snap: false starts, delay, illegal formation; offside, encroachment, twelve men
 function preSnapPenalty(g, off, def) {
   const o = g.poss, d = 1 - o;
-  const line = off.filter(e => e.slot !== 'QB'), front = def.filter(e => e.depth === 0);
+  const line = off.filter(e => e.slot !== 'QB'), front = lineMen(def);
   const lost = line.length ? line.reduce((s, e) => s + (100 - (PRAC_SIDE[e.p.pos] ? pbOf(e.p) : 100)), 0) / line.length / 100 : 0; // players still learning the calls jump
   const r = rand(), pOff = PEN.offPre * discFactor(g, o, line) * (o === 1 ? 1.15 : 1) * (1 + lost * 1.5), pDef = PEN.defPre * discFactor(g, d, front);
   if (r < pOff) { const k = rand(); const who = k < 0.72 ? flagOn(line.filter(e => OL_SLOTS.includes(e.slot) || e.slot === 'Y' || e.slot === 'H')) || flagOn(line) : null;
@@ -387,7 +387,7 @@ function applyResult(g, res, oc, dc, off, def, b) {
     if (res.fumble) {
       inc(g, res.sacker.p, 'ff');
       if (rand() < 0.55) {
-        const rec = pick(def.filter(e => e.depth === 0));
+        const rec = pick(res.prot && res.prot.rushers.length ? res.prot.rushers.map(a => a.e) : def); // one of the men around the quarterback
         inc(g, rec.p, 'fr'); inc(g, res.qb.p, 'fum'); ts.to++;
         logPlay(g, txt, res.desc + ' — FUMBLE, recovered by ' + pshort(rec.p));
         endDrive(g, 'Fumble');

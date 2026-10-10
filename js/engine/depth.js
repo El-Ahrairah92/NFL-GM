@@ -14,7 +14,7 @@ const TUNE = {
   teamForm: 0.4,       // sd of team game-day form
   fatFree: 3.0,        // fatigue tolerated before it costs anything
   // trenches
-  passProMedian: 4.4,  // seconds for an average rusher to beat an average blocker 1v1
+  passProMedian: 4.41,  // seconds for an average rusher to beat an average blocker 1v1
   rushScale: 0.029,
   insideRush: 1.1,     // interior rushers take longer to get home than edges (crowded path, more double teams)    // how strongly the rush/block gap moves win time
   preKnow: 0,          // 1: the pre-snap read knows which receiver will come open, luck included; 0: it knows the matchup only
@@ -40,6 +40,17 @@ const TUNE = {
   runWin: -0.28,        // logit: front defender beats his run block (average vs average)
   runScale: 0.12,
   comboBonus: 16,
+  levRun: 5,            // run-block points for a blocker who starts a full step between his man and the play (and against one who has to cross his face)
+  kickOut: 4,           // what a puller or lead back gives up kicking out a man set in the hole
+  twoGapPen: 0.7,       // a man head-up on his blocker holds two gaps: he gets into the backfield this much as often
+  slantPen: 1.35,       // a man slanting toward the play, or shooting a gap from depth, gets into the backfield this much more often
+  reachRush: 2,         // pass-rush points per step a blocker has to travel beyond his first one to reach his man
+  widePath: 0.12,       // seconds added per step a rusher lines up outside the tight end's spot
+  deepPath: 0.02,       // seconds added per yard a blocked rusher starts off the ball
+  offBall: 4,           // run-block points against a man who meets his blocker coming from off the line
+  headUp: 3,            // pass-rush points an interior man gives up playing head-up on a blocker
+  slantHit: 0.4,        // chance a slant crosses an average blocker's face cleanly
+  slantWin: 9, slantLose: 4, // pass-rush points when it does, and when he runs himself into the block
   // coverage / passing
   openBase: -0.54,
   accScale: 0.042,      // how much ball placement decides whether a throw is catchable
@@ -114,33 +125,46 @@ const DEF_SLOT = {
   MLB: ['MLB', 'LB'], WLB: ['WLB', 'LB'], SAM: ['WLB', 'LB'], BIGN: ['SS', 'DB'], // big nickel: a third safety plays the slot
   CB: ['CB', 'DB'], NCB: ['NCB', 'DB'], DIME: ['NCB', 'DB'], FS: ['FS', 'DB'], SS: ['SS', 'DB'],
 };
-// [name, slot type, x, depth]. Depth 0 = on the line. Names are unique within a package.
-function packageLayout(front, pkg) {
-  const e = front === 'Wide-9' ? 3.6 : 2.85;
-  const DB2 = [['CB1', 'CB', -4, 7], ['CB2', 'CB', 4, 7], ['FS', 'FS', -0.5, 13], ['SS', 'SS', 1.5, 9]];
-  let odd = front === '3-4' || front === 'Tite';
-  if (pkg === 'GL') return [['LE', 'EDGE', -3, 0], ['LT', 'DT', -1.3, 0], ['NT', 'NT', 0, 0], ['RT', 'DT', 1.3, 0], ['RE', 'EDGE', 3, 0],
-    ['WLB', 'WLB', -1.6, 3], ['MLB', 'MLB', 0, 3], ['SAM', 'SAM', 2.4, 3], ['CB1', 'CB', -4, 5], ['CB2', 'CB', 4, 5], ['SS', 'SS', 1, 6]];
-  // Bear: all three interior linemen covered, edges tight outside them, two linebackers stacked behind
-  if (pkg === 'BASE' && front === 'Bear') return [['LE', 'EDGE', -3.2, 0], ['LT', 'DT', -1.3, 0], ['NT', 'NT', 0, 0], ['RT', 'DT', 1.3, 0], ['RE', 'EDGE', 3.2, 0],
-    ['WLB', 'WLB', -0.8, 4.5], ['MLB', 'MLB', 0.8, 4.5], ...DB2];
-  // Under: the line shifts to the weak side, the nose shades the center, the strong-side linebacker walks up over the tight end
-  if (pkg === 'BASE' && front === 'Under') return [['LE', 'EDGE', -2.4, 0], ['DT', 'DT', -1.3, 0], ['NT', 'NT', 0.5, 0], ['RE', 'EDGE', 2.3, 0],
-    ['WLB', 'WLB', -1.6, 5], ['MLB', 'MLB', 0.2, 5], ['SAM', 'SAM', 3.4, 1.5], ...DB2];
-  if (front === 'Bear' || front === 'Under') front = '4-3';
-  if (pkg === 'BASE' && odd) {
-    const de = front === 'Tite' ? 1.6 : 2.2;
-    return [['LOLB', 'EDGE', -3.2, 0], ['LDE', 'DE', -de, 0], ['NT', 'NT', 0, 0], ['RDE', 'DE', de, 0], ['ROLB', 'EDGE', 3.2, 0],
-      ['WLB', 'WLB', -0.9, 5], ['MLB', 'MLB', 0.9, 5], ...DB2];
-  }
-  if (pkg === 'BASE') return [['LE', 'EDGE', -e, 0], ['NT', 'NT', -0.5, 0], ['DT', 'DT', 1.4, 0], ['RE', 'EDGE', e, 0],
-    ['WLB', 'WLB', -1.5, 5], ['MLB', 'MLB', 0, 5], ['SAM', 'SAM', 2.6, 4], ...DB2];
+// Fronts are data. A man on the line is [name, job, side, technique]; a man off the ball is [name, job, x, depth].
+// Side: 'S' is the offense's strong side (its right), 'W' the weak side. Technique is where he lines up:
+// 0 head-up on the center, 1 a shade of him; 2i, 2, 3 inside, head-up and outside the guard; 4i, 4, 5 the same on the tackle;
+// 7, 6, 9 the same on the tight end's spot; W9 wide of everyone. Names are unique within a front.
+const TECH_X = { '0': 0, '1': 0.45, '2i': 0.75, '2': 1, '3': 1.35, '4i': 1.65, '4': 2, '5': 2.3, '7': 2.6, '6': 2.9, '9': 3.3, 'W9': 3.8 };
+function techX(side, tech) { return (side === 'W' ? -1 : 1) * TECH_X[tech]; }
+function techOf(x) { let best = '0'; for (const k in TECH_X) if (Math.abs(TECH_X[k] - Math.abs(x)) < Math.abs(TECH_X[best] - Math.abs(x))) best = k; return best; }
+function frontRows(rows) { return rows.map(r => typeof r[2] === 'string' ? [r[0], r[1], techX(r[2], String(r[3])), r[4] || 0] : [r[0], r[1], r[2], r[3] || 0]); }
+const lineEnds = t => [['LE', 'EDGE', 'W', t], ['RE', 'EDGE', 'S', t]];
+const LINES = {
+  '4-3': [lineEnds('7')[0], ['NT', 'NT', 'W', '1'], ['DT', 'DT', 'S', '3'], lineEnds('7')[1]],
+  'Wide-9': [lineEnds('W9')[0], ['NT', 'NT', 'W', '1'], ['DT', 'DT', 'S', '3'], lineEnds('W9')[1]],
+  '3-4': [['LOLB', 'EDGE', 'W', '9'], ['LDE', 'DE', 'W', '5'], ['NT', 'NT', 'S', '0'], ['RDE', 'DE', 'S', '5'], ['ROLB', 'EDGE', 'S', '9']],
+  'Tite': [['LOLB', 'EDGE', 'W', '9'], ['LDE', 'DE', 'W', '4i'], ['NT', 'NT', 'S', '0'], ['RDE', 'DE', 'S', '4i'], ['ROLB', 'EDGE', 'S', '9']],
+  // Bear: all three interior linemen covered, edges tight outside them
+  'Bear': [['LE', 'EDGE', 'W', '9'], ['LT', 'DT', 'W', '3'], ['NT', 'NT', 'S', '0'], ['RT', 'DT', 'S', '3'], ['RE', 'EDGE', 'S', '9']],
+  // Under: the line shifts to the weak side and the nose shades the center
+  'Under': [['LE', 'EDGE', 'W', '5'], ['DT', 'DT', 'W', '3'], ['NT', 'NT', 'S', '1'], ['RE', 'EDGE', 'S', '5']],
+  'GL': [['LE', 'EDGE', 'W', '6'], ['LT', 'DT', 'W', '3'], ['NT', 'NT', 'S', '0'], ['RT', 'DT', 'S', '3'], ['RE', 'EDGE', 'S', '6']],
   // sub packages are a four-man line whatever the base front: two edges and two interior rushers playing tackle technique.
   // (A 3-4 team's ends slide inside here as tackles; the job is DT, not base end.)
-  const dl = odd ? [['LE', 'EDGE', -3.1, 0], ['DT1', 'DT', -1.3, 0], ['DT2', 'DT', 1.3, 0], ['RE', 'EDGE', 3.1, 0]]
-    : [['LE', 'EDGE', -e, 0], ['DT1', 'DT', -1.4, 0], ['DT2', 'DT', 1.4, 0], ['RE', 'EDGE', e, 0]];
-  if (pkg === 'NICKEL') return [...dl, ['WLB', 'WLB', -1.2, 5], ['MLB', 'MLB', 0.8, 5], ...DB2, ['NCB', 'NCB', 2.4, 6]];
-  return [...dl, ['WLB', 'WLB', 0, 5], ...DB2, ['NCB', 'NCB', 2.4, 6], ['DIME', 'DIME', -2.4, 6]]; // DIME
+  'SUB': t => [lineEnds(t)[0], ['DT1', 'DT', 'W', '3'], ['DT2', 'DT', 'S', '3'], lineEnds(t)[1]],
+};
+// The eleven for a front and package, as [name, job, x, depth]. A front can also be handed in whole as { rows: [...] }:
+// any number of men on the line in any technique, anyone else anywhere behind them.
+function packageLayout(front, pkg) {
+  if (front && front.rows) return frontRows(front.rows);
+  const DB2 = [['CB1', 'CB', -4, 7], ['CB2', 'CB', 4, 7], ['FS', 'FS', -0.5, 13], ['SS', 'SS', 1.5, 9]];
+  const odd = front === '3-4' || front === 'Tite';
+  if (pkg === 'GL') return frontRows([...LINES.GL, ['WLB', 'WLB', -1.6, 3], ['MLB', 'MLB', 0, 3], ['SAM', 'SAM', 2.4, 3], ['CB1', 'CB', -4, 5], ['CB2', 'CB', 4, 5], ['SS', 'SS', 1, 6]]);
+  // Bear: two linebackers stacked behind the covered interior
+  if (pkg === 'BASE' && front === 'Bear') return frontRows([...LINES.Bear, ['WLB', 'WLB', -0.8, 4.5], ['MLB', 'MLB', 0.8, 4.5], ...DB2]);
+  // Under: the strong-side linebacker walks up over the tight end
+  if (pkg === 'BASE' && front === 'Under') return frontRows([...LINES.Under, ['WLB', 'WLB', -1.6, 5], ['MLB', 'MLB', 0.2, 5], ['SAM', 'SAM', 3.4, 1.5], ...DB2]);
+  if (front === 'Bear' || front === 'Under') front = '4-3';
+  if (pkg === 'BASE' && odd) return frontRows([...LINES[front], ['WLB', 'WLB', -0.9, 5], ['MLB', 'MLB', 0.9, 5], ...DB2]);
+  if (pkg === 'BASE') return frontRows([...(LINES[front] || LINES['4-3']), ['WLB', 'WLB', -1.5, 5], ['MLB', 'MLB', 0, 5], ['SAM', 'SAM', 2.6, 4], ...DB2]);
+  const dl = LINES.SUB(odd ? '6' : front === 'Wide-9' ? 'W9' : '7');
+  if (pkg === 'NICKEL') return frontRows([...dl, ['WLB', 'WLB', -1.2, 5], ['MLB', 'MLB', 0.8, 5], ...DB2, ['NCB', 'NCB', 2.4, 6]]);
+  return frontRows([...dl, ['WLB', 'WLB', 0, 5], ...DB2, ['NCB', 'NCB', 2.4, 6], ['DIME', 'DIME', -2.4, 6]]); // DIME
 }
 
 // fatigue: [per-snap load, threshold before rotation pressure]

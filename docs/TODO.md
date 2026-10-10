@@ -14,6 +14,17 @@ Things we have talked about and not built yet. Newest decisions win; cross items
    - proven backups in their prime want a starting job or to test the market (a 26-year-old swing tackle who has graded 80+ filling in should expect a real chance somewhere)
 2. **Draft and trades.** Dial in draft pick value exactly; go deep on trades. Trades in the offseason.
 
+## Fronts and the trenches (agreed order)
+
+Done: the line of scrimmage is geometry and a front is data (DESIGN section 41).
+
+1. **Trench gaps inside the new model.** Interior pressure collapses the pocket and moves the quarterback off his spot; runs are stuffed because a gap was lost, not at a flat rate (21% now, real 16 to 19); yards before and after contact.
+2. **Coach front libraries.** Each defensive coach generates his own fronts, shifts, slants and stunts from his scheme and traits. Generated fronts have to be sound (every gap owned).
+3. **Pressure packages and the offense's answers.** Disguised and overload pressures on one side; on the other, protection calls, hot throws, and checking the play at the line (throw against a loaded box, run at the light side). Offensive coaches get the same depth. Heavy fronts are not punished enough until this exists.
+4. **Playbook page, scouting text, roster valuation by technique.** Play-by-play names the front and the pressure.
+
+After the trench work: re-measure attribute values and refit rating weights.
+
 ## Computer front offices (behind the curtain)
 
 - Three-season projection in the valuation (stubbed).
@@ -30,7 +41,7 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 
 ## Coaches
 
-- **Fronts and techniques (design agreed in outline, not built).** Each defensive playbook carries its own fronts: two, three or four down linemen, each assigned a technique (where he lines up within a gap), with pre-snap shifts and slants. Needs the trench engine to decide blocks by alignment, not just nearest man.
+- Fronts and techniques: see "Fronts and the trenches" above. The engine now decides blocks from alignment; coaches generating their own fronts is step 2 there.
 
 - Your position coaches suggest retraining candidates in the camp meeting.
 - A coach Evaluation rating.

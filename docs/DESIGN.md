@@ -738,3 +738,40 @@ Position groups, points a game (2,400 games a row): quarterback 11.1, receivers 
 **Rating weights refitted (version 6)** on that measurement, by the same rule as before (half old, half measured, noise earns nothing, every position re-centred). A typical player moves about one rating point, the largest under four. Main shifts: a quarterback's short accuracy and processing up and arm down; a back's burst and speed up and balance down; receivers' hands up; linebackers' and safeties' speed up; interior linemen's block shedding up and pass rush down. Positional value still left alone for the free agency work.
 
 Still outside the real range: completions of 20+ yards (2.4 a team-game, real 3.0 to 3.6), stuffed runs (21%), the best offense (34 points a game), the most-intercepted quarterback (21), the top deep threat's yards per catch (21), a cornerback's tackles (112 for the leader) and passes defended (the fifth-best has 14, real 15 to 17). The tackle leader is now a little low (158, real 165 to 185).
+
+## 41. The line of scrimmage as geometry: any front against any offense
+
+The trenches used to know a handful of fixed fronts. Now a front is data and the engine works out the blocking from where the men are standing, so any front can be handed in and resolved.
+
+**A front is a list of eleven men.** A man on the line is given by side and technique (0 head-up on the center, 1 a shade of him; 2i, 2, 3 on the guard; 4i, 4, 5 on the tackle; 7, 6, 9 on the tight end's spot; W9 wide). A man off the ball is given by where he stands and how deep. Any number can be on the line. The seven fronts the game already had (4-3, Wide-9, 3-4, Tite, Bear, Under, goal line, and the sub-package lines) are now written this way.
+
+**A pressure plan says who comes and how.** Any of: who rushes (everyone else drops), who slants one gap left or right on the snap, which two rushers twist, and which gap a blitzer from depth hits. Today's calls (rush four, rush three, blitz, simulated pressure, fire zone, stunt) still pick their own rushers when there is no plan.
+
+**Pass protection.**
+- *The call.* The line counts who is showing rush on each side of the center and slides toward the bigger number. Going with the slide a lineman can cover two men's width; against it, barely his own gap. With no slide he reaches a step and a half. The man on each end can always kick out to someone wide of him.
+- *Pairing.* Blockers and rushers are paired left to right, because linemen cannot run through each other. If somebody has to be let go it is the widest man. A back kept in takes whoever the line could not reach, inside man first.
+- *Help.* A spare lineman doubles the most dangerous rusher next to him (the better blocker takes the man, the other helps). Spare backs chip the edges.
+- *Surprise.* A man coming from depth can be missed. A man standing up near the line can be missed only as far as the look lied: if everyone who showed came, the count was right.
+- *The angle.* A blocker who has to travel to his man gives up the corner. A rusher lined up very wide has a longer way to go. A man coming from depth has ground to cover first. An interior man head-up on a blocker is reading, not rushing.
+- *Slants and twists.* A slant wins quickly if the blocker is slow to see it and runs into the block if not. A twist frees the looper if the two blockers do not pass it off.
+
+So an overload the offense can see gets picked up by sliding; one it cannot see (men from depth, or from the side it slid away from) does not.
+
+**Run blocking.**
+- The line takes the men on the line by alignment, paired left to right. If somebody has to be let go it is the man farthest from the play.
+- Gap schemes pull the backside guard first; the men next to him cover for it. A man left unblocked at the point of attack is kicked out by the puller or the lead back.
+- Zone schemes combo with a spare lineman and climb to a linebacker.
+- *The angle.* A blocker already between his man and the play only has to stay there; one who has to get across his man's face has to win a race first. This is what a technique is for: a 3-technique is hard to reach on a run at his gap and easy to wall off on a run away from it.
+- A man head-up on his blocker holds two gaps and gets into the backfield less. A man slanting toward the play, or shooting a gap from depth, gets there more, and leaves his old gap to whoever is behind him. A man who meets his blocker from off the line gives ground.
+- A gap nobody is standing in has nobody to beat at the first level.
+
+**The front lab.** A test harness hands one club an invented front and plan, plays real games with it and checks every snap: eleven different men a side, every rusher either blocked or free, no blocker on two men, every result a number. Twelve named fronts (a 46 Bear with six on the line, a 3-3-5 stack, two down linemen with four standing, six down linemen, nobody down at all, four linemen on one side, an overload, a prevent) and forty invented at random, about 66,000 snaps: no problems. What each gave up is football: the Bear allowed 2.8 a carry and stuffed 36% of runs; the prevent allowed 8.5 a carry and pressured 17% of dropbacks; four linemen on one side allowed 3.0 a carry to that side and 5.8 to the other; the three-man line pressured 23%.
+
+Two things the lab found and fixed on the way: a strip-sack with nobody on the line crashed (the recovery looked only at men with a hand down), and stacking the line to one side got a free rusher nearly every snap until the offensive line learned to slide.
+
+**League numbers** are where they were over 32 seasons: scoring 22.9, completion rate 64.7%, yards per attempt 7.16, interceptions 0.77, sack rate 7.1%, yards per carry 4.43. The league passing leader runs a little hotter (about 5,600).
+
+Known and left for the next steps:
+- Offenses do not check the play at the line. A loaded box is not thrown against and a light side is not run at, so a heavy front is not punished the way it should be. Base personnel against three receivers gives up 1.25 fewer yards a carry and only 0.4 more yards a pass attempt.
+- Stuffed runs (21%) and the small value of an interior pass rush are unchanged; both are the next step.
+- Attribute values and rating weights were measured on the old trench model. League results did not move, so they were left; re-measure after the trench work is finished.

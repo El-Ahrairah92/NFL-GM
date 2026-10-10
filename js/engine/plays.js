@@ -110,7 +110,7 @@ function resolveRun(g, off, def, oc, dc) {
   // ---- build the contact sequence ----
   const levels = [];
   const fronts = blk.filter(r => r.lvl === 1), seconds = blk.filter(r => r.lvl === 2);
-  const nearPOA = r => Math.abs(r.e.x - target) <= (outside ? 1.8 : 1.4);
+  const nearPOA = r => Math.abs(r.px - target) <= (outside ? 1.8 : 1.4);
   let lane = 'designed';
   const burstD = ea(g, carrier, 'bur') - 72; // how much quicker than an ordinary back he is to the line
   // vision: zone runners bounce to the cutback if the playside is jammed
@@ -118,10 +118,10 @@ function resolveRun(g, off, def, oc, dc) {
   if (oc.scheme === 'ZONE' && jammed && rand() < lgt((ea(g, carrier, 'vis') * 0.7 + ea(g, carrier, 'agi') * 0.3 - 62) * 0.06)) lane = 'cutback'; // see it, then make the cut
   for (const r of fronts) {
     if (trickHit === 'fooled') break;
-    const relevant = lane === 'cutback' ? Math.sign(r.e.x) === -Math.sign(target) && Math.abs(r.e.x) < 3 : nearPOA(r);
+    const relevant = lane === 'cutback' ? Math.sign(r.px) === -Math.sign(target) && Math.abs(r.px) < 3 : nearPOA(r);
     if (!relevant) continue;
     let w = r.win;
-    if (oc.duo && Math.abs(r.e.x) < 2) w *= 0.97;  // double teams at the point of attack
+    if (oc.duo && Math.abs(r.px) < 2) w *= 0.97;  // double teams at the point of attack
     if (oc.scheme === 'GAP' && !oc.counter) w *= 0.94; // a hat on a hat at the point of attack
     if (oc.wide) w *= 0.88;                          // the stretch gets the line moving and cuts off pursuit
     if (oc.tight && outside) w *= 0.92;              // receivers in close seal the edge
@@ -136,7 +136,7 @@ function resolveRun(g, off, def, oc, dc) {
   }
   // outside runs: the edge must be set by someone
   if (outside && trickHit !== 'fooled') {
-    const edgeR = fronts.filter(r => Math.sign(r.e.x) === Math.sign(target)).sort((a, b) => Math.abs(b.e.x) - Math.abs(a.e.x))[0];
+    const edgeR = fronts.filter(r => Math.sign(r.px) === Math.sign(target)).sort((a, b) => Math.abs(b.px) - Math.abs(a.px))[0];
     const lost = edgeR && rand() > edgeR.win * (oc.wide ? 0.82 : 1);
     if (edgeR) edgeR.won = !lost;
     if (!lost && edgeR && !levels.some(l => l.e === edgeR.e)) levels.push({ e: edgeR.e, at: randInt(0, 3) });
@@ -159,7 +159,7 @@ function resolveRun(g, off, def, oc, dc) {
   const deepS = def.filter(e => (e.slot === 'FS' || e.slot === 'SS') && !blk.some(b => b.e === e));
   for (const s of deepS) levels.push({ e: s, at: randInt(7, 12), bonus: TUNE.safetyRun });
   levels.sort((a, b) => a.at - b.at);
-  if (trickHit === 'read') levels.unshift({ e: def.filter(e => e.depth === 0)[0], at: -randInt(3, 7) });
+  if (trickHit === 'read') levels.unshift({ e: lineMen(def)[0], at: -randInt(3, 7) });
   const pursuit = def.filter(e => e.slot === 'CB' || e.slot === 'FS' || e.slot === 'SS' || e.slot === 'NCB');
   const r = runToContact(g, carrier, levels, { pursuit, vis: ea(g, carrier, 'vis'), fumbleMult: carrierSlot === 'QB' ? 1.2 : 1, afterBase: carrierSlot === 'QB' ? 1.6 : TUNE.runAfter + (oc.type === 'JET' ? 2.4 : 0), tackleBonus: 0.14 + (g.down >= 3 && g.togo <= 2 ? 0.45 : 0) + (100 - g.ydl <= 3 ? 0.5 : 100 - g.ydl <= 8 ? 0.2 : 0) * TUNE.goalStand }); // no room behind the defense at the goal line
   res.yds = r.yds; res.tackler = r.tackler; res.assist = r.assist; res.fumble = res.fumble || r.fumble; res.breakaway = r.breakaway;
@@ -171,7 +171,7 @@ function resolveRun(g, off, def, oc, dc) {
 }
 function sneak(g, off, def, oc, res, qb) {
   const C_ = off.find(e => e.slot === 'C'), lg = off.find(e => e.slot === 'LG'), rg = off.find(e => e.slot === 'RG');
-  const nt = def.filter(e => e.depth === 0).sort((a, b) => Math.abs(a.x) - Math.abs(b.x))[0];
+  const nt = lineMen(def).sort((a, b) => Math.abs(a.x) - Math.abs(b.x))[0];
   const push = (ea(g, C_, 'str') + ea(g, lg, 'str') + ea(g, rg, 'str')) / 3 * 0.55 + ea(g, qb, 'str') * 0.2 + ea(g, qb, 'siz') * 0.15 + ea(g, qb, 'bur') * 0.1 + bod(qb).w * 2 * TUNE.size;
   const stop = nt ? ea(g, nt, 'str') * 0.6 + ea(g, nt, 'shed') * 0.4 + (bod(nt).w * 2 - bod(nt).h * 1) * TUNE.size : 60;
   const ok = rand() < lgt(1.75 + (push - stop) * 0.05 + (g.cx[g.poss].rb - 0) * 0.05);
