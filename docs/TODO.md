@@ -41,6 +41,10 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 
 ## Players and schemes
 
+- **Positional value is out of date.** The attribute test says defensive backs are worth more than the pay and draft scale assumes (safeties 7.0 points a game as a group, corners 7.6, against edge rushers 6.8). Decide in the free agency step.
+- Attributes still too small to measure: a back's burst and pass blocking, an edge rusher's straight-line speed, ball stripping everywhere, a tight end's blocking.
+- Kicking: 86% from 40 to 49 yards (real about 83%) and about 35 tries a season from 60+ at 56 to 63%.
+
 - Inline and move tight end decided by the play call.
 - Loosen skill ties at other positions the way running backs were (pass-rush-only linemen, slot-only receivers, coverage linebackers), if wanted.
 - A low-rated power back cannot exist: balance and strength are over half of a back's rating. Would need short yardage to reward mass and strength differently from open-field running.
@@ -58,7 +62,6 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 - Two tails are still a little outside the real range after the distribution work: the top deep threat averages 20.5 yards a catch (real 16.5 to 19) and 11.5 defenders a season get 5+ interceptions (real 5 to 10). The most-intercepted quarterback throws 21.7 (real 14 to 18).
 - Completions of 20+ yards are still short (2.6 a team-game, real 3.0 to 3.6) even though 40+ is now right: the 20 to 39 yard gain is what is missing.
 - Rushing touchdowns stay high (1.13, real 0.85 to 1.05) and a stiffer goal-line stand did not move them: look at goal-to-go play-calling and the quarterback sneak.
-- **Punts are low** (3.4 a game, real 3.7 to 4.3) with first downs a bit high: break down how drives end before changing anything.
 - Stuffed runs are still high (20.7%, real 16 to 19).
 - Rushing leader a bit low (about 1,475, real 1,550 to 1,950) and 300-carry backs rare (0.75 a season, real 1 to 4), even with back usage following the playbook.
 - A safety is credited to nobody, and two-point conversions are not on anyone's stat line.

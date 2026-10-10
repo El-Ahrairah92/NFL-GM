@@ -243,3 +243,31 @@ When you run a unit yourself, "Next man's snaps" at each spot moves inside a ban
 - Middle linebacker 0–10%, weak side 0–20%, corners 0–8 or 10%, slot corner 0–20%, safeties 0–8 or 10%. Quarterback and offensive line do not rotate.
 
 The man who rotates in is the first one listed at the spot who is not already starting somewhere else in that grouping, and the staff's default order keeps players in their own position rooms.
+
+## Re-audit after the explosive-play retune (rating weights version 5)
+
+Same method (one club's men at a position +15 on the attribute, the opponent's -15), 1,200 games a row, 2,400 to 2,800 for anything doubtful. Noise is about 0.4 points on a 1,200-game row and 0.3 on the larger ones.
+
+Whole groups, points a game: quarterback 8.3, cornerbacks 7.6, receivers 7.5, safeties 7.0, edge rushers 6.8, running back 6.4, offensive line 6.3, interior line 5.1, linebackers 4.8, tight end 4.4, punter 0.9, kicker 0.6.
+
+Every attribute is read by the engine and none works backwards. Each one below moves its own statistic clearly in the right direction:
+- Quarterback: arm strength (yards per attempt), deep accuracy (yards per attempt), short accuracy (completion rate), decision-making (interceptions), processing and pocket presence (sacks), throw on the run (completion rate, small).
+- Running back: contact balance, elusiveness, speed, strength, agility and vision (yards per carry), route running (completion rate), hands (drops), ball security (fumbles).
+- Receivers: route running and contested catch (completion rate), speed (yards per attempt and after the catch), hands (drops), release (completion rate), elusiveness and contact balance (yards after the catch).
+- Tight end: route running, hands, agility; the blocking skills are too small to see in the score.
+- Offensive line: run blocking (yards per carry), pass blocking and blocking awareness (sacks), strength, agility.
+- Defensive line: block shedding and strength (yards per carry), pass rush and burst (sacks); edge agility.
+- Linebackers: play recognition, tackling (yards after the catch), man and zone coverage (completion rate, small).
+- Cornerbacks: man and zone coverage (completion rate), ball skills (interceptions), speed (yards after the catch).
+- Safeties: zone coverage, ball skills (interceptions), tackling (yards after the catch).
+- Kicker: consistency, range and falloff (field goal rate), trajectory (kick return spot). Punter: distance, hang time, spin.
+- Special teams skill: kick return spot and fair catches, very clearly.
+
+Found and fixed:
+- **A running back's elusiveness did nothing** (0.00 yards per carry). It now makes tacklers miss directly, most of all in the open field: 0.30 yards per carry for the 30-point gap.
+- **Agility and vision did almost nothing for a back.** Agility now helps in the open field (0.16) and vision at the second level, where reading blocks sets up the next defender (0.15).
+
+Still too small to measure: a back's burst and pass blocking, an edge rusher's straight-line speed, a safety's man coverage, a tight end's contested catch and blocking, ball stripping at every position.
+
+**Rating weights refitted (version 5).** Each attribute's weight is half the old weight and half what it is now measured to be worth, counting only what we can be confident of (the measured value less one standard error), so noise earns nothing. Every position is re-centred so its average rating does not move. A typical player moves under one rating point; the largest moves are about three (safeties, whose zone coverage now counts for more). Main shifts: a back's elusiveness and agility up and balance down; a quarterback's arm up; receivers' speed up and burst down; safeties' zone coverage up and speed down. Positional value (what a position is worth against another, which drives pay and draft value) was left alone: the test says defensive backs are worth more than it assumes, and that is a decision for the free agency work.
+

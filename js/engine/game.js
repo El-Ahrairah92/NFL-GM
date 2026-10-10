@@ -527,8 +527,11 @@ function fourthDown(g, range) {
   else if (g.togo <= 1 && g.ydl >= 40 && rand() < 0.15 + cx.aggr * 0.45) call = 'go';
   else if (g.togo <= 3 && g.ydl >= 55 && dist > seenRange && rand() < cx.aggr * 0.6) call = 'go';
   else call = dist <= seenRange ? 'fg' : 'punt';
+  // nobody punts from the opponent's 35: out of his kicker's range there, he goes for it, or tries the long kick with a lot to gain
+  if (call === 'punt' && g.ydl >= 65) call = g.togo > 5 && dist <= range + 4 ? 'fg' : 'go';
   if (call === 'go') return false;
-  if (call === 'fg' && dist <= Math.max(range, seenRange)) { fieldGoal(g); return true; }
+  if (call === 'fg' && dist <= Math.max(range, seenRange) + (g.ydl >= 65 ? 4 : 0)) { fieldGoal(g); return true; }
+  if (g.ydl >= 65) return false;
   punt(g);
   return true;
 }
@@ -540,7 +543,9 @@ function recommend4th(g, dist, range) {
   const pFG = dist <= range + 2 ? fgProb(g, kickUnitPlayer(g, g.poss, 'K'), dist) : 0;
   const fgVal = pFG * (3 - ep(30)) - (1 - pFG) * ep(Math.max(20, 107 - y));
   const puntLand = y + 41, puntVal = -ep(puntLand >= 100 ? 20 : 100 - puntLand);
-  if (goVal >= fgVal && goVal >= puntVal) return 'go';
+  // going for it has to be clearly better, and by more the deeper in his own end he is: a failure there hands over points
+  const edge = y < 40 ? 0.6 : y < 55 ? 0.25 : 0;
+  if (goVal >= fgVal + edge && goVal >= puntVal + edge) return 'go';
   return fgVal >= puntVal ? 'fg' : 'punt';
 }
 

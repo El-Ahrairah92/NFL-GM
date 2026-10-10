@@ -46,6 +46,7 @@ const TUNE = {
   // tackling
   tackleBase: 2.3,
   tackleScale: 0.03,
+  eluMiss: 0.012, eluMid: 70, burMiss: 0.016, visMiss: 0.014, // how much a carrier's elusiveness (and burst at the line) makes a tackler miss
   runAfter: 0.8,        // yards a back typically adds after first contact
   carryLoad: 3.8,      // how much more a carry tires a back than an ordinary snap
   pocketOpen: 1.2,

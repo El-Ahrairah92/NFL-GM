@@ -20,7 +20,10 @@ function runToContact(g, carrier, levels, opts = {}) {
     const tk = (space ? DB_.w * 0.4 + DB_.len * 0.8 : DB_.w * 1.8 + DB_.len * 0.3) * zz + (space ? ea(g, d, 'tkl') * 0.5 + ea(g, d, 'spd') * 0.2 + ea(g, d, 'agi') * 0.2 + ea(g, d, 'str') * 0.1 : ea(g, d, 'tkl') * 0.6 + ea(g, d, 'spd') * 0.15 + ea(g, d, 'str') * 0.25); // in space he has to mirror the runner first; a bigger man wins at the line and is a step late in the open
     const ev = 70 + (elu * (0.4 + 0.12 * space) + bal * (0.32 - 0.15 * space) + ea(g, carrier, 'agi') * (0.08 + 0.03 * space) + cs * 0.1 + spd * 0.1 - 70) * TUNE.carrierW + (space ? CB_.w * 0.5 : CB_.w * 1.6 - CB_.h * 0.7) * zz; // a heavy back runs through arm tackles, a short one is hard to find; neither helps him in the open field
     if (res.contactAt === undefined) res.contactAt = pos;
-    const make = lgt(TUNE.tackleBase - space * 0.55 + soft(tk - ev, 15) * TUNE.tackleScale + (lv.bonus || 0) + (opts.tackleBonus || 0));
+    // making a man miss is its own skill: elusiveness in the open field most of all, burst through the hole before the tackler is set
+    const slip = (elu - TUNE.eluMid) * TUNE.eluMiss * (space ? 1.4 : 0.8) + ((space ? ea(g, carrier, 'agi') : ea(g, carrier, 'bur')) - 72) * TUNE.burMiss; // agility in the open field, burst at the line
+    const read = opts.vis !== undefined && lv.at >= 2 ? (opts.vis - 70) * TUNE.visMiss : 0; // past the line, vision is setting up the next defender before he gets there
+    const make = lgt(TUNE.tackleBase - space * 0.55 + soft(tk - ev, 15) * TUNE.tackleScale - slip - read + (lv.bonus || 0) + (opts.tackleBonus || 0));
     if (rand() < make) {
       res.tackler = d;
       // yards after contact: little when hit in the backfield, more when met downhill at the second level
@@ -156,7 +159,7 @@ function resolveRun(g, off, def, oc, dc) {
   levels.sort((a, b) => a.at - b.at);
   if (trickHit === 'read') levels.unshift({ e: def.filter(e => e.depth === 0)[0], at: -randInt(3, 7) });
   const pursuit = def.filter(e => e.slot === 'CB' || e.slot === 'FS' || e.slot === 'SS' || e.slot === 'NCB');
-  const r = runToContact(g, carrier, levels, { pursuit, fumbleMult: carrierSlot === 'QB' ? 1.2 : 1, afterBase: carrierSlot === 'QB' ? 1.6 : TUNE.runAfter + (oc.type === 'JET' ? 2.4 : 0), tackleBonus: 0.14 + (g.down >= 3 && g.togo <= 2 ? 0.45 : 0) + (100 - g.ydl <= 3 ? 0.5 : 100 - g.ydl <= 8 ? 0.2 : 0) * TUNE.goalStand }); // no room behind the defense at the goal line
+  const r = runToContact(g, carrier, levels, { pursuit, vis: ea(g, carrier, 'vis'), fumbleMult: carrierSlot === 'QB' ? 1.2 : 1, afterBase: carrierSlot === 'QB' ? 1.6 : TUNE.runAfter + (oc.type === 'JET' ? 2.4 : 0), tackleBonus: 0.14 + (g.down >= 3 && g.togo <= 2 ? 0.45 : 0) + (100 - g.ydl <= 3 ? 0.5 : 100 - g.ydl <= 8 ? 0.2 : 0) * TUNE.goalStand }); // no room behind the defense at the goal line
   res.yds = r.yds; res.tackler = r.tackler; res.assist = r.assist; res.fumble = res.fumble || r.fumble; res.breakaway = r.breakaway;
   res.tfl = res.yds < 0;
   res.blk = blk; res.ybc = r.contactAt !== undefined ? Math.min(r.contactAt, r.yds) : r.yds; res.missed = r.missed;

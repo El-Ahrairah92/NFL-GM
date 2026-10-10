@@ -668,3 +668,13 @@ Clean: downs, distance, clock and score never impossible; eleven men from the ri
 
 32 seasons: top deep threat 24.6 yards a catch to 20.5; defenders with 5+ interceptions 13.1 to 11.5; 100-catch receivers 4.5 to 7.9; the catch leader among backs back in range; the receiving-touchdown leader back in range. Scoring, completion rate and yards per attempt unchanged. Against the game before any of this, 13 of the 31 tracked stats are outside the real range, down from 17.
 
+## 37. Attribute and rulebook audit
+
+**Rulebook.** Every snap of a season and playoffs (about 43,500) was checked: the eleven on each side match the personnel and package called; only eligible players are thrown to or carry the ball; nobody both blocks and runs a route, or both rushes and covers; the down, distance and spot after every ordinary play; turnovers on downs; who kicks off after a score and to start each half; timeouts; the clock; penalty yardage; scoring values. Two things were wrong and are fixed:
+- clubs out of their kicker's range punted from inside the opponent's 35; they now go for it, or try the long kick with a lot to gain
+- the fourth-down chart called a gamble deep in a club's own end when it was only marginally better than punting; going for it there now has to be clearly better
+
+Punts moved into the real range (3.7 a game) as a result.
+
+**Attributes.** See docs/ATTRIBUTES.md: every attribute is connected and none works backwards; a running back's elusiveness, agility and vision were close to dead and now work; rating weights were refitted to the retuned engine (version 5; saves re-rate on load).
+
