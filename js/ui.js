@@ -192,6 +192,7 @@ function render() {
   const app = $('#app');
   applyTheme();
   if (!state) { app.innerHTML = setupHTML(); return; }
+  if (state.phase === 'FA' && (!state.fa || state.fa.yr !== state.season)) { faOpen(); save(); } // a save that was already in free agency when the market was added
   document.documentElement.style.setProperty('--accent', T(state.userTid).color);
   if (state.phase === 'RECAP' && ui.wrapSeen !== state.season) { ui.wrapSeen = state.season; ui.seasonYr = null; view = 'season'; } // the season just ended: open its review once
   if (state.phase === 'PRESEASON' && !state.pre && !state.settings.autoUser && ui.prepSeen !== state.season) { ui.prepSeen = state.season; ui.staffTid = null; ui.staffSel = T(state.userTid).hc; view = 'coaches'; } // rookie free agency is over: meet with the staff before camp
@@ -238,7 +239,7 @@ function continueLabel() {
     case 'RECAP': return 'Start Offseason →';
     case 'COACHES': { const d = state.car ? state.car.day : 0; return d >= CAROUSEL_DAYS - 1 ? 'Close the Coaching Search →' : `Next Day of the Search (${d + 1} of ${CAROUSEL_DAYS}) →`; }
     case 'RESIGN': return 'Done Re-signing →';
-    case 'FA': return `Next FA Wave (${state.faWave + 1}/${FA_WAVES}) →`;
+    case 'FA': { const d = state.fa && state.fa.yr === state.season ? state.fa.day : 0; return d >= FA_DAYS - 1 ? 'Close Free Agency →' : `Next Day of Free Agency (${d + 1} of ${FA_DAYS}) →`; }
     case 'DRAFT': { const pk = currentPick(); return pk && pk.owner === state.userTid ? 'Auto-pick for Me' : 'Sim to My Pick'; }
     case 'UDFA': return state.udfa && state.udfa.round >= UDFA_ROUNDS - 1 ? 'Final Round: Send Offers & Open Camp →' : `Send Offers (Round ${(state.udfa ? state.udfa.round : 0) + 1} of ${UDFA_ROUNDS}) →`;
     case 'PRESEASON': return state.pre ? `▶ Play Preseason Game ${state.pre.wk + 1}` : '▶ Open Training Camp';
@@ -334,7 +335,7 @@ function phaseCallout() {
     case 'RECAP': return 'The season is over. Review the awards below, then start the offseason: players age and progress, contracts expire and a draft class is revealed.';
     case 'COACHES': { const d = state.car ? state.car.day : 0, open = ALL_ROLES.filter(r => !staffCoach(T(u), r)).length; return `Coaching search, day ${d + 1} of ${CAROUSEL_DAYS}. Other clubs hire <b>${DAY_NAME[Math.min(d, 3)].toLowerCase()}</b> when you advance. Interview, negotiate and hire on the <b>Staff</b> tab. You have <b>${open}</b> open job${open === 1 ? '' : 's'} and ${fmtMoney(staffRoom(u))} of staff budget left. Jobs still open when the search closes are filled by the coaches above them.`; }
     case 'RESIGN': { const n = rosterOf(u).filter(p => p.expiring).length; return `You have <b>${n}</b> expiring contract${n === 1 ? '' : 's'}. Re-sign players on the <b>Roster</b> tab. Anyone you don't re-sign becomes a free agent.`; }
-    case 'FA': return `Free agency wave ${state.faWave + 1} of ${FA_WAVES}. Sign players on the <b>Free Agents</b> tab before AI teams do. Unsigned players lower their asking price each wave.`;
+    case 'FA': return `Free agency, day ${(state.fa ? state.fa.day : 0) + 1} of ${FA_DAYS}. Every club is bidding and nobody sees the other offers. Sit down with a player's agent on the <b>Free Agents</b> tab; players decide overnight, and prices soften as the days pass.`;
     case 'DRAFT': { const pk = currentPick(); return pk ? `Pick ${pk.pick} (Rd ${pk.round}): <b>${T(pk.owner).abbr}</b> on the clock. ${pk.owner === u ? 'That\'s you! Choose on the <b>Draft</b> tab.' : ''}` : ''; }
     case 'UDFA': { const n = rosterOf(u).length, o = state.udfa ? Object.keys(state.udfa.offers).length : 0; return `Rookie free agency, round ${(state.udfa ? state.udfa.round : 0) + 1} of ${UDFA_ROUNDS}. Every team is bidding for the best undrafted players. Make your offers on the <b>Free Agents</b> tab, then send them. You have <b>${n}</b> of ${OFFSEASON_MAX} camp spots filled and <b>${o}</b> offer${o === 1 ? '' : 's'} out. Nobody is signed for you.`; }
     case 'PRESEASON': return !state.pre ? 'Rookie free agency is over. <b>Meet with your staff</b> on the Staff page: every coach has his view of the roster, the open jobs and what he wants to see. When you are ready, open training camp.' : `Camp and ${PRESEASON_GAMES} exhibition games. Each coach files a <b>camp report</b> on the Staff page after every practice block. Set how long each group plays on the Roster page: a starter who does not play in August opens the season a step slow.`;
@@ -1675,79 +1676,166 @@ function faHTML() {
   const tabs = `<div class="subtabs">${[...(udfa ? [['udfa', 'Undrafted rookies']] : []), ['now', udfa ? 'Veterans' : 'Available now'], ['next', 'Upcoming free agents']].map(([k, l]) => `<button class="${fv === k ? 'on' : ''}" data-action="faView" data-v="${k}">${l}</button>`).join('')}</div>`;
   if (fv === 'next') return tabs + upcomingFAHTML();
   if (fv === 'udfa' && udfa) return tabs + udfaHTML();
-  let fas = Object.values(state.players).filter(p => p.tid === -1);
-  if (udfa) fas = fas.filter(p => !isUdfa(p));
-  fas = fas.filter(p => !p.waiver); // players on waivers are on the Waiver Wire tab until claims are processed
-  fas = fas.filter(p => inFamily(p, ui.faPos));
+  return tabs + faMarketHTML();
+}
+// ---- the free agent page: a narrow list, the selected player's card, and the sit-down with his agent ----
+function faMarketOn() { return state.phase === 'FA' && state.fa && !state.fa.over; }
+function faStatus(p) {
+  const u = state.userTid;
+  if (!faInMarket(p)) return ['Signs now', 'muted'];
+  const mine = faOffers(p).find(o => o.tid === u), t = state.fa.talks[p.id];
+  if (mine) return [mine.night ? 'Answer tomorrow' : mine.dl ? 'Deadline tonight' : mine.fo ? 'Front office bidding' : 'Your offer is out', 'good'];
+  if (state.fa.orders[p.id]) return ['Front office bidding', 'good'];
+  if (t && t.closed === 'done') return ['Talks over', 'bad'];
+  if (t) return [t.closed ? 'Talks paused' : 'In talks', 'warn'];
+  return [faRumor(p), 'muted'];
+}
+function faExpTxt(p) { if (!faInMarket(p)) return fmtMoney(p.ask); const r = faRange(p); return `$${r[0] >= 10 ? r[0].toFixed(0) : r[0].toFixed(1)}–${r[1] >= 10 ? r[1].toFixed(0) : r[1].toFixed(1)}M`; }
+function faSortVal(p) { return faInMarket(p) ? faExp(p) : p.ask; }
+function faIn(p) {
+  const all = ui.faIn || (ui.faIn = {});
+  if (!all[p.id]) { const y = state.phase === 'REG' ? 1 : contractYears(p), e = faExp(p); all[p.id] = { role: 'start', spot: p.spot, yrs: y, gtd: round2(faGtdWant(p, y) * e * y * 0.8), aav: round2(e * 0.95), load: 'even', max: round2(e) }; }
+  return all[p.id];
+}
+function faCalcTxt(p) {
+  const i = faIn(p), t = state.fa.talks[p.id], u = state.userTid, yrs = t && t.yrs ? t.yrs : i.yrs, gtd = t && t.gtd !== null && t.step === 3 ? t.gtd : i.gtd, aav = Math.max(+i.aav || 0, gtd / yrs, MIN_SALARY);
+  const y1 = loadSched(aav, yrs, i.load)[0], mine = faOffers(p).find(o => o.tid === u), room = capRoom(u) - faCommitted(u).amt + (mine ? loadSched(mine.aav, mine.yrs, mine.load)[0] : 0);
+  return `Total ${fmtMoney(aav * yrs)} over ${yrs} · ${Math.round(100 * gtd / Math.max(0.01, aav * yrs))}% guaranteed · cap hit this year ${fmtMoney(y1)} · leaves you <b class="${room - y1 < 0 ? 'bad' : ''}">${fmtMoney(room - y1)}</b>`;
+}
+function faSitHTML(p) {
+  const u = state.userTid, a = agentOf(p), t = state.fa.talks[p.id], i = faIn(p), mine = faOffers(p).find(o => o.tid === u), ord = state.fa.orders[p.id];
+  const hist = (state.agentHist[a.id] || []).slice(-3).reverse(), cl = agentClients(a).filter(x => x.id !== p.id).slice(0, 3);
+  let h = `<div class="fa-agent"><div><b>${agentLink(a)}</b> <span class="muted small">· agent, ${agentAge(a)}</span></div>
+    <div class="small muted">${cl.length ? 'Also represents ' + cl.map(x => playerLink(x, true)).join(', ') : 'A small client list'}</div>
+    ${hist.length ? `<div class="small muted">Your dealings: ${hist.map(x => `${esc(x.n)} ${x.s} — ${x.r === 'signed' ? `signed, ${fmtMoney(x.aav)}/yr${x.ask ? ` (opened at ${fmtMoney(x.ask)})` : ''}` : x.r === 'lost' ? 'went elsewhere' : x.r === 'pulled' ? 'you pulled your offer' : 'you walked away'}`).join(' · ')}</div>` : ''}</div>`;
+  if (mine) h += `<div class="callout" style="margin:8px 0">Your offer: <b>${mine.yrs} yr, ${fmtMoney(mine.aav)}/yr, ${fmtMoney(mine.gtd)} guaranteed</b>${mine.load !== 'even' ? ` (${mine.load}-loaded)` : ''} · ${mine.night ? 'the agent took it to him: answer tomorrow' : mine.dl ? 'expires tonight' : 'on the table, binding'} <button class="sm" data-action="faPullA" data-pid="${p.id}">Withdraw</button></div>`;
+  if (!t) return h + `<div style="margin-top:10px"><button class="primary" data-action="faCall" data-pid="${p.id}">Sit down with ${esc(a.last)}</button></div>` + faOrderHTML(p, ord, i);
+  h += `<div class="fa-log" id="faLog">${t.log.map(l => `<div class="fa-line ${l.w}"><span>${esc(l.t)}</span></div>`).join('')}</div>`;
+  const seg = (fk, opts) => `<span class="seg">${opts.map(([v, l]) => `<button class="sm ${String(i[fk]) === String(v) ? 'on' : ''}" data-action="faSeg" data-pid="${p.id}" data-f="${fk}" data-v="${v}">${l}</button>`).join('')}</span>`;
+  const num = (fk, w, step) => `<input type="number" step="${step || 0.1}" min="0" data-fain="${fk}" data-pid="${p.id}" value="${i[fk]}" style="width:${w}px">`;
+  if (t.closed) h += `<div class="small muted" style="margin-top:8px">${t.closed === 'done' ? 'The agent will not take your calls about this player again.' : 'The meeting is over for today. Advance the day to talk again.'}</div>`;
+  else if (t.step === 1) {
+    const fam = FAMILIES.find(x => x[1].includes(p.spot)), spots = fam ? fam[1] : [p.spot];
+    h += `<div class="fa-step"><div class="fa-h">1 · The role</div><div class="row" style="gap:8px">
+      <select data-change="faSpot" data-pid="${p.id}">${spots.map(s => `<option value="${s}" ${i.spot === s ? 'selected' : ''}>${esc(SPOTS[s].l)}${s === p.spot ? '' : ' (new for him)'}</option>`).join('')}</select>
+      ${seg('role', [['start', 'Starter'], ['depth', 'Depth']])}<button class="primary" data-action="faRole" data-pid="${p.id}">Tell him</button></div></div>`;
+  } else if (t.step === 2) {
+    h += `<div class="fa-step"><div class="fa-h">2 · The commitment <span class="muted small">· ${t.role === 'start' ? 'starter' : 'depth'} at ${esc(SPOTS[t.spot].l)}</span></div><div class="row" style="gap:8px">
+      <label class="small muted">Years</label>${seg('yrs', [1, 2, 3, 4, 5].map(y => [y, y]))}
+      <label class="small muted">Guaranteed $M</label>${num('gtd', 80)}<button class="primary" data-action="faCommit" data-pid="${p.id}">Put it on the table</button></div>
+      <div class="small muted" style="margin-top:4px">Guaranteed money is owed even if you cut him.</div></div>`;
+  } else {
+    h += `<div class="fa-step"><div class="fa-h">3 · The salary <span class="muted small">· ${t.yrs} yr, ${fmtMoney(t.gtd)} guaranteed</span></div><div class="row" style="gap:8px">
+      <label class="small muted">Per year $M</label>${num('aav', 80)}${t.yrs >= 2 ? seg('load', [['even', 'Even'], ['front', 'Front-loaded'], ['back', 'Back-loaded']]) : ''}
+      <button class="primary" data-action="faSalary" data-pid="${p.id}">Offer</button></div>
+      <div class="small muted" id="faCalc" style="margin-top:4px">${faCalcTxt(p)}</div>
+      <div class="row" style="gap:6px;margin-top:8px">
+        <button class="sm" data-action="faHoldA" data-pid="${p.id}" ${t.aav === null ? 'disabled' : ''} title="Repeat your number and see if he moves">Hold</button>
+        <button class="sm" data-action="faFinalA" data-pid="${p.id}" ${t.aav === null ? 'disabled' : ''} title="Yes or no on your last offer. A no ends the talks.">Best and final</button>
+        <button class="sm" data-action="faLeaveA" data-pid="${p.id}" ${t.aav === null ? 'disabled' : ''} title="Leave your last offer live and end the meeting. It is binding.">Leave it on the table</button>
+        <button class="sm" data-action="faLeaveA" data-dl="1" data-pid="${p.id}" ${t.aav === null ? 'disabled' : ''} title="He must answer tonight or the offer is gone">Deadline: tonight</button>
+        <button class="sm" data-action="faBack" data-pid="${p.id}" title="Go back to years and guarantee. It costs patience.">Reopen years</button>
+      </div></div>`;
+  }
+  if (!t.closed || t.closed === 'day') h += `<div class="row" style="gap:6px;margin-top:8px">${t.closed ? '' : `<button class="sm" data-action="faStandA" data-pid="${p.id}" ${t.stood ? 'disabled' : ''}>Where do things stand?</button>`}<button class="sm danger" data-action="faWalkA" data-pid="${p.id}">Walk away</button></div>`;
+  return h + faOrderHTML(p, ord, i);
+}
+function faOrderHTML(p, ord, i) {
+  return `<details class="fa-fo" ${ord ? 'open' : ''}><summary class="small">Hand it to the front office</summary><div class="row small" style="gap:8px;margin-top:6px">
+    ${ord ? `<span>Bidding up to <b>${fmtMoney(ord.max)}</b>/yr as ${ord.role === 'start' ? 'a starter' : 'depth'}.</span><button class="sm" data-action="faOrderX" data-pid="${p.id}">Call them off</button>`
+      : `<label class="muted">Ceiling per year $M</label><input type="number" step="0.1" min="0" data-fain="max" data-pid="${p.id}" value="${i.max}" style="width:80px"><button class="sm" data-action="faOrderA" data-pid="${p.id}">Let them bid</button>`}
+    </div><div class="small muted" style="margin-top:4px">They make a standard offer each day and raise it when another club is ahead, never past your ceiling.</div></details>`;
+}
+function faFitHTML(p) {
+  const u = state.userTid, same = rosterOf(u).filter(x => x.pos === p.pos && !x.expiring).sort((a, b) => viewOvr(b, u) - viewOvr(a, u)), v = viewOvr(p, u);
+  const rank = same.filter(x => viewOvr(x, u) > v).length + 1, f = schemeFit(p, u), side = SPOTS[p.spot].side;
+  return `<div class="small">Your staff sees ${tierPill(p, v)} · he would be your <b>#${rank}</b> of ${same.length + 1} at ${esc(p.pos)}${rank <= STARTERS[p.pos] ? ' — <b class="good">a starter</b>' : ''}${same[rank - 1] ? `, ahead of ${playerLink(same[rank - 1], true)}` : ''}.${side === 'off' || side === 'def' ? ` Scheme fit: <b class="${f >= 1 ? 'good' : f <= -1 ? 'bad' : ''}">${fitLabel(f)}</b>.` : ''}</div>`;
+}
+function faCardHTML(p) {
+  const u = state.userTid, mk = faInMarket(p), last = p.career[p.career.length - 1], st = faStatus(p), src = cardAdv(p);
   const canSign = state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP';
-  let html = tabs + `<div class="callout">${state.phase === 'FA' ? `Free agency wave ${state.faWave + 1}/${FA_WAVES}. AI teams sign players when you advance. Asking prices drop each wave.` : state.phase === 'REG' ? 'In-season signings are 1-year deals. Players on IR (4+ weeks) don\'t count toward the 53-man limit.' : 'Free agents available now.'}
-    Cap space: <b>${fmtMoney(capRoom(u))}</b> · Roster ${rosterCount(u)}/${rosterLimit()}</div>`;
-  const f = ui.faF || (ui.faF = Object.assign({}, FA_DEF)), total = fas.length;
-  const tIdx = x => TIER_ORDER.indexOf(x), uIdx = x => UPSIDE_ORDER.indexOf(x);
+  let h = `<div class="row"><h2 style="margin:0">${playerLink(p)}</h2><span class="pill">${esc(p.lbl)}</span> ${statusPills(p)} ${rasHTML(p)}<span class="spacer"></span><button class="sm" data-action="player" data-pid="${p.id}">Full card</button></div>
+    <div class="muted small" style="margin:3px 0 10px">Age ${p.age} · ${p.exp} yr${p.exp === 1 ? '' : 's'} · ${fmtHeight(p.m.ht)}, ${p.m.wt} · ${p.lastTid != null && p.lastTid >= 0 ? 'last with ' + teamLink(p.lastTid) : 'no club last year'}${p.lastAmt ? ` at ${fmtMoney(p.lastAmt)}/yr` : ''}${mk ? ` · agent ${agentLink(agentOf(p))}` : ''}</div>
+    <div class="stat-tiles" style="margin-bottom:10px">
+      <div class="tile"><div class="v ${TIER_CLS[tierOf(p)]}" style="font-size:15px">${tierOf(p)}</div><div class="l">Tier</div></div>
+      <div class="tile"><div class="v ${UP_CLS[upsideOf(p)]}" style="font-size:14px">${upsideOf(p)}${upMark(p)}</div><div class="l">Upside</div></div>
+      <div class="tile"><div class="v" style="font-size:15px">${faExpTxt(p)}</div><div class="l">${mk ? 'Expected / yr' : 'Asking / yr'}</div></div>
+      <div class="tile"><div class="v ${st[1]}" style="font-size:13px">${st[0]}</div><div class="l">${mk ? 'Market' : 'Status'}</div></div>
+      <div class="tile"><div class="v" style="font-size:13px">${last && last.gp ? `${last.gs || 0} starts ${gradeChip(last.adv ? last.adv.g : null)}` : '—'}</div><div class="l">${last && last.gp ? last.season : 'Last season'}</div></div>
+    </div>
+    <div class="fa-cols"><div>
+      <div class="section-title" style="margin-top:0">Where he fits</div>${faFitHTML(p)}
+      <div class="section-title">Scouting</div><div class="small">${traitsTxt(p)}</div>${strengthsHTML(p)}
+      <div class="section-title">Positions</div><div class="row small">${comfortHTML(p)}</div>
+      ${devPanelHTML(p) ? `<div class="section-title">Upside</div>${devPanelHTML(p)}` : ''}
+    </div><div>`;
+  if (mk) h += `<div class="section-title" style="margin-top:0">The sit-down</div>${faSitHTML(p)}`;
+  else h += `<div class="section-title" style="margin-top:0">Sign him</div><div class="small muted" style="margin-bottom:8px">${state.phase === 'FA' ? 'No agent meeting for a contract this small.' : state.phase === 'REG' ? 'In-season signings are one-year deals.' : 'Available now at his asking price.'}</div>
+    <div class="row" style="gap:8px">${canSign ? `<button class="primary" data-action="sign" data-pid="${p.id}" ${p.ask > capRoom(u) ? 'disabled title="Not enough cap space"' : ''}>Sign (${fmtMoney(p.ask)}, ${state.phase === 'REG' ? 1 : contractYears(p)} yr)</button>` : ''}
+    ${p.exp <= 6 && psRoom(u, p) && ['REG', 'PRESEASON', 'CUTDOWN', 'DRAFT', 'FA'].includes(state.phase) ? `<button data-action="signPS" data-pid="${p.id}">Practice squad (${fmtMoney(PS_SALARY)})</button>` : ''}</div>`;
+  h += `<div class="section-title">Production${src ? ` · ${src.season}${src.cur ? ' to date' : ''}` : ''}</div>${last && last.gp ? `<div class="small" style="margin-bottom:6px">${statSummary(last, p.pos)}</div>` : ''}${glanceHTML(p, src)}
+    ${p.career.length > 1 ? `<div class="small muted" style="margin-top:6px">${p.career.slice(-4, -1).reverse().map(r => `${r.season}: ${r.gs || 0} starts${r.gp ? ', ' + statSummary(r, p.pos) : ''}`).join('<br>')}</div>` : ''}
+    <div class="section-title">Physicals <span class="small muted">· shaded by percentile at his position</span></div>${combineHTML(p)}`;
+  return h + '</div></div>';
+}
+const FA_LVIEWS = [['market', 'Market'], ['scout', 'Scouting'], ['stats', 'Last season'], ['phys', 'Physical']];
+function faRowCells(p, lv) {
+  const last = p.career[p.career.length - 1];
+  if (lv === 'scout') return `${tierPill(p)}${upsidePill(p)}<span class="fa-txt small muted">${traitsTxt(p)}</span>`;
+  if (lv === 'stats') return `<span class="fa-num">${last && last.gp ? (last.gs || 0) : '—'}</span><span class="fa-num">${gradeChip(last && last.adv ? last.adv.g : null)}</span><span class="fa-txt small">${last && last.gp ? statSummary(last, p.pos) : '<span class="muted">Did not play</span>'}</span>`;
+  if (lv === 'phys') return `<span class="fa-num">${fmtHeight(p.m.ht)}</span><span class="fa-num">${p.m.wt}</span><span class="fa-num">${p.m.forty ? p.m.forty.toFixed(2) : '—'}</span><span class="fa-txt">${rasHTML(p)}</span>`;
+  const s = faStatus(p); return `${tierPill(p)}<span class="fa-exp">${faExpTxt(p)}</span><span class="fa-st ${s[1]}">${s[0]}</span>`;
+}
+const FA_LHEAD = { market: ['Tier', 'Expected', 'Status'], scout: ['Tier', 'Upside', 'Scouting'], stats: ['GS', 'Grade', 'Line'], phys: ['Ht', 'Wt', '40', 'Athlete'] };
+function faMarketHTML() {
+  const u = state.userTid, on = faMarketOn(), udfa = state.phase === 'UDFA' && state.udfa;
+  let fas = Object.values(state.players).filter(p => p.tid === -1 && !p.waiver && !(udfa && isUdfa(p)) && inFamily(p, ui.faPos));
+  const f = ui.faF || (ui.faF = Object.assign({}, FA_DEF)), tIdx = x => TIER_ORDER.indexOf(x), com = on ? faCommitted(u) : { amt: 0, n: 0 };
   if (f.q) { const q = f.q.toLowerCase(); fas = fas.filter(p => (p.first + ' ' + p.last).toLowerCase().includes(q)); }
-  if (f.ageMax !== '') fas = fas.filter(p => p.age <= +f.ageMax);
   if (f.tier) fas = fas.filter(p => tIdx(tierOf(p)) <= tIdx(f.tier) || (f.tier === 'Rotation' && tierOf(p) === 'Backup'));
-  if (f.up) fas = fas.filter(p => uIdx(upsideOf(p)) <= uIdx(f.up));
-  if (f.maxAsk !== '') fas = fas.filter(p => p.ask <= +f.maxAsk);
-  if (f.exp === 'young') fas = fas.filter(p => p.exp <= 3); else if (f.exp === 'prime') fas = fas.filter(p => p.exp >= 4 && p.exp <= 8); else if (f.exp === 'vet') fas = fas.filter(p => p.exp >= 9);
-  if (f.afford) fas = fas.filter(p => p.ask <= capRoom(u));
-  if (f.played) fas = fas.filter(p => { const r = p.career[p.career.length - 1]; return r && r.season >= state.season - 1 && (r.gs || 0) >= 8; });
-  const sel = (k, opts) => `<select data-change="faF" data-f="${k}">${opts.map(([v, l]) => `<option value="${v}" ${String(f[k]) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
-  const num = (k, ph) => `<input type="number" data-change="faF" data-f="${k}" value="${f[k]}" placeholder="${ph}" style="width:70px">`;
-  const chk = (k, l) => `<label class="small"><input type="checkbox" data-change="faChk" data-f="${k}" ${f[k] ? 'checked' : ''}> ${l}</label>`;
-  html += `<div class="card" style="margin-bottom:14px"><div class="row" style="gap:10px 14px">
-    <label class="small muted">View</label>${sel('view', FA_VIEWS)}
-    <input type="text" data-change="faF" data-f="q" value="${esc(f.q)}" placeholder="Name…" style="width:150px">
-    <label class="small muted">Tier ≥</label>${sel('tier', [['', 'Any'], ...['Elite', 'All-Pro', 'Starter', 'Rotation', 'Depth'].map(t => [t, t === 'Rotation' ? 'Rotation / Backup' : t])])}
-    <label class="small muted">Upside ≥</label>${sel('up', [['', 'Any'], ...UPSIDE_ORDER.slice(0, 6).map(t => [t, t])])}
-    <label class="small muted">Age ≤</label>${num('ageMax', 'any')}
-    <label class="small muted">Asking ≤ $M</label>${num('maxAsk', 'any')}
-    ${sel('exp', [['', 'Any experience'], ['young', '0–3 years'], ['prime', '4–8 years'], ['vet', '9+ years']])}
-    ${chk('afford', 'I can afford')}${chk('played', 'Started 8+ games last year')}
-    <button class="sm" data-action="faReset">Reset</button></div>
-    <div class="subtabs" style="margin:10px 0 0">${famTabs(ui.faPos, 'faPos')}</div>
-    <div class="small muted" style="margin-top:8px">${fas.length} of ${total} free agent${total === 1 ? '' : 's'} shown${fas.length > 200 ? ' (top 200 by the current sort)' : ''}.</div></div>`;
-  const last = p => p.career[p.career.length - 1] || null;
-  const C0 = [
-    { k: 'pos', l: 'Pos', v: p => FAM_INDEX[p.spot], f: p => esc(p.lbl) },
-    { k: 'n', l: 'Name', v: p => p.last, f: p => playerLink(p) + ' ' + statusPills(p) },
-    { k: 'age', l: 'Age', v: p => p.age, num: 1 },
-    { k: 'ovr', l: 'Tier', v: tierSort, f: p => tierPill(p) + trueNums(p) },
-    { k: 'pot', l: 'Upside', v: upSort, f: p => upsidePill(p) },
-  ];
-  const C1 = [
-    { k: 'ask', l: 'Asking', v: p => p.ask, f: p => fmtMoney(p.ask), num: 1 },
-    { k: 'y', l: 'Yrs', f: p => state.phase === 'REG' ? 1 : contractYears(p), num: 1 },
-    { k: 'a', l: '', f: p => canSign ? `<button class="sm primary" data-action="sign" data-pid="${p.id}" ${p.ask > capRoom(u) ? 'disabled title="Not enough cap space"' : ''}>Sign</button>` : '' },
-  ];
-  const prevTeam = { k: 'pt', l: 'Prev team', v: p => p.lastTid != null && p.lastTid >= 0 ? T(p.lastTid).abbr : '', f: p => p.lastTid != null && p.lastTid >= 0 ? teamLink(p.lastTid) : '<span class="muted">—</span>' };
-  const mid = {
-    scout: [
-      { k: 'ht', l: 'Ht', v: p => p.m.ht, f: p => `<span class="small muted">${fmtHeight(p.m.ht)}</span>`, num: 1 }, { k: 'wt', l: 'Wt', v: p => p.m.wt, f: p => `<span class="small muted">${p.m.wt}</span>`, num: 1 },
-      { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
-      { k: 'yoe', l: 'YOE', v: p => p.exp, num: 1, title: 'Years of experience' }, prevTeam,
-    ],
-    market: [
-      { k: 'yoe', l: 'YOE', v: p => p.exp, num: 1, title: 'Years of experience' }, prevTeam,
-      { k: 'pa', l: 'Prev AAV', v: p => p.lastAmt || 0, f: p => p.lastAmt ? fmtMoney(p.lastAmt) : '<span class="muted">—</span>', num: 1 },
-      { k: 'mv', l: 'Market value', v: p => marketValue(p), f: p => fmtMoney(marketValue(p)), num: 1, title: 'What the league thinks he is worth per year (perception, not truth)' },
-      { k: 'df', l: 'Ask vs market', v: p => p.ask - marketValue(p), f: p => { const d = p.ask - marketValue(p); return `<span class="${d <= -0.3 ? 'good' : d >= 0.3 ? 'bad' : 'muted'}">${d > 0 ? '+' : ''}${d.toFixed(1)}M</span>`; }, num: 1, title: 'Below zero: he is asking for less than the league thinks he is worth' },
-      { k: 'fit', l: 'Leaves you', v: p => capRoom(u) - p.ask, f: p => { const v = capRoom(u) - p.ask; return `<span class="${v < 0 ? 'bad' : 'muted'}">${fmtMoney(v)}</span>`; }, num: 1, title: 'Your cap space after signing him at his asking price' },
-    ],
-    last: [
-      prevTeam,
-      { k: 'lgp', l: 'GP', v: p => (last(p) || {}).gp || 0, num: 1 }, { k: 'lgs', l: 'GS', v: p => (last(p) || {}).gs || 0, num: 1 },
-      { k: 'lsn', l: 'Snaps', v: p => (last(p) || {}).snp || 0, num: 1 },
-      { k: 'lgr', l: 'Grade', v: p => { const r = last(p); return r && r.adv && r.adv.g ? r.adv.g : 0; }, f: p => { const r = last(p); return gradeChip(r && r.adv ? r.adv.g : null); }, num: 1, title: 'His charted grade last season' },
-      { k: 'lln', l: 'Last season', f: p => { const r = last(p); return r && r.gp ? `<span class="small">${r.season}: ${statSummary(r, p.pos)}</span>` : '<span class="muted small">Did not play</span>'; } },
-    ],
-    comfort: [
-      { k: 'ht', l: 'Ht', v: p => p.m.ht, f: p => `<span class="small muted">${fmtHeight(p.m.ht)}</span>`, num: 1 }, { k: 'wt', l: 'Wt', v: p => p.m.wt, f: p => `<span class="small muted">${p.m.wt}</span>`, num: 1 },
-      { k: 'cf', l: 'Can line up at', v: p => Object.keys(p.cf || {}).length, f: p => Object.entries(p.cf || {}).sort((a, b) => b[1] - a[1]).map(([sp, c]) => `<span class="pill ${CF_CLS[comfortLabel(c)]}">${SPOTS[sp].l} · ${comfortLabel(c)}</span>`).join(' ') },
-    ],
-  };
-  html += '<div class="card">' + table('fa-' + f.view, [...C0, ...(mid[f.view] || mid.scout), ...C1], fas, { sort: 'ovr', limit: 200 }) + '</div>';
+  if (f.afford) fas = fas.filter(p => faSortVal(p) <= capRoom(u) - com.amt);
+  if (f.mine && on) fas = fas.filter(p => state.fa.talks[p.id] || state.fa.orders[p.id] || faOffers(p).some(o => o.tid === u));
+  const sort = ui.faSort || 'exp', total = fas.length, lv = FA_LVIEWS.some(x => x[0] === ui.faLV) ? ui.faLV : 'market';
+  fas.sort(sort === 'age' ? (a, b) => a.age - b.age : sort === 'tier' ? (a, b) => uOvr(b) - uOvr(a) : sort === 'pos' ? (a, b) => famOrder(a, b) : (a, b) => faSortVal(b) - faSortVal(a) || uOvr(b) - uOvr(a));
+  fas = fas.slice(0, 150);
+  let sel = ui.faSel !== undefined ? P(ui.faSel) : null; if (!sel || sel.tid !== -1 || sel.waiver) sel = fas[0] || null;
+  const live = on ? Object.keys(state.fa.off).map(id => P(+id)).filter(p => p && faOffers(p).some(o => o.tid === u)) : [];
+  let html = `<div class="fa-strip card"><div class="row" style="gap:18px">
+    ${on ? `<div><div class="big">Day ${state.fa.day + 1} <span class="muted small">of ${FA_DAYS}</span></div><div class="small muted">Clubs bid, players decide overnight</div></div>` : `<div><div class="big">Free agents</div><div class="small muted">${state.phase === 'REG' ? 'In-season signings are one-year deals' : 'Available now'}</div></div>`}
+    <div><div class="big">${fmtMoney(capRoom(u))}</div><div class="small muted">Cap room</div></div>
+    ${on ? `<div><div class="big ${com.amt > capRoom(u) ? 'bad' : ''}">${fmtMoney(com.amt)}</div><div class="small muted">In ${com.n} live offer${com.n === 1 ? '' : 's'}</div></div>` : ''}
+    <div><div class="big">${rosterCount(u)}<span class="muted small">/${rosterLimit()}</span></div><div class="small muted">Roster</div></div>
+    <div class="fa-live">${live.map(p => { const o = faOffers(p).find(x => x.tid === u); return `<button class="sm" data-action="faPick" data-pid="${p.id}">${esc(pshort(p))} · ${fmtMoney(o.aav)} × ${o.yrs}${o.night ? ' · answer tomorrow' : o.dl ? ' · tonight' : ''}</button>`; }).join('')}</div></div>
+    ${on && state.fa.inbox.length ? `<div class="fa-inbox">${state.fa.inbox.slice(-5).map(x => `<div class="small">• ${esc(x)}</div>`).join('')}<button class="sm" data-action="faInboxX">Clear</button></div>` : ''}</div>`;
+  const sortBtn = (k, l) => `<button class="sm ${sort === k ? 'on' : ''}" data-action="faSortA" data-v="${k}">${l}</button>`;
+  html += `<div class="fa-wrap"><div class="card fa-left">
+    <div class="subtabs" style="margin:0 0 8px">${famTabs(ui.faPos, 'faPos')}</div>
+    <div class="row" style="gap:8px;margin-bottom:8px">
+      <input type="text" data-change="faF" data-f="q" value="${esc(f.q)}" placeholder="Name…" style="width:110px">
+      <select data-change="faF" data-f="tier">${[['', 'Any tier'], ...['Elite', 'All-Pro', 'Starter', 'Rotation', 'Depth'].map(t => [t, t + ' or better'])].map(([v, l]) => `<option value="${v}" ${f.tier === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <label class="small"><input type="checkbox" data-change="faChk" data-f="afford" ${f.afford ? 'checked' : ''}> Can afford</label>
+      ${on ? `<label class="small"><input type="checkbox" data-change="faChk" data-f="mine" ${f.mine ? 'checked' : ''}> Mine</label>` : ''}</div>
+    <div class="row" style="gap:8px;margin-bottom:8px"><span class="small muted">View</span><span class="seg">${FA_LVIEWS.map(([k, l]) => `<button class="sm ${lv === k ? 'on' : ''}" data-action="faLV" data-v="${k}">${l}</button>`).join('')}</span>
+      <span class="spacer"></span><span class="small muted">Sort</span><span class="seg">${sortBtn('exp', '$')}${sortBtn('tier', 'Tier')}${sortBtn('age', 'Age')}${sortBtn('pos', 'Pos')}</span></div>
+    <div class="fa-row fa-head lv-${lv}"><span>Pos</span><span>Name</span><span>Age</span>${FA_LHEAD[lv].map(x => `<span>${x}</span>`).join('')}</div>
+    <div class="fa-list">${fas.map(p => `<div class="fa-row lv-${lv} ${sel && sel.id === p.id ? 'on' : ''}" data-action="faPick" data-pid="${p.id}">
+      <span class="fa-pos">${esc(p.lbl)}</span><span class="fa-name">${playerLink(p)}</span><span class="fa-age muted">${p.age}</span>${faRowCells(p, lv)}</div>`).join('') || '<div class="muted small" style="padding:10px">Nobody matches.</div>'}</div>
+    <div class="small muted" style="margin-top:6px">${fas.length} of ${total} shown · click a row to select, a name for the full card</div></div>
+    <div class="card fa-right">${sel ? faCardHTML(sel) : '<div class="muted">No free agents.</div>'}</div></div>`;
   return html;
+}
+// ---- agents: a name, an age, the people he represents, and what has passed between you ----
+function agentLink(a) { return `<button class="link" data-action="agent" data-aid="${a.id}">${esc(agentName(a))}</button>`; }
+function agentModal(aid) {
+  ensureAgents(); const a = state.agents[aid]; if (!a) return;
+  const cl = Object.values(state.players).filter(p => p.agent === a.id && (p.tid >= 0 || p.tid === -1)).sort((x, y) => uOvr(y) - uOvr(x)), hist = (state.agentHist[a.id] || []).slice().reverse();
+  const res = x => x.r === 'signed' ? `signed with you for ${fmtMoney(x.aav)}/yr${x.ask ? ` · he opened at ${fmtMoney(x.ask)}` : ''}${x.d !== undefined ? ` · day ${x.d + 1}` : ''}` : x.r === 'lost' ? `signed elsewhere${x.aav ? ` for ${fmtMoney(x.aav)}/yr` : ''}` : x.r === 'pulled' ? 'you pulled your offer' : 'you walked away';
+  openModal(`<div class="row"><h2 style="margin:0">${esc(agentName(a))}</h2><span class="pill">Agent</span></div>
+    <div class="muted" style="margin:4px 0 12px">Age ${agentAge(a)} · ${cl.length} client${cl.length === 1 ? '' : 's'}</div>
+    <div class="grid card-cols"><div><div class="section-title" style="margin-top:0">Clients</div>
+      ${cl.length ? `<table class="tbl"><tbody>${cl.slice(0, 40).map(p => `<tr><td class="small muted">${esc(p.lbl)}</td><td>${playerLink(p)}</td><td class="small muted">${p.age}</td><td>${tierPill(p)}</td><td class="small">${p.tid >= 0 ? teamLink(p.tid) : '<span class="muted">Free agent</span>'}</td></tr>`).join('')}</tbody></table>${cl.length > 40 ? `<div class="small muted">and ${cl.length - 40} more</div>` : ''}` : '<div class="muted small">Nobody in the league right now.</div>'}</div>
+    <div><div class="section-title" style="margin-top:0">Your history with ${a.sex === 'f' ? 'her' : 'him'}</div>
+      ${hist.length ? hist.map(x => `<div class="small" style="margin-bottom:6px"><b>${esc(x.n)}</b> <span class="muted">${x.s + 1} offseason</span><br>${res(x)}</div>`).join('') : '<div class="muted small">You have not done business yet.</div>'}</div></div>`);
 }
 
 // ---------- cutdown day: the coaches' meeting ----------
@@ -2512,7 +2600,7 @@ function playerModal(pid, replace) {
     <div class="stat-tiles" style="margin-bottom:12px">
       <div class="tile"><div class="v ${TIER_CLS[tierT]}" style="font-size:16px">${tierT}</div><div class="l">${prospect ? 'Ready now as' : 'Tier'}${trueOn() ? ` · true ${p.ovr}` : ''}</div></div>
       <div class="tile"><div class="v ${UP_CLS[upT]}" style="font-size:14px">${upT}${upMark(p)}</div><div class="l">Upside${trueOn() ? ` · true ${p.pot}` : ''}</div></div>
-      ${prospect ? '' : `<div class="tile"><div class="v" style="font-size:15px">${p.tid === -1 ? fmtMoney(p.ask) : fmtContract(p)}</div><div class="l">${p.tid === -1 ? 'Asking / yr' : 'Contract'}</div></div>
+      ${prospect ? '' : `<div class="tile"><div class="v" style="font-size:15px">${p.tid === -1 ? faExpTxt(p) : fmtContract(p)}</div><div class="l">${p.tid === -1 ? (faInMarket(p) ? 'Expected / yr' : 'Asking / yr') : 'Contract'}</div></div>
       <div class="tile"><div class="v">${gradeChip(sg)}</div><div class="l">${src ? `${src.season} grade${src.cur ? '' : ' (last season)'}` : 'Season grade'}</div>${src ? `<div class="rk">${gradeRankTxt(src.cur ? gradeRanks()[p.id] : seasonRank(p, p.career.find(r => r.season === src.season) || {})) || (sg !== null ? 'below min. snaps' : '')}</div>` : ''}</div>
       <div class="tile"><div class="v" style="font-size:14px">${form.length ? form.map(g => gradeChip(Math.round(g))).join(' ') : '—'}</div><div class="l">Recent games</div></div>`}
     </div>`;
@@ -2541,6 +2629,7 @@ function playerModal(pid, replace) {
     left += `<button class="danger" data-action="release" data-pid="${p.id}">Release</button>`;
   } else if (p.waiver) { left += '<div class="small muted">On waivers: claim him from the Waiver Wire tab.</div>';
   } else if (state.phase === 'UDFA' && state.udfa && isUdfa(p)) { const cur = state.udfa.offers[p.id], pl = udfaPathLabel(udfaPath(p, u)); left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Undrafted rookie · market: <b>${udfaInterest(p)}</b> · his view of your roster: <b>${pl}</b>${cur !== undefined ? ` · your offer: <b>${fmtBonus(cur)}</b>` : ''}</div><div class="row" style="gap:6px">${UDFA_BONUS.map(b => `<button class="sm ${cur === b ? 'primary' : ''}" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="${b}">${b ? fmtBonus(b) : 'No bonus'}</button>`).join('')}${cur !== undefined ? `<button class="sm danger" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="">Withdraw</button>` : ''}</div></div>`;
+  } else if (p.tid === -1 && faInMarket(p)) { left += `<button class="primary" data-action="faGo" data-pid="${p.id}">Sit down with his agent</button>`;
   } else if (p.tid === -1 && state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP') left += `<button class="primary" data-action="sign" data-pid="${p.id}">Sign (${fmtMoney(p.ask)})</button>`;
   else if (p.tid >= 0) left += `<button data-action="tradeFor" data-pid="${p.id}">Trade for ${esc(p.last)}</button>`;
   left += '</div>';
@@ -2943,7 +3032,28 @@ function rosterBlock() {
 }
 
 // ---------- actions ----------
+const faAct = fn => d => { const pid = +d.pid, err = fn(pid, d); if (err) toast(err); const p = P(pid); if (p && p.tid === state.userTid && !err) toast('Signed!'); save(); render(); const lg = document.getElementById('faLog'); if (lg) lg.scrollTop = lg.scrollHeight; };
 const actions = {
+  faPick: d => { ui.faSel = +d.pid; render(); const lg = document.getElementById('faLog'); if (lg) lg.scrollTop = lg.scrollHeight; },
+  faGo: d => { ui.faSel = +d.pid; ui.faView = 'now'; ui.faPos = 'ALL'; ui.faF = null; view = 'fa'; closeModal(); render(); },
+  faSortA: d => { ui.faSort = d.v; render(); },
+  faLV: d => { ui.faLV = d.v; render(); },
+  agent: d => agentModal(+d.aid),
+  faInboxX: () => { state.fa.inbox = []; save(); render(); },
+  faSeg: d => { const p = P(+d.pid); faIn(p)[d.f] = d.f === 'yrs' ? +d.v : d.v; render(); },
+  faCall: faAct(pid => (faTalk(pid) ? null : 'He is not on the market')),
+  faRole: faAct(pid => { const i = faIn(P(pid)); return faSayRole(pid, i.role, i.spot); }),
+  faCommit: faAct(pid => { const i = faIn(P(pid)); return faSayCommit(pid, +i.yrs, +i.gtd || 0); }),
+  faSalary: faAct(pid => { const i = faIn(P(pid)); return faSaySalary(pid, +i.aav || 0, i.load); }),
+  faHoldA: faAct(pid => faHold(pid)),
+  faFinalA: faAct(pid => faFinal(pid)),
+  faStandA: faAct(pid => faStand(pid)),
+  faLeaveA: faAct((pid, d) => faLeave(pid, !!d.dl)),
+  faBack: faAct(pid => faBackToCommit(pid)),
+  faWalkA: faAct(pid => faWalk(pid)),
+  faPullA: faAct(pid => faWithdraw(pid)),
+  faOrderA: faAct(pid => { const i = faIn(P(pid)); return faOrder(pid, +i.max || 0, i.role); }),
+  faOrderX: faAct(pid => faOrder(pid, 0)),
   nav: d => { view = d.view; ui.more = false; render(); window.scrollTo(0, 0); },
   navHead: d => { const h = navTree().find(x => x[0] === d.h); if (!h) return; const last = (ui.navLast || {})[d.h], hot = navHot(), ok = v => h[2].some(y => y[0] === v); view = navHeadOf(view) === d.h ? view : ok(hot) ? hot : ok(last) ? last : h[2][0][0]; ui.more = false; render(); window.scrollTo(0, 0); },
   more: () => { ui.more = !ui.more; render(); },
@@ -3168,6 +3278,7 @@ const actions = {
   },
 };
 const changes = {
+  faSpot: (v, el) => { faIn(P(+el.dataset.pid)).spot = v; },
   rosterTeam: v => { ui.rosterTid = +v; },
   rosterView: v => { ui.rosterView = v; },
   msort: (v, el) => { sortState[el.dataset.table] = { k: v, dir: -1 }; },
@@ -3258,6 +3369,12 @@ document.addEventListener('click', e => {
   if (!el) return;
   const fn = actions[el.dataset.action];
   if (fn) { e.preventDefault(); fn(el.dataset, el); }
+});
+// numbers typed into the sit-down are kept without redrawing the page (a redraw between the keystroke and the click would eat the click)
+document.addEventListener('input', e => {
+  const el = e.target.closest && e.target.closest('[data-fain]'); if (!el || !state) return;
+  const p = P(+el.dataset.pid); if (!p) return; faIn(p)[el.dataset.fain] = el.value === '' ? 0 : +el.value;
+  const c = document.getElementById('faCalc'); if (c && state.fa && state.fa.talks[p.id]) c.innerHTML = faCalcTxt(p);
 });
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-change]');

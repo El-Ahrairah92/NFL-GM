@@ -1074,3 +1074,29 @@ The defense has to answer. In man his defender goes with him, across the whole f
 **Checks.** League averages are where they were (about 23 points, 65 percent, 7.2 to 7.3 a throw, 4.45 a carry). A motion audit confirms one man moves per snap, never a man on the line, never onto another player's spot, and a defender goes with him in man every time. In the attribute test, receiver contact balance, strength and elusiveness each move yards after the catch; release moves how often he is jammed and, after its effect was raised, completion percentage; a corner's press does the same from the other side.
 
 Not built: quarterback and receiver timing (waiting for team chemistry); a back motioning out of the backfield; safeties rotating to motion in zone; the corner assignment by field and boundary.
+
+## 51. Free agency as a market with agents
+
+**Price.** A free agent's card shows an Expected yearly value as a range. The league's shared view of him sets it; no tier label for it is shown. A signing well above expectation lifts the expected value at that position for a while (the market resets). Each club has its own view of him, from its own read of his rating and his fit in its system, scaled by need. A club that sees him higher than the league can pay above the range and still be right. A role does not create value: a proven starter asks starter money because he is one; an unproven player offered a starting job is still priced as unproven, and what changes is the shape of the deal (he wants it short).
+
+**Who is in the market.** Players expected to earn at least 1.6 times the minimum have an agent meeting; everyone below that signs on the spot at his asking price, as before. A player with leverage whose agent likes the open market sometimes turns down his own club to test it, so the market has real starters in it (about 130 to 150 players, 35 or so starters, a handful of stars).
+
+**The days.** Free agency runs eight days. Each day every club can put out offers; offers are binding while live and count against what a club can still spend. Nobody sees another club's offer. An agent tells a club when it has been beaten, and it raises until the player costs more than he is worth to it. Overnight each player takes the best offer if it clears what his agent would accept that day. That bar starts near the agent's opening number and falls as days pass; stars hold longer and do not sign on day one unless someone meets the ask. After day eight whoever is left takes what he can get. Measured: starters and stars sign for 7 to 10 percent over expected, the middle at about expected, and late signings at a discount.
+
+**Agents.** 46 named agents; a few have many clients. Each has six hidden dials rolled independently: how high he opens, how honest he is about rival clubs, patience, how much he values guarantees, how long he remembers past dealings, how far he follows what the client wants. Nothing about them is shown except the name, other clients, and the user's own record with him (who signed, for what, against what opening number; who walked).
+
+**The player.** Besides money each player cares about up to three things: a short prove-it deal, a starting job, a contender, staying with his last club, a system that suits him, security. An offer's worth to him is the yearly money, bent by length against what he wants, the share guaranteed against what his standing commands, when the money is paid, and those wants.
+
+**The sit-down.** Three steps, in order.
+1. The role: starter or depth, at which position. The agent opens by saying what his client wants, as much as he is built to tell. A proven starter offered a depth role early ends the meeting. An unproven player offered a starting job wants one or two years. A new position needs more guaranteed. This step does not reopen.
+2. The commitment: years and guaranteed money as one move. The agent has a floor on the guarantee and a range of years he will discuss; an honest one names the number, others say only how close it is.
+3. The salary, and how it is paid: even, front-loaded (more cap hit now, cheaper later) or back-loaded.
+Each failed move costs patience; when it runs out the meeting ends for the day. The agent holds out for more than he would take and gives ground with each exchange, faster if he is impatient. A dishonest agent invents a rival offer. Moves: offer, hold, best and final (a no ends the talks, for good with some agents), ask where things stand (once a day; the count of clubs is padded by a dishonest agent), leave the offer on the table, set a deadline of tonight, reopen the years, walk away. A yes can be immediate, or the agent takes it to his client overnight, when a rival can still beat it. If the offer clears the player's own number and gives him what he cares about, a client-first agent is told to take it.
+
+**Contracts.** A negotiated contract records the yearly average, a year-by-year schedule if it is loaded, the guarantee and the promised role. Cap hit each year is the next number on the schedule. The promised role is stored for when morale exists.
+
+**Hands-off.** The front office can be given a yearly ceiling for a player and bids like any other club up to it.
+
+**The page.** A narrow list (position, name, age, tier, expected value, status) on the left; on the right the selected player's card: where he would fit on the user's roster, scouting, last season, positions, and the sit-down as a conversation. Across the top: the day, cap room, money tied up in live offers, roster count, live offers and overnight news.
+
+Not built: re-signing the user's own players at the same table; consequences for a broken role promise (waits for morale); other clubs using loaded contracts; agents gaining and losing clients over time.

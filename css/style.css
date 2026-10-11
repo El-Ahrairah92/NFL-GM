@@ -931,3 +931,43 @@ input, textarea, select, .selectable { -webkit-user-select: text; user-select: t
 .tbl-wrap.longlist { max-height: 62vh; overflow-y: auto; }
 .tbl-wrap.longlist thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); }
 @media (max-width: 760px) { .tbl-wrap.longlist { max-height: 58vh; } }
+
+/* ---- free agency: list, card, sit-down ---- */
+.fa-strip { margin-bottom: 12px; }
+.fa-strip .big { font-size: 20px; font-weight: 700; line-height: 1.15; }
+.fa-live { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; max-width: 46%; justify-content: flex-end; }
+.fa-inbox { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line2); display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
+.fa-wrap { display: grid; grid-template-columns: minmax(420px, 0.8fr) minmax(0, 1.2fr); gap: 14px; align-items: start; }
+.fa-left, .fa-right { max-height: calc(100vh - 215px); overflow: auto; }
+.fa-left { display: flex; flex-direction: column; }
+.fa-list { overflow: auto; flex: 1; min-height: 120px; border: 1px solid var(--line2); border-radius: 5px; }
+.fa-row { display: grid; grid-template-columns: 44px minmax(120px, 1fr) 22px 70px 74px 96px; gap: 6px; align-items: center; padding: 5px 8px; border-bottom: 1px solid var(--line2); cursor: pointer; font-size: 13px; }
+.fa-row:hover { background: var(--panel2); }
+.fa-row.on { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); }
+.fa-row.lv-scout { grid-template-columns: 44px minmax(120px, 0.8fr) 22px 70px 104px minmax(0, 1fr); }
+.fa-row.lv-stats { grid-template-columns: 44px minmax(120px, 0.7fr) 22px 26px 34px minmax(0, 1.3fr); }
+.fa-row.lv-phys { grid-template-columns: 44px minmax(120px, 1fr) 22px 44px 40px 40px 96px; }
+.fa-head { cursor: default; font-size: 11px !important; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); font-weight: 700; border-bottom: 1px solid var(--line); padding-right: 22px; }
+.fa-head:hover { background: none; }
+.fa-row .fa-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fa-row .fa-num { text-align: right; font-variant-numeric: tabular-nums; }
+.fa-row .fa-name .link { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fa-right .stat-tiles { grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); }
+.fa-row .fa-pos { font-size: 11.5px; color: var(--muted); font-weight: 700; }
+.fa-row .fa-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fa-row .fa-exp { text-align: right; font-variant-numeric: tabular-nums; }
+.fa-row .fa-st { font-size: 11.5px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fa-row .pill { text-align: center; }
+.fa-cols { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 18px; }
+.fa-agent { padding: 8px 10px; background: var(--panel2); border-radius: 6px; border: 1px solid var(--line2); }
+.fa-log { margin-top: 8px; max-height: 250px; overflow: auto; display: flex; flex-direction: column; gap: 5px; padding: 2px; }
+.fa-line { display: flex; }
+.fa-line span { max-width: 86%; padding: 6px 10px; border-radius: 10px; font-size: 13px; line-height: 1.35; }
+.fa-line.a span { background: var(--panel2); border: 1px solid var(--line); border-bottom-left-radius: 2px; }
+.fa-line.u { justify-content: flex-end; }
+.fa-line.u span { background: var(--accent); color: #fff; border-bottom-right-radius: 2px; }
+.fa-step { margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; }
+.fa-h { font-size: 11.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; margin-bottom: 8px; }
+.fa-fo { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line2); }
+.fa-fo summary { cursor: pointer; color: var(--muted); }
+@media (max-width: 900px) { .fa-wrap, .fa-cols { grid-template-columns: minmax(0, 1fr); } .fa-left, .fa-right { max-height: none; } .fa-list { max-height: 320px; } .fa-live { max-width: 100%; margin-left: 0; } }

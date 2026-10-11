@@ -77,6 +77,8 @@ const TUNE = {
   yacMiss: 7.5,         // yards a receiver gains when the first man misses him in the open field
   motionMan: 0.15, motionTell: 0.6, motionBump: 0.65, motionCheck: 0.7, // motion: the step it gives the moving man against man coverage, how much it tells the quarterback, how often a zone bumps over in time, and how much it costs the offense's own check at the line
   hashCov: 0.05, hashSpace: 0.3, hashRun: 0.05, hashThrow: 1.5, // the hash: how much easier a zone is to throw on to the wide side, the room after a catch there, the room on an outside run there, and the arm the far throw takes
+  helpRef: 64, helpSkill: 0.03, // zone help: the rating at which the second defender in an area helps the standard amount, and how much each point changes it
+  containRead: 0.02, chaseSpeed: 0.02, // the ends: play recognition keeps contain (fewer escapes outside), speed runs an escaped quarterback down sooner
   yacPower: 1,          // how much balance, strength and size break a tackle after the catch
   contestLabel: -0.15,  // how tight the window has to be before a target is charted as contested
   mugLate: 0.15,        // how much more open a route is when the man covering it started walked up in a gap
@@ -93,7 +95,7 @@ const TUNE = {
   slantHit: 0.3,        // chance a slant crosses an average blocker's face cleanly
   slantWin: 9, slantLose: 4, // pass-rush points when it does, and when he runs himself into the block
   // coverage / passing
-  openBase: -0.67,
+  openBase: -0.68,
   accScale: 0.042,      // how much ball placement decides whether a throw is catchable
   wrBlock: 12,         // receivers give up this many points to the corner they are blocking (they are not linemen)
   size: 1,             // master dial for every height and weight effect (0 switches them off)

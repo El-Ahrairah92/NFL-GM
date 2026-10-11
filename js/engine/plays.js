@@ -388,8 +388,9 @@ function resolvePass(g, off, def, oc, dc) {
     if (man) {
       defE = mm.m.get(e) || null;
       if (!defE || defE.blitz) { hole = true; defE = nearestDef(mm.free, r.endX); }
-      const offC = deep ? rte * (0.9 - TUNE.deepSpeed) + agi * 0.1 + spd * TUNE.deepSpeed : rte * 0.5 + agi * 0.2 + bur * 0.3;
-      const defC = defE ? (deep ? ea(g, defE, 'man') * 0.45 + ea(g, defE, 'agi') * 0.1 + ea(g, defE, 'spd') * 0.45 : ea(g, defE, 'man') * 0.6 + ea(g, defE, 'agi') * 0.15 + ea(g, defE, 'bur') * 0.25) : 30;
+      const mid = r.band === 'I'; // at 10 to 20 yards speed starts to tell, for the receiver and for the man running with him
+      const offC = deep ? rte * (0.9 - TUNE.deepSpeed) + agi * 0.1 + spd * TUNE.deepSpeed : mid ? rte * 0.45 + agi * 0.15 + bur * 0.2 + spd * 0.2 : rte * 0.5 + agi * 0.2 + bur * 0.3;
+      const defC = defE ? (deep ? ea(g, defE, 'man') * 0.45 + ea(g, defE, 'agi') * 0.1 + ea(g, defE, 'spd') * 0.45 : mid ? ea(g, defE, 'man') * 0.55 + ea(g, defE, 'agi') * 0.1 + ea(g, defE, 'bur') * 0.15 + ea(g, defE, 'spd') * 0.2 : ea(g, defE, 'man') * 0.6 + ea(g, defE, 'agi') * 0.15 + ea(g, defE, 'bur') * 0.25) : 30;
       const lbM = defE && ['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 0.35 : 1;
       const RB_ = bod(e), DF_ = defE ? bod(defE) : NO_BODY, zc = TUNE.size;
       w = TUNE.openBase + (soft(offC - 70 + ((deep ? RB_.h * 0.6 : -RB_.w * 0.2) + RB_.w * 0.5) * zc, 14) * TUNE.recWeight - soft(defC - 70 + ((deep ? DF_.len * 0.6 : -DF_.w * 0.2) + DF_.w * 0.5 + DF_.len * 0.5) * zc, 14) * TUNE.covWeight * lbM) * TUNE.openScale;
@@ -418,8 +419,9 @@ function resolvePass(g, off, def, oc, dc) {
           const carry = droppers.filter(x => (wideMan ? x.slot === 'CB' : x.slot === 'NCB' || x.slot === 'DIME') && Math.sign(x.x) === Math.sign(e.x) && !bit.has(x) && !owners.some(o2 => o2[0] === x))[0];
           if (carry) owners = [[carry, TUNE.zoneCarry], ...owners.map(([x, wt]) => [x, wt * 0.5])]; } }
       if (!owners.length) { hole = true; defE = nearestDef(droppers, r.endX); }
-      else { owners.sort((a, b) => b[1] - a[1]); defE = owners[0][0]; if (owners.length > 1) help -= 0.3 * owners[1][1]; }
-      const offC = deep ? rte * (0.9 - TUNE.deepSpeed * 0.95) + agi * 0.1 + spd * TUNE.deepSpeed * 0.95 : rte * 0.55 + agi * 0.15 + bur * 0.3;
+      else { owners.sort((a, b) => b[1] - a[1]); defE = owners[0][0]; if (owners.length > 1) { const h2 = owners[1][0]; help -= 0.3 * owners[1][1] * clamp(1 + (ea(g, h2, 'zone') * 0.6 + ea(g, h2, 'prec') * 0.25 + ea(g, h2, 'spd') * 0.15 - TUNE.helpRef) * TUNE.helpSkill, 0.4, 1.7); } } // the second man in the area helps as well as he plays zone
+      const mid = r.band === 'I';
+      const offC = deep ? rte * (0.9 - TUNE.deepSpeed * 0.95) + agi * 0.1 + spd * TUNE.deepSpeed * 0.95 : mid ? rte * 0.5 + agi * 0.1 + bur * 0.2 + spd * 0.2 : rte * 0.55 + agi * 0.15 + bur * 0.3;
       const own = owners.length ? owners[0][1] : 0.6;
       const defC = defE ? (deep ? ea(g, defE, 'zone') * 0.4 + ea(g, defE, 'prec') * 0.2 + ea(g, defE, 'spd') * 0.4 : ea(g, defE, 'zone') * 0.45 + ea(g, defE, 'prec') * 0.25 + ea(g, defE, 'spd') * 0.15 + ea(g, defE, 'agi') * 0.15) : 30;
       const lbZ = defE && ['MLB', 'WLB', 'SAM'].includes(defE.slot) ? TUNE.lbCover : 1, ZD = defE ? bod(defE) : NO_BODY, ZR = bod(e), zc = TUNE.size;
@@ -442,7 +444,7 @@ function resolvePass(g, off, def, oc, dc) {
     const toGoal = 100 - g.ydl;
     if (toGoal <= 20) w -= (toGoal <= 10 ? 0.65 : 0.3) * TUNE.redZone;
     w += (r.band === 'S' ? TUNE.shortOpen : r.band === 'D' ? TUNE.deepCov : TUNE.midCov) + (r.role === 3 ? (e.slot === 'RB' || e.slot === 'FB' ? 0.2 : 0.3) : 0) + (isInline(e) && INLINE.has(e.slot) ? TUNE.teOpen : 0); // defenses give up the underneath (checkdowns most of all), protect deep
-    if (e.slot === 'Y' || e.slot === 'H') w += 0.13; // tight ends work the seams and the soft middle
+    if (e.slot === 'Y' || e.slot === 'H') w += 0.13 + (r.band !== 'S' && defE ? clamp((spd - ea(g, defE, 'spd')) * 0.012, -0.2, 0.25) : 0); // tight ends work the seams and the soft middle; one who can outrun the man on him wins up the seam
     if (dc.soft) w += r.band === 'S' ? 0.35 : r.band === 'D' ? -0.35 : 0.12; // prevent: everything underneath is there
     // From a hash one side of the field is wider than the other. Zone defenders to the wide side have more grass each; into the boundary the sideline helps them.
     if (g.hash && !man && Math.abs(r.endX) > 2.2 && r.band !== 'D') w += (Math.sign(r.endX) === -g.hash ? 1 : -1) * TUNE.hashCov;
@@ -496,8 +498,10 @@ function resolvePass(g, off, def, oc, dc) {
       const rushE = rusher.e;
       const inside = isIn(rusher); // pressure up the middle: he cannot step up, and it comes with a hand in his face
       const tightEnds = prot.rushers.filter(a => a.e.depth < ON_LINE && Math.abs(a.e.x) >= 2).every(a => Math.abs(a.e.x) < 2.5);
-      const esc = lgt(-0.15 + (tightEnds ? TUNE.tightEsc : 0) + (pkt * 0.55 + ea(g, qb, 'agi') * 0.2 + ea(g, qb, 'spd') * 0.1 + ea(g, qb, 'bur') * 0.15 - (ea(g, rushE, 'prsh') * 0.5 + ea(g, rushE, 'bur') * 0.5)) * 0.045 - (rusher.free ? 0.7 : 0) - bod(qb).w * 0.04 * TUNE.size - (inside ? 0.45 + (ea(g, rushE, 'prsh') - 70) * 0.02 : 0));
-      if (rand() < esc) { escaped = true; tPress = t + 0.8 + rand() * 0.6; if (inside) tPress = Math.max(t + 0.3, Math.min(tPress, tOut + TUNE.flush)); } // flushed out of the middle, he runs into the ends
+      const ends = prot.rushers.filter(a => a.e.depth < ON_LINE && Math.abs(a.e.x) >= 2).map(a => a.e), endAvg = k => ends.length ? ends.reduce((s, x) => s + ea(g, x, k), 0) / ends.length : 65;
+      const esc = lgt(-0.15 - (inside ? 0 : (endAvg('prec') - 66) * TUNE.containRead) + (tightEnds ? TUNE.tightEsc : 0) + (pkt * 0.55 + ea(g, qb, 'agi') * 0.2 + ea(g, qb, 'spd') * 0.1 + ea(g, qb, 'bur') * 0.15 - (ea(g, rushE, 'prsh') * 0.5 + ea(g, rushE, 'bur') * 0.5)) * 0.045 - (rusher.free ? 0.7 : 0) - bod(qb).w * 0.04 * TUNE.size - (inside ? 0.45 + (ea(g, rushE, 'prsh') - 70) * 0.02 : 0));
+      // fast ends close the distance once he is out
+      if (rand() < esc) { escaped = true; tPress = t + 0.8 + rand() * 0.6 - clamp((endAvg('spd') - 76) * TUNE.chaseSpeed, -0.25, 0.3); if (inside) tPress = Math.max(t + 0.3, Math.min(tPress, tOut + TUNE.flush)); } // flushed out of the middle, he runs into the ends
       if (escaped) {
         // The scramble drill. The play is off script: receivers break off their routes and work to open grass, the deep ones going deeper,
         // and coverage that was sound for three seconds has to hold for five. How much he creates is his legs; man coverage, with its

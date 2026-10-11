@@ -39,14 +39,14 @@ function makeContract(p, amt, yrs, share) {
 function deadIfCut(p) {
   const c = p.contract;
   if (!c || c.yrs <= 0) return { now: 0, next: 0 };
-  const dead = round2(Math.min(c.gtd || 0, c.amt * c.yrs) + (c.next ? c.next.gtd || 0 : 0));
+  const dead = round2(Math.min(c.gtd || 0, c.sched ? c.sched.reduce((s, x) => s + x, 0) : c.amt * c.yrs) + (c.next ? c.next.gtd || 0 : 0));
   const inSeason = state.phase === 'REG' || state.phase === 'PLAYOFFS';
   if (!inSeason && c.yrs >= 2 && dead > c.amt) return { now: round2(c.amt), next: round2(dead - c.amt) };
   return { now: dead, next: 0 };
 }
 function payrollNext(tid) {
   let s = T(tid).deadNext || 0;
-  for (const p of rosterOf(tid)) { const c = p.contract; if (c.yrs >= 2) s += c.amt; else if (c.next) s += c.next.amt; }
+  for (const p of rosterOf(tid)) { const c = p.contract; if (c.yrs >= 2) s += c.sched && c.sched.length >= 2 ? c.sched[1] : c.amt; else if (c.next) s += c.next.amt; }
   return round2(s);
 }
 
@@ -190,6 +190,7 @@ function rolloverContract(p) {
   // guarantees work like a prorated bonus: an even share of what's left is used up each year
   c.gtd = round2((c.gtd || 0) * Math.max(0, c.yrs - 1) / Math.max(1, c.yrs));
   c.yrs--;
+  if (c.sched) { c.sched.shift(); if (c.sched.length) c.amt = c.sched[0]; } // a front- or back-loaded deal: this year's cap hit is the next number on the schedule
   if (c.yrs > 0) return;
   p.lastAmt = c.amt;
   if (c.next) { p.contract = Object.assign({}, c.next, c.opt5 === 'exercised' ? { opt5: 'exercised' } : {}); return; }
@@ -378,7 +379,7 @@ function restructure(p, x) {
   const c = p.contract, t = T(p.tid);
   x = round2(Math.max(0, Math.min(x, c.amt - MIN_SALARY)));
   if (!x) return 0;
-  c.amt = round2(c.amt - x); c.gtd = round2((c.gtd || 0) + x);
+  c.amt = round2(c.amt - x); c.gtd = round2((c.gtd || 0) + x); if (c.sched) c.sched[0] = c.amt;
   t.deadNext = round2((t.deadNext || 0) + x);
   if (p.tid === state.userTid) addNews(`${t.abbr} restructured ${p.lbl} ${pname(p)}'s deal: ${fmtMoney(x)} of cap space this year, pushed into next year.`, [p.tid], 'sign');
   return x;

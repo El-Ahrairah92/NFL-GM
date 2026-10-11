@@ -5,6 +5,8 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 ## Up next (agreed order)
 
 1. **Free agency and re-signing on the valuation** (this is what makes the cap bind):
+   - done (section 51): free agency is a market of binding offers over eight days, with agents and a three-step sit-down; clubs bid from their own view of the player
+   - still to do there: re-sign the user's own players at the same table; consequences for a broken role promise (with morale); other clubs using front- and back-loaded deals; agents gaining and losing clients
    - clubs re-sign only when the player is worth his price to them (today 161 of 177 expiring players rated 75+ are kept)
    - steeper pay at the top for non-quarterbacks (85+ averages 5% of the cap; real stars take 8 to 12%)
    - a spending floor so cheap clubs bid (league spends 88% of the cap, lowest club 68%)

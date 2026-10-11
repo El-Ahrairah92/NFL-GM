@@ -28,8 +28,8 @@ function randomName() { return [pick(FIRST_NAMES), pick(LAST_NAMES)]; }
 
 // ---------- money / value ----------
 // the market pays for perception (consensus value incl. hype), not the hidden truth
-function marketValue(p) {
-  const max = SPOTS[p.spot].sal * capFactor(), ov = typeof perOvr === 'function' ? perOvr(p) : p.ovr;
+function marketValue(p, as) { // as: price him at this rating instead (one club's own read of him)
+  const max = SPOTS[p.spot].sal * capFactor(), ov = as !== undefined ? as : typeof perOvr === 'function' ? perOvr(p) : p.ovr;
   const gr = p.per ? p.per.g : Math.max(0, p.pot - p.ovr);
   const f = clamp((ov - 58) / 37, 0, 1); // the very best reset the market, they don't double it
   // mkt flattens the curve: when teams have room, the middle class gets paid; the top of each position stays anchored to its ceiling

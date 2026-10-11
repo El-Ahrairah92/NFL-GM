@@ -244,7 +244,9 @@ function leaveResign() {
     if (isAI(t.id)) fixCap(t.id); // the league year opens: every club has to be under the cap before it does business
     const exp = rosterOf(t.id).filter(p => p.expiring).sort((a, b) => viewOvr(b, t.id) - viewOvr(a, t.id));
     for (const p of exp) {
-      if (isAI(t.id) && aiWantsResign(p) && p.ask <= capRoom(t.id) - 4) {
+      // a player with leverage and an agent who likes the open market goes to see what another club thinks he is
+      const tests = leverageOf(p) >= 0.55 && p.age <= 31 && rand() < 0.12 + agentOf(p).d[0] * 0.3;
+      if (isAI(t.id) && aiWantsResign(p) && p.ask <= capRoom(t.id) - 4 && !tests) {
         resignPlayer(p.id);
       } else {
         toFreeAgency(p);
@@ -253,6 +255,7 @@ function leaveResign() {
     }
   }
   state.phase = 'FA'; state.faWave = 0;
+  faOpen(); // the market opens: clubs bid over a run of days (freeagency.js)
 }
 function toFreeAgency(p) {
   if (p.tid >= 0) { p.lastTid = p.tid; if (p.contract && p.contract.amt) p.lastAmt = p.contract.amt; } // shown on the free-agent board
@@ -269,6 +272,7 @@ function signFA(pid, tid, yrs) {
   const p = P(pid);
   if (!p || p.tid !== -1) return 'Player is not a free agent';
   if (p.waiver) return 'He is on waivers: put in a claim';
+  if (typeof faInMarket === 'function' && faInMarket(p)) return 'He is on the market: sit down with his agent';
   if (state.phase === 'UDFA' && isUdfa(p)) return 'Undrafted rookies choose between offers: make yours on the Free Agents tab';
   if (rosterCount(tid) >= rosterLimit()) return 'Roster is full';
   if (p.ask > capRoom(tid)) return 'Not enough cap room';
@@ -314,7 +318,7 @@ function aiFreeAgencyWave(maxSigns) {
       // teams sitting on a pile of cap space are motivated buyers
       let bestP = null, best = capRoom(tid) > state.cap * 0.2 ? 0.5 : 2;
       for (const p of pool) {
-        if (p.tid !== -1 || p.ask > room) continue;
+        if (p.tid !== -1 || p.ask > room || faInMarket(p)) continue;
         const s = faGain(tid, p) - p.ask * 0.15;
         if (s > best) { best = s; bestP = p; }
       }
@@ -322,12 +326,14 @@ function aiFreeAgencyWave(maxSigns) {
     }
   }
   // unsigned players lower their demands
-  for (const p of fas()) p.ask = round2(Math.max(MIN_SALARY, p.ask * 0.85));
+  for (const p of fas()) if (!faInMarket(p)) p.ask = round2(Math.max(MIN_SALARY, p.ask * 0.85));
 }
 function advanceFA() {
-  aiFreeAgencyWave(state.faWave === 0 ? 4 : 3);
-  state.faWave++;
-  if (state.faWave >= FA_WAVES) { state.phase = 'DRAFT'; addNews(`The ${state.draft.year} draft is on the clock.`); }
+  if (!state.fa || state.fa.yr !== state.season) faOpen(); // a save from before the market existed
+  faAdvanceDay();
+  if (state.fa.day === 3 || state.fa.day === 6) aiFreeAgencyWave(2); // the bottom of the roster gets filled while the market runs
+  state.faWave = state.fa.day;
+  if (state.fa.over) { state.phase = 'DRAFT'; addNews(`The ${state.draft.year} draft is on the clock.`); }
 }
 
 // ---------- draft ----------
