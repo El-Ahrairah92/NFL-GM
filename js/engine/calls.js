@@ -185,7 +185,9 @@ function defenseCall(g, oc) {
   // package answers personnel
   const p = oc.pers;
   let pkg;
-  if (p === '10') pkg = rand() < 0.7 ? 'DIME' : 'NICKEL';
+  // no huddle: the defense cannot substitute, so it plays the snap with the package it already has out there
+  if (oc.nohud && g.nh && g.nh.poss === o && g.nh.pkg !== 'GL') pkg = g.nh.pkg;
+  else if (p === '10') pkg = rand() < 0.7 ? 'DIME' : 'NICKEL';
   else if (p === '11') pkg = rand() < dt.base * 0.35 * (1 + (runEst - 0.45) * pcF) ? 'BASE' : ((sit.b === 'D3L' || sit.hurry) && rand() < TUNE.dimeLong ? 'DIME' : sit.b === 'D3M' && rand() < TUNE.dimeMid ? 'DIME' : 'NICKEL');
   else if (p === '12') pkg = rand() < 0.25 + dt.base * 0.8 ? 'BASE' : 'NICKEL';
   else if (p === 'JUMBO' || ((p === '22' || p === '13') && (sit.gl || sit.short))) pkg = sit.gl || g.togo <= 1 ? 'GL' : 'BASE';
@@ -199,7 +201,7 @@ function defenseCall(g, oc) {
   if (lib && pkg !== 'GL' && call.front !== 'Bear' && call.front !== 'Under') {
     const fam = pkg === 'BASE' ? (odd ? 'odd' : 'even') : 'sub', list = fam === 'sub' ? lib.sub : lib.fam === fam ? lib.base : null;
     if (list) { const w = {}; for (const [k, v] of list) { const L = LOOKS[fam][k]; if (L) w[k] = v * (L.k === 'run' ? 0.4 + runEst * 1.4 : L.k === 'rush' ? (sit.passDown ? 2.2 : 1.3 - runEst) : 1); }
-      const k = wpick(w); if (k) { call.look = k; call.lookT = { t: LOOKS[fam][k].t }; call.changeup = k !== list[0][0]; } }
+      const k = wpick(w); if (k) { call.look = k; call.lookT = { t: LOOKS[fam][k].t, n: k }; call.changeup = k !== list[0][0]; } }
     if (pkg !== 'BASE' && lib.mug && rand() < lib.mug * (sit.passDown ? 2 : 0.6)) { call.lookT = Object.assign({}, call.lookT, { mug: true }); call.mug = true; }
   }
   // coverage
@@ -240,6 +242,7 @@ function defenseCall(g, oc) {
   call.stunt = call.pres !== 'BLITZ' && rand() < dt.stunt;
   // obvious passing downs in nickel or dime: the pass-rush line. If you named rush specialists, they come in every time.
   const uc = userChart(g, d, 'def'), named = uc && (hasList(uc, 'RUSHE') || hasList(uc, 'RUSHI'));
+  if (lib && lib.travel && MAN_SHELLS.includes(call.cov)) call.travel = true;
   call.subRush = (pkg === 'NICKEL' || pkg === 'DIME') && sit.passDown && (named || rand() < 0.6);
   call.runBlitz = (call.pres === 'BLITZ' || call.pres === 'FZ') && runEst > 0.55;
   // line games out of his library: a slant (to the strength, away from it, or both tackles pinching), and which twist when one is called

@@ -12,22 +12,22 @@ const CHART_SECTIONS = [
     ['FB', 'Fullback (21/22)'], ['SLOT2', '4th receiver (10 pers.)'], ['Y2', '3rd tight end (13)'], ['OL6', '6th lineman (jumbo)'],
   ] },
   { unit: 'def', title: 'Defense', rows: [
-    ['EDGE1', 'Edge (left)'], ['EDGE2', 'Edge (right)'], ['IDL1', 'Interior DL'], ['IDL2', 'Interior DL'], ['NT', 'Nose / base interior'],
-    ['MLB', 'Middle LB'], ['WLB', 'Weak-side LB'], ['SAM', 'Strong-side LB (base)'], ['CB1', 'Corner'], ['CB2', 'Corner'], ['NCB', 'Slot corner (nickel)'], ['DIME', 'Second slot corner (dime)'], ['FS', 'Free safety'], ['SS', 'Strong safety'],
+    ['NOSE', 'Nose'], ['SHADE', 'Shade'], ['T3', '3-technique'], ['END', 'End'], ['WIDE', 'Wide end'], ['OLB', 'Edge linebacker'],
+    ['MLB', 'Mike linebacker'], ['WLB', 'Will linebacker'], ['SAM', 'Sam linebacker'], ['CB', 'Corner'], ['NCB', 'Nickel'], ['DIME', 'Dime back'], ['FS', 'Free safety'], ['SS', 'Strong safety'],
   ] },
   { unit: 'off', title: 'Offensive packages', pkg: true, rows: [['RB3D', 'Passing-down back (3rd & long, 2-minute)'], ['RBSY', 'Short-yardage / goal-line back']] },
-  { unit: 'def', title: 'Defensive packages', pkg: true, rows: [['RUSHE', 'Rush specialists · edge (passing downs)'], ['RUSHI', 'Rush specialists · interior (passing downs)'], ['BIGN', 'Big nickel safety (third safety in the slot)']] },
+  { unit: 'def', title: 'Defensive packages', pkg: true, rows: [['RUSHE', 'Edge rusher'], ['RUSHI', 'Inside rusher'], ['WLBP', 'Will on passing downs'], ['NCBP', 'Nickel on passing downs']] },
   { unit: 'st', title: 'Special teams', rows: [['K', 'Kicker'], ['P', 'Punter'], ['KR', 'Kick returner'], ['PRET', 'Punt returner']] },
   { unit: 'st', title: 'Special teams units', pkg: true, rows: [['KO', 'Kickoff coverage'], ['KRU', 'Kick return blockers'], ['PU', 'Punt team (first two are the gunners)'], ['PRU', 'Punt return (first two hold up the gunners)']] },
 ];
-const CHART_DEPTH = { RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, K: 1, P: 1, KR: 2, PRET: 2, KO: 10, KRU: 10, PU: 10, PRU: 10 };
-const ROT_KEYS = new Set(['RB', 'X', 'Z', 'SLOT', 'Y', 'H', 'EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'MLB', 'WLB', 'CB1', 'CB2', 'NCB', 'FS', 'SS']);
+const CHART_DEPTH = { T3: 4, END: 4, WIDE: 4, OLB: 4, CB: 4, WLBP: 2, NCBP: 2, RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, K: 1, P: 1, KR: 2, PRET: 2, KO: 10, KRU: 10, PU: 10, PRU: 10 };
+const ROT_KEYS = new Set(['RB', 'X', 'Z', 'SLOT', 'Y', 'H', 'NOSE', 'SHADE', 'T3', 'END', 'WIDE', 'OLB', 'MLB', 'WLB', 'CB', 'NCB', 'FS', 'SS']);
 // How much of a spot's work goes to the next man up: [least, usual, most]. Your setting moves inside the band and no further:
 // nobody plays every snap on a defensive line, no back carries a whole offense, and a starting corner does not sit a third of the game.
 const ROT_BAND = {
   RB: [0.2, 0.35, 0.5], X: [0, 0.03, 0.15], Z: [0, 0.03, 0.15], SLOT: [0, 0.06, 0.25], Y: [0, 0.08, 0.3], H: [0, 0.08, 0.3],
-  EDGE1: [0.1, 0.2, 0.4], EDGE2: [0.1, 0.2, 0.4], IDL1: [0.15, 0.25, 0.45], IDL2: [0.15, 0.25, 0.45], NT: [0.15, 0.25, 0.5],
-  MLB: [0, 0, 0.1], WLB: [0, 0, 0.2], CB1: [0, 0, 0.08], CB2: [0, 0, 0.1], NCB: [0, 0, 0.2], FS: [0, 0, 0.08], SS: [0, 0, 0.1],
+  WIDE: [0.1, 0.2, 0.4], OLB: [0.1, 0.2, 0.4], T3: [0.15, 0.25, 0.45], END: [0.15, 0.25, 0.45], SHADE: [0.15, 0.25, 0.45], NOSE: [0.15, 0.25, 0.5],
+  MLB: [0, 0, 0.1], WLB: [0, 0, 0.2], CB: [0, 0, 0.1], NCB: [0, 0, 0.2], FS: [0, 0, 0.08], SS: [0, 0, 0.1],
 };
 function rotOf(c, key) { const b = ROT_BAND[key]; if (!b) return 0; const v = c && c.rot && c.rot[key] !== undefined ? c.rot[key] : b[1]; return clamp(v, b[0], b[2]); }
 // the choices offered at a spot: the ends of its band, the usual share, and a step in between
@@ -48,13 +48,18 @@ function defaultChart(tid) {
     const away = p => p.spot === 'FB' && spot !== 'FB' ? 14 : SPOTS[spot].g === p.pos ? 0 : (p.pos === 'CB' || p.pos === 'S') && (SPOTS[spot].g === 'CB' || SPOTS[spot].g === 'S') ? 2 : 8;
     if (ST_UNIT[key]) { lists[key] = stStaffUnit(ro.filter(p => !p.injury), key, stStarters(ro)).map(p => p.id); continue; } // the staff's ten: the job each man does, less the risk to a starter
     const isRet = key === 'KR' || key === 'PRET';
-    const ranked = ro.filter(p => SPOTS[p.spot].side === SPOTS[spot].side || isRet).map(p => [p, isRet ? returnScore(p) : slotRating(p, spot) - away(p)])
+    const ax = LINE_ROLE_AX[key] !== undefined ? LINE_ROLE_AX[key] : key === 'RUSHI' ? 1.35 : key === 'RUSHE' ? 3 : null, rush = key === 'RUSHI' || key === 'RUSHE';
+    const ranked = ro.filter(p => SPOTS[p.spot].side === SPOTS[spot].side || isRet).map(p => [p, isRet ? returnScore(p) : ax !== null ? lineSlotRating(p, ax) + (rush ? ((p.a.prsh || 40) - 60) * 0.35 : 0) - (p.pos === 'DL' ? 0 : 8) : slotRating(p, spot) - away(p)])
       .sort((a, b) => b[1] - a[1]).map(x => x[0]);
     if (!ranked.length) { lists[key] = []; continue; }
     // starters are unique within a unit (packages may reuse anyone)
-    const first = sec.pkg ? ranked[0] : ranked.find(p => !starters[sec.unit].has(p.id)) || ranked[0];
-    if (!sec.pkg) starters[sec.unit].add(first.id);
-    lists[key] = [first, ...ranked.filter(p => p !== first)].slice(0, n).map(p => p.id);
+    // line jobs overlap by design (the same tackle is your 3-technique in one look and your shade in another), so each is simply the best men for it
+    if (ax !== null || key === 'WLBP' || key === 'NCBP') { lists[key] = key === 'WLBP' || key === 'NCBP' ? [] : ranked.slice(0, n).map(p => p.id); continue; }
+    const need = key === 'CB' ? 2 : 1, firsts = [];
+    for (const p of ranked) { if (firsts.length >= need) break; if (sec.pkg || !starters[sec.unit].has(p.id)) firsts.push(p); }
+    if (!firsts.length) firsts.push(ranked[0]);
+    if (!sec.pkg) for (const p of firsts) starters[sec.unit].add(p.id);
+    lists[key] = [...firsts, ...ranked.filter(p => !firsts.includes(p))].slice(0, n).map(p => p.id);
   }
   return lists;
 }
@@ -66,54 +71,98 @@ const chartName = k => CHART_NAME[baseKey(k)] || baseKey(k);
 function teamFront(tid) { const t = T(tid); return t && typeof defTend === 'function' ? defTend(t).front : '4-3'; }
 function chartSpotFor(tid, key0) {
   const key = baseKey(key0);
-  if (CHART_UNIT(key) !== 'def' || ['RUSHE', 'RUSHI', 'BIGN'].includes(key)) return CHART_SPOT[key];
+  if (CHART_SPOT[key]) return CHART_SPOT[key]; // a job is the same job whatever front the coach runs
   const front = teamFront(tid);
   for (const pkg of ['BASE', 'NICKEL', 'DIME', 'GL']) { const row = packageLayout(front, pkg).find(l => (DEF_CHART_KEY[l[0]] || l[0]) === key); if (row) return DEF_SLOT[row[1]][0]; }
   return CHART_SPOT[key];
 }
-// the views of a depth chart: one per defensive package and per offensive personnel grouping your staff actually uses
+// the views of a depth chart: every look the play caller carries on defense, every personnel grouping on offense
+function defLookList(t) {
+  const dt = defTend(t), lib = dt.pk && dt.pk.lib, fr = (dt.pk && dt.pk.fr) || {}, fam = dt.front === '3-4' || dt.front === 'Tite' ? 'odd' : 'even';
+  const base = (lib && lib.fam === fam ? lib.base : [[LOOK_HOME[dt.front] || 'Over', 1]]).filter(x => LOOKS[fam][x[0]]), sub = (lib ? lib.sub : [['Even', 1]]).filter(x => LOOKS.sub[x[0]]);
+  const out = [];
+  for (const [k, w] of base) out.push({ id: 'BASE|' + k, pkg: 'BASE', front: dt.front, fam, look: k, label: k, group: dt.front + ' base', share: w });
+  for (const [k, w] of sub) out.push({ id: 'NICKEL|' + k, pkg: 'NICKEL', front: dt.front, fam: 'sub', look: k, label: k, group: 'Nickel', share: w });
+  out.push({ id: 'DIME|' + sub[0][0], pkg: 'DIME', front: dt.front, fam: 'sub', look: sub[0][0], label: 'Dime', group: 'Other' });
+  out.push({ id: 'GL|', pkg: 'GL', front: dt.front, look: '', label: 'Goal line', group: 'Other' });
+  if (fr.UNDER) out.push({ id: 'UNDER|', pkg: 'BASE', front: 'Under', look: '', label: 'Under front', group: 'Other' });
+  if (fr.BEAR) out.push({ id: 'BEAR|', pkg: 'BASE', front: 'Bear', look: '', label: 'Bear front', group: 'Other' });
+  return out;
+}
+function defLookOf(t, vid) { const l = defLookList(t); return l.find(x => x.id === vid) || l[0]; }
+function lookTOf(L) { return L.look && LOOKS[L.fam] && LOOKS[L.fam][L.look] ? { t: LOOKS[L.fam][L.look].t, n: L.look } : null; }
 function dcViews(t, tab) {
   if (tab === 'off') { const pers = offTend(t).pers, tot = Object.values(pers).reduce((a, b) => a + b, 0) || 1;
     const ks = Object.keys(PERSONNEL).sort((a, b) => (pers[b] || 0) - (pers[a] || 0));
     return ks.map(k => ({ id: k, label: k === 'JUMBO' ? 'Jumbo' : k + ' personnel', share: (pers[k] || 0) / tot })); }
-  const dt = defTend(t), fr = (dt.pk && dt.pk.fr) || {}, v = [{ id: 'BASE', label: dt.front + ' base', share: dt.base }, { id: 'NICKEL', label: 'Nickel' }, { id: 'DIME', label: 'Dime' }, { id: 'GL', label: 'Goal line' }];
-  if (fr.BIGN) v.splice(2, 0, { id: 'BIGN', label: 'Big nickel' });
-  if (fr.UNDER) v.push({ id: 'UNDER', label: 'Under front' });
-  if (fr.BEAR) v.push({ id: 'BEAR', label: 'Bear front' });
-  return v;
+  return defLookList(t);
+}
+// every job the caller's looks ask for, and how many men play it at once at most
+function defJobs(t) {
+  const n = {}, where = {};
+  for (const L of defLookList(t)) { const c = {}; for (const [name, type, x, depth] of packageLayout(L.front, L.pkg, lookTOf(L))) { const k = defRoleKey(name, type, x, depth, L.front, L.pkg); c[k] = (c[k] || 0) + 1; }
+    for (const k in c) { n[k] = Math.max(n[k] || 0, c[k]); (where[k] = where[k] || []).push(L.group === 'Other' ? L.label : L.label + (L.pkg === 'BASE' ? '' : ' nickel')); } }
+  return { n, where };
 }
 const OFF_BOX = { X: [1, 1], OL6: [2, 1], LT: [3, 1], LG: [4, 1], C: [5, 1], RG: [6, 1], RT: [7, 1], Y: [8, 1], Z: [9, 1], SLOT: [2, 2], H: [2, 2], QB: [5, 2], SLOT2: [8, 2], Y2: [8, 2], FB: [5, 3], RB: [5, 4] };
 const OFF_HOME = { H: '12', FB: '21', SLOT2: '10', Y2: '13', OL6: 'JUMBO' }, DEF_HOME = { NCB: 'NICKEL', DIME: 'DIME', BIGN: 'BIGN' };
 function homeView(tab, key) { return tab === 'off' ? OFF_HOME[key] || '11' : DEF_HOME[key] || 'BASE'; }
-function dcRawLayout(t, vid) { const front = defTend(t).front; return vid === 'BEAR' ? packageLayout('Bear', 'BASE') : vid === 'UNDER' ? packageLayout('Under', 'BASE') : vid === 'BIGN' ? packageLayout(front, 'NICKEL').map(l => l[0] === 'NCB' ? ['NCB', 'BIGN', l[2], l[3]] : l) : packageLayout(front, vid); }
 // where everyone lines up in a view: [{ key, name, spot, col, row, label }]
-function dcLayout(t, tab, vid) {
+const JOB_SHORT = { NOSE: 'NOSE', SHADE: 'SHADE', T3: '3-TECH', END: 'END', WIDE: 'WIDE', OLB: 'EDGE', MLB: 'MIKE', WLB: 'WILL', SAM: 'SAM', CB: 'CB', NCB: 'NICKEL', DIME: 'DIME', FS: 'FS', SS: 'SS', RUSHE: 'RUSH', RUSHI: 'RUSH', WLBP: 'WILL', NCBP: 'NICKEL' };
+function dcLayout(t, tab, vid, pass) {
   if (tab === 'off') return ['QB', ...OL_SLOTS, ...PERSONNEL[vid]].map(s => ({ key: s, name: s, spot: OFF_SLOT[s][0], type: s, col: OFF_BOX[s][0], row: OFF_BOX[s][1], label: chartName(s) }));
-  const front = defTend(t).front, odd = (front === '3-4' || front === 'Tite') && vid === 'BASE', sub = vid === 'NICKEL' || vid === 'DIME' || vid === 'BIGN';
-  const NAME = { EDGE: odd ? 'OLB' : 'EDGE', DE: 'DE', DT: 'DT', NT: 'NT', MLB: odd ? 'ILB' : sub ? 'SUB LB' : 'MLB', WLB: odd ? 'ILB' : sub ? 'SUB LB' : 'WLB', SAM: 'SAM', CB: 'CB', NCB: 'SLOT CB', DIME: 'DIME CB', BIGN: 'BIG NICKEL', FS: 'FS', SS: 'SS' };
-  const rows = dcRawLayout(t, vid).map(([name, type, x, depth]) => ({ name, type, x, key: type === 'BIGN' ? 'BIGN' : DEF_CHART_KEY[name] || name, spot: DEF_SLOT[type][0], label: NAME[type] || type,
-    row: depth === 0 ? 4 : DEF_SLOT[type][1] === 'LB' ? 3 : type === 'FS' || type === 'SS' ? 1 : 2 }));
-  for (const r of [1, 2, 3, 4]) { const used = new Set(); for (const b of rows.filter(x => x.row === r).sort((a, b) => a.x - b.x)) { let c = clamp(Math.round(5 + b.x * 1.05), 1, 9); while (used.has(c) && c < 9) c++; while (used.has(c) && c > 1) c--; used.add(c); b.col = c; } }
+  const L = defLookOf(t, vid), c = t.dch;
+  const rows = packageLayout(L.front, L.pkg, lookTOf(L)).map(([name, type, x, depth]) => {
+    let key = defRoleKey(name, type, x, depth, L.front, L.pkg); const pk = pass ? defPassKey(name, type, x, depth) : null;
+    if (pk && (!c || c.auto.def || hasList(c, pk))) key = pk; // on a passing down the pass-down job has him, if one is named
+    return { name, type, x, depth, key, baseKey: defRoleKey(name, type, x, depth, L.front, L.pkg), passKey: pk, spot: CHART_SPOT[key], label: JOB_SHORT[key] || key, tech: depth === 0 ? techOf(x) : '',
+      row: depth === 0 ? 4 : DEF_SLOT[type][1] === 'LB' ? 3 : type === 'FS' || type === 'SS' ? 1 : 2 }; });
+  for (const r of [1, 2, 3, 4]) { const used = new Set(); for (const b of rows.filter(x => x.row === r).sort((a, b) => a.x - b.x)) { let c2 = clamp(Math.round(5 + b.x * 1.05), 1, 9); while (used.has(c2) && c2 < 9) c2++; while (used.has(c2) && c2 > 1) c2--; used.add(c2); b.col = c2; } }
   return rows;
 }
 // who the engine would actually put out there in this view right now (your chart if you set one, the staff's read if not)
-function dcLineup(tid, tab, vid) {
+function dcLineup(tid, tab, vid, pass) {
   const g = { tids: [tid, tid], side: [null, null], ps: {}, famPen: [0, 0], down: 1, togo: 10, ydl: 30, preview: true }; initSide(g, 0);
-  const t = T(tid), front = defTend(t).front;
-  const u = tab === 'off' ? offUnit(g, 0, vid, null) : vid === 'BEAR' ? defUnit(g, 0, 'Bear', 'BASE', false) : vid === 'UNDER' ? defUnit(g, 0, 'Under', 'BASE', false) : vid === 'BIGN' ? defUnit(g, 0, front, 'NICKEL', false, true) : defUnit(g, 0, front, vid, false);
+  const t = T(tid), L = tab === 'off' ? null : defLookOf(t, vid);
+  const u = tab === 'off' ? offUnit(g, 0, vid, null) : defUnit(g, 0, L.front, L.pkg, !!pass && (L.pkg === 'NICKEL' || L.pkg === 'DIME'), false, lookTOf(L));
   const m = {}; for (const e of u) m[e.name] = e.p; return m;
+}
+function ovKeyFor(t, tab, vid, pass) { if (tab === 'off') return vid; const L = defLookOf(t, vid); return defLookKey(L.front, L.pkg, lookTOf(L), !!pass && (L.pkg === 'NICKEL' || L.pkg === 'DIME')); }
+function setOverride(tid, tab, vid, pass, name, pid) {
+  const c = ensureChart(tid); if (c.auto[tab]) setChartAuto(tid, tab, false);
+  c.ov = c.ov || {}; const k = ovKeyFor(T(tid), tab, vid, pass) + ':' + name;
+  if (pid) { for (const o in c.ov) if (o !== k && o.startsWith(ovKeyFor(T(tid), tab, vid, pass) + ':') && c.ov[o] === pid) delete c.ov[o]; c.ov[k] = pid; } else delete c.ov[k];
 }
 function ensureChart(tid) {
   const t = T(tid);
-  if (!t.dch) t.dch = { auto: { off: true, def: true, st: true }, lists: defaultChart(tid), rot: {} }; // a spot with no setting plays its usual rotation
-  // older saves had one 4-man rush list: split it into edge and interior specialists
-  if (t.dch.lists.RUSH) {
-    const old = t.dch.lists.RUSH.map(id => P(id)).filter(Boolean);
-    t.dch.lists.RUSHE = old.filter(p => p.spot === 'EDGE' || p.spot === 'DE').map(p => p.id).slice(0, 3);
-    t.dch.lists.RUSHI = old.filter(p => p.spot !== 'EDGE' && p.spot !== 'DE').map(p => p.id).slice(0, 3);
-    delete t.dch.lists.RUSH;
+  if (!t.dch) t.dch = { auto: { off: true, def: true, st: true }, lists: defaultChart(tid), rot: {}, ov: {}, jv: 3 }; // a spot with no setting plays its usual rotation
+  const c = t.dch;
+  // older saves: the defense was a list per position per package, the offense a list per position per grouping. Now each side is a set of jobs
+  // filled once, with overrides for single looks. The old order carries over; a starter who differed in one grouping becomes an override there.
+  if (c.jv !== 2 && c.jv !== 3) {
+    const L = c.lists, uniq = a => [...new Set(a)], zip = (a, b) => { const o = []; for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i] !== undefined) o.push(a[i]); if (b[i] !== undefined) o.push(b[i]); } return uniq(o); };
+    // when you ran the old chart, the order you kept lived in the per-package lists; the plain list could be long out of date
+    const VO = ['BASE', 'NICKEL', 'BIGN', 'DIME', 'GL', 'UNDER', 'BEAR'], here = new Set(rosterOf(tid).map(p => p.id));
+    const def = defaultChart(tid), old = k => uniq([...VO.flatMap(v => L[v + ':' + k] || []), ...(L[k] || [])]).filter(id => here.has(id));
+    for (const k of ['MLB', 'WLB', 'SAM', 'NCB', 'DIME', 'FS', 'SS']) { const o = old(k); if (o.length) L[k] = o.slice(0, 3); }
+    const edges = zip(old('EDGE1'), old('EDGE2')), ins = zip(old('IDL1'), old('IDL2')), cbs = zip(old('CB1'), old('CB2'));
+    c.ov = c.ov || {};
+    for (const k of Object.keys(L)) { const i = k.indexOf(':'); if (i < 0) continue; const vid = k.slice(0, i), key = k.slice(i + 1);
+      if (CHART_UNIT(key) === 'off' && PERSONNEL[vid] && L[k].length && L[key] && L[k][0] !== L[key][0] && !c.auto.off) c.ov[vid + ':' + key] = L[k][0];
+      delete L[k]; }
+    if (edges.length) { L.WIDE = uniq([...edges, ...(def.WIDE || [])]).slice(0, 4); L.OLB = L.WIDE.slice(); }
+    if (ins.length) { L.T3 = uniq([...ins, ...(def.T3 || [])]).slice(0, 4); L.END = uniq([...ins, ...(def.END || [])]).slice(0, 4); L.SHADE = uniq([...old('NT'), ...ins, ...(def.SHADE || [])]).slice(0, 3); }
+    if (old('NT').length) L.NOSE = uniq([...old('NT'), ...(def.NOSE || [])]).slice(0, 3);
+    if (cbs.length) L.CB = uniq([...cbs, ...(def.CB || [])]).slice(0, 4);
+    for (const k of ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'CB1', 'CB2', 'BIGN', 'RUSH']) delete L[k];
+    for (const k in def) if (L[k] === undefined) L[k] = def[k];
+    for (const k of ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'CB1', 'CB2']) if (c.rot && c.rot[k] !== undefined) delete c.rot[k];
+    delete c.vl; c.jv = 3;
   }
-  return t.dch;
+  // a chart converted before that fix can have a job left empty: the staff's order fills it once
+  if (c.jv === 2) { const def = defaultChart(tid), here = new Set(rosterOf(tid).map(p => p.id)); for (const k in def) if (CHART_UNIT(k) !== 'st' && !['WLBP', 'NCBP', 'RUSHE', 'RUSHI', 'RB3D', 'RBSY'].includes(k) && !(c.lists[k] || []).some(id => here.has(id))) c.lists[k] = def[k]; c.jv = 3; }
+  if (!c.ov) c.ov = {};
+  return c;
 }
 // units on auto are refreshed from the staff; manual units drop players who left
 function refreshChart(tid) {
@@ -123,12 +172,11 @@ function refreshChart(tid) {
     if (c.auto[sec.unit]) c.lists[key] = def[key] || [];
     else c.lists[key] = (c.lists[key] || []).filter(id => mine.has(id));
   }
-  for (const key in c.lists) if (key.includes(':')) c.lists[key] = c.lists[key].filter(id => mine.has(id));
-  ensureViewLists(tid);
+  for (const k in c.ov) if (!mine.has(c.ov[k])) delete c.ov[k];
 }
 function setChart(tid, key, i, pid) {
   const c = ensureChart(tid), unit = CHART_UNIT(key);
-  if (c.auto[unit]) setChartAuto(tid, unit, false); // taking control copies the staff's chart into every grouping first
+  if (c.auto[unit]) setChartAuto(tid, unit, false); // taking control starts from the staff's chart as it stands
   const list = (c.lists[key] || []).slice();
   if (pid) { const j = list.indexOf(pid); if (j >= 0) list.splice(j, 1); list.splice(Math.min(i, list.length), 0, pid); }
   else list.splice(i, 1);
@@ -138,80 +186,23 @@ function setChart(tid, key, i, pid) {
 function chartBlocked(tid, key, pid) {
   const k = baseKey(key), p = P(pid);
   if (!p || !['QB', 'K', 'P'].includes(k)) return null;
-  return comfortOf(p, CHART_SPOT[k]) > 0 ? null : `${pname(p)} has never played ${SPOTS[CHART_SPOT[k]].l}. Tick "Show everyone" if you really want him there.`;
+  return comfortOf(p, CHART_SPOT[k]) > 0 ? null : `${pname(p)} has never played ${SPOTS[CHART_SPOT[k]].l}.`;
 }
-// ---- one chart per grouping ----
-// When you run a unit, every personnel grouping and every defensive package has its own order at every spot.
-// They start as a copy of the staff's chart at the moment you take control; after that nothing is filled in for you.
 const CHART_TABS = { off: 'off', def: 'def' };
-function viewSlots(t, tab) { const out = []; for (const v of dcViews(t, tab)) for (const b of dcLayout(t, tab, v.id)) out.push({ v, b, k: v.id + ':' + b.key }); return out; }
-function ensureViewLists(tid) {
-  const t = T(tid), c = t.dch; if (!c) return;
-  for (const tab of ['off', 'def']) {
-    if (c.auto[tab]) continue;
-    const mine = new Set(rosterOf(tid).map(p => p.id)), firsts = {};
-    c.vl = c.vl || {};
-    const seed = !c.vl[tab]; c.vl[tab] = true; // only the moment you take control copies the staff's chart; a look added later starts empty
-    for (const { v, b, k } of viewSlots(t, tab)) {
-      if (c.lists[k] !== undefined) continue;
-      if (!seed) { c.lists[k] = []; continue; }
-      // first time: copy what is there now (an older package order if you had one, else the base order)
-      c.lists[k] = (c.lists[b.key] || []).filter(id => mine.has(id)).slice(0, 3);
-      (firsts[v.id] = firsts[v.id] || []).push({ k, spot: b.spot });
-    }
-    // the copy never starts one man at two spots in the same look: he keeps the job he is more at home in
-    for (const vid in firsts) { const boxes = firsts[vid];
-      for (let pass = 0; pass < 4; pass++) { const at = {}; let clash = false;
-        for (const x of boxes) { const l = c.lists[x.k]; if (!l.length) continue; const o = at[l[0]];
-          if (!o) { at[l[0]] = x; continue; }
-          clash = true; const p = P(l[0]), lose = comfortOf(p, x.spot) > comfortOf(p, o.spot) ? o : x, ll = c.lists[lose.k];
-          if (ll.length > 1) ll.push(ll.shift()); if (lose === o) at[l[0]] = x; }
-        if (!clash) break; }
-      // still doubled up (a thin room): rebuild that spot from the best men who are not starting elsewhere in this look
-      const at = {}; for (const x of boxes) { const l = c.lists[x.k]; if (!l.length) continue; if (!at[l[0]]) { at[l[0]] = x; continue; }
-        const taken = new Set(boxes.map(y => c.lists[y.k][0]).filter(Boolean));
-        const alt = rosterOf(tid).filter(p => p.a && !onIR(p) && !taken.has(p.id) && SPOTS[p.spot].side === SPOTS[x.spot].side).sort((a, b2) => slotRating(b2, x.spot) - slotRating(a, x.spot)).slice(0, 2).map(p => p.id);
-        c.lists[x.k] = [...alt, ...l.filter(id => !alt.includes(id))].slice(0, 3); if (c.lists[x.k].length) at[c.lists[x.k][0]] = x; } }
-  }
-}
+function ensureViewLists() {}
 function setChartAuto(tid, unit, on) {
   const c = ensureChart(tid);
-  if (on) { for (const k in c.lists) if (k.includes(':') && CHART_UNIT(k) === unit) delete c.lists[k]; if (c.vl) delete c.vl[unit]; c.auto[unit] = true; refreshChart(tid); }
-  else { c.auto[unit] = true; refreshChart(tid); if (c.vl) delete c.vl[unit]; c.auto[unit] = false; ensureViewLists(tid); } // start from the staff's chart as it stands
+  if (on) { for (const k in c.ov) if ((unit === 'off') === !!PERSONNEL[k.split(':')[0]] && unit !== 'st') delete c.ov[k]; c.auto[unit] = true; refreshChart(tid); }
+  else { c.auto[unit] = true; refreshChart(tid); c.auto[unit] = false; } // start from the staff's chart as it stands
 }
-// one spot's order into every other look on that side of the ball
-function applySpotAll(tid, tab, vid, key) {
-  const t = T(tid), c = ensureChart(tid), src = c.lists[vid + ':' + key]; if (!src) return 0; let n = 0;
-  for (const { v, b, k } of viewSlots(t, tab)) if (b.key === key && v.id !== vid) { c.lists[k] = src.slice(); n++; }
-  return n;
-}
-// this whole look into every other look, wherever the same spot exists
-function applyChartAll(tid, tab, vid) {
-  const t = T(tid), c = ensureChart(tid); let n = 0;
-  for (const { v, b, k } of viewSlots(t, tab)) { if (v.id === vid) continue; const src = c.lists[vid + ':' + b.key]; if (src && src.length) { c.lists[k] = src.slice(); n++; } }
-  return n;
-}
-function copyView(tid, tab, from, to) {
-  const t = T(tid), c = ensureChart(tid);
-  if (c.auto[tab]) setChartAuto(tid, tab, false);
-  const src = dcLayout(t, tab, from);
-  for (const b of dcLayout(t, tab, to)) if (src.some(s => s.key === b.key)) c.lists[to + ':' + b.key] = (c.lists[from + ':' + b.key] || []).slice();
-}
-// what is wrong with the charts you run: empty spots, and one man listed first at two spots in the same look
+// what is wrong with the charts you run: a job the system needs that nobody is listed at
+const OFF_NEED = ['QB', 'RB', 'X', 'Z', 'SLOT', 'Y', 'LT', 'LG', 'C', 'RG', 'RT'];
 function chartProblems(tid) {
   const t = T(tid), c = t.dch, out = [];
   if (!c || isAI(tid)) return out;
-  for (const tab of ['off', 'def']) {
-    if (c.auto[tab]) continue;
-    const seen = {};
-    for (const { v, b, k } of viewSlots(t, tab)) {
-      const l = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === tid);
-      if (!l.length) { out.push({ tab, view: v.id, key: b.key, text: `${v.label}: nobody at ${b.label}` }); continue; }
-      const s = seen[v.id] || (seen[v.id] = {});
-      if (s[l[0].id]) out.push({ tab, view: v.id, key: b.key, text: `${v.label}: ${l[0].last} is first at both ${s[l[0].id]} and ${b.label}` });
-      else s[l[0].id] = b.label;
-    }
-  }
+  const has = k => (c.lists[k] || []).some(id => P(id) && P(id).tid === tid), label = k => (CHART_SECTIONS.map(s => s.rows.find(r => r[0] === k)).find(Boolean) || [k, k])[1];
+  if (!c.auto.off) for (const k of OFF_NEED) if (!has(k)) out.push({ tab: 'off', key: k, text: `Nobody at ${label(k).toLowerCase()}` });
+  if (!c.auto.def) { const J = defJobs(t); for (const k in J.n) { const n = (c.lists[k] || []).filter(id => P(id) && P(id).tid === tid).length; if (n < J.n[k]) out.push({ tab: 'def', key: k, text: n ? `${label(k)} needs ${J.n[k]} men, has ${n}` : `Nobody at ${label(k).toLowerCase()}` }); } }
   return out;
 }
 // spots a player is listed at (other than his primary): where he cross-trains in camp

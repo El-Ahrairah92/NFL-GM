@@ -989,7 +989,7 @@ function genDefLib(arch) {
   const sl = { TWOHIGH: 0.06, C3: 0.08, WIDE9: 0.1, MANBLITZ: 0.12, TWOGAP: 0.04 }[arch] || 0.07, mug = { TWOHIGH: 0.1, MANBLITZ: 0.12 }[arch] || 0.03;
   const sd = normShares({ S: 0.2 + rand(), W: 0.2 + rand(), P: 0.1 + rand() * 0.6 });
   return { fam, base: menu(LOOKS[fam], LOOK_HOME[front] || Object.keys(LOOKS[fam])[0], 1 + randInt(0, 2)), sub: menu(LOOKS.sub, front === 'Wide-9' ? 'Wide' : 'Even', 1 + randInt(0, 2)),
-    sl: round2(clamp(j(sl, 0.45), 0, 0.3)), sd, tt: round2(clamp(0.2 + rand() * 0.6, 0, 1)), mug: rand() < 0.3 ? 0 : round2(clamp(j(mug, 0.5), 0, 0.25)) };
+    travel: rand() < (arch === 'MANBLITZ' ? 0.45 : 0.15) ? 1 : 0, sl: round2(clamp(j(sl, 0.45), 0, 0.3)), sd, tt: round2(clamp(0.2 + rand() * 0.6, 0, 1)), mug: rand() < 0.3 ? 0 : round2(clamp(j(mug, 0.5), 0, 0.25)) };
 }
 // a pass defense coordinator's own packages, by what he believes in
 const SPEC_PK_POOL = { PRESSURE: ['FZ', 'BLITZ', 'SIM', 'C0', 'STUNT'], MAN: ['C1', 'C2M', 'C0', 'BLITZ'], SHELL: ['T2', 'C6', 'C4', 'C2', 'DISG', 'BIGN'], PENETRATE: ['STUNT', 'UNDER'], TWOGAP: ['BEAR', 'BIGN'] };

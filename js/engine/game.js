@@ -217,6 +217,11 @@ function runPlay(g, oc, dc) {
   if (oc.form === 'EMP') { const rb = off.find(e => e.slot === 'RB'); if (rb) rb.x = -1.8; }
   if (!g.first[o].off) { g.first[o].off = true; for (const e of off) ln(g, e.p).gs = 1; }
   if (!g.first[d].def) { g.first[d].def = true; for (const e of def) ln(g, e.p).gs = 1; }
+  g.nh = oc.nohud ? { poss: o, pkg: dc.pkg } : null;
+  // a coach who travels his top corner puts him across from their best outside receiver
+  if (dc.travel) { const cbs = def.filter(e => e.slot === 'CB' && e.depth > 0), wrs = off.filter(e => e.slot === 'X' || e.slot === 'Z');
+    if (cbs.length === 2 && wrs.length === 2) { const r = e => slotRating(e.p, e.spot), topW = r(wrs[0]) >= r(wrs[1]) ? wrs[0] : wrs[1], topC = r(cbs[0]) >= r(cbs[1]) ? cbs[0] : cbs[1], other = cbs[0] === topC ? cbs[1] : cbs[0];
+      if (r(topC) - r(other) >= 3 && Math.sign(topC.x) !== Math.sign(topW.x || 1)) { const x = topC.x; topC.x = other.x; other.x = x; } } }
   preSnap(g, oc, dc, off, def); // each side's one move at the line
   // predictability: did the defense's film read match the call?
   const keyed = oc.isRun ? (dc.runEst - 0.5) * 2 : (0.5 - dc.runEst) * 2;

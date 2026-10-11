@@ -37,7 +37,7 @@ const TUNE = {
   chipBonus: 7,
   pickupMiss: 0.13,    // blitz/sim pickup failure for an average protection
   stuntMiss: 0.22,
-  runWin: -0.38,        // logit: front defender beats his run block (average vs average)
+  runWin: -0.35,        // logit: front defender beats his run block (average vs average)
   runScale: 0.12,
   comboBonus: 16,
   checkRate: 1,         // how freely quarterbacks change the play at the line (0 switches it off)
@@ -78,7 +78,7 @@ const TUNE = {
   slantHit: 0.3,        // chance a slant crosses an average blocker's face cleanly
   slantWin: 9, slantLose: 4, // pass-rush points when it does, and when he runs himself into the block
   // coverage / passing
-  openBase: -0.575,
+  openBase: -0.595,
   accScale: 0.042,      // how much ball placement decides whether a throw is catchable
   wrBlock: 12,         // receivers give up this many points to the corner they are blocking (they are not linemen)
   size: 1,             // master dial for every height and weight effect (0 switches them off)
@@ -266,11 +266,12 @@ function fillSlots(g, s, slots, table, opts = {}) {
   const listFor = key => { if (!key) return null; for (const pk of opts.pkgKeys || []) { const l = chart.lists[pk + ':' + key]; if (l) return l; } return chart.lists[key] && chart.lists[key].length ? chart.lists[key] : null; };
   // everybody who starts somewhere in this grouping: the man who rotates in is the first one listed who is not already on the field
   const firsts = new Set();
-  if (chart) for (const [name, slot] of slots) { const l = listFor(opts.keyOf(name, slot)); if (l) { const id = l.find(i => !firsts.has(i) && T_.roster.some(p => p.id === i)); if (id !== undefined) firsts.add(id); } }
+  if (chart) for (const [name, slot, x0, d0] of slots) { const l = listFor(opts.keyOf(name, slot, x0, d0)); if (l) { const id = l.find(i => !firsts.has(i) && T_.roster.some(p => p.id === i)); if (id !== undefined) firsts.add(id); } }
   // exhibitions off your chart: each spot's man for the string on the field is spoken for first, so a player listed second at one spot
   // and third at another plays the first of those in the first half and the other after it
   const preOn = !!(g.pre && chart && !g.preview), prePos = (slot, grp) => grp === 'DB' ? (['FS', 'SS', 'BIGN'].includes(slot) ? 'S' : 'CB') : slot === 'FB' ? 'RB' : grp, preFeat = preOn ? prePlanFor(g.tids[s]).feat : {}, resv = new Map();
-  if (preOn) for (const [name, slot] of slots) { const l = listFor(opts.keyOf(name, slot)); if (!l) continue; const str = preString(g.tids[s], g, prePos(slot, table[slot][1])), id = l[str]; if (id !== undefined && !resv.has(id) && (str === 0 || !firsts.has(id)) && T_.roster.some(p => p.id === id)) resv.set(id, name); }
+  if (preOn) for (const [name, slot, x0, d0] of slots) { const l = listFor(opts.keyOf(name, slot, x0, d0)); if (!l) continue; const str = preString(g.tids[s], g, prePos(slot, table[slot][1])), id = l[str]; if (id !== undefined && !resv.has(id) && (str === 0 || !firsts.has(id)) && T_.roster.some(p => p.id === id)) resv.set(id, name); }
+  const ovIds = new Set(); if (chart && opts.ov) for (const [name] of slots) { const id = opts.ov(name); if (id !== undefined && id !== null) ovIds.add(id); }
   for (const [name, slot, x, depth] of slots) {
     const [spot, grp] = table[slot];
     let best = null, bs = -1e9;
@@ -283,7 +284,9 @@ function fillSlots(g, s, slots, table, opts = {}) {
     if (slot === 'QB' && !g.pre && !cands.some(c => c.p.pos === 'QB' && !used.has(c.p.id))) { const em = rosterOf(g.tids[s]).filter(p => p.pos === 'QB' && !p.injury && !onIR(p) && !T_.roster.includes(p)).sort((a, b) => b.ovr - a.ovr)[0];
       if (em) { T_.active.add(em.id); T_.roster.push(em); if (!g.ps[em.id]) g.ps[em.id] = { fat: 0, snp: 0, last: null }; const c = { p: em, r: slotRating(em, 'QB') }; T_.depth.QB = [c, ...T_.depth.QB]; cands = T_.depth.QB; if (g.pbp) g.pbp.push({ q: g.q || 1, c: Math.max(0, g.clock || 0), t: `${pshort(em)} comes in as the emergency quarterback`, s: g.score ? g.score.slice() : [0, 0] }); } }
     // your depth chart: listed players come first (in order); fatigue can still force a sub, and #2 gets his rotation share
-    const key = chart ? opts.keyOf(name, slot) : null;
+    const key = chart ? opts.keyOf(name, slot, x, depth) : null;
+    // an override for this look: that man plays here whatever the role order says, as long as he is dressed and not already on the field
+    const ovP = chart && opts.ov && ovIds.has(opts.ov(name)) ? T_.roster.find(p => p.id === opts.ov(name) && !used.has(p.id)) : null;
     // a package can have its own order at a spot (your nickel linebacker need not be your base one); otherwise the base order
     const list = listFor(key);
     let rotHit = false, rotId = null;
@@ -306,8 +309,10 @@ function fillSlots(g, s, slots, table, opts = {}) {
       if (g.pbNeed && slot !== 'QB' && c.p.a) { const k = pbOf(c.p), need = g.pbNeed[s]; if (k < need) sc -= (need - k) * 0.3; } // he does not know this call
       if (g.ps[c.p.id] && g.ps[c.p.id].last === name) sc += 1.5; // continuity: no needless shuffling
       if (opts.score && !list) sc += opts.score(c.p, slot);
+      if (ovIds.has(c.p.id)) sc -= 600; // spoken for by an override somewhere in this look
       if (sc > bs) { bs = sc; best = c; }
     }
+    if (ovP) best = { p: ovP, r: 0 };
     if (!best) { const pool = sameSide(spot).filter(p => !used.has(p.id) && p.pos !== 'K' && p.pos !== 'P' && (slot === 'QB' || p.pos !== 'QB')).sort((a, b) => (b.a ? slotRating(b, spot) : 20) - (a.a ? slotRating(a, spot) : 20)); best = { p: pool[0] || T_.roster.find(p => !used.has(p.id)) || T_.roster[0], r: 30 }; }
     used.add(best.p.id);
     const pen = best.p.a ? (ax !== null ? linePen(best.p, ax) : comfortPen(best.p, spot)) : 0; // how well he knows this spot; his own attributes do the rest
@@ -346,7 +351,7 @@ function offUnit(g, s, pers, call) {
   const shortYd = g.togo <= 2 && (g.down >= 3 || g.ydl >= 98);
   const rbKey = call && call.passDown && hasList(chart, 'RB3D') ? 'RB3D' : shortYd && hasList(chart, 'RBSY') ? 'RBSY' : 'RB';
   return fillSlots(g, s, slots, OFF_SLOT, {
-    score: rbScore, chart, pkgKeys: [pers], keyOf: name => name === 'RB' ? rbKey : name,
+    score: rbScore, chart, pkgKeys: [], ov: name => chart && chart.ov ? chart.ov[pers + ':' + name] : undefined, keyOf: name => name === 'RB' ? rbKey : name,
     rot: key => key === 'RB' ? !!T_.rb2Turn : rand() < rotOf(chart, key),
   });
 }
@@ -355,9 +360,21 @@ const DEF_CHART_KEY = { LE: 'EDGE1', LOLB: 'EDGE1', RE: 'EDGE2', ROLB: 'EDGE2', 
   NT: 'NT', WLB: 'WLB', MLB: 'MLB', SAM: 'SAM', CB1: 'CB1', CB2: 'CB2', NCB: 'NCB', DIME: 'DIME', FS: 'FS', SS: 'SS' };
 const CHART_SPOT = { QB: 'QB', RB: 'RB', RB3D: 'RB', RBSY: 'RB', FB: 'FB', X: 'WRX', Z: 'WRZ', SLOT: 'SLOT', SLOT2: 'SLOT', Y: 'TEY', H: 'TEH', Y2: 'TEY', OL6: 'RT',
   LT: 'LT', LG: 'LG', C: 'C', RG: 'RG', RT: 'RT', EDGE1: 'EDGE', EDGE2: 'EDGE', IDL1: 'DT', IDL2: 'DT', NT: 'NT', RUSH: 'EDGE', MLB: 'MLB', WLB: 'WLB', SAM: 'WLB',
-  CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', K: 'K', P: 'P', KR: 'RB', PRET: 'RB', KO: 'SS', KRU: 'TEH', PU: 'SS', PRU: 'CB', RUSHE: 'EDGE', RUSHI: 'DT', BIGN: 'SS' };
+  CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', NOSE: 'NT', SHADE: 'DT', T3: 'DT', END: 'DE', WIDE: 'EDGE', OLB: 'EDGE', CB: 'CB', WLBP: 'WLB', NCBP: 'NCB', K: 'K', P: 'P', KR: 'RB', PRET: 'RB', KO: 'SS', KRU: 'TEH', PU: 'SS', PRU: 'CB', RUSHE: 'EDGE', RUSHI: 'DT', BIGN: 'SS' };
+// ---- the jobs on a defensive chart ----
+// A job on the line is a stretch of it, not a named position: whoever is listed there plays it in every look that has one.
+const LINE_ROLE_AX = { NOSE: 0.2, SHADE: 0.75, T3: 1.35, END: 2.2, WIDE: 2.9, OLB: 3.3 };
+function lineRole(ax, slot, front, pkg) { if (slot === 'EDGE' && pkg === 'BASE' && (front === '3-4' || front === 'Tite')) return 'OLB'; return ax <= 0.5 ? 'NOSE' : ax < 1.1 ? 'SHADE' : ax < 1.5 ? 'T3' : ax < 2.45 ? 'END' : 'WIDE'; }
+function defRoleKey(name, slot, x, depth, front, pkg) {
+  const grp = DEF_SLOT[slot] ? DEF_SLOT[slot][1] : null;
+  if (grp === 'DL' && !(depth > 0)) return lineRole(Math.abs(x || 0), slot, front, pkg);
+  return slot === 'CB' ? 'CB' : slot === 'BIGN' ? 'NCB' : slot;
+}
+// the same job on a passing down, where you may want a different man
+function defPassKey(name, slot, x, depth) { const grp = DEF_SLOT[slot] ? DEF_SLOT[slot][1] : null; return grp === 'DL' && !(depth > 0) ? (Math.abs(x || 0) >= 2.45 ? 'RUSHE' : 'RUSHI') : slot === 'WLB' ? 'WLBP' : slot === 'NCB' ? 'NCBP' : null; }
+function defLookKey(front, pkg, look, pass) { return (front === 'Bear' ? 'BEAR' : front === 'Under' ? 'UNDER' : pkg) + '|' + ((look && look.n) || '') + '|' + (pass ? 'P' : 'R'); }
 const baseKey = k => { const i = k.indexOf(':'); return i < 0 ? k : k.slice(i + 1); }; // 'NICKEL:MLB' -> 'MLB'
-const CHART_UNIT = k0 => { const k = baseKey(k0); return ['K', 'P', 'KR', 'PRET', 'KO', 'KRU', 'PU', 'PRU'].includes(k) ? 'st' : ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'RUSH', 'RUSHE', 'RUSHI', 'MLB', 'WLB', 'SAM', 'CB1', 'CB2', 'NCB', 'DIME', 'FS', 'SS', 'BIGN'].includes(k) ? 'def' : 'off'; };
+const CHART_UNIT = k0 => { const k = baseKey(k0); return ['K', 'P', 'KR', 'PRET', 'KO', 'KRU', 'PU', 'PRU'].includes(k) ? 'st' : ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'RUSH', 'RUSHE', 'RUSHI', 'MLB', 'WLB', 'SAM', 'CB1', 'CB2', 'NCB', 'DIME', 'FS', 'SS', 'BIGN', 'NOSE', 'SHADE', 'T3', 'END', 'WIDE', 'OLB', 'CB', 'WLBP', 'NCBP'].includes(k) ? 'def' : 'off'; };
 // the QB the staff (or your chart) has under center
 function starterQB(g, s) {
   const p = chartFirst(g, s, 'QB') || (g.side[s].depth.QB[0] ? g.side[s].depth.QB[0].p : null);
@@ -389,16 +406,17 @@ function defUnit(g, s, front, pkg, subRush, bign, look) {
   const DB_POS = { CB: 1, S: 1 };
   const score = (p, slot) => { const grp = DEF_SLOT[slot][1]; return pkgRoleBias(p, slot, pkg) + (subRush && grp === 'DL' && p.a ? (ea0(p, 'prsh') - 60) * 0.35 : 0) - (grp === 'LB' && p.pos !== 'LB' ? 7 : grp === 'DB' && !DB_POS[p.pos] ? 7 : 0); };
   const chart = userChart(g, s, 'def');
-  const pkgKeys = [bign ? 'BIGN' : null, front === 'Bear' ? 'BEAR' : front === 'Under' ? 'UNDER' : null, pkg].filter(Boolean);
   if (!chart) return fix(fillSlots(g, s, layout, DEF_SLOT, { score }));
-  // passing downs: your rush specialists take over the edge and interior spots
-  const EDGE_NAMES = new Set(['LE', 'RE', 'LOLB', 'ROLB']);
-  // the rush specialists rotate at the rate set for the spot they are standing in
-  return fix(fillSlots(g, s, layout, DEF_SLOT, { score, chart, pkgKeys, rotKeyOf: name => DEF_CHART_KEY[name] || name, keyOf: (name, slot) => {
-    if (slot === 'BIGN') return 'BIGN';
-    if (subRush && DEF_SLOT[slot][1] === 'DL') { const k = EDGE_NAMES.has(name) ? 'RUSHE' : 'RUSHI'; if (hasList(chart, k)) return k; }
-    return DEF_CHART_KEY[name] || name;
-  } }));
+  // your chart: every spot is a role you filled once. On passing downs in sub packages the pass-down version of a role takes over if you
+  // named one. An override puts one man at one spot in one look.
+  if (bign) { layout = packageLayout(front, pkg, look); } // on your chart a big nickel is whoever you put in the nickel role
+  const lk = defLookKey(front, pkg, look, subRush);
+  // a pass-down job with fewer men named than it has spots falls back on the regular job's order for the rest
+  const lists = Object.create(chart.lists), ch = { lists, rot: chart.rot, ov: chart.ov, auto: chart.auto };
+  return fix(fillSlots(g, s, layout, DEF_SLOT, { score, chart: ch, pkgKeys: [], rotKeyOf: () => '-', ov: name => chart.ov ? chart.ov[lk + ':' + name] : undefined,
+    keyOf: (name, slot, x, depth) => { const role = defRoleKey(name, slot, x, depth, front, pkg);
+      if (subRush) { const k = defPassKey(name, slot, x, depth); if (k && hasList(chart, k)) { const kk = '~' + k + ':' + role; if (!lists[kk]) lists[kk] = [...chart.lists[k], ...(chart.lists[role] || []).filter(id => !chart.lists[k].includes(id))]; return kk; } }
+      return role; } }));
 }
 function kickUnitPlayer(g, s, spot) {
   const d = g.side[s].depth[spot], pick = chartFirst(g, s, spot);

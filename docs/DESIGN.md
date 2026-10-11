@@ -939,3 +939,35 @@ Also: a wide alignment gives the rusher more of an angle than before, so the Wid
 
 Not done: the four points still exist as labels in cross-training, scouting text and the depth chart lists; the depth chart page built on roles is next.
 
+## 47. The depth chart is a set of jobs
+
+**The idea.** You no longer set a list per position per package. Each side of the ball is a set of jobs, filled once. Whoever is listed first at a job plays it in every look or grouping that has that job; the rest are next in line. An override puts one man at one spot in one look.
+
+**Defensive jobs come from the coach's system.** The page reads his looks and lists only the jobs they contain.
+- Line: nose (0, 1), shade (2i, 2), 3-technique, end (4i, 4, 5), wide end (7, 6, 9, wide), and the stand-up edge of a 3-4 base. A job two men play at once (two 3-techniques in an even nickel line) starts the first two listed.
+- Linebackers: Mike, Will, Sam. Secondary: corner (one ranked job, the first two start), nickel, dime, free and strong safety.
+- Passing downs: edge rusher, inside rusher, and optional pass-down versions of the Will and the nickel. Left empty, the regular man stays in; with fewer men named than spots, the regular job's order fills the rest.
+
+**Big nickel is a choice, not a package.** A corner in the nickel job is a nickel; a safety there is a big nickel; a safety in the Will job on passing downs is a sub linebacker. Computer-run staffs still use their coach's preference.
+
+**Comfort carries to the next job along.** Along the line, from the box to the deep middle (Mike, Will, strong safety, free safety) and from outside in (corner, slot, strong safety), a man is never less at home than about two fifths of what he knows at the job next door. So a safety in the slot starts decent, not unfamiliar, and learns from there.
+
+**Corners.** One job. Whether the best corner travels with the offense's best outside receiver is the coach's: about one in seven does it in man coverage (nearer half of man-blitz coaches).
+
+**No huddle.** The defense plays the snap with the package it already has on the field, so run-down personnel can be caught by a hurry-up.
+
+**Offense** works the same way: jobs filled once across every personnel grouping, with an override for a single grouping. Its formations are not coach-generated yet.
+
+**Old saves.** The old order carries into the new jobs (both tackle lists become the 3-technique, end and shade orders, both corner lists the corner order). A starter who differed in one offensive grouping becomes an override there. Per-package defensive orders are not carried over.
+
+**The page.** Rebuilt.
+- Tabs for defense, offense and special teams; one switch between the staff setting a unit and you setting it.
+- A field showing the selected look or grouping with whoever the engine would actually put out there, each man's job and technique, coloured by how he grades at that job. Looks are pills grouped by base, nickel and other, with how often the coach plays them; a toggle shows run downs or passing downs.
+- Job cards in collapsible groups under it: the order, how many start, a fold with what the job asks for, which looks it plays in, and the rotation share.
+- A bench column listing the best fits for the selected job, with where each man already starts.
+- Drag a player onto a job card to list him, onto a place in the order to rank him, or onto a spot on the field to use him in that look only. A pin on the spot removes the override.
+
+**League after it, 24 seasons:** scoring 22.9, completion rate 64.2%, yards per attempt 7.27, sack rate 7.4%, yards per carry 4.50, stuffed runs 18.8%; ten items clearly off.
+
+Not done: ratings on the page do not yet weigh a defensive back by the coach's mix of man and zone; the quarterback does not yet look for a linebacker or safety walked out over a receiver; cross-training and scouting text still use the old position names; offensive jobs wait on offensive coach libraries; linebackers, safeties and receivers have carry-over comfort but not ratings read between points the way the line has.
+

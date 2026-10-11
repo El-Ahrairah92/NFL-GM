@@ -11,7 +11,7 @@
 const CAMP_BLOCKS = 4; // practice blocks: two weeks of camp before the first exhibition, then a lighter week after each of the first two games
 const CAMP_ROOMS = [['QB', ['QB']], ['RB', ['RB']], ['WR', ['WR']], ['TE', ['TE']], ['OL', ['OL']], ['DL', ['DL']], ['LB', ['LB']], ['DB', ['CB', 'S']]];
 const CAMP_JOBS = [['QB', 'Quarterback'], ['RB', 'Running back'], ['X', 'X receiver'], ['Z', 'Z receiver'], ['SLOT', 'Slot receiver'], ['Y', 'Tight end'], ['LT', 'Left tackle'], ['LG', 'Left guard'], ['C', 'Center'], ['RG', 'Right guard'], ['RT', 'Right tackle'],
-  ['EDGE1', 'Edge'], ['EDGE2', 'Edge'], ['IDL1', 'Interior line'], ['IDL2', 'Interior line'], ['MLB', 'Middle linebacker'], ['WLB', 'Weak-side linebacker'], ['CB1', 'Corner'], ['CB2', 'Corner'], ['NCB', 'Slot corner'], ['FS', 'Free safety'], ['SS', 'Strong safety'], ['K', 'Kicker'], ['P', 'Punter']];
+  ['WIDE', 'Edge'], ['T3', '3-technique'], ['NOSE', 'Nose'], ['MLB', 'Middle linebacker'], ['WLB', 'Weak-side linebacker'], ['CB', 'Corner'], ['NCB', 'Slot corner'], ['FS', 'Free safety'], ['SS', 'Strong safety'], ['K', 'Kicker'], ['P', 'Punter']];
 const CAMP_TIER_NAME = ['the ones', 'the twos', 'the threes'];
 // ---- where a man is working ----
 // One setting drives his camp: the room he sits in, the drills he takes, who he faces, where his comfort grows and what the reports say.
@@ -299,8 +299,8 @@ function campWeek(label, load) {
 // Groups are yours: name them, fill them with anyone, order them however you like. Nothing here touches the real depth chart or the roster.
 const PLAN_ROOMS = [['QB', 'Quarterbacks', ['QB']], ['RB', 'Running backs', ['RB']], ['WR', 'Receivers', ['WR']], ['TE', 'Tight ends', ['TE']], ['OL', 'Offensive line', ['OL']], ['DL', 'Defensive line', ['DL']], ['LB', 'Linebackers', ['LB']], ['CB', 'Corners', ['CB']], ['S', 'Safeties', ['S']], ['ST', 'Specialists', ['K', 'P']]];
 const PLAN_SEED = { QB: [['Starter', ['QB']]], RB: [['Lead back', ['RB']]], WR: [['X receiver', ['X']], ['Z receiver', ['Z']], ['Slot', ['SLOT']]], TE: [['Tight end (Y)', ['Y']], ['Move tight end (H)', ['H']]],
-  OL: [['Left tackle', ['LT']], ['Left guard', ['LG']], ['Center', ['C']], ['Right guard', ['RG']], ['Right tackle', ['RT']]], DL: [['Edge', ['EDGE1', 'EDGE2']], ['Interior', ['IDL1', 'IDL2', 'NT']]], LB: [['Middle linebacker', ['MLB']], ['Weak side', ['WLB']]],
-  CB: [['Outside corner', ['CB1', 'CB2']], ['Slot corner', ['NCB']]], S: [['Free safety', ['FS']], ['Strong safety', ['SS']]], ST: [['Kicker', ['K']], ['Punter', ['P']], ['Kickoff coverage', ['KO']], ['Punt team', ['PU']]] };
+  OL: [['Left tackle', ['LT']], ['Left guard', ['LG']], ['Center', ['C']], ['Right guard', ['RG']], ['Right tackle', ['RT']]], DL: [['Edge', ['WIDE', 'OLB']], ['Interior', ['T3', 'NOSE', 'END']]], LB: [['Middle linebacker', ['MLB']], ['Weak side', ['WLB']]],
+  CB: [['Outside corner', ['CB']], ['Slot corner', ['NCB']]], S: [['Free safety', ['FS']], ['Strong safety', ['SS']]], ST: [['Kicker', ['K']], ['Punter', ['P']], ['Kickoff coverage', ['KO']], ['Punt team', ['PU']]] };
 function planRoomOf(p) { const r = PLAN_ROOMS.find(x => x[2].includes(cpos(p))); return r ? r[0] : null; }
 const PLAN_PHASES = ['COACHES', 'RESIGN', 'FA', 'DRAFT', 'UDFA', 'PRESEASON', 'CUTDOWN'];
 function planOn() { return !!state && PLAN_PHASES.includes(state.phase); }

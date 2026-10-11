@@ -186,14 +186,20 @@ const SPOT_NEIGHBORS = {
   NT: ['DT'], DT: ['NT', 'DE'], DE: ['DT', 'EDGE'], EDGE: ['DE', 'WLB'], MLB: ['WLB'], WLB: ['MLB', 'EDGE', 'SS'],
   CB: ['NCB', 'FS'], NCB: ['CB', 'SS', 'FS'], FS: ['SS', 'NCB'], SS: ['FS', 'WLB', 'NCB'], K: ['P'], P: ['K'],
 };
-function comfortOf(p, s) { return p.cf ? (p.cf[s] || 0) : (s === p.spot ? 100 : 0); }
+// Jobs that sit next to each other share most of what a man has to know. Along the line (nose - tackle - end - edge), from the
+// box to the deep middle (middle linebacker - weak side - strong safety - free safety) and from outside in (corner - slot - strong
+// safety), a man is never less at home than what carries over from the next job along: about two fifths of it one step away.
+const CARRY_EDGES = [['NT', 'DT'], ['DT', 'DE'], ['DE', 'EDGE'], ['MLB', 'WLB'], ['WLB', 'SS'], ['SS', 'FS'], ['CB', 'NCB'], ['NCB', 'SS']];
+const CARRY_NEXT = {}; for (const [a, b] of CARRY_EDGES) { (CARRY_NEXT[a] = CARRY_NEXT[a] || []).push(b); (CARRY_NEXT[b] = CARRY_NEXT[b] || []).push(a); }
+function comfortOwn(p, s) { return p.cf ? (p.cf[s] || 0) : (s === p.spot ? 100 : 0); }
+function comfortOf(p, s) { let c = comfortOwn(p, s); const n = CARRY_NEXT[s]; if (n && c < 40) for (const k of n) c = Math.max(c, comfortOwn(p, k) * 0.4); return c; }
 function comfortLabel(c) { return c >= 85 ? 'Natural' : c >= 60 ? 'Comfortable' : c >= 30 ? 'Decent' : c > 0 ? 'Raw' : 'Unfamiliar'; }
 function comfortPen(p, s) { return Math.round(16 * Math.pow(1 - comfortOf(p, s) / 100, 1.6) * 10) / 10; }
 // ---------- the defensive line is one line ----------
 // Nose, 3-technique, 5-technique and wide edge are four points along it, not four positions. A man's rating and his comfort
 // anywhere on the line are read between the points on either side: a 2i asks for some of what a nose does and some of what a
 // 3-technique does. ax is how far from the center he lines up (the same scale the fronts use).
-const LINE_ANCHORS = [['NT', 0.2], ['DT', 1.3], ['DE', 2.0], ['EDGE', 2.7]];
+const LINE_ANCHORS = [['NT', 0.2], ['DT', 1.35], ['DE', 2.3], ['EDGE', 2.9]];
 const LINE_SPOTS = new Set(LINE_ANCHORS.map(a => a[0]));
 function linePos(ax) {
   const A = LINE_ANCHORS; if (ax <= A[0][1]) return 0;
@@ -205,7 +211,7 @@ function lineBlend(ax) { const u = linePos(ax), i = Math.min(LINE_ANCHORS.length
 // (a step along the line is a different job, half a step is nearly the same one)
 function lineComfort(p, ax) {
   const u = linePos(ax); let lin = 0, best = 0;
-  LINE_ANCHORS.forEach(([s], i) => { const c = comfortOf(p, s), d = Math.abs(u - i); lin += Math.max(0, 1 - d) * c; best = Math.max(best, c * Math.max(0, 1 - 0.6 * d)); });
+  LINE_ANCHORS.forEach(([s], i) => { const c = comfortOwn(p, s), d = Math.abs(u - i); lin += Math.max(0, 1 - d) * c; best = Math.max(best, c * Math.max(0, 1 - 0.6 * d)); });
   return clamp(Math.max(lin, best), 0, 100);
 }
 function penOfComfort(c) { return Math.round(16 * Math.pow(1 - c / 100, 1.6) * 10) / 10; }
@@ -235,7 +241,7 @@ function learnRate(p) {
 // add comfort points (slower as he nears Natural); returns true if his level changed
 function learnSpot(p, s, pts) {
   if (!p.cf) genComfort(p);
-  const c = p.cf[s] || 0, before = comfortLabel(c);
+  const c = Math.max(p.cf[s] || 0, comfortOf(p, s)), before = comfortLabel(c); // he starts from what already carries over
   p.cf[s] = Math.min(100, Math.round((c + pts * (c < 60 ? 1 : c < 85 ? 0.8 : 0.5)) * 10) / 10);
   return comfortLabel(p.cf[s]) !== before;
 }
