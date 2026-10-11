@@ -26,7 +26,7 @@ function ensureAgents() {
   if (state.agents && state.agents.length) { if (state.agents[0].born === undefined) state.agents.forEach(agentFill); state.agentHist = state.agentHist || {}; return; }
   state.agents = [];
   for (let i = 0; i < AGENT_N; i++) {
-    const sex = rand() < 0.35 ? 'f' : 'm', last = pick(LAST_NAMES), first = sex === 'f' ? pick(AGENT_F_NAMES) : pick(FIRST_NAMES);
+    const sex = rand() < 0.35 ? 'f' : 'm', nm = randomName(), last = nm[1], first = sex === 'f' ? pick(AGENT_F_NAMES) : nm[0];
     state.agents.push({ id: i, first, last, sex, born: state.season - randInt(31, 66), w: i < 3 ? 7 : i < 8 ? 4 : i < 18 ? 2 : 1, d: [0, 0, 0, 0, 0, 0].map(() => round2(rand())) });
   }
   state.agentHist = state.agentHist || {};

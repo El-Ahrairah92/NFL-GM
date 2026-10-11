@@ -397,7 +397,7 @@ function rasOf(p, peers) {
 const GEN_LOOSE = { RB: { hnd: [2.5, 6, 'rec'], rte: [2.5, 6, 'rec'], pbk: [2.5, 6, 'rec'], str: [1.5, 9] } }, GEN_BENT = { rec: 15 };
 function genPlayer(spot, q, age, gf, raw) {
   const S = SPOTS[spot];
-  const [first, last] = randomName();
+  const [first, last] = randomName(S.g);
   const ht = Math.round(gauss(S.body[0], S.body[1]));
   const wt = Math.round(gauss(S.body[2], S.body[3]));
   const arm = Math.round((S.body[4] + (ht - S.body[0]) * 0.35 + gauss(0, 0.6)) * 8) / 8;
@@ -422,7 +422,7 @@ function genPlayer(spot, q, age, gf, raw) {
   const p = {
     id: state.nextPid++, first, last, age, spot, pos: S.g, lbl: S.l, a,
     m: genMeasurables(a, ht, wt, arm), h: genHidden(), ag: genAging(), grow: { E: 0, P: 0, T: 0, M: 0 },
-    ovr: 0, pot: 0, fit: {}, tid: -1, college: pick(COLLEGES),
+    ovr: 0, pot: 0, fit: {}, tid: -1, college: pickSchool(clamp(1 + ((q || 60) - 62) / 20, 0.85, 1.6)),
     contract: { amt: MIN_SALARY, yrs: 1 }, injury: null, stats: {}, career: [], draft: null, exp: 0,
   };
   genDecline(p);

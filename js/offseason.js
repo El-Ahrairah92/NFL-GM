@@ -39,6 +39,7 @@ const AWARD_NAMES = { mvp: 'MVP', opoy: 'Offensive Player of the Year', dpoy: 'D
 //  Worked out once, when the season ends, and kept with that season in the history books.
 // =====================================================================
 const HONOR_SLOTS = [['QB', 1], ['RB', 1], ['WR', 3], ['TE', 1], ['OL', 5], ['EDGE', 2], ['IDL', 2], ['LB', 3], ['CB', 3], ['S', 2], ['K', 1], ['P', 1]];
+const PRO_BOWL_SLOTS = [['QB', 3], ['RB', 3], ['WR', 4], ['TE', 2], ['OL', 8], ['EDGE', 3], ['IDL', 3], ['LB', 5], ['CB', 4], ['S', 3], ['K', 1], ['P', 1]];
 const ROOKIE_SLOTS = [['QB', 1], ['RB', 1], ['WR', 2], ['TE', 1], ['OL', 2], ['EDGE', 1], ['IDL', 1], ['LB', 1], ['CB', 1], ['S', 1]];
 const HONOR_NAME = { QB: 'Quarterback', RB: 'Running back', WR: 'Receiver', TE: 'Tight end', OL: 'Offensive line', EDGE: 'Edge', IDL: 'Interior line', LB: 'Linebacker', CB: 'Corner', S: 'Safety', K: 'Kicker', P: 'Punter' };
 function honorGroup(p) { return p.spot === 'FB' ? null : p.pos === 'DL' ? (p.spot === 'EDGE' ? 'EDGE' : 'IDL') : p.pos; }
@@ -62,6 +63,10 @@ function seasonHonors(awards) {
   // All-Pro: first and second teams
   const allPro = { 1: [], 2: [] };
   for (const [g, n] of HONOR_SLOTS) { const l = by[g] || []; l.slice(0, n).forEach(([p]) => { allPro[1].push(honorRef(p, { g })); tag(p, 'First-team All-Pro'); }); l.slice(n, n * 2).forEach(([p]) => { allPro[2].push(honorRef(p, { g })); tag(p, 'Second-team All-Pro'); }); }
+  // the Pro Bowl: the best of each conference, a wider net than All-Pro
+  const proBowl = {};
+  for (const [g, n] of PRO_BOWL_SLOTS) for (const conf of [...new Set(state.teams.map(t => t.conf))]) { const l = (by[g] || []).filter(x => T(x[0].tid).conf === conf).slice(0, n);
+    for (const [p] of l) { (proBowl[conf] = proBowl[conf] || []).push(honorRef(p, { g })); tag(p, 'Pro Bowl'); } }
   const allRookie = [];
   for (const [g, n] of ROOKIE_SLOTS) (by[g] || []).filter(x => x[0].exp === 0).slice(0, n).forEach(([p]) => { allRookie.push(honorRef(p, { g })); tag(p, 'All-Rookie team'); });
   // the wider slate
@@ -102,10 +107,11 @@ function seasonHonors(awards) {
   const mine = { rec: recStr(recs[u]), result: e === undefined ? 'Missed the playoffs' : e === 4 ? 'Won the championship' : 'Lost in the ' + ROUND_NAMES[e], prev: Math.round(prevW(T(u))), pf: recs[u].pf, pa: recs[u].pa, offRk: rank(pf, recs[u].pf, true), defRk: rank(pa, recs[u].pa, false),
     mvp: mvpU ? honorRef(mvpU[0]) : null, rookie: rookU ? honorRef(rookU[0]) : null, improved: upU && upU[1] >= 2 ? honorRef(upU[0], { note: tierOf(upU[0]) }) : null };
   const bracket = po ? po.rounds.map((rd, i) => ({ name: ROUND_NAMES[i], games: rd.map(g => ({ h: g.h, a: g.a, win: g.win, score: g.score, gid: g.gid })) })) : [];
-  return { allPro, allRookie, leaders, league, mine, bracket };
+  return { allPro, allRookie, proBowl, leaders, league, mine, bracket };
 }
 
-function statSummary(s, pos) {
+function statSummary(s, pos) { const b = statSummary0(s, pos), x = s ? [(s.tpc || 0) + (s.tpp || 0) ? `${(s.tpc || 0) + (s.tpp || 0)} two-point` : '', s.sfty ? `${s.sfty} safet${s.sfty === 1 ? 'y' : 'ies'}` : ''].filter(Boolean) : []; return x.length ? b + '; ' + x.join(', ') : b; }
+function statSummary0(s, pos) {
   if (!s) return '';
   if (pos === 'QB') return `${s.passC || 0}/${s.passA || 0}, ${s.passY || 0} yds, ${s.passTD || 0} TD, ${s.passInt || 0} INT` + ((s.rushY || 0) > 200 ? `; ${s.rushY} rush yds, ${s.rushTD || 0} TD` : '');
   if (pos === 'RB') return `${s.rushA || 0} car, ${s.rushY || 0} yds, ${s.rushTD || 0} TD; ${s.rec || 0} rec, ${s.recY || 0} yds`;
@@ -195,6 +201,7 @@ function startOffseason() {
   psOffseason();
   devCheckpoint('off'); // the staff re-reads everyone after a winter of work
   ensureDraftClass(year, true);
+  state.carSnap = carouselSnap(); // who held every coaching job before anyone was fired or retired
   coachOffseason();
   state.phase = 'COACHES';
   startCarousel();

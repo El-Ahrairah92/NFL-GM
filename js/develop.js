@@ -324,7 +324,7 @@ function compFor(p, best) {
 }
 
 // ---------- the record book: nobody disappears when he retires ----------
-const CAREER_SUM = ['gp', 'gs', 'passA', 'passC', 'passY', 'passTD', 'passInt', 'rushA', 'rushY', 'rushTD', 'rec', 'recY', 'recTD', 'tkl', 'sck', 'dint', 'pd', 'ff', 'fgm', 'fga'];
+const CAREER_SUM = ['gp', 'gs', 'passA', 'passC', 'passY', 'passTD', 'passInt', 'rushA', 'rushY', 'rushTD', 'rec', 'recY', 'recTD', 'tkl', 'sck', 'dint', 'pd', 'ff', 'fgm', 'fga', 'tpc', 'tpp', 'sfty'];
 function trackPeak(p) {
   if (!p.a || p.tid === -2) return;
   if (!p.pkR || p.ovr > p.pkR.o) p.pkR = { o: p.ovr, s: state.season, a: Object.assign({}, p.a) };

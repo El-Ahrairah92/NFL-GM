@@ -150,6 +150,7 @@ function statusPills(p) {
   if (p.expiring) s += `<span class="pill exp">Expiring</span> `;
   if ((p.wear || 0) >= 8) s += `<span class="pill inj" title="Heavy workload: playing below his ratings and at higher injury risk">Worn</span> `;
   if (p.exp === 0 && p.tid >= 0) s += `<span class="pill rook">R</span> `;
+  { const w = typeof stWord === 'function' && p.a && p.tid !== -2 ? stWord(p) : null; if (w && w[0] === 'Core special teamer') s += `<span class="pill good" title="Core special teamer">ST++</span> `; else if (w && w[0] === 'Helps on special teams') s += `<span class="pill" title="Helps on special teams">ST+</span> `; }
   return s;
 }
 function fmtContract(p) {
@@ -312,6 +313,7 @@ function pageHTML() {
     case 'waivers': return state.phase === 'WAIVERS' ? waiversHTML() : homeHTML();
     case 'draft': return draftHTML();
     case 'coaches': return coachesHTML();
+    case 'carwrap': return carWrapHTML();
     case 'news': return newsHTML();
     case 'history': return historyHTML();
     case 'season': return seasonHTML();
@@ -581,6 +583,8 @@ function seasonHTML() {
     html += `<div class="wr-two"><div class="card"><h3>All-Pro teams</h3><div class="small muted" style="margin-bottom:8px">The best season at every position: production where the position has it, the season grade where it does not.${mineN ? ` <b>${mineN} of yours</b> made it.` : ''}</div>
       <table class="wr-tbl"><thead><tr><th>Position</th><th>First team</th><th>Second team</th></tr></thead><tbody>${rows.map(r => `<tr><td class="muted">${HONOR_NAME[r.g]}</td><td>${r.a.map(pl).join('')}</td><td>${r.b.map(pl).join('')}</td></tr>`).join('')}</tbody></table></div>`;
     html += `<div><div class="card"><h3>All-Rookie team</h3>${w.allRookie && w.allRookie.length ? `<table class="wr-tbl"><tbody>${ROOKIE_SLOTS.map(([g]) => { const l = w.allRookie.filter(x => x.g === g); return l.length ? `<tr><td class="muted">${HONOR_NAME[g]}</td><td>${l.map(pl).join('')}</td></tr>` : ''; }).join('')}</tbody></table>` : '<div class="muted small">No rookies played enough to qualify.</div>'}</div>`;
+    if (w.proBowl) { const confs = Object.keys(w.proBowl).sort(), mineN = confs.reduce((n, c) => n + w.proBowl[c].filter(x => x.tid === u).length, 0);
+      html += `<div class="card" style="margin-top:14px"><h3>Pro Bowl</h3><div class="small muted" style="margin-bottom:8px">The best of each conference.${mineN ? ` <b>${mineN} of yours</b> ${mineN === 1 ? 'was' : 'were'} named.` : ''}</div><table class="wr-tbl"><thead><tr><th>Position</th>${confs.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${PRO_BOWL_SLOTS.map(([g]) => `<tr><td class="muted">${HONOR_NAME[g]}</td>${confs.map(c => `<td>${w.proBowl[c].filter(x => x.g === g).map(pl).join('')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`; }
     if (w.league) html += `<div class="card" style="margin-top:14px"><h3>Around the league</h3><div class="kv">${w.league.map(l => `<div>${l.label}</div><div>${teamLink(l.tid)} <span class="muted">${esc(l.line)}</span></div>`).join('')}</div></div>`;
     html += '</div></div>';
   }
@@ -793,6 +797,11 @@ function dcJobCard(t, c, k, need, where, prob) {
     <div class="dcj-list">${list.map((p, i) => (i === need && !ST_UNIT[k] ? '<div class="dcj-div"><span>next in line</span></div>' : '') + dcChip(p, k, i, need)).join('')}${list.length < n ? `<div class="dcj-drop ${list.length ? 'more' : ''}" data-dcjob="${k}" data-dci="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div>` : ''}</div>
     <details class="dcj-more" ${foldAttr('dcj' + k)}><summary>about this job</summary><div class="small muted">${esc(JOB_HELP[k] || '')}${where && where.length ? `<br><b>Plays in:</b> ${esc([...new Set(where)].join(', '))}` : ''}</div>${rot}</details></div>`;
 }
+// the emergency quarterback: who takes the snaps if every quarterback is hurt
+function emergencyQBHTML(t) {
+  const pool = rosterOf(t.id).filter(p => p.pos !== 'QB' && !['OL', 'DL', 'K', 'P'].includes(p.pos) && p.a).sort((a, b) => emergencyScore(b) - emergencyScore(a)).slice(0, 12), cur = emergencyPasser(t.id);
+  return `<div class="dc2-lk" title="If every quarterback is hurt during a game, he takes the snaps."><span>Emergency QB</span><select data-change="eqbSet">${pool.map(p => `<option value="${p.id}" ${cur && cur.id === p.id ? 'selected' : ''}>${esc(pshort(p))} · ${esc(p.lbl)}</option>`).join('')}</select>${t.eqb === undefined ? '<i class="small muted" style="margin-left:6px">staff pick</i>' : ''}</div>`;
+}
 function depthChartHTML() {
   const u = state.userTid, t = T(u), c = ensureChart(u);
   refreshChart(u);
@@ -834,7 +843,7 @@ function depthChartHTML() {
       return ['next up', why.length ? why.join(' · ') : 'Next man up']; };
     const pills = tab === 'def'
       ? [...new Set(views.map(v => v.group))].map(gr => `<div class="dc2-lk"><span>${esc(gr)}</span>${views.filter(v => v.group === gr).map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.label)}${v.share && v.group !== 'Other' ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div>`).join('')
-      : `<div class="dc2-lk"><span>Personnel</span>${views.map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.id === 'JUMBO' ? 'Jumbo' : v.id)}${v.share ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div><div class="dc2-lk"><span>Formation</span>${formShares(t, vid).map(([k, s2]) => `<button class="${k === (FORMS[vid][ui.dcFm] ? ui.dcFm : FORM_HOME[vid]) ? 'on' : ''}" data-action="dcFm" data-k="${esc(k)}">${esc(k)} <i>${Math.round(s2 * 100)}%</i></button>`).join('')}</div>`;
+      : `<div class="dc2-lk"><span>Personnel</span>${views.map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.id === 'JUMBO' ? 'Jumbo' : v.id)}${v.share ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div><div class="dc2-lk"><span>Formation</span>${formShares(t, vid).map(([k, s2]) => `<button class="${k === (FORMS[vid][ui.dcFm] ? ui.dcFm : FORM_HOME[vid]) ? 'on' : ''}" data-action="dcFm" data-k="${esc(k)}">${esc(k)} <i>${Math.round(s2 * 100)}%</i></button>`).join('')}</div>${emergencyQBHTML(t)}`;
     const scen = sub ? `<div class="dc2-scen"><button class="${pass ? '' : 'on'}" data-action="dcPass" data-v="0">Run downs</button><button class="${pass ? 'on' : ''}" data-action="dcPass" data-v="1">Passing downs</button></div>` : '';
     // where each man really stands: across the formation by his alignment, up the field by his depth. Nobody is snapped to a grid;
     // two men who would sit on top of each other are eased apart just enough to read both.
@@ -2147,6 +2156,7 @@ function searchHTML2(t) {
   const light = ROLE_TIER[role] >= 3, ivN = ivLeftOf(role);
   html += `<div class="small" style="margin-bottom:4px"><b>${ivN}</b> interview${ivN === 1 ? '' : 's'} left for this job.</div><div class="small muted" style="margin-bottom:6px">${cur ? `${roleName(role)}: currently ${coachNameLink(cur)}${t.locks && t.locks[role] && C(t.locks[role]) && C(t.locks[role]).tid === u ? ' 🔒 promised' : ''}. Hiring someone else lets him go${owedIfFired(cur) ? ' (he is owed ' + fmtMoney(owedIfFired(cur)) + ')' : ''}.` : `The ${roleName(role).toLowerCase()} job is open.`}</div>` + table('search' + role, [
     { k: 'n', l: 'Name', v: c => c.last, f: c => coachNameLink(c) + (c.role !== role ? ` <span class="pill">promotion from ${ROLE_SHORT[c.role] || c.role}</span>` : c.tid >= 0 ? ' <span class="pill warn">under contract</span>' : '') + (c.tid >= 0 ? ` <span class="small muted">${T(c.tid).abbr}</span>` : '') },
+    { k: 'st', l: 'Status', v: c => c.tid >= 0 ? 1 : c.college ? -1 : 0, f: c => c.tid >= 0 ? `<span class="small warn">Under contract</span>` : c.college ? `<span class="small muted">College</span>` : `<span class="small good">Free</span>`, title: 'Click to put coaches who are free to sign, or those under contract elsewhere, first' },
     { k: 'a', l: 'Age', v: c => c.age, num: 1 },
     { k: 'rep', l: 'Reputation', v: c => repOf(c), f: c => `<span class="small">${repLabel(c)}</span>` },
     { k: 's', l: light ? 'Keywords' : 'System', f: c => isAsst(c) ? kwPills(c) : `<span class="small">${esc(schemeLabel(c) || '—')}</span>` },
@@ -2308,13 +2318,29 @@ function staffSelHTML(t, c, role, mine, canHire) {
   return `<div class="card ss"><div class="ss-c">${a}</div><div class="ss-c">${b}</div><div class="ss-c">${p}</div><div class="ss-c">${m}</div></div>`;
 }
 function staffList(t) { return STAFF_ORDER.map(r => staffCoach(t, r)).filter(Boolean); }
+// ---- the coaching carousel, after it stops ----
+function carWrapHTML() {
+  const w = state.carWrap, u = state.userTid;
+  if (!w || !w.moves.length) return `<div class="pagehead"><div><h1>Coaching moves</h1><div class="sub">Nothing changed around the league this offseason.</div></div></div>`;
+  const who = (id, name) => id !== undefined && C(id) ? coachNameLink(C(id)) : name ? esc(name) : '<span class="muted">nobody</span>';
+  const line = m => `<tr class="${m.tid === u ? 'mine' : ''}"><td>${teamLink(m.tid)}</td><td class="muted small">${esc(roleName(m.role))}</td>
+    <td>${m.inName ? `<b>${who(m.inId, m.inName)}</b> <span class="small muted">${esc(m.from)}${m.scheme ? ' · ' + esc(m.scheme) : ''}</span>` : '<span class="muted">vacant</span>'}</td>
+    <td>${m.outName ? `${who(m.outId, m.outName)} <span class="small muted">${esc(m.to)}</span>` : '<span class="muted small">new job</span>'}</td></tr>`;
+  const sec = (title, list) => list.length ? `<div class="card" style="margin-bottom:14px"><h3>${title} <span class="muted small" style="font-weight:400">${list.length}</span></h3><table class="tbl cw-tbl"><thead><tr><th>Club</th><th>Job</th><th>In</th><th>Out</th></tr></thead><tbody>${list.sort((a, b) => (b.tid === u) - (a.tid === u) || a.tid - b.tid).map(line).join('')}</tbody></table></div>` : '';
+  const hc = w.moves.filter(m => m.role === 'HC'), co = w.moves.filter(m => ['OC', 'DC', 'STC', 'SC'].includes(m.role)), sp = w.moves.filter(m => SPEC_ROLES.includes(m.role)), pos = w.moves.filter(m => POS_ROLES.includes(m.role));
+  const clubs = new Set(w.moves.map(m => m.tid)).size, promo = w.moves.filter(m => m.from.startsWith('promoted')).length, college = w.moves.filter(m => m.from.includes('college')).length;
+  return `<div class="pagehead"><div><h1>Coaching moves</h1><div class="sub">The ${w.season + 1} carousel has stopped. ${w.moves.length} jobs changed hands at ${clubs} clubs: ${hc.length} head coach${hc.length === 1 ? '' : 'es'}, ${co.length} coordinators, ${promo} promoted from within, ${college} up from the college ranks.</div></div>
+    <span class="spacer"></span><button data-action="nav" data-view="coaches">Your staff</button></div>
+    ${sec('Head coaches', hc)}${sec('Coordinators', co)}${sec('Pass and run game coordinators', sp)}
+    ${pos.length ? `<details class="card" style="margin-bottom:14px"${pos.some(m => m.tid === u) ? ' open' : ''}><summary><b>Position coaches</b> <span class="muted small">${pos.length}</span></summary><table class="tbl cw-tbl" style="margin-top:8px"><thead><tr><th>Club</th><th>Job</th><th>In</th><th>Out</th></tr></thead><tbody>${pos.sort((a, b) => (b.tid === u) - (a.tid === u) || a.tid - b.tid).map(line).join('')}</tbody></table></details>` : ''}`;
+}
 function coachesHTML() {
   const tid = ui.staffTid == null ? state.userTid : ui.staffTid, t = T(tid), mine = tid === state.userTid, canHire = state.phase === 'COACHES' && mine;
   const opts = state.teams.map(x => `<option value="${x.id}" ${x.id === tid ? 'selected' : ''}>${x.region} ${x.name}</option>`).join('');
   const list = staffList(t), sel = list.find(c => c.id === ui.staffSel) || list[0] || null, selRole = sel ? STAFF_ORDER.find(r => staffCoach(t, r) === sel) : null;
   const has = !!t.asst, card = (role, kind) => orgCard(t, role, staffCoach(t, role), canHire, kind, sel);
   let html = `<div class="pagehead"><div><h1>Coaching staff</h1><div class="sub">${state.phase === 'COACHES' ? (mine ? 'The coaching search is open: let a coach go to open his job, then interview and negotiate below.' : 'The coaching search is open.') : 'Hierarchy, responsibilities and what each man brings. Changes happen in the coaching search, right after the season.'}</div></div>
-    <span class="spacer"></span><select data-change="staffTeam">${opts}</select></div>`;
+    <span class="spacer"></span>${state.carWrap ? `<button class="sm" data-action="nav" data-view="carwrap">League coaching moves</button>` : ''}<select data-change="staffTeam">${opts}</select></div>`;
   const branch = (coordRole, specs) => `<div class="br">${card(coordRole, 'co')}${has ? `<div class="fork">${specs.map(r => `<div class="leaf">${card(r, 'sp')}</div>`).join('')}</div>` : ''}</div>`;
   const tree = `<div class="card tree"><h3>Staff hierarchy</h3>
     <div class="tree-top">${card('HC', 'hc')}</div>
@@ -3008,7 +3034,7 @@ function stepContinue() {
     case 'REG': simWeek(); break;
     case 'PLAYOFFS': simPlayoffRound(); break;
     case 'RECAP': startOffseason(); break;
-    case 'COACHES': advanceCarousel(); break;
+    case 'COACHES': advanceCarousel(); if (state.phase !== 'COACHES' && state.carWrap && !state.settings.autoUser) view = 'carwrap'; break;
     case 'RESIGN': leaveResign(); break;
     case 'FA': advanceFA(); break;
     case 'DRAFT': { const pk = currentPick(); if (pk && pk.owner === state.userTid) simDraftPick(); else simDraftToUser(); break; }
@@ -3278,6 +3304,7 @@ const actions = {
   },
 };
 const changes = {
+  eqbSet: v => { T(state.userTid).eqb = +v; save(); },
   faSpot: (v, el) => { faIn(P(+el.dataset.pid)).spot = v; },
   rosterTeam: v => { ui.rosterTid = +v; },
   rosterView: v => { ui.rosterView = v; },

@@ -474,7 +474,9 @@ function resolveYards(g, yds, res, oc) {
   }
   if (g.ydl <= 0) {
     endDrive(g, 'Safety');
-    addScore(g, 1 - o, 2, `Safety — ${T(g.tids[o]).abbr} downed in the end zone`);
+    const sfBy = res.kind === 'sack' ? res.sacker : res.tackler, sfWho = res.kind === 'sack' ? res.qb : res.carrier || res.target;
+    if (sfBy && sfBy.p && sfBy.p.id >= 0) inc(g, sfBy.p, 'sfty');
+    addScore(g, 1 - o, 2, sfBy && sfBy.p && sfWho && sfWho.p ? `Safety — ${pshort(sfWho.p)} ${res.kind === 'sack' ? 'sacked' : 'tackled'} in the end zone by ${pshort(sfBy.p)}` : `Safety — ${T(g.tids[o]).abbr} downed in the end zone`);
     kickoff(g, o, true);
     return;
   }
@@ -647,7 +649,8 @@ function kickoff(g, kickSide, safetyKick) {
     stShare(g, KO, clamp(expS - start, -15, 8)); stShare(g, KRU, clamp(start - expS, -8, 15)); if (start < 95) stTackle(g, KO);
     start = clamp(start, 5, 99);
     const r = start - (safetyKick ? 20 : 0);
-    inc(g, ret.p, 'krA'); inc(g, ret.p, 'krY', Math.max(0, start));
+    const caught = safetyKick ? clamp(Math.round(gauss(22, 6)), 8, 40) : clamp(Math.round(gauss(2, 4)), 0, 14); // where he fields it: return yards are counted from there
+    inc(g, ret.p, 'krA'); inc(g, ret.p, 'krY', Math.max(0, start - caught));
     if (!safetyKick && rand() < 0.0035 * Math.exp(clamp(mKo, -12, 12) / 6)) {
       startPossession(g, recv, 100); if (g.over) return;
       endDrive(g, 'Kick Return TD');
@@ -687,7 +690,9 @@ function touchdown(g, side, text) {
       const off = offUnit(g, side, oc.pers, oc), def = defUnit(g, 1 - side, dc.front, dc.pkg, dc.subRush, dc.bign, dc.lookT);
       const res = oc.isRun ? resolveRun(g, off, def, oc, dc) : resolvePass(g, off, def, oc, dc);
       const good = (res.kind === 'run' || res.kind === 'scramble' || res.kind === 'comp') && res.yds >= 2;
-      if (good) { g.score[side] += 2; g.qs[side][Math.min(g.q, 5) - 1] += 2; entry.text += ' (2-pt good)'; } else entry.text += ' (2-pt failed)';
+      if (good) { g.score[side] += 2; g.qs[side][Math.min(g.q, 5) - 1] += 2; const sc = res.kind === 'comp' ? res.target : res.carrier;
+        if (sc && sc.p) inc(g, sc.p, 'tpc'); if (res.kind === 'comp' && res.qb && res.qb.p) inc(g, res.qb.p, 'tpp');
+        entry.text += sc && sc.p ? ` (${pshort(sc.p)} 2-pt ${res.kind === 'comp' ? 'catch' : 'run'})` : ' (2-pt good)'; } else entry.text += ' (2-pt failed)';
       pbpLog(g, `Two-point try ${good ? 'is GOOD' : 'fails'}: ${res.desc || ''}`, false);
       Object.assign(g, save);
     } else {

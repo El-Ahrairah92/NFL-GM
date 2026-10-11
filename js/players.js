@@ -24,7 +24,7 @@ function activeCount(tid) { return rosterOf(tid).filter(p => !onIR(p)).length; }
 function pname(p) { return p ? p.first + ' ' + p.last : '—'; }
 function pshort(p) { return p ? p.first[0] + '. ' + p.last : '—'; }
 
-function randomName() { return [pick(FIRST_NAMES), pick(LAST_NAMES)]; }
+// randomName(pos) lives in names.js
 
 // ---------- money / value ----------
 // the market pays for perception (consensus value incl. hype), not the hidden truth
@@ -124,6 +124,7 @@ function genProspect(draftYear, depth) {
   const spot = weightedPick(Object.keys(DRAFT_SPOT_W), depth ? Object.keys(DRAFT_SPOT_W).map(k => DRAFT_SPOT_W[k] * (DEPTH_MIX[k] || 1)) : Object.values(DRAFT_SPOT_W));
   if (depth) { const p = rookiePlayer(spot, DRAFT_Q.mean + DRAFT_Q.udfa, DRAFT_Q.udfaSd, 24); setTid(p, -2); p.exp = 0; initPerception(p, 'prospect'); p.draftYear = draftYear;
     // without the pedigree, a flash on tape is discounted by everyone: half of anything he shows above a rotation grade is believed
+    p.college = classSchool(draftYear, p, p.per.b - 8, th(p).rotation); // the bottom of a class is where the small schools are
     const t = th(p), lim = t.rotation - 3; if (p.per.b > lim) p.per.b = round1(lim + (p.per.b - lim) * 0.5);
     p.per.g = round1(Math.min(p.per.g * 0.6, Math.max(2, t.starter - 2 - p.per.b))); return p; }
   // some prospects never develop and a few have far more in them than anyone can see: nobody knows which on draft day
@@ -132,6 +133,7 @@ function genProspect(draftYear, depth) {
   p.exp = 0;
   initPerception(p, 'prospect'); // scouting fog: everyone (you and the AI) sees prospects through it
   p.draftYear = draftYear;
+  p.college = classSchool(draftYear, p, p.per.b, th(p).rotation); // the better the tape, the bigger the programme, most of the time
   return p;
 }
 

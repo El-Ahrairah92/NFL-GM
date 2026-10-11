@@ -907,9 +907,32 @@ function genCollegeClass() { // fresh faces: no ties, cheap, and nobody really k
     c.college = true; c.age = clamp(c.age - randInt(2, 8), 28, 60); c.links = {};
   }
 }
+// where every coach stood before the carousel started, and the list of moves once it is over
+function carouselSnap() {
+  const jobs = {}, at = {};
+  for (const t of state.teams) for (const r of ALL_ROLES) { const c = staffCoach(t, r); if (c) { jobs[t.id + ':' + r] = c.id; at[c.id] = { tid: t.id, role: r, name: cname(c) }; } }
+  return { jobs, at };
+}
+function carouselWrap() {
+  const snap = state.carSnap; if (!snap) return;
+  const now = carouselSnap(), moves = [];
+  for (const t of state.teams) for (const r of ALL_ROLES) {
+    const was = snap.jobs[t.id + ':' + r], is = now.jobs[t.id + ':' + r]; if (was === is) continue;
+    const c = C(is), old = snap.at[was], prev = is !== undefined ? snap.at[is] : null, oldNow = was !== undefined ? now.at[was] : null;
+    moves.push({ tid: t.id, role: r, tier: ROLE_TIER[r] || 3,
+      inName: c ? cname(c) : null, inId: is, scheme: c && schemeLabel(c) || '',
+      from: !c ? '' : !prev ? ((snap.col || []).includes(c.id) ? 'from the college ranks' : 'was out of the league') : prev.tid === t.id ? `promoted from ${roleName(prev.role).toLowerCase()}` : `was ${T(prev.tid).abbr} ${roleName(prev.role).toLowerCase()}`,
+      outName: old ? old.name : null, outId: was,
+      to: !old ? '' : !oldNow ? (C(was) ? 'out of work' : 'left the league') : oldNow.tid === t.id ? `now ${roleName(oldNow.role).toLowerCase()}` : `now ${T(oldNow.tid).abbr} ${roleName(oldNow.role).toLowerCase()}` });
+  }
+  state.carWrap = { season: state.season, moves };
+  delete state.carSnap;
+}
 function startCarousel() {
   state.car = { day: 0, iv: {}, ivLeft: {}, dem: {}, req: [], raids: [], raided: {}, blocked: {}, roll: {} };
+  if (!state.carSnap) state.carSnap = carouselSnap();
   ensureCoachContracts(); genCollegeClass(); seedWeb();
+  state.carSnap.col = Object.values(state.coaches).filter(c => c.college).map(c => c.id); // the college men in this year's pool
   genRaids(['HC']);
 }
 // the market moves a tier a day; whatever is still open on the last day gets filled
@@ -934,6 +957,7 @@ function finishCarousel() {
   for (const x of state.teams) { for (const r of ALL_ROLES) { const c = staffCoach(x, r); if (c && c.sal === undefined) signCoachContract(c, coachAsk(c), askYears(c), askGtd(c)); } setCaller(x); }
   // the college men nobody hired go back to campus
   for (const id in state.coaches) { const c = state.coaches[id]; if (c.college && c.tid < 0) { for (const o in c.links || {}) { const x = C(+o); if (x && x.links) delete x.links[c.id]; } delete state.coaches[id]; } }
+  carouselWrap();
   state.car = null;
   leaveCoaches();
 }

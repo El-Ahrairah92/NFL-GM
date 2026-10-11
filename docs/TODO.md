@@ -2,6 +2,18 @@
 
 Things we have talked about and not built yet. Newest decisions win; cross items off by deleting them.
 
+## Coaches: the rebuild (in discussion, nothing built)
+
+The ratings were written for the old play system and most of the new mechanics do not read them (defensive Adaptability does nothing in games; every caller picks looks, slants and concepts equally well). Agreed so far:
+
+- Coordinators keep three design ratings each (run, pass, protection; front, coverage, pressure).
+- Play Calling is shown only for a coach who calls plays. One who used to call and no longer does shows his last known rating greyed out with the year. One who never has shows nothing.
+- Head coach: Game Management, Accountability, Leading Practice, Team Building, Execution. Still to settle: what Execution means (situations, or composure in big moments), and who owns the staff working together, player development, opponent preparation and pull with free agents.
+- Pass and run game coordinators: Concept Creativity and Concept Execution.
+- Position coaches: Development, Leading Drills (the game-day technique of the room), Teaching.
+- **Leading Practice sets a weekly rep allowance: 80 to 120, 100 average, half a rep per rating point.** Starters take their share first; the extra (or the shortfall) lands on the second and third team. Reps feed progression, playbook learning, comfort at a new position and readiness. The position coach decides what a rep is worth. Wear and tear and the progression weights get tuned later; no steering of the budget yet.
+- Still open: one caller rating or two (calling and adjusting); whether the defense learns the offense's habits during a game; visible numbers or tiers for coaches.
+
 ## Up next (agreed order)
 
 1. **Free agency and re-signing on the valuation** (this is what makes the cap bind):
@@ -21,7 +33,7 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 Done: the line of scrimmage is geometry and a front is data (DESIGN section 41). Each side has a move at the line, defenses that repeat themselves are punished, inside and outside runs are balanced (section 42). The pocket: stepping up, interior push, flushes (section 43). Where the ball is thrown (section 44). Coaches carry their own looks, line games and walked-up linebackers (section 45). The defensive line is one continuous line; bigger libraries are slower to learn (section 46).
 
 0. **Finish the role-based depth chart (section 47).** Weigh a defensive back's rating at a job by the coach's mix of man and zone. Let the quarterback see a linebacker or safety walked out over a receiver and throw at it, and a small nickel on an early down and run at it. Reword cross-training and scouting text away from NT, DT, DE, EDGE. Offensive jobs once offensive coaches have libraries. Ratings read between points for linebackers, safeties and receivers, as the line has.
-0b. **Finish the offense (section 49).** Receivers and tight ends as one line of jobs (split end, flanker, slot, move tight end, in-line tight end) with ratings read between points; offensive jobs from the coach's formations and overrides per formation; the featured receiver moved around the formation (coach trait, stored, not yet acting); refit rating weights to the new attribute values. From section 50: a back motioning out of the backfield, safeties rotating to motion in zone, corners assigned by field and boundary, quarterback and receiver timing (with team chemistry).
+0b. **Finish the offense (sections 49 and 50).** Done in section 50: routes by job, on and off the line, zone carry, tackle-breaking after the catch, real motion, the hash. Still to do: receivers and tight ends as one line of jobs (split end, flanker, slot, move tight end, in-line tight end) with ratings read between points; offensive jobs from the coach's formations and overrides per formation; the featured receiver moved around the formation (coach trait, stored, not yet acting); refit rating weights to the new attribute values. From section 50: a back motioning out of the backfield, safeties rotating to motion in zone, corners assigned by field and boundary, quarterback and receiver timing (with team chemistry).
 1. **Season film.** Record each game's defensive tendencies (looks, slants, pressure) so opponents prepare for a coach's habits before kickoff.
 2. **Pressure packages and the offense's answers.** Disguised and overload pressures; protection calls as a choice the offense makes. Offensive coaches get the same depth.
 3. **Playbook page, scouting text, roster valuation by technique.**
@@ -46,14 +58,12 @@ After the trench work: re-measure attribute values and refit rating weights.
 
 ## Coaches
 
-- Fronts and techniques: see "Fronts and the trenches" above. The engine now decides blocks from alignment; coaches generating their own fronts is step 2 there.
-
+- The rebuild of coach ratings: see "Coaches: the rebuild" at the top.
 - Your position coaches suggest retraining candidates in the camp meeting.
 - A coach Evaluation rating.
 - Promotions down either the run or the pass path.
 - Coach progression pass.
 - Exotic packages.
-- Sort coaches by under contract.
 - A living "coach input system" (later; the camp meeting is the first piece).
 - Fire a coach during the season, not only in the carousel.
 
@@ -69,28 +79,24 @@ After the trench work: re-measure attribute values and refit rating weights.
 - Size outliers.
 - Scheme fit pass.
 - Practice habits balance pass.
-- ST+ and ST++ tags.
 - Kick return as its own attribute? (undecided)
 - **Bug: special teams slots are teaching positions.** A receiver on special teams shows as raw at corner, H tight end, strong safety and running back. Comfort at a position must not come from kicking-game snaps.
 - What moves a player's perceived upside over time: review the inputs.
-- More names, balanced for how common each one is.
 
 ## Football realism (known gaps)
 
 - The best back still averages 6.2 a carry (real 5.2 to 5.9). The tackle leader is a little low (158, real 165 to 185) and the leading cornerback makes too many (112, real 80 to 100).
 - Passes defended are short at the top (fifth-best 14, real 15 to 17).
-- An interior lineman's pass rush moves sacks but barely the score (0.2 points); linebacker and safety coverage skills are too small to measure. Look at both in the trench and front work.
-- Positional value was fitted three retunes ago (rating weights are current, version 6). Latest measurement: quarterback 11.1, receivers 7.4, line 6.2, corners 6.0, edge 5.9, back 5.8, linebackers 5.3, interior 5.0, safeties 4.9, tight end 3.6. Refit in the free agency work.
+- From the latest attribute test (all positions, then the weak ones at 3,000 games): safety zone and man coverage, tight end speed and receiver release now register. Still faint: edge speed and edge play recognition (a small lift to the score, nothing on sacks), linebacker zone coverage, tight end contested catch, quarterback agility, kicker consistency, punter placement.
+- Positional value was fitted several retunes ago (rating weights are version 6). Latest measurement, in points: quarterback 11.5, corners 9.3, receivers 8.1, edge 6.3, line 6.1, back 6.0, linebackers 5.8, safeties 5.1, interior 5.0, tight end 4.6. Refit pay and rating weights to it.
+- Passing: completions of 20+ yards are a little short (2.8 a game, real 3.0 to 3.6); the best offense scores too much (about 34 a game, real 28.5 to 31.5); the flanker's catch rate is low (56%); the top receiver's share of targets is 24% (real 26%).
 
 - **Yards before and after contact are inverted** (3.1 before and 1.6 after; real about 1.4 and 2.9): backs are first hit too deep and go down too soon after.
 - **Success rate is high** (50.5%, real 43 to 45%) and expected points per play average +0.03 instead of zero.
 
 - Two tails are still a little outside the real range after the distribution work: the top deep threat averages 20.5 yards a catch (real 16.5 to 19) and 11.5 defenders a season get 5+ interceptions (real 5 to 10). The most-intercepted quarterback throws 21.7 (real 14 to 18).
 - Rushing leader a bit low (about 1,475, real 1,550 to 1,950) and 300-carry backs rare (0.75 a season, real 1 to 4), even with back usage following the playbook.
-- A safety is credited to nobody, and two-point conversions are not on anyone's stat line.
-- Kick return yards are really the yard line the return reached, not yards gained from the catch.
 - Kicking looks generous: about half the league's kickers hit from 60+ in a season, and 46% of punts end inside the 20 (real: about 38%). Only 28% of punts are returned (real: about 40%).
-- A club with two quarterbacks that loses both in a game still plays a tight end there (about ten plays a season): decide whether every club should name an emergency passer.
 
 - Quarterback completion percentage: spread between best and worst.
 - Catch percentage for high-volume receivers.

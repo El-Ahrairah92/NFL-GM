@@ -971,3 +971,7 @@ input, textarea, select, .selectable { -webkit-user-select: text; user-select: t
 .fa-fo { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line2); }
 .fa-fo summary { cursor: pointer; color: var(--muted); }
 @media (max-width: 900px) { .fa-wrap, .fa-cols { grid-template-columns: minmax(0, 1fr); } .fa-left, .fa-right { max-height: none; } .fa-list { max-height: 320px; } .fa-live { max-width: 100%; margin-left: 0; } }
+
+/* ---- the coaching carousel wrap-up ---- */
+.cw-tbl td { padding: 5px 8px; vertical-align: top; }
+.cw-tbl tr.mine { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); }
