@@ -69,6 +69,16 @@ const TUNE = {
   tightIn: 0.05, tightDeep: 0.22, tightOut: 0.14, // tight splits: crossers gain, deep balls and out-breakers lose
   concept: 1,           // how much a pass concept gains or loses against each coverage (0 switches concepts off)
   conceptPlan: 9,       // how hard a good play caller leans toward concepts that beat what this defense has been playing
+  slotMix: 0.2,         // how often the slot is in the mix when receivers trade routes (the outside two trade the rest of the time)
+  slotTwoWay: 0.22, slotSpace: 1.6, teSpace: 1.2, zFree: 0.18, // the slot's two-way release, and the extra room he has after a catch made on the move
+  zoneCarry: 0.6,       // how much of an outside receiver's route a zone corner owns when it ends in a linebacker's area
+  pressOn: 2.2, pressOff: 0.3, pressWin: 0.45, // press: how much more often a man on the line is pressed, how much less a man off it, and the receiver's head start
+  wideTight: 1.4,       // an outside receiver catches it with the sideline beside him: less room to run than a man inside
+  yacMiss: 7.5,         // yards a receiver gains when the first man misses him in the open field
+  motionMan: 0.15, motionTell: 0.6, motionBump: 0.65, motionCheck: 0.7, // motion: the step it gives the moving man against man coverage, how much it tells the quarterback, how often a zone bumps over in time, and how much it costs the offense's own check at the line
+  hashCov: 0.05, hashSpace: 0.3, hashRun: 0.05, hashThrow: 1.5, // the hash: how much easier a zone is to throw on to the wide side, the room after a catch there, the room on an outside run there, and the arm the far throw takes
+  yacPower: 1,          // how much balance, strength and size break a tackle after the catch
+  contestLabel: -0.15,  // how tight the window has to be before a target is charted as contested
   mugLate: 0.15,        // how much more open a route is when the man covering it started walked up in a gap
   levRun: 5,            // run-block points for a blocker who starts a full step between his man and the play (and against one who has to cross his face)
   kickOut: 4,           // what a puller or lead back gives up kicking out a man set in the hole
@@ -83,7 +93,7 @@ const TUNE = {
   slantHit: 0.3,        // chance a slant crosses an average blocker's face cleanly
   slantWin: 9, slantLose: 4, // pass-rush points when it does, and when he runs himself into the block
   // coverage / passing
-  openBase: -0.595,
+  openBase: -0.67,
   accScale: 0.042,      // how much ball placement decides whether a throw is catchable
   wrBlock: 12,         // receivers give up this many points to the corner they are blocking (they are not linemen)
   size: 1,             // master dial for every height and weight effect (0 switches them off)
@@ -92,7 +102,7 @@ const TUNE = {
   helpShort: 0.8, helpDeep: 0.12, // how often a second defender is close enough to clean up a missed tackle after the catch
   carrierW: 0.68,      // how much the runner's own skill moves a tackle attempt
   recWeight: 0.66,     // how much the receiver's own skill moves the window
-  lbCover: 0.18,       // linebackers own zones that are open by design: their coverage skill moves the window less than a defensive back's
+  lbCover: 0.45,       // linebackers own zones that are open by design: their coverage skill moves the window less than a defensive back's
   openScale: 0.034,
   covWeight: 1.5,      // a defender's coverage skill counts this much more than the receiver's route skill
   holeBonus: 0.9,
@@ -114,16 +124,16 @@ const TUNE = {
   routeMix: 0.75,       // how often the wide receivers trade routes on a call, so the deep route is not always the same man's
   deepSpeed: 0.27,     // how much of getting open deep is pure speed (the rest is route craft)
   intHelp: 0.45,        // share of interceptions made by a help defender (the safety over the top, the man sitting underneath)
-  primPow: 2.2,        // how strongly the call is designed for the better receivers
-  starLook: 0.16,      // how much the quarterback favours his best receiver, covered or not
+  primPow: 2.8,        // how strongly the call is designed for the better receivers
+  starLook: 0.24,      // how much the quarterback favours his best receiver, covered or not
   redZone: 1.25,        // how much tighter the windows get inside the 20
   goalStand: 1,        // how much harder a run is to finish with no field behind the defense
   safetyRun: -1.6,     // a safety coming down on a back who has cleared the second level: negative makes the tackle harder
   deepCatch: 2.3,     // how much harder a ball thrown 20+ yards is to put on a receiver
   shortCatch: 0.45,      // how much easier a ball thrown 3 to 9 yards is to complete
   shortTight: 1.25,      // yards closer the defender is when a short ball is caught: completed more easily, tackled sooner
-  teOpen: 0.12,       // tight ends work the seams and the middle against linebackers and safeties: how much more open that leaves them
-  rbSpace: 3.6,       // extra yards of room a back has when he catches it: nobody is covering him tight
+  teOpen: 0.05,       // tight ends work the seams and the middle against linebackers and safeties: how much more open that leaves them
+  rbSpace: 4.8,       // extra yards of room a back has when he catches it: nobody is covering him tight
   midCatch: 0.95,     // how much harder a ball thrown 10 to 19 yards is to complete than a short one
   deepCov: -0.3,      // deep routes start covered: they need time (or a beaten defender) to come open
   midCov: -0.38,     // separation a receiver gains per second the QB can hold the ball in a clean pocket
@@ -199,6 +209,44 @@ function alignDefense(off, def, oc) {
   if (slot && n && Math.sign(n.x) !== Math.sign(slot.x)) { n.x = -n.x; if (dm && Math.sign(dm.x) === Math.sign(n.x)) dm.x = -dm.x; }
   // a tight end split off the line takes his defender with him: the nearest linebacker or safety widens out over him, still close enough to play the run to that side
   for (const te of off.filter(e => e.flex)) { const who = def.filter(e => e.depth >= ON_LINE && e.depth <= 5.5 && ['SAM', 'WLB', 'MLB', 'SS'].includes(e.slot) && !e.out).sort((a, b) => Math.abs(a.x - te.x) - Math.abs(b.x - te.x))[0]; if (who) { who.x = te.x; who.out = true; if (rand() < 0.4) who.depth = 6; } } // sometimes all the way out of the box
+}
+// Motion. One man who is off the line of scrimmage goes to a real place before the snap, and the defense has to answer it. In man
+// coverage his defender runs with him, which tells the quarterback it is man; in zone nobody does and the zones bump over.
+//   across: a receiver crosses the formation and lines up on the other side (two-by-two becomes three-by-one, or the reverse)
+//   short:  he tightens down next to another receiver, a stack: he cannot be jammed and his defender has to play through traffic
+//   jet:    he is running flat across the formation at the snap, to take the ball or to make the linebackers think he might
+//   insert: a wing or H-back comes across to block on the side the run is going
+function sendMotion(off, def, oc, dc) {
+  oc.mv = null; if (!oc.tags.has('MOTION')) return;
+  const sg = e => Math.sign(e.x || 1), skill = off.filter(e => !OL_SLOTS.includes(e.slot) && !['QB', 'RB', 'FB', 'OL6'].includes(e.slot));
+  const taken = (x, me) => skill.some(o => o !== me && Math.abs(o.x - x) < 0.7), spot = (s, me, list) => list.map(v => v * s).find(x => !taken(x, me));
+  let who = null, kind = null, to = null;
+  if (oc.type === 'JET') { who = ['SLOT', 'Z', 'SLOT2'].map(s => off.find(e => e.slot === s)).find(Boolean); kind = 'jet'; }
+  else if (oc.isRun) {
+    const side = oc.side || 1, h = off.find(e => e.slot === 'H' && sg(e) !== side), wr = ['SLOT', 'Z', 'SLOT2'].map(s => off.find(e => e.slot === s)).find(Boolean);
+    if (h && rand() < 0.6) { who = h; kind = 'insert'; to = spot(side, h, [2.9, 3.4, 3.9]); }
+    else if (wr && rand() < 0.3) { who = wr; kind = 'jet'; }
+    else if (wr) { who = wr; kind = 'across'; to = spot(-sg(wr), wr, [3.2, 4.3, 2.5, 5.2]); } // a receiver changes sides: the strength changes, and in man a defender leaves with him
+  } else {
+    const c = off.filter(e => ['Z', 'SLOT', 'SLOT2'].includes(e.slot) || (e.slot === 'H' && e.flex)); if (!c.length) return;
+    who = weightedPick(c, c.map(e => ({ SLOT: 1, Z: 0.8, SLOT2: 0.6, H: 0.5 }[e.slot])));
+    const k = rand(), nb = skill.filter(e => e !== who && sg(e) === sg(who) && !isInline(e)).sort((a, b) => Math.abs(a.x - who.x) - Math.abs(b.x - who.x))[0];
+    const tight = x => skill.some(o => o !== who && o !== nb && Math.abs(o.x - x) < 0.6);
+    if (k < 0.35 && nb && !oc.bunch && !tight(nb.x - sg(nb) * 0.45)) { kind = 'short'; to = nb.x - sg(nb) * 0.45; } // just inside and behind him
+    else { kind = k > 0.82 ? 'jet' : 'across'; to = spot(-sg(who), who, [3.2, 4.3, 2.5, 5.2]); }
+  }
+  if (!who) return; if (kind === 'jet' && to === null) to = sg(who) * 1.4; // caught in the backfield area at the snap, moving
+  if (to === null || to === undefined) return;
+  const from = who.x, man = ['C1', 'C0', 'C2M'].includes(dc.cov); who.x = to; who.moved = kind;
+  oc.mv = { kind, slot: who.slot, from, to, tell: kind !== 'insert' && !(dc.disg && rand() < 0.6) }; // a disguised coverage answers motion the wrong way on purpose
+  const back = def.filter(e => e.depth >= ON_LINE), near = f => back.filter(f).sort((a, b) => Math.abs(a.x - from) - Math.abs(b.x - from))[0];
+  if (man) { // his man goes with him, all the way across if he has to
+    const isLB = e => ['MLB', 'WLB', 'SAM'].includes(e.slot), f = who.slot === 'Z' ? near(e => e.slot === 'CB' && Math.sign(e.x) === Math.sign(from)) : who.slot === 'H' ? near(e => e.slot === 'SS') || near(isLB) : near(e => e.slot === 'NCB' || e.slot === 'DIME') || near(e => e.slot === 'SS') || near(isLB);
+    if (f && !(isLB(f) && kind === 'jet')) { f.x = kind === 'jet' ? Math.sign(from) * 2 : to; f.trail = true; }
+  } else if (kind === 'across') { // zone: the nickel bumps over to the side that now has the inside receivers, when the call gets made in time
+    const inside = s => { const d = skill.filter(e => !isInline(e) && sg(e) === s); return Math.max(0, d.length - 1); }, n = def.find(e => e.slot === 'NCB' && e.depth > 0);
+    if (n && inside(-Math.sign(n.x)) > inside(Math.sign(n.x)) && rand() < TUNE.motionBump) n.x = -n.x; }
+  formRead(off, oc);
 }
 
 // ---------- defense ----------

@@ -155,7 +155,7 @@ function conceptBook(t) {
 function coachTrait(c, k) { let h = 2166136261; const s = (c ? c.id : 0) + '|' + k; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 10000) / 10000; }
 function formTraits(t) {
   const c = offCaller(t), h = k => coachTrait(c, k);
-  return { doubles: round2(0.08 + h('db') * 0.34), wing: round2(0.05 + h('wg') * 0.33), strR: round2(0.42 + h('sr') * 0.2), offI: round2(0.1 + h('oi') * 0.45), move: h('mv') < 0.25 ? 1 : 0 };
+  return { doubles: round2(0.08 + h('db') * 0.34), wing: round2(0.05 + h('wg') * 0.33), strR: round2(0.42 + h('sr') * 0.2), toField: round2(0.45 + h('tf') * 0.35), offI: round2(0.1 + h('oi') * 0.45), move: h('mv') < 0.25 ? 1 : 0 };
 }
 
 function defTend(t) { return blendedTend(t, 'D'); }

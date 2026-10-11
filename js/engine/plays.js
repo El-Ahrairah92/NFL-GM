@@ -23,7 +23,9 @@ function runToContact(g, carrier, levels, opts = {}) {
     // making a man miss is its own skill: elusiveness in the open field most of all, burst through the hole before the tackler is set
     const slip = (elu - TUNE.eluMid) * TUNE.eluMiss * (space ? 1.4 : 0.8) + ((space ? ea(g, carrier, 'agi') : ea(g, carrier, 'bur')) - 72) * TUNE.burMiss; // agility in the open field, burst at the line
     const read = opts.vis !== undefined && lv.at >= 2 ? (opts.vis - 70) * TUNE.visMiss : 0; // past the line, vision is setting up the next defender before he gets there
-    const make = lgt(TUNE.tackleBase - space * 0.55 + soft(tk - ev, 15) * TUNE.tackleScale - clamp(slip + read, -TUNE.slipCap, TUNE.slipCap) + (lv.bonus || 0) + (opts.tackleBonus || 0));
+    // A receiver with the ball: balance and strength run through an arm tackle, and so does thirty pounds on the man trying to make it.
+    const power = opts.power && carrier.p.m && d.p.m ? clamp(((bal + cs) / 2 - 66) * 0.014 + (carrier.p.m.wt - d.p.m.wt) * 0.006, -0.3, 0.5) * opts.power : 0;
+    const make = lgt(TUNE.tackleBase - power - space * 0.55 + soft(tk - ev, 15) * TUNE.tackleScale - clamp(slip + read, -TUNE.slipCap, TUNE.slipCap) + (lv.bonus || 0) + (opts.tackleBonus || 0));
     if (rand() < make) {
       res.tackler = d;
       // yards after contact: little when hit in the backfield, more when met downhill at the second level
@@ -67,7 +69,7 @@ function resolveRun(g, off, def, oc, dc) {
   const qb = off.find(e => e.slot === 'QB');
   let carrierSlot = oc.carrier || 'RB';
   if (oc.type === 'SNEAK') return sneak(g, off, def, oc, res, qb);
-  if (oc.type === 'JET') carrierSlot = ['SLOT', 'Z', 'SLOT2', 'X'].find(s => off.some(e => e.slot === s)) || 'RB';
+  if (oc.type === 'JET') carrierSlot = oc.mv && off.some(e => e.slot === oc.mv.slot) ? oc.mv.slot : ['SLOT', 'Z', 'SLOT2', 'X'].find(s => off.some(e => e.slot === s)) || 'RB';
   // option: QB reads the unblocked edge defender and gives or keeps
   let readRemoved = null;
   if (oc.type === 'OPTION') {
@@ -106,7 +108,7 @@ function resolveRun(g, off, def, oc, dc) {
     trickHit = !bites(g, keyD, 0.1) ? 'read' : 'fooled';
   }
   // motion and zone flow: linebackers have to read it
-  const motion = oc.tags.has('MOTION');
+  const motion = !!oc.mv && oc.mv.kind === 'jet'; // a man running across the formation at the snap: flow the other way
   // ---- build the contact sequence ----
   const levels = [];
   const fronts = blk.filter(r => r.lvl === 1), seconds = blk.filter(r => r.lvl === 2);
@@ -165,7 +167,8 @@ function resolveRun(g, off, def, oc, dc) {
   levels.sort((a, b) => a.at - b.at);
   if (trickHit === 'read') levels.unshift({ e: lineMen(def)[0], at: -randInt(3, 7) });
   const pursuit = def.filter(e => e.slot === 'CB' || e.slot === 'FS' || e.slot === 'SS' || e.slot === 'NCB');
-  const r = runToContact(g, carrier, levels, { pursuit, vis: ea(g, carrier, 'vis'), fumbleMult: carrierSlot === 'QB' ? 1.2 : 1, afterBase: carrierSlot === 'QB' ? 1.6 : TUNE.runAfter + (oc.type === 'JET' ? 2.4 : 0), tackleBonus: 0.14 + (g.down >= 3 && g.togo <= 2 ? 0.45 : 0) + (100 - g.ydl <= 3 ? 0.5 : 100 - g.ydl <= 8 ? 0.2 : 0) * TUNE.goalStand }); // no room behind the defense at the goal line
+  const r = runToContact(g, carrier, levels, { pursuit, vis: ea(g, carrier, 'vis'), fumbleMult: carrierSlot === 'QB' ? 1.2 : 1, afterBase: (carrierSlot === 'QB' ? 1.6 : TUNE.runAfter + (oc.type === 'JET' ? 2.4 : 0)) + (outside && g.hash ? (Math.sign(target) === -g.hash ? TUNE.hashRun : -TUNE.hashRun) : 0), // an outside run to the wide side has more grass before the sideline than one into the boundary
+    tackleBonus: 0.14 + (g.down >= 3 && g.togo <= 2 ? 0.45 : 0) + (100 - g.ydl <= 3 ? 0.5 : 100 - g.ydl <= 8 ? 0.2 : 0) * TUNE.goalStand }); // no room behind the defense at the goal line
   res.yds = r.yds; res.tackler = r.tackler; res.assist = r.assist; res.fumble = res.fumble || r.fumble; res.breakaway = r.breakaway;
   res.tfl = res.yds < 0;
   res.blk = blk; res.ybc = r.contactAt !== undefined ? Math.min(r.contactAt, r.yds) : r.yds; res.missed = r.missed;
@@ -307,7 +310,7 @@ function resolvePass(g, off, def, oc, dc) {
   const cEdge = cpt ? (cpt.vs[dc.cov] || 0) * TUNE.concept : 0; // the concept against the coverage it actually got
   res.cpt = cpt ? oc.cpt : null;
   // the same concept is run from different alignments: the wide receivers trade routes, so the deep one is not always the same man's
-  if (!oc.rpoThrow && rand() < TUNE.routeMix) { const wide = ['X', 'Z', 'SLOT'].filter(s => off.some(e => e.slot === s) && routes.some(r => r[0] === s));
+  if (!oc.rpoThrow && rand() < TUNE.routeMix) { const wide = (rand() < TUNE.slotMix ? ['X', 'Z', 'SLOT'] : ['X', 'Z']).filter(s => off.some(e => e.slot === s) && routes.some(r => r[0] === s));
     if (wide.length > 1) { const from = wide.map(s => routes.find(r => r[0] === s)), to = shuffle(wide.slice()), swap = new Map(wide.map((s, i) => [s, [to[i], ...from[i].slice(1)]])); routes = routes.map(r => swap.has(r[0]) ? null : r).filter(Boolean).concat([...swap.values()]); } }
   // heavier personnel: the extra TE (or a fullback, on short routes) runs the route of the receiver he replaced,
   // so 12/13/21/22 sets still attack every level — a play-action seam to the third tight end is a real play
@@ -319,7 +322,7 @@ function resolvePass(g, off, def, oc, dc) {
     const i = h === 'FB' ? vacated.findIndex(r => r[1] === 'S') : 0;
     if (i < 0) continue;
     const v = vacated.splice(i, 1)[0];
-    routes = routes.filter(r => r[0] !== h).concat([[h, ...v.slice(1)]]); heirs.add(h);
+    routes = routes.filter(r => r[0] !== h).concat([v[1] === 'D' || v[3][1] > 16 ? [h, 'I', v[2] === 'VERT' ? 'IN' : v[2], [9, 14], Math.min(v[4], 2.1), v[5]] : [h, ...v.slice(1)]]); heirs.add(h);
   }
   if (onField.has('Y2') && !routes.some(r => r[0] === 'Y2')) routes = routes.concat([['Y2', 'S', 'OUT', [2, 5], 1.6, 3]]);
   // who blocks, who runs routes
@@ -355,7 +358,7 @@ function resolvePass(g, off, def, oc, dc) {
   const man = dc.cov === 'C1' || dc.cov === 'C0' || dc.cov === 'C2M';
   // the design: one receiver is the primary on this call (weighted toward the better/featured players, but it rotates)
   const featured = receivers.filter(e => e.slot !== 'FB');
-  const prim = featured.length ? weightedPick(featured, featured.map(e => (heirs.has(e.slot) ? 0.6 : { X: 0.92, Z: 0.88, SLOT: 0.85, SLOT2: 0.4, Y: 0.8, H: 0.4, Y2: 0.2, RB: 0.42 }[e.slot] || 0.3) * Math.pow(Math.max(40, slotRating(e.p, e.spot)) / 75, TUNE.primPow))) : null;
+  const prim = featured.length ? weightedPick(featured, featured.map(e => (heirs.has(e.slot) ? 0.6 : { X: 1.0, Z: 0.9, SLOT: 0.85, SLOT2: 0.4, Y: 0.58, H: 0.34, Y2: 0.2, RB: 0.72 }[e.slot] || 0.3) * Math.pow(Math.max(40, slotRating(e.p, e.spot)) / 75, TUNE.primPow))) : null;
   const rlist = routes.filter(rt => receivers.some(e => e.slot === rt[0])).map(rt => {
     const e = receivers.find(x => x.slot === rt[0]);
     const depth = randInt(rt[3][0], rt[3][1]);
@@ -396,15 +399,24 @@ function resolvePass(g, off, def, oc, dc) {
       if (dc.cov === 'C1' && fs && (deep || r.band === 'I') && Math.abs(r.endX) < 3) help -= 0.45 * clamp((ea(g, fs, 'zone') * 0.55 + ea(g, fs, 'spd') * 0.45) / 75, 0.6, 1.3); // range is as much speed as it is eyes
       if (dc.cov === 'C2M' && deep) help -= 0.55;
       if (oc.tags.has('RUB') && r.dir === 'IN' && r.band !== 'D') w += 0.55;
-      if (oc.tags.has('MOTION') && rand() < 0.4) w += 0.15;
-      if (defE && r.band !== 'D') w += (ea(g, e, 'rel') - ea(g, defE, 'prs')) * 0.006; // hand fighting through the stem, press or not
+      if (e.moved && e.moved !== 'insert') w += TUNE.motionMan * (e.moved === 'jet' ? 1.3 : 1); // his man is chasing him across the formation, or playing through a stack
+      if (defE && r.band !== 'D') w += (ea(g, e, 'rel') - ea(g, defE, 'prs')) * 0.011; // hand fighting through the stem, press or not
       // press at the line
-      if (defE && (e.slot === 'X' || e.slot === 'Z' || e.slot === 'SLOT') && !(oc.bunch && e.slot !== 'X') && rand() < pressRate) {
-        const winRel = rand() < lgt((ea(g, e, 'rel') - ea(g, defE, 'prs')) * 0.06 + (RB_.w * 0.22 - DF_.w * 0.16 - DF_.len * 0.14) * zc); // a big receiver runs through the jam; a long, heavy corner lands it
-        w += winRel ? 0.25 : -0.65; r.pressed = !winRel; r.pressAtt = true; if (!winRel) r.tb += 0.25;
+      // The split end is on the line of scrimmage: the corner can get his hands on him. The flanker and the slot are a step off it and
+      // mostly are not pressed; a man in a bunch, a stack or in motion cannot be.
+      const onLine = e.slot === 'X', pressP = oc.bunch && !onLine || e.moved ? 0 : pressRate * (onLine ? TUNE.pressOn : e.slot === 'Z' ? TUNE.pressOff : TUNE.pressOff * 1.4);
+      if (defE && (e.slot === 'X' || e.slot === 'Z' || e.slot === 'SLOT') && rand() < pressP) {
+        const winRel = rand() < lgt(TUNE.pressWin + (ea(g, e, 'rel') - ea(g, defE, 'prs')) * 0.08 + (RB_.w * 0.22 - DF_.w * 0.16 - DF_.len * 0.14) * zc); // a big receiver runs through the jam; a long, heavy corner lands it
+        w += winRel ? 0.3 : -0.8; r.pressed = !winRel; r.pressAtt = true; if (!winRel) r.tb += 0.25;
       }
     } else {
-      const area = areaOf(r, r.endX), owners = (zown[area] || []).filter(([x]) => !bit.has(x));
+      const area = areaOf(r, r.endX); let owners = (zown[area] || []).filter(([x]) => !bit.has(x));
+      // A zone corner carries the outside receiver through his stem, and the nickel the slot, whoever's patch the route ends in:
+      // the linebacker underneath squeezes the window, he does not cover the man by himself.
+      if (r.band !== 'D') { const isLB = x => ['MLB', 'WLB', 'SAM'].includes(x.slot), wideMan = Math.abs(e.x) >= 3.3 && !isInline(e), slotMan = !wideMan && (e.slot === 'SLOT' || e.slot === 'SLOT2' || e.flex);
+        if ((wideMan || slotMan) && (!owners.length || isLB(owners.slice().sort((a, b) => b[1] - a[1])[0][0]))) {
+          const carry = droppers.filter(x => (wideMan ? x.slot === 'CB' : x.slot === 'NCB' || x.slot === 'DIME') && Math.sign(x.x) === Math.sign(e.x) && !bit.has(x) && !owners.some(o2 => o2[0] === x))[0];
+          if (carry) owners = [[carry, TUNE.zoneCarry], ...owners.map(([x, wt]) => [x, wt * 0.5])]; } }
       if (!owners.length) { hole = true; defE = nearestDef(droppers, r.endX); }
       else { owners.sort((a, b) => b[1] - a[1]); defE = owners[0][0]; if (owners.length > 1) help -= 0.3 * owners[1][1]; }
       const offC = deep ? rte * (0.9 - TUNE.deepSpeed * 0.95) + agi * 0.1 + spd * TUNE.deepSpeed * 0.95 : rte * 0.55 + agi * 0.15 + bur * 0.3;
@@ -417,6 +429,8 @@ function resolvePass(g, off, def, oc, dc) {
       if (dc.pres === 'FZ' && defE && defE.depth === 0) w -= 0.25; // the quarterback throws hot into a lineman he never expected to be there
     }
     if (defE && defE.depth >= ON_LINE && defE.depth < 2.2 && !defE.blitz) w += TUNE.mugLate; // he showed rush from a gap and has to get back out to cover
+    if (e.slot === 'Z' && !e.moved) w += TUNE.zFree; // off the line he gets into his route clean
+    if ((e.slot === 'SLOT' || e.slot === 'SLOT2') && r.band !== 'D') w += man ? TUNE.slotTwoWay : TUNE.slotTwoWay * 0.5; // a two-way release: the nickel cannot use the sideline
     if (cEdge && r.role !== 3) w += cEdge;
     if (bit.size && r.band !== 'S') w += TUNE.paOpen;
     // formation and concept packages
@@ -427,9 +441,11 @@ function resolvePass(g, off, def, oc, dc) {
     // the field shrinks near the goal line: no room behind the defense, tighter windows
     const toGoal = 100 - g.ydl;
     if (toGoal <= 20) w -= (toGoal <= 10 ? 0.65 : 0.3) * TUNE.redZone;
-    w += (r.band === 'S' ? TUNE.shortOpen : r.band === 'D' ? TUNE.deepCov : TUNE.midCov) + (r.role === 3 ? (e.slot === 'RB' || e.slot === 'FB' ? 0.05 : 0.3) : 0) + (isInline(e) && INLINE.has(e.slot) ? TUNE.teOpen : 0); // defenses give up the underneath (checkdowns most of all), protect deep
+    w += (r.band === 'S' ? TUNE.shortOpen : r.band === 'D' ? TUNE.deepCov : TUNE.midCov) + (r.role === 3 ? (e.slot === 'RB' || e.slot === 'FB' ? 0.2 : 0.3) : 0) + (isInline(e) && INLINE.has(e.slot) ? TUNE.teOpen : 0); // defenses give up the underneath (checkdowns most of all), protect deep
     if (e.slot === 'Y' || e.slot === 'H') w += 0.13; // tight ends work the seams and the soft middle
     if (dc.soft) w += r.band === 'S' ? 0.35 : r.band === 'D' ? -0.35 : 0.12; // prevent: everything underneath is there
+    // From a hash one side of the field is wider than the other. Zone defenders to the wide side have more grass each; into the boundary the sideline helps them.
+    if (g.hash && !man && Math.abs(r.endX) > 2.2 && r.band !== 'D') w += (Math.sign(r.endX) === -g.hash ? 1 : -1) * TUNE.hashCov;
     const luck = gauss(0, 0.55);
     // every man sent after the quarterback is a man not in coverage, and in man with one safety deep he cannot be over the top of everybody
     w += (7 - droppers.length) * TUNE.thinCover + (dc.cov === 'C1' && r.band !== 'S' ? TUNE.oneHigh : 0);
@@ -440,7 +456,7 @@ function resolvePass(g, off, def, oc, dc) {
   // ---- the QB's read ----
   const proc = ea(g, qb, 'proc'), dec = ea(g, qb, 'dec'), pkt = ea(g, qb, 'pkt');
   // pre-snap coverage read: the QB's processing vs. the coordinator's disguise
-  const covID = rand() < lgt(0.6 + soft(proc - 70, 18) * 0.04 - clamp(designKnob(T(g.tids[d]), 'covD') - 55, -35, 35) * 0.0045 - (dc.disg ? 0.5 : 0) - (dc.cov === 'C6' ? 0.25 : 0) + (oc.tags.has('MOTION') ? 0.5 : 0));
+  const covID = rand() < lgt(0.6 + soft(proc - 70, 18) * 0.04 - clamp(designKnob(T(g.tids[d]), 'covD') - 55, -35, 35) * 0.0045 - (dc.disg ? 0.5 : 0) - (dc.cov === 'C6' ? 0.25 : 0) + (oc.mv && oc.mv.tell ? TUNE.motionTell : 0)); // somebody ran with the motion man, or nobody did
   // The pocket. Pressure off the edge can be stepped up from as long as the middle is holding; push up the middle takes that away.
   // So an edge rusher's win is worth the most when the tackles next to him are winning too.
   const isIn = a => a.e.depth < ON_LINE && Math.abs(a.e.x) < 2;
@@ -559,7 +575,9 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
   const e = r.e, defE = r.def;
   const air = r.depth;
   const arm = ea(g, qb, 'arm'), outside = Math.abs(r.endX) > 2.2 && air >= 6; // the out-breaker to the far hash is an arm throw
+  const wideSide = g.hash && Math.abs(r.endX) > 2.2 ? (Math.sign(r.endX) === -g.hash ? 1 : -1) : 0; // +1 the ball goes to the wide side of the field, -1 into the boundary
   let acc = air < 10 ? ea(g, qb, 'sacc') * (outside ? 0.8 : 1) + arm * (outside ? 0.2 : 0) : air < 20 ? ea(g, qb, 'sacc') * 0.4 + ea(g, qb, 'dacc') * 0.4 + arm * 0.2 : ea(g, qb, 'dacc') * 0.6 + arm * 0.4;
+  if (wideSide > 0 && air >= 6) acc -= TUNE.hashThrow * clamp((88 - arm) / 12, 0, 2); // the out to the far side from the hash is the longest throw there is
   const QH = bod(qb).h * TUNE.size, middle = Math.abs(r.endX) < 2.2 && air < 20 && !onRun;
   if (middle) acc += QH * 1.6; // he has to see it and throw it over the line
   if (onRun) acc = acc * 0.4 + ea(g, qb, 'tor') * 0.6;
@@ -593,7 +611,7 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
     if (rand() < pDrop) { Object.assign(res, { kind: 'inc', drop: true, desc: tag + ' — dropped' }); return res; }
     // contested window
     if (r.w < tight && defE) {
-      res.contested = true;
+      res.contested = r.w < TUNE.contestLabel;
       const win = lgt(0.25 + (rcC - dfC) * 0.05 + r.w * 0.8);
       if (rand() > win) {
         if (rand() < (0.075 + soft(ea(g, defE, 'bsk') - 65, 20) * 0.002) * (['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 0.4 : 1)) return interception(g, def, res, qb, defE, airY, tag);
@@ -606,10 +624,11 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
     const cushion = Math.max(0, Math.max(0, r.w) * 2.0 + (r.band === 'S' ? 1.0 : 0.3) + place * 2.5);
     const rest = def.filter(x => x !== defE && !x.blitz && x.depth > 0);
     const levels = [];
-    if (defE) levels.push({ e: defE, at: airY + Math.max(0, gauss(cushion + (e.slot === 'RB' ? TUNE.rbSpace : 0) - (airY >= 0 && airY < 10 ? TUNE.shortTight : 0), 1.2)), bonus: (r.w > 1 ? -0.3 : 0.2) - (airY >= 20 ? TUNE.deepStride : 0) - place });
+    const inSlot = e.slot === 'SLOT' || e.slot === 'SLOT2';
+    if (defE) levels.push({ e: defE, at: airY + Math.max(0, gauss(cushion + (e.slot === 'RB' ? TUNE.rbSpace : inSlot ? TUNE.slotSpace : INLINE.has(e.slot) ? TUNE.teSpace : -TUNE.wideTight) + wideSide * TUNE.hashSpace - (airY >= 0 && airY < 10 ? TUNE.shortTight : 0), 1.2)), bonus: (r.w > 1 ? -0.3 : 0.2) - (airY >= 20 ? TUNE.deepStride : 0) - place });
     const n2 = nearestDef(rest.filter(x => x.slot === 'FS' || x.slot === 'SS' || x.slot.indexOf('LB') >= 0 || x.slot === 'MLB' || x.slot === 'WLB'), r.endX);
     if (n2 && rand() < (airY >= 15 ? TUNE.helpDeep : TUNE.helpShort)) levels.push({ e: n2, at: airY + randInt(3, 8) }); // sometimes it is one-on-one in space
-    const rr = runToContact(g, e, levels, { start: airY, missGain: 6.5, pursuit: rest.filter(x => x.slot === 'CB' || x.slot === 'FS' || x.slot === 'SS') });
+    const rr = runToContact(g, e, levels, { start: airY, missGain: TUNE.yacMiss, power: TUNE.yacPower, pursuit: rest.filter(x => x.slot === 'CB' || x.slot === 'FS' || x.slot === 'SS') });
     let yds = Math.max(airY, rr.yds);
     if (oc.tags.has('SIDE') && r.dir === 'OUT') { yds = Math.min(yds, airY + randInt(0, 3)); res.oob = rand() < 0.75; }
     else res.oob = r.dir === 'OUT' && rand() < 0.38;

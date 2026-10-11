@@ -1045,3 +1045,32 @@ Not built: receivers and tight ends as one line of jobs read between points (the
 
 A check draws out all 61 combinations of grouping, formation and snap, tests each (quarterback behind the center, the right depth for the snap, an I in a line, an offset fullback to the strength, split backs level, nobody on top of anybody, the right number on the line), and then compares every player on every snap of four weeks of games with the drawing for the formation, snap and strong side that was called: 8,300 snaps, no mismatches. The depth chart page shows no overlapping players in any grouping and formation. League numbers did not move.
 
+## 50. Receivers: jobs, the line of scrimmage, motion, and the hash
+
+A receiver's job now changes what happens to him, because the things that make the jobs different on a field are in the engine.
+
+**Routes by job.** The two outside receivers trade routes with each other; the slot joins that trade only now and then, so he keeps the inside and underneath work and the outside men keep the deep and intermediate work. A second or third tight end who inherits a route does not inherit a deep one. Result: outside receivers are thrown to about 13 yards downfield and catch 56 to 58 percent; the slot about 8.5 yards and 63 percent.
+
+**On the line and off it.** The split end is on the line: a corner can get his hands on him, so he is pressed on about a quarter of his routes and his release against the corner's press decides it. The flanker and the slot are a step off the line and are rarely pressed; the flanker gets a clean start. A man in a bunch, a stack or in motion cannot be jammed.
+
+**Who covers whom in zone.** A zone corner carries the outside receiver and the nickel the slot, even when the route ends in a linebacker's area; the linebacker squeezes the window. Outside receivers are now covered by a corner on about 70 percent of routes (it was 41) and by a linebacker on 6 (it was 36). With that in place linebacker coverage counts at full weight for the men they really do cover: tight ends, backs and some slot routes.
+
+**The slot.** No sideline beside him: he can break either way against man coverage, and he catches the ball on the move with room to run. An outside receiver catches it with the sideline next to him and has less room.
+
+**After the catch.** A receiver with the ball can run through a tackle as well as around it: contact balance, strength and his weight against the tackler's all count, next to elusiveness and speed.
+
+**Targets.** Fewer to tight ends (about 21 percent, it was 27), more to the top receiver and to backs (about 16 percent). A target is charted as contested only when the window was really tight (about 18 percent, it was 35 to 40).
+
+**Motion is a man going to a place.** Only a man off the line can move: the flanker, a slot, an H-back. Four kinds:
+- Across: he crosses the formation and lines up on the other side. Two-by-two becomes three-by-one or the reverse, and everything that reads the formation (trips, bunch, the lone receiver) reads the new one.
+- Short: he tightens down beside another receiver into a stack.
+- Jet: he is running flat across at the snap, to take the ball or to hold the linebackers.
+- Insert: an H-back comes across to block on the side the run is going.
+
+The defense has to answer. In man his defender goes with him, across the whole formation if need be, trailing; that is a step for the moving man and it tells the quarterback it is man. In zone nobody follows, which tells him that, and the nickel bumps over to the new slot side about two times in three; when the call is late a linebacker is left on a receiver. A disguised coverage answers the wrong way on purpose more often than not. Costs: slightly more pre-snap flags (illegal motion and illegal shift now exist), and less chance of a check at the line on that snap. Callers use it on roughly 35 to 75 percent of snaps by system. Pass plays with motion are worth about a quarter of a yard an attempt more than without.
+
+**The hash.** The ball is spotted on the left hash, the middle or the right hash by where the last play ended (an incompletion comes back to the same spot). From a hash one side of the field is wider. To the wide side: zone defenders each have more ground, there is more room after a catch and on an outside run, and the out-breaking throw is the longest on the field, so it takes an arm. Into the boundary the reverse. Each coach has a habit of setting his strength to the wide side (45 to 80 percent). Measured: outside runs 4.5 a carry to the wide side against 4.3 into the boundary; outside throws about half a yard an attempt better to the wide side. Deliberately small, because professional hashes are narrow.
+
+**Checks.** League averages are where they were (about 23 points, 65 percent, 7.2 to 7.3 a throw, 4.45 a carry). A motion audit confirms one man moves per snap, never a man on the line, never onto another player's spot, and a defender goes with him in man every time. In the attribute test, receiver contact balance, strength and elusiveness each move yards after the catch; release moves how often he is jammed and, after its effect was raised, completion percentage; a corner's press does the same from the other side.
+
+Not built: quarterback and receiver timing (waiting for team chemistry); a back motioning out of the backfield; safeties rotating to motion in zone; the corner assignment by field and boundary.

@@ -223,13 +223,14 @@ function runPlay(g, oc, dc) {
   if (dc.travel) { const cbs = def.filter(e => e.slot === 'CB' && e.depth > 0), wrs = off.filter(e => e.slot === 'X' || e.slot === 'Z');
     if (cbs.length === 2 && wrs.length === 2) { const r = e => slotRating(e.p, e.spot), topW = r(wrs[0]) >= r(wrs[1]) ? wrs[0] : wrs[1], topC = r(cbs[0]) >= r(cbs[1]) ? cbs[0] : cbs[1], other = cbs[0] === topC ? cbs[1] : cbs[0];
       if (r(topC) - r(other) >= 3 && Math.sign(topC.x) !== Math.sign(topW.x || 1)) { const x = topC.x; topC.x = other.x; other.x = x; } } }
+  sendMotion(off, def, oc, dc);
   preSnap(g, oc, dc, off, def); // each side's one move at the line
   // predictability: did the defense's film read match the call?
   const keyed = oc.isRun ? (dc.runEst - 0.5) * 2 : (0.5 - dc.runEst) * 2;
   const dcp = knob(C(T(g.tids[o]).oc), 'dcp');
   // the play-calling chess match: a sharper caller hides his tendencies and reads the other side's
   g.key = clamp(keyed * (0.35 + g.cx[d].dpc / 99 * 0.45) * (1.25 - dcp / 200) * 0.6 + (g.cx[d].dpc - g.cx[o].pc) * 0.003 + (dc.answer ? (dc.answerRight ? TUNE.answerKey : -TUNE.answerKey) : 0), -0.55, 0.55); // a defense that answered a check is leaning the way it guessed
-  if (preSnapPenalty(g, off, def)) return; // the flag comes out before the snap: no play
+  if (preSnapPenalty(g, off, def, oc)) return; // the flag comes out before the snap: no play
   recordFilm(g, o, oc.b, oc.pers, oc.isRun);
   const downB = g.down, togoB = g.togo, ydlB = g.ydl, before = { down: g.down, togo: g.togo, ydl: g.ydl, poss: o, score: [g.score[0], g.score[1]], q: g.q, clock: g.clock };
   if (g.pbp) g.pendingDD = `${ordinal(g.down)} & ${g.ydl + g.togo >= 100 ? 'Goal' : g.togo} at ${spotTxt(g)}`;
@@ -248,6 +249,9 @@ function runPlay(g, oc, dc) {
   const scoreB = g.score[0] + g.score[1];
   applyResult(g, res, oc, dc, off, def, { downB, togoB, ydlB });
   if (g.poss === o && g.score[0] + g.score[1] === scoreB && !res.fumble) lateFoul(g, res, off, def);
+  // the next snap is from the hash nearest where this play ended; an incompletion comes back to the same spot
+  if (g.poss === o) { const ex = res.kind === 'run' ? (oc.dir === 'OUT' || Math.abs(res.yds || 0) >= 8 ? (oc.side || 0) * 2 : (oc.side || 0) * 0.5 + (g.hash || 0)) : res.kind === 'comp' && res.route ? res.route.endX : null;
+    if (ex !== null) g.hash = ex > 0.9 ? 1 : ex < -0.9 ? -1 : 0; }
   chartPlay(g, oc, dc, res, before, off, def);
   // injuries: whoever was in the collision, plus the trenches
   injuryCheck(g, (res.involved || []).filter(Boolean), res.kind === 'sack' ? 0.011 : 0.0042); // quarterbacks get hurt taking sacks
@@ -288,13 +292,13 @@ function assessPenalty(g, onOffense, yards, name, who, opts = {}) {
   return y;
 }
 // before the snap: false starts, delay, illegal formation; offside, encroachment, twelve men
-function preSnapPenalty(g, off, def) {
+function preSnapPenalty(g, off, def, oc) {
   const o = g.poss, d = 1 - o;
   const line = off.filter(e => e.slot !== 'QB'), front = lineMen(def);
   const lost = line.length ? line.reduce((s, e) => s + (100 - (PRAC_SIDE[e.p.pos] ? pbOf(e.p) : 100)), 0) / line.length / 100 : 0; // players still learning the calls jump
-  const r = rand(), pOff = PEN.offPre * discFactor(g, o, line) * (o === 1 ? 1.15 : 1) * (1 + lost * 1.5), pDef = PEN.defPre * discFactor(g, d, front);
+  const r = rand(), mv = oc && oc.mv, pOff = PEN.offPre * discFactor(g, o, line) * (o === 1 ? 1.15 : 1) * (1 + lost * 1.5) * (mv ? 1.12 : 1), pDef = PEN.defPre * discFactor(g, d, front);
   if (r < pOff) { const k = rand(); const who = k < 0.72 ? flagOn(line.filter(e => OL_SLOTS.includes(e.slot) || e.slot === 'Y' || e.slot === 'H')) || flagOn(line) : null;
-    assessPenalty(g, true, 5, k < 0.72 ? 'False start' : k < 0.86 ? 'Delay of game' : 'Illegal formation', who); return true; }
+    assessPenalty(g, true, 5, k < 0.72 ? 'False start' : k < 0.86 ? (mv && k > 0.8 ? 'Illegal motion' : 'Delay of game') : mv && k > 0.93 ? 'Illegal shift' : 'Illegal formation', who); return true; }
   if (r < pOff + pDef) { const k = rand(); const who = k < 0.9 ? flagOn(front) : null;
     assessPenalty(g, false, 5, k < 0.55 ? 'Offside' : k < 0.75 ? 'Neutral zone infraction' : k < 0.9 ? 'Encroachment' : 'Too many men on the field', who); return true; }
   return false;
@@ -342,7 +346,7 @@ function liveBallPenalty(g, res, oc, dc, off, def) {
 
 function playText(oc, dc, res) {
   const form = { UC: 'Under center', SG: 'Shotgun', PI: 'Pistol', EMP: 'Empty' }[oc.form];
-  const tags = [...oc.tags].map(t => ({ MOTION: 'motion', PA: 'play-action', BOOT: 'boot', RUB: 'rub', RPO: 'RPO', SIDE: 'sideline', TRICK: 'trick' }[t])).join(', ');
+  const tags = [...oc.tags].map(t => ({ MOTION: oc.mv ? ({ across: oc.mv.slot + ' in motion across', short: oc.mv.slot + ' motions into a stack', jet: 'jet motion', insert: oc.mv.slot + ' motions across to block' }[oc.mv.kind]) : 'shift', PA: 'play-action', BOOT: 'boot', RUB: 'rub', RPO: 'RPO', SIDE: 'sideline', TRICK: 'trick' }[t])).join(', ');
   const cov = { C0: 'Cover 0', C1: 'Cover 1', C2: 'Cover 2', C2M: '2-Man', C3: 'Cover 3', C4: 'Quarters', T2: 'Tampa 2', C6: 'Cover 6' }[dc.cov] + (dc.disg ? ' (disguised)' : '');
   const pres = { FOUR: '4-man rush', THREE: '3-man rush', BLITZ: 'blitz', SIM: 'sim pressure', FZ: 'fire zone' }[dc.pres] + (dc.stunt ? ' + stunt' : '');
   const looks = [oc.fm && oc.fm !== FORM_HOME[oc.pers] && !['Trips', 'Bunch', 'Tight'].includes(oc.fm) && oc.fm.toLowerCase(), oc.trips && 'trips', oc.bunch && 'bunch', oc.tight && 'tight splits', oc.counter && 'counter', oc.duo && 'duo', oc.wide && 'wide zone', oc.optrt && 'option routes', oc.maxp && 'max protect', oc.nohud && 'no-huddle', oc.checked && { pass: 'checks to a pass', run: 'checks to a run', flip: 'flips the run', hot: 'checks to a quick throw', concept: 'checks the routes' }[oc.checked]].filter(Boolean).join(', ');
@@ -701,6 +705,7 @@ function startPossession(g, side, ydl) {
   if (g.over) return;
   if (g.q >= 5) { checkOT(g); if (g.over) return; g.otStarted[side] = 1; }
   g.poss = side; g.ydl = ydl; g.down = 1; g.togo = Math.min(10, 100 - ydl); g.running = false; g.spikeNext = false;
+  g.hash = [-1, 0, 0, 1][Math.floor(rand() * 4)]; // where the ball is spotted across the field: the left hash, the middle, the right hash
   // exhibitions: who is in changes drive by drive (starters come out, featured players stay in)
   if (g.pre && g.side[0] && g.side[1]) for (let s = 0; s < 2; s++) { const a = preseasonActives(g.tids[s], g), cur = g.side[s].active; if (!cur || a.size !== cur.size || [...a].some(id => !cur.has(id))) { g.side[s].active = a; initSide(g, s); } }
   g.drive = { side, q: g.q, clock: g.clock, start: ydl, plays: 0, yds: 0, time: 0 };

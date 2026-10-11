@@ -153,7 +153,7 @@ function offenseCall(g) {
   const key = call.type === 'RUN' ? (call.carrier === 'QB' ? 'RUN_QB' : call.carrier === 'FB' ? 'RUN_FB' : call.dir === 'IN' ? 'RUN_RB_IN' : 'RUN_RB_OUT') : call.type;
   const ok = new Set(TAG_OK[key] || []);
   const manRate = seenShare(g, d, 'man', 0.35);
-  if (ok.has('MOTION') && rand() < ot.motion * (sit.hurry ? 0.2 : 0.75)) call.tags.add('MOTION');
+  if (ok.has('MOTION') && rand() < Math.min(0.85, ot.motion * (sit.hurry ? 0.25 : 1.25))) call.tags.add('MOTION');
   if (call.type === 'JET') call.tags.add('MOTION');
   if (ok.has('PA') && !sit.hurry && (g.down <= 2 || g.togo <= 3) && call.form !== 'EMP' && rand() < ot.pa * (call.form === 'SG' ? 3.8 : 6.0) * Math.exp(clamp(adv.PA || 0, -1, 1) * 0.3 * pcF)) call.tags.add('PA');
   if (ok.has('BOOT') && !sit.hurry && call.form !== 'EMP' && rand() < ot.boot * (call.tags.has('PA') ? 1.8 : 0.4)) call.tags.add('BOOT');
@@ -176,7 +176,8 @@ function offenseCall(g) {
       else if (F.Doubles && FORM_HOME[call.pers] !== 'Doubles' && rand() < (ft.doubles || 0)) fm = 'Doubles'; else if (F.Wing && rand() < (ft.wing || 0)) fm = 'Wing';
       // two backs: in the gun they split either side of the quarterback; under center the fullback is in front of the tailback or offset to the strength
       if (!fm && F.Split) fm = call.form === 'SG' ? 'Split' : call.form === 'UC' && rand() < (ft.offI || 0) ? 'Offset' : null; }
-    call.fm = fm || FORM_HOME[call.pers]; call.str = rand() < (ft.strR || 0.5) ? 1 : -1; if (call.side) call.side *= call.str; } // runs go to the strength a little more often than away from it
+    // from a hash the strength goes to the wide side or into the boundary, as the coach likes it
+    call.fm = fm || FORM_HOME[call.pers]; call.str = g.hash ? (rand() < (ft.toField || 0.6) ? -g.hash : g.hash) : rand() < (ft.strR || 0.5) ? 1 : -1; if (call.side) call.side *= call.str; } // runs go to the strength a little more often than away from it
   if (!isRun) {
     if ((call.type === 'DROP' || call.type === 'QUICK') && rand() < (ot.optrt || 0)) call.optrt = true;
     if ((call.type === 'DEEP' || (call.type === 'DROP' && call.tags.has('PA'))) && call.form !== 'EMP' && rand() < (ot.maxp || 0)) call.maxp = true;
@@ -302,7 +303,7 @@ function preSnap(g, oc, dc, off, def) {
   const miss = rand() < clamp(0.22 - (proc - 50) * 0.005, 0.03, 0.3) ? (rand() < 0.5 ? -1 : 1) : 0;
   const extra = L.men + (single && !L.down ? 1 : 0) + miss - L.hats; // defenders in the box beyond the blockers: 1 is ordinary
   // how much he is allowed to change: his head, how well he knows the offense, and whether he can be heard
-  const lic = clamp(0.18 + (proc - 60) * 0.014, 0.04, 0.7) * clamp(pbOf(qb.p) / 85, 0.4, 1.1) * (o === 1 ? 0.85 : 1) * TUNE.checkRate;
+  const lic = clamp(0.18 + (proc - 60) * 0.014, 0.04, 0.7) * clamp(pbOf(qb.p) / 85, 0.4, 1.1) * (o === 1 ? 0.85 : 1) * TUNE.checkRate * (oc.mv ? TUNE.motionCheck : 1); // the play clock spent on the motion is not spent on a check
   const ot = g.cx[o].ot, keepTags = () => { oc.tags = new Set(oc.tags.has('MOTION') ? ['MOTION'] : []); };
   if (oc.isRun) {
     const plain = (oc.type === 'RUN' || oc.type === 'OPTION') && oc.carrier !== 'FB';
