@@ -13,7 +13,7 @@ function coachCtx(tid, oppTid) {
   return {
     pb: net(designKnob(t, 'passD'), designKnob(opp, 'presD')) * 0.3,
     rb: net(designKnob(t, 'runD'), designKnob(opp, 'frontD')) * 2.2,
-    ot: offTend(t), dt: defTend(t),
+    ot: offTend(t), dt: defTend(t), ft: formTraits(t), cb: conceptBook(t),
     pc: knob(offCaller(t), 'pc'), adp: knob(offCaller(t), 'adp'), dpc: knob(defCaller(t), 'pc'),
     gm: knob(hc, 'gm'), aggr: hc ? hc.t.aggr : 0.5, clock: hc ? hc.t.clock : 0.5,
     st: clamp(knob(stc, 'units') - knob(ostc, 'units'), -40, 40),
@@ -214,9 +214,10 @@ function runPlay(g, oc, dc) {
   g.pbNeed = null; // only real snaps are gated
   g.nohud = !!oc.nohud; if (oc.nohud) for (const e of def) e.extraLoad = 1.3; // no time to substitute or catch a breath
   { const need = [0, 0]; need[o] = offNeed(oc); need[d] = defNeed(dc); g.pbNeed = need; playbookBusts(g, [...off, ...def]); g.pbNeed = null; }
-  if (oc.form === 'EMP') { const rb = off.find(e => e.slot === 'RB'); if (rb) rb.x = -1.8; }
+  if (oc.form === 'EMP') { const rb = off.find(e => e.slot === 'RB'); if (rb) { rb.x = emptySpot(oc.pers, oc.fm) * (oc.str === -1 ? -1 : 1); rb.depth = 1; } }
   if (!g.first[o].off) { g.first[o].off = true; for (const e of off) ln(g, e.p).gs = 1; }
   if (!g.first[d].def) { g.first[d].def = true; for (const e of def) ln(g, e.p).gs = 1; }
+  formRead(off, oc); alignDefense(off, def, oc);
   g.nh = oc.nohud ? { poss: o, pkg: dc.pkg } : null;
   // a coach who travels his top corner puts him across from their best outside receiver
   if (dc.travel) { const cbs = def.filter(e => e.slot === 'CB' && e.depth > 0), wrs = off.filter(e => e.slot === 'X' || e.slot === 'Z');
@@ -344,7 +345,7 @@ function playText(oc, dc, res) {
   const tags = [...oc.tags].map(t => ({ MOTION: 'motion', PA: 'play-action', BOOT: 'boot', RUB: 'rub', RPO: 'RPO', SIDE: 'sideline', TRICK: 'trick' }[t])).join(', ');
   const cov = { C0: 'Cover 0', C1: 'Cover 1', C2: 'Cover 2', C2M: '2-Man', C3: 'Cover 3', C4: 'Quarters', T2: 'Tampa 2', C6: 'Cover 6' }[dc.cov] + (dc.disg ? ' (disguised)' : '');
   const pres = { FOUR: '4-man rush', THREE: '3-man rush', BLITZ: 'blitz', SIM: 'sim pressure', FZ: 'fire zone' }[dc.pres] + (dc.stunt ? ' + stunt' : '');
-  const looks = [oc.trips && 'trips', oc.bunch && 'bunch', oc.tight && 'tight splits', oc.counter && 'counter', oc.duo && 'duo', oc.wide && 'wide zone', oc.optrt && 'option routes', oc.maxp && 'max protect', oc.nohud && 'no-huddle', oc.checked && { pass: 'checks to a pass', run: 'checks to a run', flip: 'flips the run', hot: 'checks to a quick throw' }[oc.checked]].filter(Boolean).join(', ');
+  const looks = [oc.fm && oc.fm !== FORM_HOME[oc.pers] && !['Trips', 'Bunch', 'Tight'].includes(oc.fm) && oc.fm.toLowerCase(), oc.trips && 'trips', oc.bunch && 'bunch', oc.tight && 'tight splits', oc.counter && 'counter', oc.duo && 'duo', oc.wide && 'wide zone', oc.optrt && 'option routes', oc.maxp && 'max protect', oc.nohud && 'no-huddle', oc.checked && { pass: 'checks to a pass', run: 'checks to a run', flip: 'flips the run', hot: 'checks to a quick throw', concept: 'checks the routes' }[oc.checked]].filter(Boolean).join(', ');
   const fr = dc.front === 'Bear' ? 'Bear ' : dc.front === 'Under' ? 'under ' : dc.look ? dc.look.toLowerCase() + ' ' : '';
   const games = dc.plan ? (dc.plan.slant ? ', line slant' : '') : '';
   return { pre: `(${form}, ${oc.pers}${tags ? ', ' + tags : ''}${looks ? ', ' + looks : ''})`, post: `[${fr}${dc.bign ? 'big nickel' : dc.pkg.toLowerCase()}, ${cov}, ${pres}${games}${dc.mug ? ', linebackers walked up' : ''}${dc.answer ? ', adjusts to the check' : ''}]` };

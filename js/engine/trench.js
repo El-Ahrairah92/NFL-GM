@@ -101,7 +101,7 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
   const helpers = extraProtect.slice(); // RB / TE kept in
   const qbE = off.find(e => e.slot === 'QB');
   // the protection's front: the five linemen and any tight end or extra lineman kept in next to them
-  const surf = off.filter(e => OL_SLOTS.includes(e.slot) || (INLINE.has(e.slot) && helpers.includes(e))).sort((a, b) => a.x - b.x);
+  const surf = off.filter(e => OL_SLOTS.includes(e.slot) || (isInline(e) && helpers.includes(e))).sort((a, b) => a.x - b.x);
   for (const e of surf) { const i = helpers.indexOf(e); if (i >= 0) helpers.splice(i, 1); }
   const assign = rushers.map(r => ({ e: r, rx: rushPoint(r), blockers: [], free: false, t: 9 }));
   // The protection call. The line counts who is showing rush on each side of the center and slides toward the bigger number:
@@ -206,7 +206,7 @@ function runBlocking(g, off, def, oc, dc, target, carrierSlot) {
   if (singleHigh || dc.pkg === 'GL') { const ss = def.find(e => e.slot === 'SS'); if (ss && !box.some(b => b.e === ss)) box.push({ e: ss, px: ss.x, lvl: 2, rotated: true }); }
   // blockers
   const ol = off.filter(e => OL_SLOTS.includes(e.slot) || e.slot === 'OL6').map(e => ({ e, used: false }));
-  const tes = off.filter(e => INLINE.has(e.slot) && e.slot !== 'OL6').map(e => ({ e, used: false }));
+  const tes = off.filter(e => isInline(e) && e.slot !== 'OL6').map(e => ({ e, used: false }));
   const lead = off.filter(e => e.slot === 'FB' || (carrierSlot === 'QB' && e.slot === 'RB')).map(e => ({ e, used: false }));
   const blk = [...ol, ...tes, ...lead];
   const res = box.map(b => ({ ...b, blockers: [], state: 'free' }));

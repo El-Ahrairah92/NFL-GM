@@ -299,6 +299,10 @@ body.dc-dragging .dcj-drop { border-color: var(--accent); color: var(--accent); 
 .dc-over { outline: 2px dashed var(--accent) !important; outline-offset: 2px; }
 .drag { opacity: .4; }
 @media (max-width: 700px) { .dcs { min-width: 0; width: 10.6%; padding: 2px 3px; } .dcs-n { font-size: 10px; } .dcs-r { font-size: 7.5px; } .dcs-r i { display: none; } }
+/* formations and concepts */
+svg.look .sk { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; } svg.look .sk.q { fill: var(--muted); } svg.look .ol.te2 { fill: color-mix(in srgb, var(--accent) 35%, transparent); stroke: var(--accent); }
+.cpt-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.cpt { padding: 8px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; }
 /* the play caller's looks: small line diagrams */
 .look-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); gap: 10px; margin-bottom: 10px; }
 button.look-tile { text-align: left; padding: 8px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; display: block; width: 100%; }

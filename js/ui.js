@@ -833,11 +833,13 @@ function depthChartHTML() {
       return ['next up', why.length ? why.join(' · ') : 'Next man up']; };
     const pills = tab === 'def'
       ? [...new Set(views.map(v => v.group))].map(gr => `<div class="dc2-lk"><span>${esc(gr)}</span>${views.filter(v => v.group === gr).map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.label)}${v.share && v.group !== 'Other' ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div>`).join('')
-      : `<div class="dc2-lk"><span>Personnel</span>${views.map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.id === 'JUMBO' ? 'Jumbo' : v.id)}${v.share ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div>`;
+      : `<div class="dc2-lk"><span>Personnel</span>${views.map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.id === 'JUMBO' ? 'Jumbo' : v.id)}${v.share ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div><div class="dc2-lk"><span>Formation</span>${formShares(t, vid).map(([k, s2]) => `<button class="${k === (FORMS[vid][ui.dcFm] ? ui.dcFm : FORM_HOME[vid]) ? 'on' : ''}" data-action="dcFm" data-k="${esc(k)}">${esc(k)} <i>${Math.round(s2 * 100)}%</i></button>`).join('')}</div>`;
     const scen = sub ? `<div class="dc2-scen"><button class="${pass ? '' : 'on'}" data-action="dcPass" data-v="0">Run downs</button><button class="${pass ? 'on' : ''}" data-action="dcPass" data-v="1">Passing downs</button></div>` : '';
     // where each man really stands: across the formation by his alignment, up the field by his depth. Nobody is snapped to a grid;
     // two men who would sit on top of each other are eased apart just enough to read both.
-    const OFFD = b => OL_SLOTS.includes(b.name) ? [OL_X[b.name], 0] : b.name === 'QB' ? [0, 4.6] : b.name === 'RB' ? [1.15, 4.6] : b.name === 'FB' ? [-1.15, 4.6] : [OFF_ALIGN[b.name], INLINE.has(b.name) || b.name === 'X' ? 0.4 : 1.4];
+    const fmD = tab === 'off' ? (FORMS[vid] && FORMS[vid][ui.dcFm] ? ui.dcFm : FORM_HOME[vid]) : null, flexD = fmD && FORMS[vid][fmD]._flex || [];
+    const snapD = fmD ? formSnap(vid, fmD) : 'SG', BK = d => 0.9 + d * 0.62; // backs are drawn at their real depth, squeezed to fit the card
+    const OFFD = b => OL_SLOTS.includes(b.name) ? [OL_X[b.name], 0] : ['QB', 'RB', 'FB'].includes(b.name) ? [backSpot(snapD, fmD, b.name)[0], BK(backSpot(snapD, fmD, b.name)[1])] : [formX(vid, fmD, b.name), (INLINE.has(b.name) && !flexD.includes(b.name)) || b.name === 'X' ? 0.4 : 1.4];
     const pos = lay.map(b => { const [x, d] = tab === 'def' ? [b.x, b.depth] : OFFD(b); return { b, left: 50 + x * 10.2, top: tab === 'def' ? 86 - d * 5.5 : 13 + d * 14 }; });
     { const W = 9.9; pos.sort((a, q) => a.top - q.top || a.left - q.left);
       for (let pass = 0; pass < 8; pass++) for (const a of pos) for (const q of pos) { if (a === q || Math.abs(a.top - q.top) >= 11) continue; const gap = Math.abs(a.left - q.left); if (gap < W) { const push = (W - gap) / 2, dir = a.left <= q.left ? -1 : 1; a.left += dir * push; q.left -= dir * push; } }
@@ -850,7 +852,7 @@ function depthChartHTML() {
         <div class="dcs-r">${esc(b.label)}${b.tech ? `<i>${b.tech}</i>` : ''}</div><div class="dcs-n">${p ? esc(p.last) : '—'}${p ? dcDot(p, b.key) : ''}</div>${ov ? `<button class="dcs-pin" data-action="dcOvClear" data-name="${b.name}" title="Remove the override: go back to the job order">this look ×</button>` : wy ? `<span class="dcs-why ${wy[0] === 'staff' ? 'bad' : ''}" title="${esc(wy[1])}">${wy[0]}</span>` : ''}</div>`; }).join('');
     const nOv = Object.keys(c.ov).filter(k => k.startsWith(ok + ':')).length;
     field = `<div class="card dc2-field"><div class="dc2-looks">${pills}</div>
-      <div class="row" style="margin:6px 0 8px"><h3 style="margin:0">${tab === 'def' ? esc(view.group === 'Other' ? view.label : view.label + (view.pkg === 'BASE' ? ' · ' + view.group : ' · nickel')) : esc(PERS_LABEL[vid] || vid)}</h3><span class="spacer"></span>${scen}</div>
+      <div class="row" style="margin:6px 0 8px"><h3 style="margin:0">${tab === 'def' ? esc(view.group === 'Other' ? view.label : view.label + (view.pkg === 'BASE' ? ' · ' + view.group : ' · nickel')) : esc(PERS_LABEL[vid] || vid) + ' · ' + esc(fmD) + ' · ' + (snapD === 'UC' ? 'under center' : 'shotgun')}</h3><span class="spacer"></span>${scen}</div>
       ${outP ? `<div class="dc2-out">Showing this ${tab === 'def' ? 'look' : 'grouping'} <b>without ${esc(pname(outP))}</b>. Outlined spots change hands. <button class="sm" data-action="dcOut" data-pid="0">Back to the real lineup</button></div>` : ''}
       <div class="dcf ${tab}"><div class="dcf-los"></div>${yard}${spots}</div>
       <div class="small muted" style="margin-top:6px">${auto ? "The staff's lineup. Drag anything and the unit is yours." : `<b>Drag a player onto a spot</b> to use him there in this ${tab === 'def' ? 'look' : 'grouping'} only${nOv ? ` (${nOv} set here)` : ''}.`} Top edge: green is starter level, amber below it, red well below. <i class="dcd warn"></i> learning the job · <i class="dcd bad"></i> raw.</div></div>`;
@@ -940,14 +942,16 @@ function lineupHTML(units) {
 }
 // ---------- formation viewer: where everyone lines up ----------
 const FORM_NAMES = [['SG', 'Shotgun'], ['UC', 'Under center'], ['PI', 'Pistol'], ['EMP', 'Empty']];
-function alignOffense(units, form) {
+function alignOffense(units, form, pers, fm) {
+  const flex = pers && fm && FORMS[pers] && FORMS[pers][fm] && FORMS[pers][fm]._flex || [];
   return units.map(e => {
-    let x = e.x || 0, d = e.depth || 0;
+    let x = pers && fm && !OL_SLOTS.includes(e.slot) && e.slot !== 'QB' && e.slot !== 'RB' && e.slot !== 'FB' ? formX(pers, fm, e.slot) : e.x || 0, d = e.depth || 0;
+    if (['QB', 'RB', 'FB'].includes(e.slot) && form !== 'EMP') { const b = backSpot(form, fm || (pers ? FORM_HOME[pers] : null), e.slot); return { e, x: b[0], d: e.slot === 'QB' && form === 'UC' ? 2 : b[1] }; }
     if (OL_SLOTS.includes(e.slot)) d = 0;
     else if (e.slot === 'QB') d = form === 'UC' ? 2 : form === 'PI' ? 4 : 5;
-    else if (e.slot === 'RB') { if (form === 'SG') { x = 1.1; d = 5; } else if (form === 'EMP') { x = -5.3; d = 1; } else d = 7; }
+    else if (e.slot === 'RB') { if (form === 'EMP') { x = emptySpot(pers || '11', fm || FORM_HOME[pers || '11']); d = 1; } else d = 7; }
     else if (e.slot === 'FB') d = 4;
-    else if (INLINE.has(e.slot)) d = 0.35;
+    else if (INLINE.has(e.slot) && !flex.includes(e.slot)) d = 0.35;
     else d = e.slot === 'X' ? 0.35 : 1.3; // X on the line, Z and slots off it
     return { e, x, d };
   });
@@ -1020,6 +1024,50 @@ function frontsHTML(tid, pkg, cur) {
     <div class="small muted" style="margin-bottom:6px">Where each lineman puts his hand down. The number is his technique: 0 on the center, 1 a shade of him; 2i, 2, 3 inside, on and outside the guard; 4i, 4, 5 the same on the tackle; 7, 6, 9 on the tight end's spot; W9 wide of everyone. Letters are the gaps. Run looks come out when a run is expected, rush looks on passing downs. Click one to see it with ${tid === state.userTid ? 'your' : 'their'} players.</div>
     ${group(esc(dt.front || '') + ' base', 'BASE')}${group('Nickel and dime', 'NICKEL')}${games}</div>`;
 }
+// ---------- the play caller's formations and pass concepts ----------
+const FORM_NOTE = {
+  Trey: 'Tight end and two receivers to the strength, one receiver alone away from it. The everyday look.', Doubles: 'Two receivers each side. Balanced: the defense cannot roll its coverage one way.',
+  Trips: 'Three split to one side, the tight end flexed out as one of them. Isolates the man on the back side; fewer blockers for the run.',
+  Bunch: 'Three men in a cluster. Man coverage gets picked off in the traffic and nobody can be pressed.', Tight: 'Everyone in close. Crossers run free and receivers can block the edge; little room for deep balls and outs.',
+  Ace: 'A tight end on each side. Balanced run surface with both edges covered.', Wing: 'Both tight ends on the same side. An extra blocker and gap at the point of attack.',
+  Heavy: 'Extra tight ends on the line. Built to run and to throw off the run.', I: 'Under center, fullback straight ahead of the tailback. A lead blocker through either side.', Offset: 'Under center, the fullback a step to the strong side. The lead block gets there sooner that way and later the other.', Split: 'Shotgun with a back on each side of the quarterback. Both can protect or release.', Jumbo: 'A sixth lineman. Short yardage and the goal line.',
+};
+// roughly how often he lines up in each formation of a grouping, from his habits
+function formShares(t, pers) {
+  const ot = offTend(t), ft = formTraits(t), F = FORMS[pers] || {}, s = ['10', '11'].includes(pers) ? 1 - clamp(ot.uc || 0, 0, 0.92) : 0, out = {};
+  const pT = F.Trips ? s * (ot.trips || 0) : 0, pB = F.Bunch ? (s - pT) * (ot.bunch || 0) : 0, r1 = 1 - pT - pB, pTi = F.Tight ? r1 * (ot.tight || 0) : 0, r2 = r1 - pTi;
+  const pD = F.Doubles && FORM_HOME[pers] !== 'Doubles' ? r2 * ft.doubles : 0, pW = F.Wing ? (r2 - pD) * ft.wing : 0;
+  if (pT) out.Trips = pT; if (pB) out.Bunch = pB; if (pTi) out.Tight = pTi; if (pD) out.Doubles = pD; if (pW) out.Wing = pW;
+  let home = Math.max(0, r2 - pD - pW);
+  if (F.Split) { const uc = clamp((ot.uc || 0) + 0.3, 0, 0.92), gun = (1 - uc) * 0.85; out.Split = home * gun; out.Offset = home * uc * ft.offI; home -= out.Split + out.Offset; }
+  out[FORM_HOME[pers]] = Math.max(0, home);
+  return Object.entries(out).sort((a, b) => (b[0] === FORM_HOME[pers]) - (a[0] === FORM_HOME[pers]) || b[1] - a[1]);
+}
+function formSVG(pers, fm) {
+  const W = 232, H = 84, cx = W / 2, sx = 24, yl = 20, F = FORMS[pers][fm] || {}, flex = F._flex || [];
+  let g = `<svg viewBox="0 0 ${W} ${H}" class="look" role="img" aria-label="${esc(fm)} formation">`;
+  for (let i = -2; i <= 2; i++) g += `<rect x="${cx + i * sx - 7}" y="${yl - 7}" width="14" height="14" rx="3" class="ol${i === 0 ? ' c' : ''}"/>`;
+  const snap = formSnap(pers, fm), by = d => 9 + d * 5.6, q = backSpot(snap, fm, 'QB');
+  g += `<circle cx="${cx}" cy="${yl + by(q[1])}" r="7" class="sk q"/><text x="${cx}" y="${yl + by(q[1]) + 3}" class="tech">Q</text>`;
+  for (const k of PERSONNEL[pers]) { const inl = INLINE.has(k) && !flex.includes(k), bk = k === 'RB' || k === 'FB' ? backSpot(snap, fm, k) : null, x = bk ? bk[0] : formX(pers, fm, k), d = bk ? by(bk[1]) : inl || k === 'X' ? 0 : 9;
+    const px = clamp(cx + x * sx, 10, W - 10), py = yl + d + (k === 'FB' ? 0 : 0);
+    g += inl ? `<rect x="${px - 7}" y="${py - 7}" width="14" height="14" rx="3" class="ol te2"/>` : `<circle cx="${px}" cy="${py}" r="7.5" class="sk"/>`;
+    g += `<text x="${px}" y="${py + (d >= 40 ? 3 : inl ? 3 : 3)}" class="tech" style="font-size:7.5px">${esc({ SLOT: 'S', SLOT2: 'S', OL6: 'T', Y2: 'Y' }[k] || k[0])}</text>`; }
+  return g + '</svg>';
+}
+function offBookHTML(tid, pers, fmCur) {
+  const t = T(tid), oc = offCaller(t), ft = formTraits(t), book = conceptBook(t), shares = formShares(t, pers);
+  const tiles = shares.map(([k, v]) => `<button class="look-tile ${k === fmCur ? 'sel' : ''}" data-action="pbFm" data-k="${esc(k)}" title="Show it on the field above with ${tid === state.userTid ? 'your' : 'their'} players"><div class="look-h"><b>${esc(k)}</b><span>${Math.round(v * 100)}%</span></div>${formSVG(pers, k)}<div class="look-n">${k === FORM_HOME[pers] ? '<span class="pill">home</span> ' : ''}${esc(FORM_NOTE[k] || '')}</div></button>`).join('');
+  const COVN = { C0: 'Cover 0', C1: 'Cover 1', C2: 'Cover 2', C2M: '2-Man', C3: 'Cover 3', C4: 'Quarters', T2: 'Tampa 2', C6: 'Cover 6' };
+  const beats = k => { const e = Object.entries(CONCEPTS[k].vs).sort((a, b) => b[1] - a[1]); return [e.filter(x => x[1] >= 0.07).slice(0, 3).map(x => COVN[x[0]]), e.filter(x => x[1] <= -0.07).slice(-3).reverse().map(x => COVN[x[0]])]; };
+  const fam = (f, title) => `<div class="section-title">${title}</div><div class="cpt-row">${Object.entries(book[f] || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => { const [good, poor] = beats(k);
+    return `<div class="cpt"><div class="look-h"><b>${esc(k)}</b><span>${Math.round(v * 100)}%</span></div><div class="look-n">${esc(CONCEPTS[k].d)}</div>${good.length ? `<div class="small"><span class="good">Beats</span> ${good.join(', ')}</div>` : ''}${poor.length ? `<div class="small"><span class="bad">Struggles against</span> ${poor.join(', ')}</div>` : ''}</div>`; }).join('')}</div>`;
+  return `<div class="card" style="margin-top:16px"><h3>Formations and pass concepts · ${oc ? esc(cname(oc)) + "'s book" : 'the book'}</h3>
+    <div class="small muted" style="margin-bottom:6px">How he lines up ${esc(PERS_LABEL[pers] || pers)}, and how often. Pick another grouping on the field above. What a formation does comes from where it puts people: the defense lines up to it, and the strong side is the ${ft.strR >= 0.55 ? 'right more often than the left' : ft.strR <= 0.47 ? 'left more often than the right' : 'right and the left about equally'}.${ft.move ? ' He moves his best receiver around the formation to find a matchup.' : ''}</div>
+    <div class="look-row">${tiles}</div>
+    ${fam('QUICK', 'Quick game')}${fam('DROP', 'Dropback')}${fam('DEEP', 'Deep shots')}
+    <div class="small muted" style="margin-top:6px">He carries these and no others. A sharp play caller leans on the ones that beat what a defense keeps playing, and a quarterback who reads the coverage can get to a better one at the line.</div></div>`;
+}
 function formationViewerHTML(tid) {
   const ot = offTend(T(tid)), dt = defTend(T(tid));
   const persUsed = Object.entries(ot.pers || {}).sort((x, y) => y[1] - x[1]).map(x => x[0]).filter(k => PERSONNEL[k]);
@@ -1027,12 +1075,13 @@ function formationViewerHTML(tid) {
   const pers = ui.pbPers && PERSONNEL[ui.pbPers] ? ui.pbPers : persUsed[0] || '11';
   const form = ui.pbForm || 'SG', pkg = ui.pbPkg || 'NICKEL';
   const btn = (act, v, cur, l, dim) => `<button class="sm ${v === cur ? 'primary' : ''}" data-action="${act}" data-v="${v}" ${dim ? 'style="opacity:.6"' : ''}>${l}</button>`;
-  const offPts = alignOffense(lineupFor(tid, pers), form);
+  const fmCur = FORMS[pers] && FORMS[pers][ui.pbFm] ? ui.pbFm : FORM_HOME[pers];
+  const offPts = alignOffense(lineupFor(tid, pers), form, pers, fmCur);
   // the look on the field: the one clicked below if this package has it, otherwise the caller's home look
   const lk = looksFor(tid, pkg), lookName = lk.list.some(x => x[0] === ui.pbLook) ? ui.pbLook : lk.list.length ? lk.list[0][0] : null, cur = lookName ? { fam: lk.fam, k: lookName } : null;
   const defPts = defLineup(tid, pkg, lookName ? { t: LOOKS[lk.fam][lookName].t } : null).map(e => ({ e, x: e.x || 0, d: e.depth || 0 }));
   return `<div class="grid fv-grid" style="margin-top:16px">
-    <div class="card"><h3>Offense · ${esc(PERS_LABEL[pers] || pers)} · ${FORM_NAMES.find(f => f[0] === form)[1]}</h3>
+    <div class="card"><h3>Offense · ${esc(PERS_LABEL[pers] || pers)} · ${esc(fmCur)} · ${FORM_NAMES.find(f => f[0] === form)[1]}</h3>
       <div class="row" style="gap:4px;margin-bottom:6px">${allPers.map(k => btn('pbPers', k, pers, k, !persUsed.includes(k))).join('')}</div>
       <div class="row" style="gap:4px;margin-bottom:8px">${FORM_NAMES.map(([k, l]) => btn('pbForm', k, form, l)).join('')}</div>
       ${formationSVG(offPts, 'off')}
@@ -1040,7 +1089,7 @@ function formationViewerHTML(tid) {
     <div class="card"><h3>Defense · ${PKG_LABEL[pkg]} · ${lookName ? esc(lookName) + ' look' : esc(dt.front || '') + ' front'}</h3>
       <div class="row" style="gap:4px;margin-bottom:8px">${['BASE', 'NICKEL', 'DIME', 'GL'].map(k => btn('pbPkg', k, pkg, PKG_LABEL[k])).join('')}</div>
       ${formationSVG(defPts, 'def')}
-      <div class="small muted">Shown from the defense's side: the ball is at the bottom. Edges, tackles and nose line up by the front; corners, nickel and safeties by the package. The small number under a lineman is his technique.</div></div></div>${frontsHTML(tid, pkg, cur)}`;
+      <div class="small muted">Shown from the defense's side: the ball is at the bottom. Edges, tackles and nose line up by the front; corners, nickel and safeties by the package. The small number under a lineman is his technique.</div></div></div>${offBookHTML(tid, pers, fmCur)}${frontsHTML(tid, pkg, cur)}`;
 }
 function playbookHTML() {
   const u = state.userTid, nx = userMatchup();
@@ -3017,11 +3066,13 @@ const actions = {
   pbPers: d => { ui.pbPers = d.v; ui.pbPkg = { '10': 'DIME', '11': 'NICKEL', '12': 'BASE', '13': 'BASE', '21': 'BASE', '22': 'BASE', JUMBO: 'GL' }[d.v] || ui.pbPkg; render(); },
   pbForm: d => { ui.pbForm = d.v; render(); },
   pbPkg: d => { ui.pbPkg = d.v; render(); },
+  pbFm: d => { ui.pbFm = d.k; render(); },
   pbLook: d => { ui.pbLook = d.k; if (d.pkg === 'BASE') ui.pbPkg = 'BASE'; else if (ui.pbPkg !== 'NICKEL' && ui.pbPkg !== 'DIME') ui.pbPkg = 'NICKEL'; render(); },
   dcJob: d => { ui.dcJob = d.key; ui.dchPid = null; render(); },
   dcGrp: d => { const tab = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def'; (ui.dcGrp = ui.dcGrp || {})[tab] = d.v; ui.dcJob = null; ui.dchPid = null; render(); },
   dcLook: d => { (ui.dchView = ui.dchView || {})[['def', 'off'].includes(ui.dchTab) ? ui.dchTab : 'def'] = d.v; render(); },
   dcPass: d => { ui.dcPass = d.v; render(); },
+  dcFm: d => { ui.dcFm = d.k; render(); },
   dcOut: d => { const keep = ui.dchPid; ui.dcOut = +d.pid || null; ui.dchPid = keep || +d.pid || null; render(); },
   dcRemove: d => { setChart(state.userTid, d.key, +d.i, 0); save(); render(); },
   dcAdd: d => { const blocked = !ui.dchAll && chartBlocked(state.userTid, d.key, +d.pid); if (blocked) { toast(blocked); return; } const cc = ensureChart(state.userTid); setChart(state.userTid, d.key, (cc.lists[d.key] || []).length, +d.pid); save(); render(); },

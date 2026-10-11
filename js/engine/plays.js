@@ -208,6 +208,29 @@ const ROUTES = {
   PA: [['X', 'I', 'IN', [13, 20], 2.5, 1], ['Z', 'D', 'IN', [20, 30], 2.7, 1], ['SLOT', 'I', 'VERT', [12, 18], 2.4, 2], ['SLOT2', 'S', 'OUT', [4, 8], 1.9, 3], ['Y', 'S', 'OUT', [3, 7], 1.9, 2], ['H', 'S', 'IN', [3, 6], 2.0, 3], ['RB', 'S', 'OUT', [-1, 2], 2.4, 3], ['FB', 'S', 'OUT', [0, 2], 2.3, 3]],
   BOOT: [['X', 'I', 'IN', [14, 20], 2.4, 2], ['Z', 'I', 'OUT', [12, 18], 2.2, 1], ['SLOT', 'S', 'OUT', [4, 8], 1.8, 2], ['SLOT2', 'I', 'IN', [12, 18], 2.3, 2], ['Y', 'S', 'OUT', [2, 5], 1.7, 1], ['H', 'S', 'OUT', [2, 5], 1.8, 2], ['RB', 'S', 'OUT', [0, 2], 2.1, 3], ['FB', 'S', 'OUT', [0, 2], 2.1, 3]],
 };
+// ---------- pass concepts ----------
+// A concept is a set of routes built to beat a kind of coverage. f is the kind of pass it is (quick game, dropback, deep shot);
+// w is how common it is across the league; vs is how much more (or less) open its routes come against each coverage. A coach
+// carries some of these and not others. The edges are centred on the league's mix of coverages, so a concept called blind is worth
+// nothing extra: it pays only when it is called into the coverage it was drawn up for.
+const RTE_TAIL = { DROP: [['H', 'S', 'OUT', [3, 6], 1.7, 3], ['RB', 'S', 'OUT', [0, 3], 2.0, 3], ['FB', 'S', 'OUT', [0, 2], 2.0, 3]], QUICK: [['H', 'S', 'IN', [3, 5], 1.3, 3], ['Y2', 'S', 'OUT', [2, 4], 1.35, 3], ['RB', 'S', 'OUT', [-1, 2], 1.5, 3], ['FB', 'S', 'OUT', [-1, 1], 1.6, 3]] };
+const CONCEPTS = {
+  'Stick': { f: 'QUICK', w: 0.45, r: ROUTES.QUICK, vs: { C3: 0.12, C4: 0.1, C6: 0.06, C1: -0.1, C2M: -0.12, C0: -0.1, C2: 0.02, T2: 0.02 }, d: 'A quick out and a sit route on one linebacker. Finds the soft spot in zone.' },
+  'Slant-flat': { f: 'QUICK', w: 0.35, r: [['X', 'S', 'IN', [4, 8], 1.15, 1], ['Z', 'S', 'IN', [4, 8], 1.2, 2], ['SLOT', 'S', 'OUT', [2, 5], 1.2, 2], ['SLOT2', 'S', 'OUT', [2, 5], 1.2, 2], ['Y', 'S', 'OUT', [2, 4], 1.3, 2], ...RTE_TAIL.QUICK], vs: { C1: 0.16, C0: 0.14, C2M: 0.08, C3: 0.04, C2: -0.18, T2: -0.16, C4: -0.02, C6: -0.08 }, d: 'Slants inside with a flat route under them. Beats man and off coverage; squatting corners sit on it.' },
+  'Spacing': { f: 'QUICK', w: 0.2, r: [['X', 'S', 'IN', [4, 6], 1.25, 2], ['Z', 'S', 'IN', [4, 6], 1.25, 2], ['SLOT', 'S', 'IN', [4, 6], 1.2, 1], ['SLOT2', 'S', 'OUT', [3, 5], 1.2, 2], ['Y', 'S', 'IN', [4, 6], 1.25, 1], ...RTE_TAIL.QUICK], vs: { C3: 0.12, C2: 0.1, T2: 0.08, C4: 0.08, C6: 0.06, C1: -0.16, C2M: -0.18, C0: -0.16 }, d: 'Five men settle five yards apart. More routes than a zone has underneath defenders; man coverage just sits on them.' },
+  'Curl-flat': { f: 'DROP', w: 0.26, r: ROUTES.DROP[0], vs: { C3: 0.14, C1: 0.02, C4: 0.04, C2: -0.16, T2: -0.14, C2M: -0.06, C6: -0.04, C0: 0 }, d: 'A curl with a flat route outside it: one defender cannot take both. Built for three-deep.' },
+  'Levels': { f: 'DROP', w: 0.22, r: ROUTES.DROP[1], vs: { C4: 0.1, C3: 0.06, T2: 0.08, C2: 0.04, C6: 0.04, C1: -0.06, C2M: -0.1, C0: -0.08 }, d: 'In-breakers at two depths over the middle. Puts a linebacker in a bind in zone.' },
+  'Four verticals': { f: 'DROP', w: 0.09, r: ROUTES.DROP[2], vs: { C3: 0.2, C1: 0.1, C0: 0.12, C2: 0.06, C4: -0.26, C6: -0.14, T2: -0.12, C2M: -0.1 }, d: 'Four men down the field against three deep defenders. Quarters is the answer to it.' },
+  'Mesh': { f: 'DROP', w: 0.18, r: ROUTES.DROP[3], vs: { C1: 0.2, C2M: 0.2, C0: 0.18, C3: -0.1, C4: -0.1, C2: -0.06, T2: -0.08, C6: -0.08 }, d: 'Two shallow crossers rubbing past each other. Man coverage gets picked; zone passes them off.' },
+  'Flood': { f: 'DROP', w: 0.14, r: [['X', 'I', 'IN', [8, 12], 2.0, 2], ['Z', 'D', 'VERT', [18, 26], 2.5, 2], ['SLOT', 'I', 'OUT', [10, 14], 2.1, 1], ['SLOT2', 'I', 'OUT', [10, 14], 2.1, 1], ['Y', 'S', 'OUT', [2, 5], 1.7, 2], ...RTE_TAIL.DROP], vs: { C3: 0.22, C1: 0.02, C6: 0.04, C4: -0.06, C2: -0.12, T2: -0.1, C2M: -0.06, C0: 0 }, d: 'Three receivers at three depths on one side. Overloads a three-deep zone.' },
+  'Dagger': { f: 'DROP', w: 0.11, r: [['X', 'I', 'IN', [13, 17], 2.3, 1], ['Z', 'S', 'OUT', [5, 8], 1.7, 2], ['SLOT', 'I', 'VERT', [14, 22], 2.3, 2], ['SLOT2', 'I', 'VERT', [14, 22], 2.3, 2], ['Y', 'S', 'IN', [4, 6], 1.7, 2], ...RTE_TAIL.DROP], vs: { C2: 0.16, C4: 0.1, C6: 0.08, C2M: 0.04, C3: 0.02, T2: -0.12, C1: -0.06, C0: -0.04 }, d: 'A seam route clears the middle and a deep dig comes in behind it. Splits two deep safeties.' },
+  'Smash': { f: 'DROP', w: 0.11, r: [['X', 'S', 'IN', [5, 6], 1.5, 2], ['Z', 'S', 'IN', [5, 6], 1.5, 2], ['SLOT', 'I', 'OUT', [12, 18], 2.2, 1], ['SLOT2', 'I', 'OUT', [12, 18], 2.2, 1], ['Y', 'I', 'OUT', [10, 14], 2.1, 2], ...RTE_TAIL.DROP], vs: { C2: 0.26, T2: 0.14, C6: 0.06, C2M: 0.02, C1: 0, C3: -0.14, C4: -0.2, C0: 0 }, d: 'A hitch underneath and a corner route over it: high-low on a squatting corner. The play for Cover 2.' },
+  'Post-dig': { f: 'DEEP', w: 0.6, r: ROUTES.DEEP, vs: { C1: 0.1, C3: 0.06, C0: 0.12, C2: -0.04, C4: -0.14, C6: -0.08, T2: -0.06, C2M: -0.06 }, d: 'A deep post with a dig under it. Takes a shot at a single deep safety.' },
+  'Sail shot': { f: 'DEEP', w: 0.4, r: [['X', 'D', 'VERT', [22, 34], 2.7, 1], ['Z', 'D', 'OUT', [18, 26], 2.6, 1], ['SLOT', 'I', 'OUT', [10, 14], 2.2, 2], ['SLOT2', 'D', 'VERT', [20, 30], 2.6, 2], ['Y', 'I', 'IN', [12, 16], 2.3, 2], ['H', 'S', 'OUT', [3, 6], 1.9, 3], ['RB', 'S', 'OUT', [0, 3], 2.3, 3], ['FB', 'S', 'OUT', [0, 2], 2.3, 3]], vs: { C3: 0.12, C2: 0.1, C6: 0.04, C1: -0.02, C4: -0.1, T2: 0, C2M: -0.1, C0: 0 }, d: 'A go route and a deep out on the same side. Attacks the sideline behind a corner.' },
+};
+// centre every concept on what the league actually plays, so the average call into an unknown coverage is worth nothing
+const COV_MIX = { C3: 0.31, C1: 0.2, C4: 0.17, C2: 0.14, C2M: 0.06, C6: 0.05, T2: 0.04, C0: 0.03 };
+for (const k in CONCEPTS) { const c = CONCEPTS[k]; let m = 0; for (const v in COV_MIX) m += COV_MIX[v] * (c.vs[v] || 0); for (const v in COV_MIX) c.vs[v] = Math.round(((c.vs[v] || 0) - m) * 1000) / 1000; }
 // which defenders own each area of the field in each zone coverage (by role)
 function zoneOwners(cov, droppers) {
   const deep = [], under = [];
@@ -278,8 +301,11 @@ function resolvePass(g, off, def, oc, dc) {
   if (oc.type === 'RBSCR' || oc.type === 'WRSCR') return screen(g, off, def, oc, dc, res, qb);
   const pa = oc.tags.has('PA') || oc.type === 'GADGET', boot = oc.tags.has('BOOT');
   const tpl = oc.rpoThrow ? 'QUICK' : oc.type === 'GADGET' ? 'DEEP' : boot ? 'BOOT' : pa ? 'PA' : oc.type;
-  let routes = ROUTES[tpl];
+  const cpt = oc.cpt && CONCEPTS[oc.cpt] && CONCEPTS[oc.cpt].f === tpl ? CONCEPTS[oc.cpt] : null;
+  let routes = cpt ? cpt.r : ROUTES[tpl];
   if (Array.isArray(routes[0][0])) routes = weightedPick(routes, [0.36, 0.3, 0.1, 0.24]);
+  const cEdge = cpt ? (cpt.vs[dc.cov] || 0) * TUNE.concept : 0; // the concept against the coverage it actually got
+  res.cpt = cpt ? oc.cpt : null;
   // the same concept is run from different alignments: the wide receivers trade routes, so the deep one is not always the same man's
   if (!oc.rpoThrow && rand() < TUNE.routeMix) { const wide = ['X', 'Z', 'SLOT'].filter(s => off.some(e => e.slot === s) && routes.some(r => r[0] === s));
     if (wide.length > 1) { const from = wide.map(s => routes.find(r => r[0] === s)), to = shuffle(wide.slice()), swap = new Map(wide.map((s, i) => [s, [to[i], ...from[i].slice(1)]])); routes = routes.map(r => swap.has(r[0]) ? null : r).filter(Boolean).concat([...swap.values()]); } }
@@ -298,7 +324,7 @@ function resolvePass(g, off, def, oc, dc) {
   if (onField.has('Y2') && !routes.some(r => r[0] === 'Y2')) routes = routes.concat([['Y2', 'S', 'OUT', [2, 5], 1.6, 3]]);
   // who blocks, who runs routes
   const keep = [];
-  const rb = off.find(e => e.slot === 'RB'), fb = off.find(e => e.slot === 'FB'), y = off.find(e => e.slot === 'Y');
+  const rb = off.find(e => e.slot === 'RB'), fb = off.find(e => e.slot === 'FB'), y = off.find(e => e.slot === 'Y' && !e.flex);
   const blitzKnown = oc.sawBlitz !== undefined ? oc.sawBlitz : (dc.pres === 'BLITZ' || dc.pres === 'FZ') && rand() < lgt((ea(g, qb, 'proc') - 60) * 0.06);
   if (oc.form !== 'EMP') {
     if (rb && (oc.type === 'DEEP' || oc.type === 'GADGET' || (oc.type === 'DROP' && (blitzKnown || rand() < 0.35)))) keep.push(rb);
@@ -308,7 +334,7 @@ function resolvePass(g, off, def, oc, dc) {
   if (oc.maxp) { if (rb && !keep.includes(rb)) keep.push(rb); if (y && !keep.includes(y)) keep.push(y); } // seven stay in: time for the shot, fewer places to go with it
   for (const e of off) if (e.slot === 'OL6') keep.push(e);
   const receivers = off.filter(e => !OL_SLOTS.includes(e.slot) && e.slot !== 'QB' && !keep.includes(e));
-  if (oc.form === 'EMP' && rb) { rb.x = -1.6; }
+
   // pass protection & the pressure clock
   const prot = passProtection(g, off, def, oc, dc, keep);
   // play-action / boot: rushers and second-level defenders may bite on the fake
@@ -391,16 +417,17 @@ function resolvePass(g, off, def, oc, dc) {
       if (dc.pres === 'FZ' && defE && defE.depth === 0) w -= 0.25; // the quarterback throws hot into a lineman he never expected to be there
     }
     if (defE && defE.depth >= ON_LINE && defE.depth < 2.2 && !defE.blitz) w += TUNE.mugLate; // he showed rush from a gap and has to get back out to cover
+    if (cEdge && r.role !== 3) w += cEdge;
     if (bit.size && r.band !== 'S') w += TUNE.paOpen;
     // formation and concept packages
-    if (oc.trips) w += e.slot === 'X' ? 0.2 : -0.1;                 // the back-side receiver is alone; the trips side draws a crowd
-    if (oc.bunch && e.slot !== 'X' && e.slot !== 'RB' && e.slot !== 'FB') w += man ? 0.25 : 0.04; // traffic at the snap beats man coverage
-    if (oc.tight) w += r.dir === 'IN' ? 0.12 : r.band === 'D' ? -0.1 : -0.04;      // crossers get a free run; the sideline is a long throw
+    if (oc.trips) w += e.slot === oc.iso ? TUNE.tripsIso : -TUNE.tripsCrowd;                 // the back-side receiver is alone; the trips side draws a crowd
+    if (oc.bunch && e.slot !== 'X' && e.slot !== 'RB' && e.slot !== 'FB') w += man ? TUNE.bunchMan : TUNE.bunchZone; // traffic at the snap beats man coverage; a zone just passes the routes off, and has three men to do it
+    if (oc.tight) w += r.dir === 'IN' ? TUNE.tightIn : r.band === 'D' ? -TUNE.tightDeep : -TUNE.tightOut;      // crossers get a free run; the sideline is a long throw
     if (oc.optrt && r.band !== 'D') w += 0.25 * clamp((ea(g, qb, 'proc') + rte - 130) / 40, -0.6, 1); // right when both read it right, wrong when they do not
     // the field shrinks near the goal line: no room behind the defense, tighter windows
     const toGoal = 100 - g.ydl;
     if (toGoal <= 20) w -= (toGoal <= 10 ? 0.65 : 0.3) * TUNE.redZone;
-    w += (r.band === 'S' ? TUNE.shortOpen : r.band === 'D' ? TUNE.deepCov : TUNE.midCov) + (r.role === 3 ? (e.slot === 'RB' || e.slot === 'FB' ? 0.05 : 0.3) : 0) + (INLINE.has(e.slot) ? TUNE.teOpen : 0); // defenses give up the underneath (checkdowns most of all), protect deep
+    w += (r.band === 'S' ? TUNE.shortOpen : r.band === 'D' ? TUNE.deepCov : TUNE.midCov) + (r.role === 3 ? (e.slot === 'RB' || e.slot === 'FB' ? 0.05 : 0.3) : 0) + (isInline(e) && INLINE.has(e.slot) ? TUNE.teOpen : 0); // defenses give up the underneath (checkdowns most of all), protect deep
     if (e.slot === 'Y' || e.slot === 'H') w += 0.13; // tight ends work the seams and the soft middle
     if (dc.soft) w += r.band === 'S' ? 0.35 : r.band === 'D' ? -0.35 : 0.12; // prevent: everything underneath is there
     const luck = gauss(0, 0.55);

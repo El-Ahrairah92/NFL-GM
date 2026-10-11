@@ -998,3 +998,50 @@ Preseason games keep their own first, second and third strings and do not use th
 
 Two flaws it found, both fixed: a breather (rotation, fatigue, planned rest) could trigger the next-man-up rule and pull another starter out of his job; and a breather could take a man the staff was about to use to fill a spot whose list had run out.
 
+## 49. The offense: formations as geometry, the strong side, and pass concepts
+
+**Formations are data**, as fronts are: where each skill player lines up in a grouping. A slot a formation does not mention stays at its usual spot. What a formation does comes from where it puts people, read off the field once everyone is lined up:
+- three detached to one side and one alone on the other: the man alone is more open, the crowded side less
+- three men in a cluster: man coverage gets picked and nobody can be pressed; zone passes the routes off
+- everyone in close: crossers gain, deep balls and out-breakers lose, receivers can block the edge
+- a tight end flexed off the line is a receiver, not a blocker: one fewer hat for the run, and the nearest linebacker or safety widens out over him (sometimes all the way out of the box)
+
+11 personnel has Trey (home), Doubles, Trips, Bunch and Tight; 12 has Ace, Wing and Tight; 10 has Doubles, Trips, Bunch and Tight; heavier groupings have their base set and Tight. The formation is chosen before run or pass, so it does not tip the play.
+
+**The strong side flips.** Each coach sets it right or left by his own habit. The defensive front, the linebackers and the safeties line up to it and the nickel goes to the slot; corners stay on their sides unless the coach travels one. Runs go to the strength a little more often than away. Slants "to the strength" follow it.
+
+**Pass concepts.** Every pass used to be one of a few fixed route sets. There are now twelve named concepts, each a set of routes drawn up for a kind of coverage: Stick, Slant-flat and Spacing in the quick game; Curl-flat, Levels, Four verticals, Mesh, Flood, Dagger and Smash on dropbacks; Post-dig and a Sail shot deep. Each is a little more open against the coverages it beats and a little less against the ones that take it away (Smash against Cover 2, Mesh against man, Four verticals against three-deep and not against quarters). The edges are centred on the league's mix of coverages, so a concept called blind is worth nothing extra.
+
+**A coach carries some concepts and not others**: two quick, five dropback, both deep shots, weighted by his own taste. Every book has an answer to man coverage.
+
+**How concepts meet the rest of the play-calling.**
+- The play caller leans, as far as he is sharp, toward the concepts in his book that beat what this defense has been playing today. A defense that mixes its coverages gives him nothing to lean on.
+- He also goes to bunch more against a defense that keeps playing man.
+- At the line, a quarterback who reads the coverage (the wrong shell if the disguise fooled him) can get out of a concept the coverage has taken away and into a better one in his book. It is one of his possible checks, not an extra one.
+
+**Coach identity** for formations, the strong side and the concept book is read from who the coach is, so nothing new is stored and existing saves have it at once.
+
+**Forced on every snap, yards a play.** 11 personnel: Trey 5.42, Tight 5.44, Bunch 5.42, Trips 5.36 (4.5 a carry against 5.0, a little more through the air), Doubles 5.31. 12 personnel: Ace 5.41, Wing 5.39, Tight 5.29. Strong side right against left: 5.35 and 5.28. As first built, Tight, Bunch and Trips out of four-receiver sets were each a free 0.2 to 0.6 a play; their costs were added until they were trades.
+
+**One coverage all game** (points allowed; mixing is 21.9 on the same schedule): Cover 3 only 22.4, quarters only 22.1, Cover 1 only 21.4, 2-Man only 21.4. Man coverage is still the strongest single call but no longer clearly better than mixing.
+
+**Concepts in league play** (yards per pass play including sacks and interceptions): Curl-flat 6.6 against Cover 3 and 4.0 against Cover 2; Slant-flat 4.8 against Cover 1 and 3.0 against Cover 2; Smash 7.3 against Cover 2; Post-dig 7.4 against Cover 3 and 4.2 against quarters. Plays where the quarterback checked the routes at the line: 3.6% of passes, 6.6 yards against 4.9.
+
+**Changed at the line, all checks together:** quarterbacks under 60 processing change 3.7% of plays, 60 to 72 change 7.1%, 72 to 82 change 10.7%, 82+ change 14.7%; clubs range from 5.6% to 9.2%.
+
+**League, 24 seasons:** scoring 22.6, completion rate 65.1%, yards per attempt 7.13, interceptions 0.68, sack rate 7.1%, yards per carry 4.52, stuffed runs 18.8%; eight items clearly off.
+
+**Attributes, 1,200 games a row.** Nothing works backwards. Groups, points a game: quarterback 11.7, receivers 8.1, offensive line 6.6, cornerbacks 6.6, edge 6.1, running back 5.6, safeties 5.6, interior line 4.4, tight end 3.3. A quarterback's processing rose from 2.8 to 3.7 (the checks) and a corner's man coverage from 1.0 to 1.6. Too small to see at this sample: a quarterback's decision-making, a receiver's release, a tight end's route running, a corner's press, a safety's zone coverage.
+
+**Pages.** The Playbook page has a card for the caller's formations in the grouping on show (a diagram each, how often, what it is for; click one to see it on the field) and his concept book with what each beats and struggles against. The depth chart's offense tab has formation pills under the grouping.
+
+Not built: receivers and tight ends as one line of jobs read between points (they have carry-over comfort only); offensive depth chart overrides per formation (they are per grouping); the featured-receiver-moves trait is stored but does nothing yet; motion to change the strength; rating weights refitted to the new values.
+
+**The backfield.** Where the quarterback and the backs stand now comes from how the snap is taken and the formation, in the engine and in every drawing (one function for both).
+- Under center: quarterback at the ball, tailback seven yards deep. Pistol: quarterback at four, tailback behind him. Shotgun: quarterback at five, a lone back beside him on the weak side.
+- Two backs: I (fullback straight ahead of the tailback), Offset (fullback a step to the strength), Split (shotgun, a back each side). A two-back call in the gun is Split; under center it is I or Offset by the coach's habit. Two-back and heavy sets are under center more often than before.
+- Empty: the back lines up as a receiver on the weak side, in the slot if it is free and outside everyone if not (he had been standing just outside the left tackle).
+- Jumbo: the sixth lineman is next to the tackle with the tight end outside him (they had been standing on the same spot).
+
+A check draws out all 61 combinations of grouping, formation and snap, tests each (quarterback behind the center, the right depth for the snap, an I in a line, an offset fullback to the strength, split backs level, nobody on top of anybody, the right number on the line), and then compares every player on every snap of four weeks of games with the drawing for the formation, snap and strong side that was called: 8,300 snaps, no mismatches. The depth chart page shows no overlapping players in any grouping and formation. League numbers did not move.
+

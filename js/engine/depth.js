@@ -64,6 +64,11 @@ const TUNE = {
   noContain: 0.55,      // how much less often the corner turns an outside run back when the beaten edge man was lined up inside the play
   tightEsc: 0.3,        // how much easier the quarterback gets out when no rusher is lined up wide of the tackles
   lineBody: 1,          // how much each spot on the line asks for its own kind of player: mass and strength inside, burst and bend outside (0 switches it off)
+  tripsIso: 0.2, tripsCrowd: 0.15,   // three wide to one side: the man alone on the back side is this much more open, everyone else this much less
+  bunchMan: 0.18, bunchZone: -0.06,  // a bunch against man coverage, and against zone
+  tightIn: 0.05, tightDeep: 0.22, tightOut: 0.14, // tight splits: crossers gain, deep balls and out-breakers lose
+  concept: 1,           // how much a pass concept gains or loses against each coverage (0 switches concepts off)
+  conceptPlan: 9,       // how hard a good play caller leans toward concepts that beat what this defense has been playing
   mugLate: 0.15,        // how much more open a route is when the man covering it started walked up in a gap
   levRun: 5,            // run-block points for a blocker who starts a full step between his man and the play (and against one who has to cross his face)
   kickOut: 4,           // what a puller or lead back gives up kicking out a man set in the hole
@@ -149,6 +154,52 @@ const PERSONNEL = {
 // where each skill slot lines up (offense's view, + = right / strong side). Inline TEs are blockers.
 const OFF_ALIGN = { X: -4, Z: 4, SLOT: 2.4, SLOT2: -2.4, Y: 2.9, H: -2.9, Y2: 3.6, OL6: 3, RB: 0, FB: 0 };
 const INLINE = new Set(['Y', 'H', 'Y2', 'OL6']);
+// a tight end is a blocker on the line only while he is attached to it: flexed out he is a receiver
+function isInline(e) { return INLINE.has(e.slot) && !e.flex; }
+// Formations are data, like fronts: where each skill player lines up in a grouping. + is the strong side; a slot a formation does
+// not mention stays at its usual spot; _flex lists tight ends split off the line. What a formation does comes from where the men are
+// standing (three wide to one side, a bunch, tight splits, a tight end off the line), not from its name.
+const FORMS = {
+  '10': { Doubles: {}, Trips: { SLOT2: 3.2 }, Bunch: { Z: 3.6, SLOT2: 3.1, SLOT: 2.6 }, Tight: { X: -3.1, Z: 3.5 } },
+  '11': { Trey: {}, Doubles: { SLOT: -2.4 }, Trips: { Y: 2.3, SLOT: 3.2, _flex: ['Y'] }, Bunch: { Z: 3.5, SLOT: 2.5 }, Tight: { X: -3.1, Z: 3.5 } },
+  '12': { Ace: {}, Wing: { H: 3.6 }, Tight: { X: -3.1, Z: 3.4 } },
+  '13': { Heavy: {}, Tight: { X: -3.1 } }, JUMBO: { Jumbo: { OL6: 3, Y: 3.9 } }, // the sixth lineman next to the tackle, the tight end outside him
+  // two backs: I (fullback straight ahead of the tailback), Offset (fullback a step to the strength), Split (one back each side of the quarterback)
+  '21': { I: {}, Offset: {}, Split: {}, Tight: { X: -3.1, Z: 3.4 } }, '22': { Heavy: {}, Offset: {}, Split: {}, Tight: { X: -3.1 } },
+};
+// The backfield. Where the quarterback and the backs stand comes from how the snap is taken (under center, pistol, shotgun) and the
+// formation: [x, yards behind the ball], before the strong side is applied. Under center the tailback is seven yards deep with the
+// fullback in front of him; in the gun a lone back stands beside the quarterback on the weak side.
+function backSpot(form, fm, k) {
+  const gun = form === 'SG' || form === 'EMP', deep = form === 'PI' ? 4 : gun ? 5 : 1;
+  if (k === 'QB') return [0, deep];
+  if (fm === 'Split') return [k === 'RB' ? 1.15 : -1.15, gun ? 5 : 4.5];
+  if (k === 'RB') return gun ? [-1.1, 5.2] : [0, 7];
+  return fm === 'Offset' ? [1.1, 4.5] : gun ? [1.1, 5.2] : form === 'PI' ? [1.1, 4.5] : [0, 4.5]; // the fullback
+}
+// Empty: the back leaves the backfield and lines up as a receiver on the weak side, in the slot if it is free and outside everyone if not
+function emptySpot(pers, fm) { const taken = (PERSONNEL[pers] || []).some(k => k !== 'RB' && k !== 'FB' && !isNaN(formX(pers, fm, k)) && formX(pers, fm, k) < -1.5 && formX(pers, fm, k) > -3.5); return taken ? -5 : -2.4; }
+// how the snap is usually taken in a formation, for drawing it when no play has been called
+function formSnap(pers, fm) { return fm === 'Split' ? 'SG' : ['12', '13', '21', '22', 'JUMBO'].includes(pers) ? 'UC' : 'SG'; }
+const FORM_HOME = { '10': 'Doubles', '11': 'Trey', '12': 'Ace', '13': 'Heavy', '21': 'I', '22': 'Heavy', JUMBO: 'Jumbo' };
+function formX(pers, fm, k) { const F = fm && FORMS[pers] ? FORMS[pers][fm] : null; return F && F[k] !== undefined ? F[k] : OFF_ALIGN[k]; }
+// read the formation off the field: three detached to one side and one alone on the other, three men in a cluster, everyone in tight
+function formRead(off, oc) {
+  const rec = off.filter(e => ['X', 'Z', 'SLOT', 'SLOT2', 'Y', 'H', 'Y2'].includes(e.slot)), det = rec.filter(e => !isInline(e));
+  const L = det.filter(e => e.x < 0), Rr = det.filter(e => e.x > 0);
+  oc.bunch = oc.form !== 'EMP' && [-1, 1].some(s => { const a = rec.filter(e => e.x * s > 0).map(e => Math.abs(e.x)).sort((p, q) => p - q); return a.some((v, i) => i + 2 < a.length && a[i + 2] - v <= 1.15); });
+  oc.trips = !oc.bunch && ((L.length >= 3 && Rr.length === 1) || (Rr.length >= 3 && L.length === 1));
+  oc.iso = oc.trips ? (L.length === 1 ? L[0] : Rr[0]).slot : null; // the man alone on the back side
+  oc.tight = !oc.bunch && !oc.trips && oc.form !== 'EMP' && det.length >= 2 && det.every(e => Math.abs(e.x) <= 3.6);
+}
+// the defense lines up to the offense: the front and the safeties set to the strength, the nickel goes to the slot
+function alignDefense(off, def, oc) {
+  if (oc.str === -1) for (const e of def) if (e.slot !== 'CB') e.x = -e.x;
+  const slot = off.find(e => (e.slot === 'SLOT' || e.slot === 'SLOT2') && !isInline(e)) , n = def.find(e => e.slot === 'NCB' && e.depth > 0), dm = def.find(e => e.slot === 'DIME' && e.depth > 0);
+  if (slot && n && Math.sign(n.x) !== Math.sign(slot.x)) { n.x = -n.x; if (dm && Math.sign(dm.x) === Math.sign(n.x)) dm.x = -dm.x; }
+  // a tight end split off the line takes his defender with him: the nearest linebacker or safety widens out over him, still close enough to play the run to that side
+  for (const te of off.filter(e => e.flex)) { const who = def.filter(e => e.depth >= ON_LINE && e.depth <= 5.5 && ['SAM', 'WLB', 'MLB', 'SS'].includes(e.slot) && !e.out).sort((a, b) => Math.abs(a.x - te.x) - Math.abs(b.x - te.x))[0]; if (who) { who.x = te.x; who.out = true; if (rand() < 0.4) who.depth = 6; } } // sometimes all the way out of the box
+}
 
 // ---------- defense ----------
 const DEF_SLOT = {
@@ -380,9 +431,11 @@ function rbLean(g, s) { const ot = g.cx && g.cx[s] && g.cx[s].ot; return clamp((
 function offUnit(g, s, pers, call) {
   const T_ = g.side[s];
   const skill = PERSONNEL[pers];
-  const slots = [['QB', 'QB', 0, 5], ...OL_SLOTS.map(o => [o, o, OL_X[o], 0])];
+  const fm = call && call.fm ? call.fm : FORM_HOME[pers], snap = call && call.form ? call.form : formSnap(pers, fm), str = call && call.str === -1 ? -1 : 1, flex = FORMS[pers] && FORMS[pers][fm] && FORMS[pers][fm]._flex || [];
+  const slots = [['QB', 'QB', 0, backSpot(snap, fm, 'QB')[1]], ...OL_SLOTS.map(o => [o, o, OL_X[o], 0])];
   const order = ['RB', 'X', 'Z', 'SLOT', 'Y', 'H', 'FB', 'Y2', 'SLOT2', 'OL6'].filter(k => skill.includes(k));
-  for (const k of order) slots.push([k, k, OFF_ALIGN[k], k === 'RB' ? 7 : k === 'FB' ? 4 : 1]);
+  for (const k of order) { const b = k === 'RB' || k === 'FB' ? backSpot(snap, fm, k) : null; slots.push([k, k, (b ? b[0] : formX(pers, fm, k)) * str, b ? b[1] : 1]); }
+  const done = u => { for (const e of u) if (flex.includes(e.name)) e.flex = true; return u; };
   // running back usage: committee share, a third-down back on passing downs
   const rbScore = (p, slot) => {
     if ((slot === 'Y' || slot === 'H' || slot === 'Y2') && p.spot === 'FB') return -13; // a fullback is not your tight end
@@ -400,13 +453,13 @@ function offUnit(g, s, pers, call) {
     return sit + (rb2 && p.id === rb2.p.id && backs[0].r - rb2.r <= 45 ? backs[0].r - rb2.r + 2 : 0);
   };
   const chart = userChart(g, s, 'off');
-  if (!chart) return fillSlots(g, s, slots, OFF_SLOT, { score: rbScore });
+  if (!chart) return done(fillSlots(g, s, slots, OFF_SLOT, { score: rbScore }));
   const shortYd = g.togo <= 2 && (g.down >= 3 || g.ydl >= 98);
   const rbKey = call && call.passDown && hasList(chart, 'RB3D') ? 'RB3D' : shortYd && hasList(chart, 'RBSY') ? 'RBSY' : 'RB';
-  return fillSlots(g, s, slots, OFF_SLOT, {
+  return done(fillSlots(g, s, slots, OFF_SLOT, {
     score: rbScore, chart, pkgKeys: [], ov: name => chart && chart.ov ? chart.ov[pers + ':' + name] : undefined, keyOf: name => name === 'RB' ? rbKey : name,
     rot: key => key === 'RB' ? !!T_.rb2Turn : rand() < rotOf(chart, key),
-  });
+  }));
 }
 // ---------- user depth charts (t.dch): lists by chart key, #2 rotation share, auto per unit ----------
 const DEF_CHART_KEY = { LE: 'EDGE1', LOLB: 'EDGE1', RE: 'EDGE2', ROLB: 'EDGE2', DT1: 'IDL1', LDE: 'IDL1', LT: 'IDL1', DT2: 'IDL2', RDE: 'IDL2', DT: 'IDL2', RT: 'IDL2',

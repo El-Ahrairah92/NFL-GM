@@ -140,6 +140,24 @@ function fillCoachPool(n = 9) {
 function offCaller(t) { const hc = C(t.hc); return hc && hc.t.caller === 'O' ? hc : C(t.oc); }
 function defCaller(t) { const hc = C(t.hc); return hc && hc.t.caller === 'D' ? hc : C(t.dc); }
 function offTend(t) { return blendedTend(t, 'O'); }
+// The pass concepts a play caller carries: two of the quick-game concepts, five of the dropback ones, both deep shots, weighted by
+// how common each is and by his own taste. Read from who he is, like his formation habits.
+function conceptBook(t) {
+  const c = offCaller(t), out = {}, keep = { QUICK: 2, DROP: 5, DEEP: 2 };
+  for (const f in keep) { const all = Object.keys(CONCEPTS).filter(k => CONCEPTS[k].f === f).map(k => [k, CONCEPTS[k].w * (0.5 + coachTrait(c, 'cp' + k) * 1.5)]).sort((a, b) => b[1] - a[1]).slice(0, keep[f]);
+    // every book has an answer to man coverage: nobody gets to sit in it all afternoon for free
+    const must = f === 'QUICK' ? 'Slant-flat' : f === 'DROP' ? 'Mesh' : null; if (must && !all.some(x => x[0] === must)) all[all.length - 1] = [must, all[all.length - 1][1]];
+    const tot = all.reduce((s, x) => s + x[1], 0) || 1; out[f] = {}; for (const [k, v] of all) out[f][k] = round2(v / tot); }
+  return out;
+}
+// ---------- an offensive coach's habits with formations ----------
+// Traits that belong to the man calling the offense and never change: read from who he is, so nothing has to be stored.
+function coachTrait(c, k) { let h = 2166136261; const s = (c ? c.id : 0) + '|' + k; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 10000) / 10000; }
+function formTraits(t) {
+  const c = offCaller(t), h = k => coachTrait(c, k);
+  return { doubles: round2(0.08 + h('db') * 0.34), wing: round2(0.05 + h('wg') * 0.33), strR: round2(0.42 + h('sr') * 0.2), offI: round2(0.1 + h('oi') * 0.45), move: h('mv') < 0.25 ? 1 : 0 };
+}
+
 function defTend(t) { return blendedTend(t, 'D'); }
 function offArch(t) { const c = offCaller(t); return c ? c.arch : null; }
 function defArch(t) { const c = defCaller(t); return c ? c.arch : null; }
