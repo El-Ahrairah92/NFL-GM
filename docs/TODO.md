@@ -11,8 +11,9 @@ Things we have talked about and not built yet. Newest decisions win; cross items
 - Whether a defense learns the offense's concepts and formations during a game (today it learns run and pass by situation).
 - A center making protection calls, as the green dot does for the defense.
 - Other clubs choosing a green dot and an emergency quarterback with more thought than "the best one".
-- Ratings that work as built but do not show in a single game's result yet (coach value test, 1,500 games each): the caller's Adjustments on both sides, the defensive specialists' Creativity and Game Planning, defensive line chemistry, Conditioning, Game Management. Look at each and decide whether it should be worth more.
-- Accountability is strong: 20 points of it either way is about two penalties a game.
+- **A better fourth-down model for Game Management.** The rating is worth about nothing in points: the decisions a good manager follows are not better than the ones a poor one makes. Clock management is in; the fourth-down, field goal and punt choices need a model that is right.
+- Accountability is strong: 20 points of it either way is about two penalties a game and close to two points.
+- A defensive caller picks his looks and slants from the run-or-pass guess the same way whoever he is: Play Calling should make his slant go to the play more often.
 
 ## Up next (agreed order)
 

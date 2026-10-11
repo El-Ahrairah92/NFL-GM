@@ -1113,12 +1113,18 @@ The coach ratings were written for an older play system. They have been rebuilt 
 
 **Coordinators.** Three design ratings each (run, pass and protection; front, coverage and pressure), which are how good the scheme is, and Install. Install sets how fast the unit learns past the basics and how much of the system it can ever hold: a coordinator below about 60 never gets all of a system in, and the bigger the system the further short his players stop. Until a unit knows its book the caller keeps to what it knows: fewer formations, concepts, looks and line games, which is plainer and easier for an opponent to read. When he is chasing a game or it is a down he must have he reaches for the rest anyway, and that is where the blown assignments come from.
 
-**Play Calling and Adjustments** belong to whoever calls the plays. Every head coach and coordinator has them, but they are shown only for a man who calls plays now. One who used to shows them greyed, as they were the last year he called. One who never has shows nothing: nobody knows. Calling games is how a caller improves.
+**Play Calling** belongs to whoever calls the plays, and it is his alone. Every head coach and coordinator has it, but it is shown only for a man who calls plays now. One who used to shows it greyed, as it was the last year he called. One who never has shows nothing: nobody knows. Calling games is how a caller improves. It is how sharply his choices follow what he knows: the matchups, the opponent's film (what a defense shows each game goes on its film; older games count less; a new coordinator has none), what is working today, and what the other side is showing. Between the two callers it also decides how well the defense reads the play, all game.
 
-**Specialists** (pass game, run game, pass defense, run defense).
-- Concept Creativity: makes his side harder to learn. An opponent catches on to a repeated look or line game more slowly, and its game plan reaches less far. It also makes the system bigger, which costs learning time.
-- Game Planning: how much of the opponent's film his side walks in already knowing. What a defense shows each game goes on its film (older games count less; a new coordinator has none). A plan is knowing how this defense differs from the league. It matters most early in a game; what is seen today takes over.
-- The caller's Adjustments sets how fast what is seen today takes over.
+**Specialists** (pass game, run game, pass defense, run defense) have Concept Creativity and Adjustments, each for his own part of the game.
+- Catching on. As a game goes on each staff works out what the other keeps doing, separately for the run and the pass. One specialist's Adjustments works against the other side's Creativity: the pass-defense coordinator against the pass-game coordinator and the reverse, and the same for the run. Screens and play-action are passes; draws are runs. Nothing has been seen at kickoff, so it starts at nothing and is at full strength once that offense has run about twenty of that kind of play. It does not reset.
+- When the defense has caught on it reads that kind of play better: linebackers fit the run sooner, coverage is tighter, fewer bite on a fake. When the offense has caught on, the defense's blitzes, twists and slants are seen coming, and the caller's choices against that defense land more often.
+- Creativity also makes the system bigger, which costs learning time. A unit that has not installed its book is running a short menu, and creativity cannot hide what is not there.
+
+**Play-action.** Linebackers and the strong safety bite by how well the offense has run today, once it has run enough to count (ten carries for full credit), and by how much of the offense the run has been. The pass-game coordinator's Creativity sells the fake. A defense whose pass-defense coordinator adjusts well stops biting on a fake it has seen several times. So a run game that gets figured out takes the play-action with it.
+
+**In the fourth quarter** a well-conditioned team has a little more left than a poorly conditioned one, most of all the men who have played every snap.
+
+**Game Management** now includes the clock: a good manager's hurry-up gets the next snap off sooner and his four-minute offence wastes none of it. When the hurry-up starts no longer depends on the rating (starting it sooner was costing the better managers points).
 
 **Position coaches.** Cohesion is the ceiling on his room's chemistry. Technique is development.
 

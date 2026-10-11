@@ -5,15 +5,14 @@
 //    practice reps (head coach: Organizing Practice)        how much work reaches the second and third team
 //    install (head coach: Team Building, then the coordinator: Install)   how much of the playbook the unit holds
 //    chemistry (head coach: Team Building, then the position coach: Cohesion)
-//    season film and the game plan (specialists: Game Planning against Concept Creativity; the caller: Adjustments)
+//    season film (the caller's plan) and catching on during a game (specialists: Adjustments against the other side's Creativity)
 //    the green dot: the defender who makes the calls
 // =====================================================================
 
 function specAvg(t, roles, key) { const v = roles.map(r => asst(t, r)).filter(Boolean).map(c => c[key]).filter(x => typeof x === 'number'); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 42; }
 function offCreativity(t) { return specAvg(t, ['PGC', 'RGC'], 'cre'); }
 function defCreativity(t) { return specAvg(t, ['DPC', 'DRC'], 'cre'); }
-function offPlanning(t) { return specAvg(t, ['PGC', 'RGC'], 'plan'); }
-function defPlanning(t) { return specAvg(t, ['DPC', 'DRC'], 'plan'); }
+function specVal(t, role, key) { const c = asst(t, role); return c && typeof c[key] === 'number' ? c[key] : 42; }
 
 // ---------- practice reps ----------
 // The week has an allowance of reps: 100 for an ordinary practice, 80 to 120 by how well the head coach runs one.
@@ -163,6 +162,24 @@ function dotOnField(g, d, def) {
   return def.filter(e => ['SS', 'FS'].includes(e.slot) && e.p && e.p.a).sort((a, b) => dotScore(b.p) - dotScore(a.p))[0] || null; // no linebacker out there at all: a safety makes the calls
 }
 
+// ---------- the caller, and the staffs catching on ----------
+// Play Calling is the caller's alone, all game: how sharply his choices follow what he knows of the matchups, the film and the day.
+function callGain(g, s, def) { return (def ? g.cx[s].dpc : g.cx[s].pc) / 99; }
+// Catching on. As a game goes on each staff works out what the other keeps doing, separately for the run game and the pass game.
+// One specialist's Adjustments works against the other side's Creativity: the pass-defense coordinator against the pass-game
+// coordinator and the reverse; the same for the run. Nothing has been seen at kickoff, so it starts at nothing and is at full
+// strength once that offense has run about twenty of that kind of play. It does not reset.
+// A unit that has not installed its book is running a short menu, and creativity cannot hide what is not there.
+function catchProg(g, o, run) { const n = g.typeN ? g.typeN[o][run ? 0 : 1] : 0; return run ? clamp((n - 3) / 13, 0, 1) : clamp((n - 4) / 17, 0, 1); }
+function effCre(g, s, off, run) { const cx = g.cx[s], c = off ? (run ? cx.rCre : cx.pCre) : (run ? cx.drCre : cx.dpCre); return c - (1 - variety(g, s, off ? 'O' : 'D')) * 25; }
+// how far the defense has caught on to this offense's run or pass game (positive: it has), and the offense to the defense
+function defCaught(g, o, d, run) { return (((run ? g.cx[d].drAdj : g.cx[d].dpAdj) - effCre(g, o, true, run)) / 100) * catchProg(g, o, run); }
+function offCaught(g, o, d, run) { return (((run ? g.cx[o].rAdj : g.cx[o].pAdj) - effCre(g, d, false, run)) / 100) * catchProg(g, o, run); }
+// The read of the play, as an edge for the defense: the two callers all game, and whoever has caught on to whom.
+function chessEdge(g, o, d, run) {
+  return (g.cx[d].dpc - g.cx[o].pc) * TUNE.callKey + (defCaught(g, o, d, run) - offCaught(g, o, d, run)) * TUNE.catchKey;
+}
+
 // ---------- season film and the game plan ----------
 // What a defense showed in a game is added to its film; older games count for less. A new defensive coordinator means no film.
 function foldFilm(g) {
@@ -182,9 +199,9 @@ function foldFilm(g) {
 function planTrust(g, s) { // s: the defense being studied
   const c = g.gp || (g.gp = {}); if (c['p' + s] !== undefined) return c['p' + s];
   const o = 1 - s, f = T(g.tids[s]).dfilm, n = f && f.s === state.season ? f.n : 0;
-  return c['p' + s] = clamp((g.cx[o].plan - 30) / 60, 0, 1) * (n / (n + 60)) * clamp(1.3 - g.cx[s].dcre / 100, 0.4, 1.1);
+  return c['p' + s] = clamp((g.cx[o].pc - 30) / 60, 0, 1) * (n / (n + 60)) * clamp(1.3 - g.cx[s].dcre / 100, 0.4, 1.1); // the caller's plan: how much of this defense's film he walks in knowing
 }
-function seenWeight(g, s) { const c = g.gp || (g.gp = {}); if (c['w' + s] !== undefined) return c['w' + s]; const o = 1 - s; return c['w' + s] = clamp(1.6 - g.cx[o].adp / 83, 0.5, 1.6) * clamp(0.5 + g.cx[s].dcre / 100, 0.7, 1.45) * (0.7 + 0.3 * variety(g, s, 'D')); } // a plain defense is learned sooner
+function seenWeight(g, s) { return 0.7 + 0.3 * variety(g, s, 'D'); } // a plain defense is learned sooner
 // the league's habits this season, from everybody's film: a game plan is knowing how this defense differs from the rest
 const LEAGUE_FILM = { key: null, m: null };
 function leagueFilm() {

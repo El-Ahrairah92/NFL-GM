@@ -140,7 +140,9 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
   // a line that has played together passes things off; a front that has played together runs its games in step
   const chO = chemEdge(off, ['OL']) * TUNE.chemOL, chD = chemEdge(def, ['DL']) * TUNE.chemDL, design = design0 - chO, designT = design0 - chO + chD;
   // how much of a surprise each thing still is: something this defense has done on a quarter of today's snaps is the ordinary amount
-  const fresh = (k, usual) => clamp(1.45 - 1.8 * seenShare(g, d, k, usual), 0.15, 1.3) / clamp(1.45 - 1.8 * usual, 0.15, 1.3);
+  // a pass-game staff that has caught on to this defense sees its blitzes, twists and slants coming
+  const caught = clamp(1 - offCaught(g, o, d, false) * TUNE.catchFresh, 0.6, 1.4);
+  const fresh = (k, usual) => clamp(1.45 - 1.8 * seenShare(g, d, k, usual), 0.15, 1.3) / clamp(1.45 - 1.8 * usual, 0.15, 1.3) * caught;
   // A man coming from depth is a surprise. A man standing up near the line is one only as far as the look lied: if everyone who showed came, the count was right.
   const standing = def.filter(e => e.depth >= ON_LINE && e.depth < 2.2), bluff = standing.length ? standing.filter(e => !rushers.includes(e)).length / standing.length : 0;
   for (const a of assign) {
@@ -245,7 +247,8 @@ function runBlocking(g, off, def, oc, dc, target, carrierSlot) {
     if (!c) continue;
     c.used = true; r.blockers.push(c.e); r.state = 'blocked'; r.climb = c;
   }
-  const dNet = cx.rb;
+  // a run-game staff that has caught on to this front blocks it with better angles; a run-defense staff that has caught on takes them away
+  const dNet = cx.rb + (offCaught(g, o, 1 - o, true) - defCaught(g, o, 1 - o, true)) * TUNE.catchBlock;
   for (const r of res) {
     const e = r.e;
     const E = bod(e), zs = TUNE.size;

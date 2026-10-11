@@ -14,11 +14,13 @@ function coachCtx(tid, oppTid) {
     pb: net(designKnob(t, 'protD'), designKnob(opp, 'presD')) * 0.5,
     rb: net(designKnob(t, 'runD'), designKnob(opp, 'frontD')) * 2.2,
     ot: offTend(t), dt: defTend(t), ft: formTraits(t), cb: conceptBook(t),
-    pc: knob(offCaller(t), 'pc'), adp: knob(offCaller(t), 'adj'), dpc: knob(defCaller(t), 'pc'), dadj: knob(defCaller(t), 'adj'),
+    pc: knob(offCaller(t), 'pc'), adp: knob(offCaller(t), 'pc'), dpc: knob(defCaller(t), 'pc'),
     gm: knob(hc, 'gm'), aggr: hc ? hc.t.aggr : 0.5, clock: hc ? hc.t.clock : 0.5,
     st: clamp(knob(stc, 'ret') - knob(ostc, 'cov'), -40, 40), // when this club returns a kick: its return units against their coverage units
     kop: knob(stc, 'kop'), cond: knob(C(t.sc), 'cond'),
-    plan: offPlanning(t), dplan: defPlanning(t), cre: offCreativity(t), dcre: defCreativity(t),
+    cre: offCreativity(t), dcre: defCreativity(t),
+    pCre: specVal(t, 'PGC', 'cre'), pAdj: specVal(t, 'PGC', 'adj'), rCre: specVal(t, 'RGC', 'cre'), rAdj: specVal(t, 'RGC', 'adj'),
+    dpCre: specVal(t, 'DPC', 'cre'), dpAdj: specVal(t, 'DPC', 'adj'), drCre: specVal(t, 'DRC', 'cre'), drAdj: specVal(t, 'DRC', 'adj'),
     famO: familiarityPenalty(t, 'O'), famD: familiarityPenalty(t, 'D'),
   };
 }
@@ -95,8 +97,7 @@ function inc(g, p, k, v = 1) { if (!p) return; const l = ln(g, p); l[k] = (l[k] 
 function mx(g, p, k, v) { if (!p) return; const l = ln(g, p); l[k] = Math.max(l[k] || 0, v); }
 function isHurry(g) {
   const diff = g.score[g.poss] - g.score[1 - g.poss];
-  const gm = g.cx ? g.cx[g.poss].gm : 60;
-  const late = 0.65 + gm / 280; // poorer game managers start the hurry-up late
+  const late = 0.83; // when the hurry-up starts is the same for everyone: starting it sooner was costing the better game managers points
   return g.q >= 5 || (g.q === 2 && g.clock <= 120) || (g.q >= 4 && diff < 0 && g.clock <= 300 * late) || (g.q >= 4 && diff <= -9 && g.clock <= 600 * late);
 }
 function spotTxt(g) { return g.ydl === 50 ? 'MID 50' : g.ydl < 50 ? T(g.tids[g.poss]).abbr + ' ' + g.ydl : T(g.tids[1 - g.poss]).abbr + ' ' + (100 - g.ydl); }
@@ -117,9 +118,11 @@ function runClock(g, secs) {
 }
 function betweenPlays(g) {
   const o = g.poss, diff = g.score[o] - g.score[1 - o];
-  if (isHurry(g)) return randInt(14, 20);
+  const gm = g.cx ? g.cx[o].gm : 52;
+  // clock management: a good manager's hurry-up gets the next snap off sooner, and his four-minute offence wastes none of the clock
+  if (isHurry(g)) return randInt(14, 20) + clamp(Math.round((52 - gm) / 8), -4, 5);
   if (g.nohud) return randInt(22, 30);
-  if (g.q >= 4 && diff > 0 && g.clock < 480) return randInt(37, 40) - (g.cx[o].clock < 0.4 ? 8 : 0);
+  if (g.q >= 4 && diff > 0 && g.clock < 480) return randInt(37, 40) - (g.cx[o].clock < 0.4 ? 8 : 0) - clamp(Math.round((50 - gm) / 5), 0, 7);
   return randInt(33, 40);
 }
 function callTimeout(g, s, why) {
@@ -233,7 +236,7 @@ function runPlay(g, oc, dc) {
   const keyed = oc.isRun ? (dc.runEst - 0.5) * 2 : (0.5 - dc.runEst) * 2;
   const dcp = offCreativity(T(g.tids[o])); // how hard this offense is to read: its pass and run game coordinators' creativity
   // the play-calling chess match: a sharper caller hides his tendencies and reads the other side's
-  g.key = clamp(keyed * (0.35 + g.cx[d].dpc / 99 * 0.45) * (1.25 - dcp / 200) * 0.6 + (g.cx[d].dpc - g.cx[o].pc) * 0.003 + (dc.answer ? (dc.answerRight ? TUNE.answerKey : -TUNE.answerKey) : 0), -0.55, 0.55); // a defense that answered a check is leaning the way it guessed
+  g.key = clamp(keyed * (0.35 + callGain(g, d, true) * 0.45) * (1.25 - dcp / 200) * 0.6 + chessEdge(g, o, d, !!oc.isRun) + (dc.answer ? (dc.answerRight ? TUNE.answerKey : -TUNE.answerKey) : 0), -0.55, 0.55); // a defense that answered a check is leaning the way it guessed
   if (preSnapPenalty(g, off, def, oc)) return; // the flag comes out before the snap: no play
   recordFilm(g, o, oc.b, oc.pers, oc.isRun);
   const downB = g.down, togoB = g.togo, ydlB = g.ydl, before = { down: g.down, togo: g.togo, ydl: g.ydl, poss: o, score: [g.score[0], g.score[1]], q: g.q, clock: g.clock };
@@ -242,6 +245,7 @@ function runPlay(g, oc, dc) {
   g.ts[o].plays++;
   const res = oc.isRun ? resolveRun(g, off, def, oc, dc) : resolvePass(g, off, def, oc, dc);
   recordSeen(g, d, dc);
+  { const tn = g.typeN || (g.typeN = [[0, 0], [0, 0]]); tn[o][oc.isRun ? 0 : 1]++; if (oc.tags.has('PA')) (g.paN || (g.paN = [0, 0]))[o]++; } // what each staff has now seen of the other
   // no play gains more than the field that is left: everything downstream (box score, charting, grades) sees the same number
   if (typeof res.yds === 'number' && res.yds > 100 - g.ydl) { res.yds = 100 - g.ydl; if (res.ybc !== undefined && res.ybc > res.yds) res.ybc = res.yds; }
   if (globalThis.__calib) globalThis.__calib(g, oc, dc, res, off, def);
@@ -747,7 +751,10 @@ function endDrive(g, result) {
 }
 function endPeriod(g) {
   g.running = false;
-  if (g.q === 1 || g.q === 3) { g.q++; g.clock = 900; pbpLog(g, `End of quarter ${g.q - 1}`, false); return; }
+  if (g.q === 1 || g.q === 3) { g.q++; g.clock = 900; pbpLog(g, `End of quarter ${g.q - 1}`, false);
+    // the fourth quarter: a well-conditioned team has more left than a poorly conditioned one, most of all the men who have played every snap
+    if (g.q === 4 && !g.pre) for (let s = 0; s < 2; s++) { const k = (g.cx[s].cond - 50) / 40 * TUNE.lateLegs; for (const p of g.side[s].roster) { const st = g.ps[p.id]; if (p.id >= 0 && st && st.snp) p._gs = (p._gs || 0) + k * Math.min(1, st.snp / 40); } }
+    return; }
   if (g.q === 2) {
     endDrive(g, 'End of Half');
     g.q = 3; g.clock = 900; g.to = [3, 3];

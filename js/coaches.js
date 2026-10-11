@@ -14,16 +14,16 @@ const KNOBS = {
   STC: ['cov', 'ret', 'kop', 'tech'],
   SC: ['dur', 'recov', 'cond', 'ath'],
 };
-// Play Calling and Adjustments belong to whoever calls the plays. Every head coach and coordinator has them, but they are only
-// known for a man who calls plays now, and remembered (as they were) for one who used to.
-const CALL_KNOBS = ['pc', 'adj'], CALLER_ROLES = ['HC', 'OC', 'DC'];
+// Play Calling belongs to whoever calls the plays. Every head coach and coordinator has it, but it is only known for a man who
+// calls plays now, and remembered (as it was) for one who used to. Adjusting during a game is the specialists' work.
+const CALL_KNOBS = ['pc'], CALLER_ROLES = ['HC', 'OC', 'DC'];
 const KNOB_LABEL = {
   prac: 'Organizing Practice', gm: 'Game Management', acc: 'Accountability', tb: 'Team Building',
   runD: 'Run Design', passD: 'Pass Design', protD: 'Protection Design', frontD: 'Front Design', covD: 'Coverage Design', presD: 'Pressure Design',
   inst: 'Install', pc: 'Play Calling', adj: 'Adjustments',
   cov: 'Coverage Units', ret: 'Return Units', kop: 'Kicking Operation', tech: 'Technique',
   dur: 'Durability', recov: 'Recovery', cond: 'Conditioning', ath: 'Athletic Development',
-  cre: 'Concept Creativity', plan: 'Game Planning', coh: 'Cohesion', dev: 'Technique',
+  cre: 'Concept Creativity', coh: 'Cohesion', dev: 'Technique',
   dQB: 'QB Development', dBC: 'Ball Carrier Dev.', dREC: 'Receiver Dev.', dOL: 'O-Line Dev.',
   dPR: 'Pass Rush Dev.', dRD: 'Run Defense Dev.', dCOV: 'Coverage Dev.',
 };
@@ -33,10 +33,10 @@ const KNOB_HELP = {
   runD: 'How good his run schemes are.', passD: 'How good his pass concepts are against coverage.', protD: 'Blitz pickup, twists passed off, the slide going the right way.',
   frontD: 'How sound his fronts are against the run.', covD: 'How much his coverages take away.', presD: 'Whether blitzes and line games get home.',
   inst: 'How fast his unit learns the playbook past the basics, and how much of it they can ever hold.',
-  pc: 'The right call for the situation.', adj: 'How fast his side catches on to what the opponent is doing during a game.',
+  pc: 'The right call for the situation and the opponent, from the first snap to the last.', adj: 'How fast his part of the team catches on to what the opponent keeps doing during a game. It works against the other staff\'s creativity.',
   cov: 'Kickoff and punt coverage.', ret: 'Blocking for your returners.', kop: 'Snap, hold and protection on kicks.', tech: 'Development of the players he coaches.',
   dur: 'How often players get hurt.', recov: 'How quickly injured players return.', cond: 'Stamina within a game and wear across a season.', ath: 'Speed, strength and burst in young players, and how long older players keep them.',
-  cre: 'How hard his concepts are for an opponent to recognise and prepare for.', plan: 'How much his side already knows about this opponent at kickoff.',
+  cre: 'How hard his part of the game is for an opponent to figure out as the game goes on. More of it also means a bigger playbook to learn.',
   coh: 'How far his room can get on the same page.', dev: 'Development of the players in his room.',
 };
 // which coach knob develops each attribute (DESIGN §6b)
@@ -104,7 +104,7 @@ function genCoach(role, opts = {}) {
     makeCaller(c, opts.callerArch);
     if (c.t.caller || (c.t.bg !== 'ST' && rand() < 0.6)) noteCalled(c, state.season - (c.t.caller ? 0 : randInt(1, 6)));
   }
-  c.rv = 2; updateCoachOvr(c);
+  c.rv = 3; updateCoachOvr(c);
   state.coaches[c.id] = c;
   return c;
 }
@@ -118,7 +118,7 @@ function makeCaller(c, arch) {
     c.ct = jitterTend((c.t.bg === 'O' ? OFF_ARCH : DEF_ARCH)[c.arch].t);
   }
 }
-function noteCalled(c, season) { c.called = season; c.seen = { pc: c.k.pc, adj: c.k.adj }; }
+function noteCalled(c, season) { c.called = season; c.seen = { pc: c.k.pc }; }
 // 'now' he calls plays for his club, 'past' he has before, null he never has
 function callerState(c) {
   if (!c || !CALLER_ROLES.includes(c.role)) return null;
@@ -127,18 +127,18 @@ function callerState(c) {
 }
 // what his card shows: [{ k, l, v, grey, note }]
 function coachRatings(c) {
-  if (isAsst(c)) return (SPEC_ROLES.includes(c.role) ? ['cre', 'plan'] : ['coh', 'dev']).map(k => ({ k, l: KNOB_LABEL[k], v: c[k] }));
+  if (isAsst(c)) return (SPEC_ROLES.includes(c.role) ? ['cre', 'adj'] : ['coh', 'dev']).map(k => ({ k, l: KNOB_LABEL[k], v: c[k] }));
   const out = KNOBS[c.role].map(k => ({ k, l: KNOB_LABEL[k], v: c.k[k] })), st = callerState(c);
   if (st) for (const k of CALL_KNOBS) out.push({ k, l: KNOB_LABEL[k], v: st === 'now' ? c.k[k] : (c.seen && c.seen[k] !== undefined ? c.seen[k] : c.k[k]), grey: st !== 'now', note: st === 'now' ? 'He calls the plays' : `As of ${c.called}, the last time he called plays` });
   return out;
 }
 function updateCoachOvr(c) {
-  const k = c.k, call = (wp, wa) => callerState(c) || c.tid < 0 ? k.pc * wp + k.adj * wa : 50 * (wp + wa);
+  const k = c.k, call = w => callerState(c) || c.tid < 0 ? k.pc * w : 50 * w;
   let v;
-  if (c.tier >= 3) { c.ovr = Math.round(c.cre !== undefined ? (c.cre + c.plan) / 2 : (c.dev + c.coh) / 2); return; }
-  if (c.role === 'HC') v = k.prac * 0.22 + k.gm * 0.26 + k.acc * 0.22 + k.tb * 0.22 + (c.t && c.t.caller ? k.pc * 0.06 + k.adj * 0.02 : 4);
-  else if (c.role === 'OC') v = k.runD * 0.2 + k.passD * 0.25 + k.protD * 0.15 + k.inst * 0.2 + call(0.14, 0.06);
-  else if (c.role === 'DC') v = k.frontD * 0.2 + k.covD * 0.22 + k.presD * 0.18 + k.inst * 0.2 + call(0.14, 0.06);
+  if (c.tier >= 3) { c.ovr = Math.round(c.cre !== undefined ? (c.cre + c.adj) / 2 : (c.dev + c.coh) / 2); return; }
+  if (c.role === 'HC') v = k.prac * 0.22 + k.gm * 0.26 + k.acc * 0.22 + k.tb * 0.22 + (c.t && c.t.caller ? k.pc * 0.08 : 4);
+  else if (c.role === 'OC') v = k.runD * 0.2 + k.passD * 0.25 + k.protD * 0.15 + k.inst * 0.2 + call(0.2);
+  else if (c.role === 'DC') v = k.frontD * 0.2 + k.covD * 0.22 + k.presD * 0.18 + k.inst * 0.2 + call(0.2);
   else if (c.role === 'STC') v = k.cov * 0.3 + k.ret * 0.3 + k.kop * 0.2 + k.tech * 0.2;
   else v = k.dur * 0.3 + k.recov * 0.25 + k.cond * 0.25 + k.ath * 0.2;
   c.ovr = Math.round(clamp(v, 1, 99));
@@ -146,7 +146,8 @@ function updateCoachOvr(c) {
 // A coach from a save made before the ratings were rebuilt: each old rating goes to its nearest new one, and the ones with
 // no ancestor are rolled around what kind of coach he was.
 function migrateCoach(c, teams, coaches) {
-  if (!c || c.rv === 2) return;
+  if (!c || c.rv >= 3) return;
+  if (c.rv === 2) { migrateCoach3(c); return; }
   const k = c.k || (c.k = {}), q = c.ovr || 50, n = (v, sd) => Math.round(clamp((v === undefined || isNaN(v) ? q : v) + gauss(0, sd || 0), 15, 97));
   if (c.tier >= 3 || ASST_ROLES.includes(c.role)) {
     if (SPEC_ROLES.includes(c.role)) { if (c.cre === undefined) { c.cre = n(c.exp, 6); c.plan = n(c.exp, 6); } delete c.exp; delete c.disc; if (typeof c.dev === 'number') delete c.dev; }
@@ -161,11 +162,18 @@ function migrateCoach(c, teams, coaches) {
     const t = c.tid >= 0 && teams ? teams.find(x => x.id === c.tid) : null, hc = t && coaches ? coaches[t.hc] : null;
     const now = t && (c.role === 'HC' ? !!(c.t && c.t.caller) : !(hc && hc.t && hc.t.caller === (c.role === 'OC' ? 'O' : 'D')));
     const past = (c.hist || []).filter(h => h.role === 'OC' || h.role === 'DC').map(h => h.s);
-    if (now || past.length) { c.called = now ? (typeof state !== 'undefined' && state ? state.season : 0) : Math.max(...past); c.seen = { pc: k.pc, adj: k.adj }; }
+    if (now || past.length) { c.called = now ? (typeof state !== 'undefined' && state ? state.season : 0) : Math.max(...past); c.seen = { pc: k.pc }; }
   }
-  c.rv = 2;
-  const v = c.tier >= 3 || ASST_ROLES.includes(c.role) ? (c.cre !== undefined ? (c.cre + c.plan) / 2 : (c.dev + c.coh) / 2) : null;
+  c.rv = 2; migrateCoach3(c);
+  const v = c.tier >= 3 || ASST_ROLES.includes(c.role) ? (c.cre !== undefined ? (c.cre + c.adj) / 2 : (c.dev + c.coh) / 2) : null;
   if (v !== null) c.ovr = Math.round(v);
+}
+// Adjusting moved from the caller to the specialists: a specialist's Game Planning becomes his Adjustments, a caller keeps Play Calling alone
+function migrateCoach3(c) {
+  if (c.plan !== undefined) { if (c.adj === undefined) c.adj = c.plan; delete c.plan; }
+  if (c.k && !ASST_ROLES.includes(c.role)) delete c.k.adj;
+  if (c.seen) delete c.seen.adj;
+  c.rv = 3;
 }
 function coachTier(v) { return v >= 85 ? 'Elite' : v >= 70 ? 'Strong' : v >= 50 ? 'Average' : 'Weak'; }
 function schemeLabel(c) {
@@ -449,8 +457,8 @@ function genAssistant(role, opts = {}) {
   const c = { id: state.nextCid++, first, last, role, tid: -1, tier: spec ? 3 : 4, age: clamp(Math.round(gauss(spec ? 45 : 40, 7)), 27, 68),
     k: {}, t: {}, arch: null, rec: { w: 0, l: 0, t: 0, titles: 0 }, mentors: [], hist: [], yrs: 0,
     style: pick(COACH_STYLES), bg: opts.bg && archs.includes(opts.bg) ? opts.bg : pick(archs), lean: pick(Object.keys(LEANS[spec ? role : SPEC_OVER[role]])) };
-  if (spec) { c.cre = r(); c.plan = r(); } else { c.dev = opts.dev !== undefined ? Math.round(clamp(opts.dev, 15, 97)) : r(); c.coh = r(); }
-  c.rv = 2; updateCoachOvr(c);
+  if (spec) { c.cre = r(); c.adj = r(); } else { c.dev = opts.dev !== undefined ? Math.round(clamp(opts.dev, 15, 97)) : r(); c.coh = r(); }
+  c.rv = 3; updateCoachOvr(c);
   state.coaches[c.id] = c;
   return c;
 }
@@ -562,7 +570,7 @@ function tendInfluences(t, side) {
 // ---- the ladder ----
 function promoteToSpecialist(c) {
   const role = SPEC_OVER[c.role];
-  c.role = role; c.tier = 3; { const b0 = (c.dev + c.coh) / 2; c.cre = Math.round(clamp(gauss(b0, 8), 20, 95)); c.plan = Math.round(clamp(gauss(b0, 8), 20, 95)); delete c.dev; delete c.coh; }
+  c.role = role; c.tier = 3; { const b0 = (c.dev + c.coh) / 2; c.cre = Math.round(clamp(gauss(b0, 8), 20, 95)); c.adj = Math.round(clamp(gauss(b0, 8), 20, 95)); delete c.dev; delete c.coh; }
   if (!LEANS[role][c.lean]) c.lean = pick(Object.keys(LEANS[role]));
   delete c.pks; ensureDefPk(c); ensureOffPk(c);
   c.yrs = 0; updateCoachOvr(c); TEND_VER++;
@@ -571,7 +579,7 @@ function promoteToSpecialist(c) {
 // the keywords become a system: his background is the scheme, his lean is baked into the tendencies
 function promoteToCoordinator(c) {
   const side = ASST_SIDE[c.role], from = c.role, role = side === 'O' ? 'OC' : 'DC', A = side === 'O' ? OFF_ARCH : DEF_ARCH;
-  const base = c.cre !== undefined ? (c.cre + c.plan) / 2 : (c.dev + c.coh) / 2;
+  const base = c.cre !== undefined ? (c.cre + c.adj) / 2 : (c.dev + c.coh) / 2;
   c.arch = A[c.bg] ? c.bg : pick(Object.keys(A));
   c.t = jitterTend(A[c.arch].t);
   if (LEANS[from]) applyLean(c.t, from, c.lean, 0.22);
@@ -581,7 +589,7 @@ function promoteToCoordinator(c) {
   if (role === 'DC') { c.pk = genDefPk(c.arch); for (const id of c.pks || []) { if (SHELLS[id]) c.pk.sh[id] = (c.pk.sh[id] || 0) + 0.15; else if (PRESSURES[id]) c.pk.pr[id] = (c.pk.pr[id] || 0) + 0.12; else if (id === 'DISG') c.pk.disg = Math.min(0.6, c.pk.disg + 0.25); else if (id === 'STUNT') c.pk.stunt = Math.min(0.5, c.pk.stunt + 0.1); } normShares(c.pk.sh); normShares(c.pk.pr); }
   if (role === 'OC') { ensureOffSheet(c.t, c.arch); c.t.pers = Object.assign({}, c.t.pers); for (const id of c.pks || []) if (OFF_PK[id]) OFF_PK[id][2](c.t, 0.15); for (const k in c.t) if (typeof c.t[k] === 'number') c.t[k] = round2(clamp(c.t[k], 0, 0.95)); }
   delete c.pks;
-  c.role = role; c.tier = 2; delete c.cre; delete c.plan; delete c.dev; delete c.coh; delete c.called; delete c.seen; c.promoted = state.season;
+  c.role = role; c.tier = 2; delete c.cre; delete c.adj; delete c.dev; delete c.coh; delete c.called; delete c.seen; c.promoted = state.season;
   updateCoachOvr(c); TEND_VER++;
   return c;
 }
@@ -590,7 +598,7 @@ function promoteToHead(c) {
   const from = c.role, side = from === 'OC' ? 'O' : from === 'DC' ? 'D' : 'ST', arch = c.arch, st = side === 'ST';
   const num = (v, m, sd) => v !== undefined ? v : Math.round(clamp(gauss(m, sd), 20, 90));
   c.role = 'HC';
-  { const r0 = (m, sd) => Math.round(clamp(gauss(m, sd), 20, 92)); c.k = { prac: r0(st ? 56 : 51, 11), gm: r0(st ? 55 : 50, 10), acc: r0(st ? 56 : 52, 11), tb: r0(52, 11), pc: num(c.k.pc, 42, 8), adj: num(c.k.adj, 50, 9) }; }
+  { const r0 = (m, sd) => Math.round(clamp(gauss(m, sd), 20, 92)); c.k = { prac: r0(st ? 56 : 51, 11), gm: r0(st ? 55 : 50, 10), acc: r0(st ? 56 : 52, 11), tb: r0(52, 11), pc: num(c.k.pc, 42, 8) }; }
   c.t = { aggr: round2(clamp(gauss(0.5, 0.17), 0.05, 0.95)), clock: round2(clamp(gauss(0.5, 0.17), 0.05, 0.95)), bg: side };
   if (st) { c.t.caller = null; delete c.ct; c.arch = null; delete c.pk; }
   else { makeCaller(c, arch); if (!c.t.caller && rand() < 0.5) { c.t.caller = side; c.arch = arch; c.ct = jitterTend((side === 'O' ? OFF_ARCH : DEF_ARCH)[arch].t); } }
@@ -633,14 +641,14 @@ function asstOffseason(recs, rank, pf, pa) {
   for (const c of Object.values(state.coaches)) {
     if (!isAsst(c)) continue;
     const drift = c.age < 42 ? 0.9 : c.age < 58 ? 0.1 : -0.9;
-    for (const k of ['cre', 'plan', 'dev', 'coh']) if (typeof c[k] === 'number') c[k] = Math.round(clamp(c[k] + gauss(drift, 1.5), 15, 97));
+    for (const k of ['cre', 'adj', 'dev', 'coh']) if (typeof c[k] === 'number') c[k] = Math.round(clamp(c[k] + gauss(drift, 1.5), 15, 97));
     updateCoachOvr(c);
   }
   // the ladder: good position coaches get specialist jobs, good specialists get coordinator interviews
   for (const c of Object.values(state.coaches)) {
     if (!isAsst(c) || c.age >= 62) continue;
     const mine = c.tid === state.userTid && !isAI(state.userTid);
-    if (SPEC_ROLES.includes(c.role) && (c.cre + c.plan) / 2 >= 66 && (c.yrs || 0) >= 2 && rand() < 0.14) {
+    if (SPEC_ROLES.includes(c.role) && (c.cre + c.adj) / 2 >= 66 && (c.yrs || 0) >= 2 && rand() < 0.14) {
       if (c.tid >= 0) { if (mine) addNews(`${ASST_LABEL[c.role]} ${cname(c)} is leaving to interview for coordinator jobs.`, [c.tid], 'coach'); vacateCoach(c); }
       promoteToCoordinator(c);
     } else if (POS_ROLES.includes(c.role) && (c.dev + c.coh) / 2 >= 64 && (c.yrs || 0) >= 2 && rand() < 0.1) {

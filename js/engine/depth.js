@@ -80,7 +80,11 @@ const TUNE = {
   helpRef: 64, helpSkill: 0.03, // zone help: the rating at which the second defender in an area helps the standard amount, and how much each point changes it
   containRead: 0.02, chaseSpeed: 0.02, // the ends: play recognition keeps contain (fewer escapes outside), speed runs an escaped quarterback down sooner
   chemRef: 81,          // the chemistry of an ordinary settled unit: above it helps, below it hurts
-  chemOL: 2.6, chemDL: 2.0, chemLB: 2.2, chemDB: 0.3, chemQB: 0.4, chemD: 0.0025, chemKB: 0.3, // how much each unit's chemistry is worth where it acts
+  chemOL: 2.6, chemDL: 3.2, chemLB: 2.2, chemContain: 2.5, chemDB: 0.3, chemQB: 0.4, chemD: 0.0025, chemKB: 0.3, // how much each unit's chemistry is worth where it acts
+  callKey: 0.003,       // the read of the play: what a point of Play Calling between the two callers is worth
+  catchKey: 0.15, catchGain: 1.1, catchFresh: 0.85, catchRun: 2.6, catchBlock: 3.5, // catching on: what it is worth to the read, to the caller's choices against this defense, and to seeing its line games coming
+  paVolume: 1.2, paSeen: 0.9, // play-action: how much the run's share of the offense adds to the fake, and how much a defense that adjusts stops biting
+  lateLegs: 0.4,        // rating points in the fourth quarter between a well and an ordinarily conditioned team (40 points of the rating)
   dotWeight: 0.5,       // how much of the gap between the signal-caller's eyes and his whole make-up (system, leadership) counts
   filmRun: 0.6,        // how much a season of the opponent's run and pass habits counts against what the defense sees today
   kickOp: 0.05,         // field goal percentage from a good or bad operation

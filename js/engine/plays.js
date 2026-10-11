@@ -54,9 +54,9 @@ function runToContact(g, carrier, levels, opts = {}) {
 function defBySlot(def, ...slots) { for (const s of slots) { const e = def.find(x => x.slot === s && !x.used); if (e) return e; } return null; }
 function nearestDef(list, x) { return list.filter(Boolean).sort((a, b) => Math.abs(a.x - x) - Math.abs(b.x - x))[0] || null; }
 // deception check: does this defender bite? (Play Recognition vs the coordinator's Deception and the call's credibility)
-function bites(g, e, strength) {
+function bites(g, e, strength, kind) { // kind: 'pass' (play-action, screens) is sold by the pass-game coordinator, 'run' (draws) by the run-game coordinator
   const o = g.poss;
-  const dcp = offCreativity(T(g.tids[o]));
+  const dcp = kind === 'pass' ? g.cx[o].pCre : kind === 'run' ? g.cx[o].rCre : offCreativity(T(g.tids[o]));
   return rand() < lgt(strength + clamp(dcp - 55, -35, 35) * 0.008 - soft(ea(g, e, 'prec') - 70, 18) * 0.045 - g.key * 0.9);
 }
 
@@ -109,7 +109,7 @@ function resolveRun(g, off, def, oc, dc) {
   }
   // motion and zone flow: linebackers have to read it
   const motion = !!oc.mv && oc.mv.kind === 'jet';
-  const lbChem = chemEdge(def, ['LB']) * TUNE.chemLB; // linebackers who have played together fit the run the same way // a man running across the formation at the snap: flow the other way
+  const lbChem = chemEdge(def, ['LB']) * TUNE.chemLB + (defCaught(g, g.poss, 1 - g.poss, true) - offCaught(g, g.poss, 1 - g.poss, true)) * TUNE.catchRun; // and a run-defense staff that has caught on to this run game gets them there sooner (or a run-game staff that has caught on to the fits, later) // linebackers who have played together fit the run the same way // a man running across the formation at the snap: flow the other way
   // ---- build the contact sequence ----
   const levels = [];
   const fronts = blk.filter(r => r.lvl === 1), seconds = blk.filter(r => r.lvl === 2);
@@ -128,7 +128,7 @@ function resolveRun(g, off, def, oc, dc) {
     if (oc.scheme === 'GAP' && !oc.counter) w *= 0.94; // a hat on a hat at the point of attack
     if (oc.wide) w *= 0.88;                          // the stretch gets the line moving and cuts off pursuit
     if (oc.tight && outside) w *= 0.92;              // receivers in close seal the edge
-    if (draw && r.state !== 'free') w *= bites(g, r.e, 0.6) ? 0.35 : 1.1;
+    if (draw && r.state !== 'free') w *= bites(g, r.e, 0.6, 'run') ? 0.35 : 1.1;
     if (r.state !== 'free') w *= clamp(1 - burstD * TUNE.burHole, 0.75, 1.25); // a blocked defender has to get off the block before the back is through: burst is how long he has
     if (r.state === 'free' && r.backside && lane === 'designed') continue;
     if (rand() < w) {
@@ -304,6 +304,11 @@ function resolvePass(g, off, def, oc, dc) {
   const res = { kind: 'pass', qb, yds: 0 };
   if (oc.type === 'RBSCR' || oc.type === 'WRSCR') return screen(g, off, def, oc, dc, res, qb);
   const pa = oc.tags.has('PA') || oc.type === 'GADGET', boot = oc.tags.has('BOOT');
+  // Play-action is believed when the run game has earned it: how well it has run today, once it has run enough to count, and how much
+  // of the offense the run has been. And a defense whose pass staff adjusts well stops biting on a fake it has already seen.
+  const runN = g.runY ? g.runY[g.poss][1] : 0, allN = g.ts && g.ts[g.poss] ? g.ts[g.poss].plays || 0 : 0;
+  const paCred = (g.runCred[g.poss] - 4.2) * 0.25 * Math.min(1, runN / 10) + (allN >= 10 ? clamp(runN / allN - 0.41, -0.25, 0.25) * TUNE.paVolume : 0);
+  const paSeen = Math.max(0, (g.cx[1 - g.poss].dpAdj - 45) / 100) * Math.min(1, ((g.paN ? g.paN[g.poss] : 0)) / 6) * TUNE.paSeen;
   const tpl = oc.rpoThrow ? 'QUICK' : oc.type === 'GADGET' ? 'DEEP' : boot ? 'BOOT' : pa ? 'PA' : oc.type;
   const cpt = oc.cpt && CONCEPTS[oc.cpt] && CONCEPTS[oc.cpt].f === tpl ? CONCEPTS[oc.cpt] : null;
   let routes = cpt ? cpt.r : ROUTES[tpl];
@@ -343,7 +348,7 @@ function resolvePass(g, off, def, oc, dc) {
   const prot = passProtection(g, off, def, oc, dc, keep);
   // play-action / boot: rushers and second-level defenders may bite on the fake
   let tPress = prot.tPress;
-  if (pa) for (const a of prot.rushers.slice(0, 2)) if (bites(g, a.e, -0.6)) a.t += 0.35;
+  if (pa) for (const a of prot.rushers.slice(0, 2)) if (bites(g, a.e, -0.6 - paSeen, 'pass')) a.t += 0.35;
   if (boot) {
     // the pocket moves away from interior pressure; the backside edge must stay home or chase
     for (const a of prot.rushers) a.t += Math.abs(a.e.x) < 2.4 ? 0.6 : 0.2;
@@ -376,7 +381,7 @@ function resolvePass(g, off, def, oc, dc) {
   const sepNet = clamp(designKnob(T(g.tids[o]), 'passD') - designKnob(T(g.tids[d]), 'covD'), -35, 35) * 0.002;
   // PA / RPO: underneath defenders who bite leave windows behind them
   const bit = new Set();
-  if (pa) for (const e of droppers) if (['MLB', 'WLB', 'SAM', 'SS'].includes(e.slot) && bites(g, e, TUNE.paBite + (g.runCred[o] - 4.2) * 0.25)) bit.add(e);
+  if (pa) for (const e of droppers) if (['MLB', 'WLB', 'SAM', 'SS'].includes(e.slot) && bites(g, e, TUNE.paBite + paCred - paSeen, 'pass')) bit.add(e);
   if (oc.rpoVacated) bit.add(oc.rpoVacated);
   const pressRate = man ? 0.35 + (dcx.dt.man - 0.35) * 0.6 : dc.cov === 'C2' || dc.cov === 'T2' ? 0.4 : dc.cov === 'C6' ? 0.25 : 0.12;
   // the coordinator shades coverage toward the opponent's best receiver (safety rolled over, bracket, robber)
@@ -502,7 +507,7 @@ function resolvePass(g, off, def, oc, dc) {
       const inside = isIn(rusher); // pressure up the middle: he cannot step up, and it comes with a hand in his face
       const tightEnds = prot.rushers.filter(a => a.e.depth < ON_LINE && Math.abs(a.e.x) >= 2).every(a => Math.abs(a.e.x) < 2.5);
       const ends = prot.rushers.filter(a => a.e.depth < ON_LINE && Math.abs(a.e.x) >= 2).map(a => a.e), endAvg = k => ends.length ? ends.reduce((s, x) => s + ea(g, x, k), 0) / ends.length : 65;
-      const esc = lgt(-0.15 - (inside ? 0 : (endAvg('prec') - 66) * TUNE.containRead) + (tightEnds ? TUNE.tightEsc : 0) + (pkt * 0.55 + ea(g, qb, 'agi') * 0.2 + ea(g, qb, 'spd') * 0.1 + ea(g, qb, 'bur') * 0.15 - (ea(g, rushE, 'prsh') * 0.5 + ea(g, rushE, 'bur') * 0.5)) * 0.045 - (rusher.free ? 0.7 : 0) - bod(qb).w * 0.04 * TUNE.size - (inside ? 0.45 + (ea(g, rushE, 'prsh') - 70) * 0.02 : 0));
+      const esc = lgt(-0.15 - (inside ? 0 : (endAvg('prec') - 66) * TUNE.containRead + chemEdge(def, ['DL']) * TUNE.chemContain) + (tightEnds ? TUNE.tightEsc : 0) + (pkt * 0.55 + ea(g, qb, 'agi') * 0.2 + ea(g, qb, 'spd') * 0.1 + ea(g, qb, 'bur') * 0.15 - (ea(g, rushE, 'prsh') * 0.5 + ea(g, rushE, 'bur') * 0.5)) * 0.045 - (rusher.free ? 0.7 : 0) - bod(qb).w * 0.04 * TUNE.size - (inside ? 0.45 + (ea(g, rushE, 'prsh') - 70) * 0.02 : 0));
       // fast ends close the distance once he is out
       if (rand() < esc) { escaped = true; tPress = t + 0.8 + rand() * 0.6 - clamp((endAvg('spd') - 76) * TUNE.chaseSpeed, -0.25, 0.3); if (inside) tPress = Math.max(t + 0.3, Math.min(tPress, tOut + TUNE.flush)); } // flushed out of the middle, he runs into the ends
       if (escaped) {
@@ -678,7 +683,7 @@ function screen(g, off, def, oc, dc, res, qb) {
   const { rushers, droppers } = chooseRushers(g, def, dc);
   // does someone smell it out?
   const readers = rbScreen ? droppers.filter(e => ['MLB', 'WLB', 'SAM'].includes(e.slot)).slice(0, 1).concat(rushers.slice(0, 1)) : droppers.filter(e => ['CB', 'NCB', 'DIME'].includes(e.slot) && Math.sign(e.x) === Math.sign(tgt.x || 1));
-  const sniffed = readers.find(e => !bites(g, e, rbScreen ? 0.9 : 0.6));
+  const sniffed = readers.find(e => !bites(g, e, rbScreen ? 0.9 : 0.6, 'pass'));
   const res2 = Object.assign(res, { target: tgt, air: rbScreen ? -randInt(1, 3) : randInt(-2, 1), ttt: 0.9, xc: 0.94 });
   const tag = `${pshort(qb.p)} ${rbScreen ? 'screen' : 'bubble screen'} to ${pshort(tgt.p)}`;
   // pressing or squatting corners blow up the bubble; aggressive rushes feed the RB screen

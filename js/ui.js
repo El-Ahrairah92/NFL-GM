@@ -193,7 +193,7 @@ function render() {
   const app = $('#app');
   applyTheme();
   if (!state) { app.innerHTML = setupHTML(); return; }
-  if (!state.rv2) { state.rv2 = 1; for (const c of Object.values(state.coaches)) { migrateCoach(c, state.teams, state.coaches); updateCoachOvr(c); } TEND_VER++; }
+  if (state.rv2 !== 3) { state.rv2 = 3; for (const c of Object.values(state.coaches)) { migrateCoach(c, state.teams, state.coaches); updateCoachOvr(c); } TEND_VER++; }
   if (state.phase === 'FA' && (!state.fa || state.fa.yr !== state.season)) { faOpen(); save(); } // a save that was already in free agency when the market was added
   document.documentElement.style.setProperty('--accent', T(state.userTid).color);
   if (state.phase === 'RECAP' && ui.wrapSeen !== state.season) { ui.wrapSeen = state.season; ui.seasonYr = null; view = 'season'; } // the season just ended: open its review once
@@ -2065,8 +2065,8 @@ function coachRoleBlurb(c) {
   return { HC: 'He runs the building and the game: practice, discipline, how fast new players fit in, and the decisions on Sunday.',
     OC: 'His scheme, and how much of it his players ever learn. If he calls the plays, the calls and the adjustments are his too.', DC: 'His scheme, and how much of it his players ever learn. If he calls the plays, the calls and the adjustments are his too.',
     STC: 'Coverage and return units, the kicking operation, and the kickers and punters themselves.', SC: 'Who gets hurt, how fast they come back, how fresh the team is late, and how bodies develop and age.',
-    PGC: 'He adds wrinkles to the passing game and prepares it for this week\'s opponent.', RGC: 'He adds wrinkles to the run game and prepares it for this week\'s opponent.',
-    DPC: 'He adds wrinkles to the coverage and pressure and prepares them for this week\'s opponent.', DRC: 'He adds wrinkles to the run defense and prepares it for this week\'s opponent.' }[c.role]
+    PGC: 'His creativity keeps your passing game hard to figure out; his adjustments figure out their pass defense as the game goes on.', RGC: 'His creativity keeps your run game hard to figure out; his adjustments figure out their run defense as the game goes on.',
+    DPC: 'His creativity keeps your coverage and pressure hard to figure out; his adjustments figure out their passing game as the game goes on.', DRC: 'His creativity keeps your run defense hard to figure out; his adjustments figure out their run game as the game goes on.' }[c.role]
     || 'Cohesion is how far his room can get on the same page: the ceiling on its chemistry. Technique is how fast his players improve.';
 }
 function coachNameLink(c) { return c ? `<button class="link" data-action="coach" data-cid="${c.id}">${esc(cname(c))}</button>` : '<span class="bad">Vacant</span>'; }

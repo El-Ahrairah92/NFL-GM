@@ -33,8 +33,8 @@ function filmKey(b, pers) { return b + '|' + pers; }
 function filmRunRate(tid, b, pers, g, s) {
   const f = (T(tid).film || {})[filmKey(b, pers)] || [0, 0];
   const live = g.liveFilm[s][filmKey(b, pers)] || [0, 0];
-  // the defense's plan for this offense (its specialists' Game Planning against the offense's Creativity), and how fast its caller adjusts to what he sees today
-  const dS = 1 - s, pf = g.cx ? clamp((g.cx[dS].dplan - 30) / 60, 0, 1) * clamp(1.3 - g.cx[s].cre / 100, 0.4, 1.1) : 0, af = g.cx ? clamp(0.3 + g.cx[dS].dadj / 71, 0.5, 1.6) : 1;
+  // the defensive caller's plan for this offense: how much of its film he walks in knowing
+  const dS = 1 - s, pf = g.cx ? clamp((g.cx[dS].dpc - 30) / 60, 0, 1) * clamp(1.3 - g.cx[s].cre / 100, 0.4, 1.1) : 0, af = 1;
   const runs = f[0] * pf * TUNE.filmRun + live[0] * 2 * af, passes = f[1] * pf * TUNE.filmRun + live[1] * 2 * af;
   return (runs + 2) / (runs + passes + 4);
 }
@@ -72,6 +72,8 @@ function wpick(obj) {
 function offenseCall(g) {
   const o = g.poss, d = 1 - o, cx = g.cx[o], ot = cx.ot, T_ = g.side[o], sit = situation(g);
   const pcF = cx.pc / 99, adpF = cx.adp / 99;
+  // rg: how sharply he acts on what this defense is showing. His own Play Calling, lifted when his pass-game staff has caught on to their coverage and pressure.
+  const rg = pcF * clamp(1 + offCaught(g, o, d, false) * TUNE.catchGain, 0.6, 1.5);
   const call = { b: sit.b, tags: new Set(), passDown: sit.passDown };
   // --- run or pass intent
   let pr = g.basePass[o];
@@ -148,10 +150,10 @@ function offenseCall(g) {
     if (call.form === 'EMP') { w.RBSCR = 0; w.DEEP *= 0.8; }
     if (g.togo >= 15) w.RBSCR *= 1.6;
     // a defense that has been coming all day gets the ball out quick and the screen; one that never comes gets tested deep
-    { const b = clamp(blitzy - 0.25, -0.2, 0.6) * pcF; w.QUICK *= 1 + b * 1.6; w.RBSCR *= 1 + b * 2.4; w.WRSCR *= 1 + b * 1.2; w.DEEP *= Math.max(0.3, 1 - b * 0.9); }
+    { const b = clamp(blitzy - 0.25, -0.2, 0.6) * rg; w.QUICK *= 1 + b * 1.6; w.RBSCR *= 1 + b * 2.4; w.WRSCR *= 1 + b * 1.2; w.DEEP *= Math.max(0.3, 1 - b * 0.9); }
     call.type = wpick(w) || 'DROP';
     // the concept: from the coach's own book, leaning (as far as the play caller is sharp) toward what beats this defense's habits
-    { const book = cx.cb && cx.cb[call.type]; if (book) { const mix = seenCov(g, d), cw = {}, vC = variety(g, o, 'O'), top = Object.keys(book).sort((a, b) => book[b] - book[a])[0]; for (const k in book) cw[k] = book[k] * (k === top ? 1 : vC) * Math.exp(conceptEdge(k, mix) * TUNE.conceptPlan * pcF); call.cpt = wpick(cw) || null; } }
+    { const book = cx.cb && cx.cb[call.type]; if (book) { const mix = seenCov(g, d), cw = {}, vC = variety(g, o, 'O'), top = Object.keys(book).sort((a, b) => book[b] - book[a])[0]; for (const k in book) cw[k] = book[k] * (k === top ? 1 : vC) * Math.exp(conceptEdge(k, mix) * TUNE.conceptPlan * rg); call.cpt = wpick(cw) || null; } }
   }
   // --- tags (spec §7a compatibility; Motion + one other, PA+Boot, Rub+Sideline)
   const key = call.type === 'RUN' ? (call.carrier === 'QB' ? 'RUN_QB' : call.carrier === 'FB' ? 'RUN_FB' : call.dir === 'IN' ? 'RUN_RB_IN' : 'RUN_RB_OUT') : call.type;
@@ -163,7 +165,7 @@ function offenseCall(g) {
   if (ok.has('PA') && !sit.hurry && (g.down <= 2 || g.togo <= 3) && call.form !== 'EMP' && rand() < ot.pa * (call.form === 'SG' ? 3.8 : 6.0) * Math.exp(clamp(adv.PA || 0, -1, 1) * 0.3 * pcF)) call.tags.add('PA');
   if (ok.has('BOOT') && !sit.hurry && call.form !== 'EMP' && rand() < ot.boot * (call.tags.has('PA') ? 1.8 : 0.4)) call.tags.add('BOOT');
   if (ok.has('RPO') && call.form !== 'UC' && rand() < ot.rpo * 1.3) call.tags.add('RPO');
-  if (ok.has('RUB') && rand() < 0.06 + (manRate - 0.3) * 0.5 * pcF + (sit.red ? 0.12 : 0)) call.tags.add('RUB');
+  if (ok.has('RUB') && rand() < 0.06 + (manRate - 0.3) * 0.5 * rg + (sit.red ? 0.12 : 0)) call.tags.add('RUB');
   if (ok.has('SIDE') && sit.needClock && rand() < 0.65) call.tags.add('SIDE');
   if (ok.has('TRICK') && rand() < ot.trick * (call.type === 'JET' ? 2.5 : 0.35)) call.tags.add('TRICK');
   // enforce allowed stacks
@@ -177,7 +179,7 @@ function offenseCall(g) {
   { const ft = cx.ft || {}, F = FORMS[call.pers] || {}, spread = ['10', '11'].includes(call.pers) && call.form !== 'UC'; let fm = null;
     if (call.form !== 'EMP') {
       const vF = variety(g, o, 'O');
-      if (spread && F.Trips && rand() < (ot.trips || 0) * vF) fm = 'Trips'; else if (spread && F.Bunch && rand() < (ot.bunch || 0) * vF * clamp(1 + (seenShare(g, d, 'man', 0.35) - 0.35) * 3 * pcF, 0.5, 2.5)) fm = 'Bunch'; // more bunch against a defense that keeps playing man
+      if (spread && F.Trips && rand() < (ot.trips || 0) * vF) fm = 'Trips'; else if (spread && F.Bunch && rand() < (ot.bunch || 0) * vF * clamp(1 + (seenShare(g, d, 'man', 0.35) - 0.35) * 3 * rg, 0.5, 2.5)) fm = 'Bunch'; // more bunch against a defense that keeps playing man
       else if (F.Tight && rand() < (ot.tight || 0) * vF) fm = 'Tight';
       else if (F.Doubles && FORM_HOME[call.pers] !== 'Doubles' && rand() < (ft.doubles || 0) * vF) fm = 'Doubles'; else if (F.Wing && rand() < (ft.wing || 0) * vF) fm = 'Wing';
       // two backs: in the gun they split either side of the quarterback; under center the fullback is in front of the tailback or offset to the strength
@@ -199,7 +201,7 @@ function offenseCall(g) {
 // ---------- defense ----------
 function defenseCall(g, oc) {
   const o = g.poss, d = 1 - o, cx = g.cx[d], dt = cx.dt, sit = situation(g);
-  const pcF = cx.pc / 99;
+  const pcF = callGain(g, d, true); // the defensive caller
   // what does the film say this offense does from this down & personnel?
   const runEst = filmRunRate(g.tids[o], sit.b, oc.pers, g, o);
   const call = { front: dt.front, runEst };
