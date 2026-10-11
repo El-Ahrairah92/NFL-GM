@@ -121,11 +121,25 @@ function dcLayout(t, tab, vid, pass) {
   return rows;
 }
 // who the engine would actually put out there in this view right now (your chart if you set one, the staff's read if not)
-function dcLineup(tid, tab, vid, pass) {
+function dcLineup(tid, tab, vid, pass, without) {
+  // 'without' previews the lineup if that man went down
+  const gone = without ? P(without) : null, keepInj = gone ? gone.injury : null; if (gone) gone.injury = { weeks: 1, preview: true };
+  try { return dcLineup0(tid, tab, vid, pass); } finally { if (gone) { if (keepInj) gone.injury = keepInj; else delete gone.injury; } }
+}
+function dcLineup0(tid, tab, vid, pass) {
   const g = { tids: [tid, tid], side: [null, null], ps: {}, famPen: [0, 0], down: 1, togo: 10, ydl: 30, preview: true }; initSide(g, 0);
   const t = T(tid), L = tab === 'off' ? null : defLookOf(t, vid);
   const u = tab === 'off' ? offUnit(g, 0, vid, null) : defUnit(g, 0, L.front, L.pkg, !!pass && (L.pkg === 'NICKEL' || L.pkg === 'DIME'), false, lookTOf(L));
-  const m = {}; for (const e of u) m[e.name] = e.p; return m;
+  const m = {}, why = {}; for (const e of u) { m[e.name] = e.p; if (e.why) why[e.name] = e.why; } Object.defineProperty(m, '_why', { value: why }); return m;
+}
+// everyone your chart starts somewhere (as many per job as it has spots, plus the next man), and anyone pinned to a spot in a look
+function chartDress(tid) {
+  const t = T(tid), c = t && t.dch; if (!c || (typeof isAI === 'function' && isAI(tid)) || (state.settings.autoUser && tid === state.userTid)) return null;
+  const keep = new Set(), J = c.auto.def ? null : defJobs(t);
+  for (const k in c.lists) { const u = CHART_UNIT(k); if (u === 'st' || c.auto[u] || k.includes(':')) continue;
+    const n = (u === 'def' ? (J.n[k] || (k === 'RUSHE' || k === 'RUSHI' ? 2 : 1)) : 1) + 1; c.lists[k].slice(0, n).forEach(id => keep.add(id)); }
+  for (const k in c.ov || {}) keep.add(c.ov[k]);
+  return keep;
 }
 function ovKeyFor(t, tab, vid, pass) { if (tab === 'off') return vid; const L = defLookOf(t, vid); return defLookKey(L.front, L.pkg, lookTOf(L), !!pass && (L.pkg === 'NICKEL' || L.pkg === 'DIME')); }
 function setOverride(tid, tab, vid, pass, name, pid) {

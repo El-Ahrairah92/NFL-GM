@@ -788,8 +788,8 @@ function dcJobCard(t, c, k, need, where, prob) {
   const rotNow = rotOf(c, k), rotList = rotOpts(k), rotPick = rotList.length ? rotList.reduce((a, o) => Math.abs(o[0] - rotNow) < Math.abs(a[0] - rotNow) ? o : a)[0] : 0;
   const rot = ROT_KEYS.has(k) && rotList.length > 1 ? `<div class="dcj-rot"><span>Next man's snaps</span><select data-change="dchRot" data-key="${k}">${rotList.map(([v, l]) => `<option value="${v}" ${v === rotPick ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : '';
   return `<div class="dcj ${on ? 'on' : ''} ${prob ? 'bad' : ''}" data-action="dcJob" data-key="${k}">
-    <div class="dcj-h"><b>${esc(jobLabel(k))}</b>${need > 1 ? `<span class="dcj-tag">${need} start</span>` : ''}${prob ? '<span class="dcj-tag bad">needs a man</span>' : ''}</div>
-    <div class="dcj-list">${list.map((p, i) => dcChip(p, k, i, need)).join('')}${list.length < n ? `<div class="dcj-drop ${list.length ? 'more' : ''}" data-dcjob="${k}" data-dci="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div>` : ''}</div>
+    <div class="dcj-h"><b>${esc(jobLabel(k))}</b>${need > 1 && !ST_UNIT[k] ? `<span class="dcj-tag two" title="This job has ${need} spots on the field at once: the first ${need} listed both start">top ${need} start</span>` : ''}${prob ? '<span class="dcj-tag bad">needs a man</span>' : ''}</div>
+    <div class="dcj-list">${list.map((p, i) => (i === need && !ST_UNIT[k] ? '<div class="dcj-div"><span>next in line</span></div>' : '') + dcChip(p, k, i, need)).join('')}${list.length < n ? `<div class="dcj-drop ${list.length ? 'more' : ''}" data-dcjob="${k}" data-dci="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div>` : ''}</div>
     <details class="dcj-more" ${foldAttr('dcj' + k)}><summary>about this job</summary><div class="small muted">${esc(JOB_HELP[k] || '')}${where && where.length ? `<br><b>Plays in:</b> ${esc([...new Set(where)].join(', '))}` : ''}</div>${rot}</details></div>`;
 }
 function depthChartHTML() {
@@ -822,7 +822,15 @@ function depthChartHTML() {
     const views = dcViews(t, tab); ui.dchView = ui.dchView || {};
     const vid = views.some(v => v.id === ui.dchView[tab]) ? ui.dchView[tab] : views[0].id, view = views.find(v => v.id === vid);
     const sub = tab === 'def' && (view.pkg === 'NICKEL' || view.pkg === 'DIME'), pass = sub && ui.dcPass === '1';
-    const lay = dcLayout(t, tab, vid, pass), lineup = dcLineup(u, tab, vid, pass), ok = ovKeyFor(t, tab, vid, pass);
+    const outP = ui.dcOut && ro.some(p => p.id === ui.dcOut) ? P(ui.dcOut) : null;
+    const lay = dcLayout(t, tab, vid, pass), normal = dcLineup(u, tab, vid, pass), lineup = outP ? dcLineup(u, tab, vid, pass, outP.id) : normal, ok = ovKeyFor(t, tab, vid, pass);
+    // why a spot is not being played by the first man on its list
+    const whyText = (b, p) => { const w = lineup._why[b.name]; if (!w || w === 'ov' || auto) return null;
+      if (w === 'staff') return ['staff', "Nobody left on this job's list: the staff put him here"];
+      if (w === 'rot') return ['rest', 'In for a rotation'];
+      const list = c.lists[b.key] || [], above = list.slice(0, Math.max(0, list.indexOf(p.id))).map(id => P(id)).filter(Boolean), at = q => lay.find(x => lineup[x.name] === q);
+      const why = above.map(q => (outP && q.id === outP.id) || q.injury ? `${q.last} is out` : at(q) ? `${q.last} is at ${at(q).label.toLowerCase()} in this look` : `${q.last} is not dressed`);
+      return ['next up', why.length ? why.join(' · ') : 'Next man up']; };
     const pills = tab === 'def'
       ? [...new Set(views.map(v => v.group))].map(gr => `<div class="dc2-lk"><span>${esc(gr)}</span>${views.filter(v => v.group === gr).map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.label)}${v.share && v.group !== 'Other' ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div>`).join('')
       : `<div class="dc2-lk"><span>Personnel</span>${views.map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.id === 'JUMBO' ? 'Jumbo' : v.id)}${v.share ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div>`;
@@ -837,11 +845,13 @@ function depthChartHTML() {
     const yard = tab === 'def' ? [5, 10].map(y => `<div class="dcf-yl" style="top:${86 - y * 5.5 + 6}%"><span>${y}</span></div>`).join('') : '';
     const spots = pos.map(({ b, left, top }) => { const p = lineup[b.name] && lineup[b.name].a ? lineup[b.name] : null, ov = !auto && c.ov[ok + ':' + b.name] !== undefined, tr = p ? jobTier(p, b.key) : null;
       const cls = !p ? 'empty' : THIN_TIERS.has(tr) ? 'thin' : OK_TIERS.has(tr) ? 'soft' : '';
-      return `<div class="dcs ${cls} ${b.key === job ? 'on' : ''} ${ov ? 'ov' : ''}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%" data-action="dcJob" data-key="${b.key}" data-dcov="${b.name}" ${p ? `draggable="true" data-dcp="${p.id}"` : ''} title="${p ? esc(pname(p)) + ' · ' + esc(p.lbl) + ' · ' + tr + ' at this job' : 'Nobody'}${ov ? ' · set for this look only' : ''}">
-        <div class="dcs-r">${esc(b.label)}${b.tech ? `<i>${b.tech}</i>` : ''}</div><div class="dcs-n">${p ? esc(p.last) : '—'}${p ? dcDot(p, b.key) : ''}</div>${ov ? `<button class="dcs-pin" data-action="dcOvClear" data-name="${b.name}" title="Remove the override: go back to the job order">this look ×</button>` : ''}</div>`; }).join('');
+      const wy = p ? whyText(b, p) : null, chg = outP && normal[b.name] !== lineup[b.name];
+      return `<div class="dcs ${cls} ${b.key === job ? 'on' : ''} ${ov ? 'ov' : ''} ${chg ? 'chg' : ''}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%" data-action="dcJob" data-key="${b.key}" data-dcov="${b.name}" ${p ? `draggable="true" data-dcp="${p.id}"` : ''} title="${p ? esc(pname(p)) + ' · ' + esc(p.lbl) + ' · ' + tr + ' at this job' : 'Nobody'}${ov ? ' · set for this look only' : ''}">
+        <div class="dcs-r">${esc(b.label)}${b.tech ? `<i>${b.tech}</i>` : ''}</div><div class="dcs-n">${p ? esc(p.last) : '—'}${p ? dcDot(p, b.key) : ''}</div>${ov ? `<button class="dcs-pin" data-action="dcOvClear" data-name="${b.name}" title="Remove the override: go back to the job order">this look ×</button>` : wy ? `<span class="dcs-why ${wy[0] === 'staff' ? 'bad' : ''}" title="${esc(wy[1])}">${wy[0]}</span>` : ''}</div>`; }).join('');
     const nOv = Object.keys(c.ov).filter(k => k.startsWith(ok + ':')).length;
     field = `<div class="card dc2-field"><div class="dc2-looks">${pills}</div>
       <div class="row" style="margin:6px 0 8px"><h3 style="margin:0">${tab === 'def' ? esc(view.group === 'Other' ? view.label : view.label + (view.pkg === 'BASE' ? ' · ' + view.group : ' · nickel')) : esc(PERS_LABEL[vid] || vid)}</h3><span class="spacer"></span>${scen}</div>
+      ${outP ? `<div class="dc2-out">Showing this ${tab === 'def' ? 'look' : 'grouping'} <b>without ${esc(pname(outP))}</b>. Outlined spots change hands. <button class="sm" data-action="dcOut" data-pid="0">Back to the real lineup</button></div>` : ''}
       <div class="dcf ${tab}"><div class="dcf-los"></div>${yard}${spots}</div>
       <div class="small muted" style="margin-top:6px">${auto ? "The staff's lineup. Drag anything and the unit is yours." : `<b>Drag a player onto a spot</b> to use him there in this ${tab === 'def' ? 'look' : 'grouping'} only${nOv ? ` (${nOv} set here)` : ''}.`} Top edge: green is starter level, amber below it, red well below. <i class="dcd warn"></i> learning the job · <i class="dcd bad"></i> raw.</div></div>`;
   }
@@ -872,7 +882,7 @@ function dcBigCard(p, job, jobs, c) {
   const listed = jobs.map(k => [k, (c.lists[k] || []).indexOf(p.id)]).filter(x => x[1] >= 0);
   const ord = i => ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'][i] || (i + 1) + 'th';
   const pb = PRAC_SIDE[p.pos] ? pbOf(p) : null;
-  return `<div class="card dc2-card"><div class="row"><b style="font-size:19px">${playerLink(p)}</b><span class="pill">${esc(p.lbl)}</span>${statusPills(p)}${tierPill(p)}${upsidePill(p)}${starHTML(starsOf(p))}<span class="spacer"></span><button class="sm" data-action="player" data-pid="${p.id}">Full card</button></div>
+  return `<div class="card dc2-card"><div class="row"><b style="font-size:19px">${playerLink(p)}</b><span class="pill">${esc(p.lbl)}</span>${statusPills(p)}${tierPill(p)}${upsidePill(p)}${starHTML(starsOf(p))}<span class="spacer"></span><button class="sm ${ui.dcOut === p.id ? 'primary' : ''}" data-action="dcOut" data-pid="${ui.dcOut === p.id ? 0 : p.id}" title="Show the field as it would line up without him">${ui.dcOut === p.id ? 'Showing without him' : 'If he goes down'}</button><button class="sm" data-action="player" data-pid="${p.id}">Full card</button></div>
     <div class="small muted" style="margin:4px 0 8px">Age ${p.age} · ${fmtHeight(p.m.ht)}, ${p.m.wt} lb · ${p.exp} yr${p.exp === 1 ? '' : 's'} · ${fmtContract(p)}${p.injury ? ` · <span class="bad">out ${p.injury.weeks} wk</span>` : ''}</div>
     <div class="dc2-fit"><div class="dc2-bk">At ${esc(jobLabel(job).toLowerCase())}</div><div class="row small" style="margin-top:4px">${tr ? `<span class="pill ${TIER_CLS[tr]}">${tr} here</span>` : ''}${jobSide(job) === 'st' ? '' : `<span class="pill ${CF_CLS[cf]}">${cf}</span>`}${m <= -1.5 ? '<span class="pill warn">light for the spot</span>' : m >= 1.5 ? '<span class="pill warn">heavy for the spot</span>' : ''}${listed.some(x => x[0] === job) ? `<span class="pill">${ord(listed.find(x => x[0] === job)[1])} on the card</span>` : `<button class="sm primary" data-action="dcAdd" data-key="${job}" data-pid="${p.id}">Add to this job</button>`}</div></div>
     <div style="margin:10px 0">${esc(scoutProfile(p))}</div>
@@ -3012,6 +3022,7 @@ const actions = {
   dcGrp: d => { const tab = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def'; (ui.dcGrp = ui.dcGrp || {})[tab] = d.v; ui.dcJob = null; ui.dchPid = null; render(); },
   dcLook: d => { (ui.dchView = ui.dchView || {})[['def', 'off'].includes(ui.dchTab) ? ui.dchTab : 'def'] = d.v; render(); },
   dcPass: d => { ui.dcPass = d.v; render(); },
+  dcOut: d => { const keep = ui.dchPid; ui.dcOut = +d.pid || null; ui.dchPid = keep || +d.pid || null; render(); },
   dcRemove: d => { setChart(state.userTid, d.key, +d.i, 0); save(); render(); },
   dcAdd: d => { const blocked = !ui.dchAll && chartBlocked(state.userTid, d.key, +d.pid); if (blocked) { toast(blocked); return; } const cc = ensureChart(state.userTid); setChart(state.userTid, d.key, (cc.lists[d.key] || []).length, +d.pid); save(); render(); },
   dcOvClear: d => { const tab = ['def', 'off'].includes(ui.dchTab) ? ui.dchTab : 'def', t = T(state.userTid), views = dcViews(t, tab), vid = views.some(v => v.id === (ui.dchView || {})[tab]) ? ui.dchView[tab] : views[0].id; setOverride(state.userTid, tab, vid, ui.dcPass === '1', d.name, 0); save(); render(); },

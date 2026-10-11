@@ -971,3 +971,21 @@ Not done: the four points still exist as labels in cross-training, scouting text
 
 Not done: ratings on the page do not yet weigh a defensive back by the coach's mix of man and zone; the quarterback does not yet look for a linebacker or safety walked out over a receiver; cross-training and scouting text still use the old position names; offensive jobs wait on offensive coach libraries; linebackers, safeties and receivers have carry-over comfort but not ratings read between points the way the line has.
 
+## 48. How a chart becomes a lineup
+
+A look is resolved as a whole, not one spot at a time (which had made the answer depend on the order the spots were filled in).
+
+1. **An override plays where he was pinned**, if he is dressed and healthy. If not, the spot falls back on the job's order for that game and the override is kept.
+2. **Every other spot wants the highest available man on its job's list.** Fatigue and a planned series off count against him.
+3. **A job with two spots in the look starts the first two listed.** The card says "top 2 start" and draws a line under them.
+4. **Next man up moves.** When two jobs want the same man and he is a listed starter at one and the next healthy name at the other, he goes where he is needed and the job he left goes to its own next man. The list is the instruction: to keep him where he is, list someone else second.
+5. **First at two jobs in the same look:** he plays where the drop to the man behind him is bigger.
+6. **A rotation brings in the next man on that job's list who is not already on the field.** It never pulls another starter out of his job.
+7. **A spot whose list has run out is filled by the staff for that game**, and the page says so.
+
+**Game-day actives.** Anyone the chart starts (as many per job as it has spots, plus the next man) and anyone pinned to a spot dresses. A second end the user chose to start had been sitting out because he graded low, and a better man from another job was playing for him.
+
+**On the page.** A spot not played by the first man on its list carries a small tag with the reason on hover ("Abbott is out", "Barber is at nose in this look", "staff"). The player card has "If he goes down": the field redraws without him and outlines every spot that changes hands.
+
+Preseason games keep their own first, second and third strings and do not use these rules.
+

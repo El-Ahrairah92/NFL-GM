@@ -358,10 +358,11 @@ function gameDayActives(tid) {
   const ro = rosterOf(tid).filter(p => !p.injury && !onIR(p)); // a man still on injured reserve does not dress, healthy or not
   if (ro.length <= GAMEDAY_ACTIVE) return new Set(ro.map(p => p.id));
   const counts = {}; ro.forEach(p => counts[p.pos] = (counts[p.pos] || 0) + 1);
-  const out = new Set();
+  const out = new Set(), keep = typeof chartDress === 'function' ? chartDress(tid) : null; // a man you start does not sit because he grades out low
   // coaches know who helps on Sunday: the least valuable surplus bodies sit (often QB3, extra linemen, raw rookies)
   for (const p of ro.slice().sort((a, b) => a.ovr + stRosterValue(a) * 1.5 - b.ovr - stRosterValue(b) * 1.5)) { // a core special teamer dresses ahead of a slightly better body who does not help there
     if (ro.length - out.size <= GAMEDAY_ACTIVE) break;
+    if (keep && keep.has(p.id)) continue;
     if (counts[p.pos] > (GAMEDAY_MIN[p.pos] || 1)) { out.add(p.id); counts[p.pos]--; }
   }
   return new Set(ro.filter(p => !out.has(p.id)).map(p => p.id));

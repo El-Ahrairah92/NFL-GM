@@ -258,6 +258,45 @@ function fatPenalty(g, p, grp) {
   const thr = FAT[grp][1];
   return st.fat > thr ? (st.fat - thr) * FAT_SLOPE[grp] : 0;
 }
+// Your chart, resolved for a whole look at once. The rules:
+//  1. An override plays where you pinned him, if he is dressed and healthy; otherwise the spot falls back on the job's order.
+//  2. Every other spot wants the highest man on its job's list who is available (fatigue and a planned series off count against him).
+//  3. A job with two spots in the look starts the first two on its list.
+//  4. When two jobs want the same man: if he is a listed starter at one and the next man up at the other (the men above him there
+//     are out), he moves to where he is needed and the job he left goes to its own next man. Your list is the instruction.
+//  5. If he is a starter at both (or next up at both), he plays where the drop to the man behind him is bigger.
+//  6. A man who comes off for a rotation is replaced by the next one on that job's list who is not already on the field.
+// A spot whose list has run out of available men is left for the staff to fill, and says so.
+function resolveChart(g, s, T_, slots, table, opts, chart, listFor) {
+  const avail = id => T_.roster.find(p => p.id === id), out = {}, taken = new Set();
+  if (opts.ov) for (const [name] of slots) { const id = opts.ov(name), p = id !== undefined && id !== null ? avail(id) : null; if (p && !taken.has(p.id)) { out[name] = { p, why: 'ov' }; taken.add(p.id); } }
+  const need = {}, all = slots.map(([name, slot, x, depth]) => { const key = opts.keyOf(name, slot, x, depth); need[key] = (need[key] || 0) + 1; return { name, slot, x, depth, key, list: listFor(key) || [], grp: table[slot][1], spot: table[slot][0] }; });
+  const rate = (q, p) => q.grp === 'DL' && !(q.depth > 0) && q.x !== undefined ? lineSlotRating(p, Math.abs(q.x)) : slotRating(p, q.spot);
+  const score = (q, p, i) => -i * 14 * (ROT_GAP[q.grp] || 1) - fatPenalty(g, p, q.grp) - (T_.rest && T_.rest.has(p.id) ? 40 : 0);
+  const ranked = (q, skip) => { const r = []; q.list.forEach((id, i) => { if (taken.has(id) || id === skip) return; const p = avail(id); if (p) r.push({ p, i, sc: score(q, p, i) }); }); return r.sort((a, b) => b.sc - a.sc); };
+  let open = all.filter(q => !out[q.name]);
+  for (let guard = 0; open.length && guard < 30; guard++) {
+    const want = open.map(q => ({ q, t: ranked(q)[0] })).filter(w => w.t);
+    if (!want.length) break;
+    const byP = new Map(); for (const w of want) { if (!byP.has(w.t.p.id)) byP.set(w.t.p.id, []); byP.get(w.t.p.id).push(w); }
+    for (const ws of byP.values()) {
+      let win = ws[0];
+      if (new Set(ws.map(w => w.q.key)).size > 1) {
+        const up = w => w.t.i >= need[w.q.key], ups = ws.filter(up), pool = ups.length && ups.length < ws.length ? ups : ws; // rule 4
+        const drop = w => { const n = ranked(w.q, w.t.p.id)[0]; return n ? rate(w.q, w.t.p) - rate(w.q, n.p) : 99; };      // rule 5
+        win = pool.slice().sort((a, b) => drop(b) - drop(a))[0];
+      }
+      out[win.q.name] = { p: win.t.p, i: win.t.i, key: win.q.key, why: win.t.i >= need[win.q.key] ? 'up' : null }; taken.add(win.t.p.id); open = open.filter(q => q !== win.q);
+    }
+  }
+  // rotation: the starter sits this snap and the next man on that job's list who is not on the field goes in
+  if (!g.preview && !g.pre) for (const q of all) { const a = out[q.name]; if (!a || a.why === 'ov') continue;
+    const hit = opts.rot ? opts.rot(q.key) : rand() < rotOf(chart, ROT_BAND[q.key] || !opts.rotKeyOf ? q.key : opts.rotKeyOf(q.name));
+    if (!hit) continue; const sub = q.list.map((id, i) => ({ id, i })).find(x => x.i > a.i && !taken.has(x.id) && avail(x.id));
+    if (sub) { out[q.name] = { p: avail(sub.id), i: sub.i, key: q.key, why: 'rot' }; taken.add(sub.id); } }
+  out._taken = taken;
+  return out;
+}
 // Fill a list of slots with the best available players (rating at the slot's spot, minus fatigue, plus continuity)
 function fillSlots(g, s, slots, table, opts = {}) {
   const T_ = g.side[s], used = new Set(opts.exclude || []), out = [];
@@ -272,6 +311,9 @@ function fillSlots(g, s, slots, table, opts = {}) {
   const preOn = !!(g.pre && chart && !g.preview), prePos = (slot, grp) => grp === 'DB' ? (['FS', 'SS', 'BIGN'].includes(slot) ? 'S' : 'CB') : slot === 'FB' ? 'RB' : grp, preFeat = preOn ? prePlanFor(g.tids[s]).feat : {}, resv = new Map();
   if (preOn) for (const [name, slot, x0, d0] of slots) { const l = listFor(opts.keyOf(name, slot, x0, d0)); if (!l) continue; const str = preString(g.tids[s], g, prePos(slot, table[slot][1])), id = l[str]; if (id !== undefined && !resv.has(id) && (str === 0 || !firsts.has(id)) && T_.roster.some(p => p.id === id)) resv.set(id, name); }
   const ovIds = new Set(); if (chart && opts.ov) for (const [name] of slots) { const id = opts.ov(name); if (id !== undefined && id !== null) ovIds.add(id); }
+  // your chart is worked out for the whole look first (exhibitions keep their own strings); anything it could not fill is left to the staff
+  const plan = chart && !preOn ? resolveChart(g, s, T_, slots, table, opts, chart, listFor) : null;
+  if (plan) for (const id of plan._taken) used.add(id);
   for (const [name, slot, x, depth] of slots) {
     const [spot, grp] = table[slot];
     let best = null, bs = -1e9;
@@ -297,7 +339,9 @@ function fillSlots(g, s, slots, table, opts = {}) {
       rotHit = g.preview || g.pre ? false : opts.rot ? opts.rot(key) : rand() < rotOf(chart, ROT_BAND[key] || !opts.rotKeyOf ? key : opts.rotKeyOf(name)); // a preview shows the order as set, never a random rotation snap
       if (rotHit) rotId = list.find((id, i) => i >= 1 && !firsts.has(id) && !used.has(id) && T_.roster.some(p => p.id === id));
     }
-    for (const c of cands) {
+    const pl = plan ? plan[name] : null;
+    if (pl) best = { p: pl.p, r: 0 };
+    else for (const c of cands) {
       if (used.has(c.p.id)) continue;
       let sc = c.r * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp);
       if (list) { const i = list.indexOf(c.p.id);
@@ -317,6 +361,7 @@ function fillSlots(g, s, slots, table, opts = {}) {
     used.add(best.p.id);
     const pen = best.p.a ? (ax !== null ? linePen(best.p, ax) : comfortPen(best.p, spot)) : 0; // how well he knows this spot; his own attributes do the rest
     const ent = { p: best.p, slot, name, spot, grp, x, depth: depth || 0, pen, s }; if (ax !== null) ent.lw = lineBlend(ax);
+    if (plan) ent.why = pl ? pl.why : 'staff';
     out.push(ent);
   }
   return out;

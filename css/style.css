@@ -253,6 +253,13 @@ button.dc2-at { cursor: pointer; }
 .dcs-r i { font-style: normal; color: var(--accent); }
 .dcs-n { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
 .dcs-pin { position: absolute; top: -11px; right: -6px; font-size: 9.5px; padding: 0 6px; border-radius: 999px; background: var(--accent); border-color: var(--accent); color: #fff; white-space: nowrap; }
+.dcs-why { position: absolute; top: -10px; left: -4px; font-size: 9.5px; padding: 0 6px; border-radius: 999px; background: var(--warn); color: #fff; white-space: nowrap; cursor: help; }
+.dcs-why.bad { background: var(--bad); }
+.dcs.chg { outline: 2px dashed var(--warn); outline-offset: 2px; }
+.dc2-out { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; padding: 6px 10px; margin-bottom: 8px; border-radius: 8px; background: color-mix(in srgb, var(--warn) 12%, var(--panel)); border: 1px solid var(--warn-b); }
+.dcj-div { display: flex; align-items: center; gap: 6px; margin: 5px 0 2px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.dcj-div::before, .dcj-div::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.dcj-tag.two { color: var(--accent); border-color: var(--accent); font-weight: 600; }
 /* dots */
 .dcd { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 5px; vertical-align: middle; font-style: normal; }
 .dcd.warn { background: var(--warn); } .dcd.bad { background: var(--bad); } .dcd.inj { width: auto; height: auto; color: var(--bad); font-size: 11px; }
