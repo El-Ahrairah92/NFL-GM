@@ -737,7 +737,7 @@ function contractHTML(p) {
   return h + '</div>';
 }
 function rosterActions(p) {
-  if (p.expiring && state.phase === 'RESIGN') return `<button class="sm primary" data-action="resign" data-pid="${p.id}" title="His preferred deal. Open his card for other lengths.">Re-sign ${prefYears(p)} yr · ${fmtMoney(p.ask)}</button> <button class="sm" data-action="player" data-pid="${p.id}">Terms…</button> <button class="sm danger" data-action="release" data-pid="${p.id}">Let go</button>`;
+  if (p.expiring && state.phase === 'RESIGN') return `<button class="sm primary" data-action="faOpen" data-pid="${p.id}" title="Sit down with his agent">Negotiate · asks ${fmtMoney(p.ask)}</button>`;
   return `<button class="sm danger" data-action="release" data-pid="${p.id}">Release</button>`;
 }
 
@@ -1740,55 +1740,137 @@ function faExpTxt(p) { if (!faInMarket(p)) return fmtMoney(p.ask); const r = faR
 function faSortVal(p) { return faInMarket(p) ? faExp(p) : p.ask; }
 function faIn(p) {
   const all = ui.faIn || (ui.faIn = {});
-  if (!all[p.id]) { const y = state.phase === 'REG' ? 1 : contractYears(p), e = faExp(p); all[p.id] = { role: 'start', spot: p.spot, yrs: y, gtd: round2(faGtdWant(p, y) * e * y * 0.8), aav: round2(e * 0.95), load: 'even', max: round2(e) }; }
+  if (!all[p.id] || all[p.id].v !== 2) { const y = state.phase === 'REG' ? 1 : contractYears(p), e = faExp(p), b = round2(faGtdWant(p, y) * e * y * 0.8);
+    all[p.id] = { v: 2, yrs: y, bonus: b, sal: round2(Math.max(MIN_SALARY, e * 0.95 - b / y)), load: 'even', inc: [], max: round2(e) }; }
   return all[p.id];
 }
-function faCalcTxt(p) {
-  const i = faIn(p), t = state.fa.talks[p.id], u = state.userTid, yrs = t && t.yrs ? t.yrs : i.yrs, gtd = t && t.gtd !== null && t.step === 3 ? t.gtd : i.gtd, aav = Math.max(+i.aav || 0, gtd / yrs, MIN_SALARY);
-  const y1 = loadSched(aav, yrs, i.load)[0], mine = faOffers(p).find(o => o.tid === u), room = capRoom(u) - faCommitted(u).amt + (mine ? loadSched(mine.aav, mine.yrs, mine.load)[0] : 0);
-  return `Total ${fmtMoney(aav * yrs)} over ${yrs} · ${Math.round(100 * gtd / Math.max(0.01, aav * yrs))}% guaranteed · cap hit this year ${fmtMoney(y1)} · leaves you <b class="${room - y1 < 0 ? 'bad' : ''}">${fmtMoney(room - y1)}</b>`;
+// the terms on the table right now: what has been agreed in the meeting, with whatever is being typed on top
+function faDraft(p) {
+  const i = faIn(p), t = negTalkOf(p), yrs = t && t.step === 2 ? t.yrs : clamp(Math.round(+i.yrs || 1), 1, 5), bonus = t && t.step === 2 ? t.gtd : Math.max(0, +i.bonus || 0);
+  const sal = Math.max(MIN_SALARY, +i.sal || 0), aav = round2(sal + bonus / yrs), inc = incClean(p, (i.inc || []).map(x => { const [k, th] = String(x.m || '').split(':'); return { k, th: +th, amt: +x.amt || 0 }; }), aav);
+  const o = { tid: state.userTid, yrs, gtd: bonus, sal, aav, load: yrs >= 2 ? i.load : 'even', inc }; o.incL = incLikelySum(p, inc);
+  return o;
 }
+// what every other contract on the books costs in a later year (0 is this year)
+function futureCommit(tid, i) {
+  let s = i === 0 ? (T(tid).dead || 0) : i === 1 ? (T(tid).deadNext || 0) : 0;
+  for (const q of rosterOf(tid)) { const c = q.contract; if (!c) continue;
+    if (c.yrs > i) s += i === 0 ? c.amt : (c.sched && c.sched[i] !== undefined ? c.sched[i] + (c.incL || 0) : c.sal !== undefined && c.bonus !== undefined ? c.amt : c.amt);
+    else if (c.next && i < c.yrs + c.next.yrs) s += c.next.amt; }
+  return round2(s);
+}
+function negOffset(p) { return negMode(p) === 'extend' ? p.contract.yrs : 0; } // an extension starts when his present deal ends
+function faHeadHTML(p) {
+  const o = faDraft(p), tot = o.sal * o.yrs + o.gtd, hit = faHit(o), mx = o.inc.reduce((s, x) => s + x.amt, 0), off = negOffset(p);
+  return `<b>${o.yrs} year${o.yrs === 1 ? '' : 's'}, ${fmtMoney(tot)}</b><span>${fmtMoney(o.gtd)} signing bonus</span><span><b>${fmtMoney(hit)}</b> against ${off ? 'the ' + (state.season + 1 + off) : "this year's"} cap</span>${mx ? `<span>up to ${fmtMoney(mx)} a year in incentives</span>` : ''}`;
+}
+function faCapTableHTML(p) {
+  const o = faDraft(p), u = state.userTid, base = loadSched(o.sal, o.yrs, o.load), share = o.gtd / o.yrs, mine = faOffers(p).find(x => x.tid === u), off = negOffset(p), com = negMode(p) === 'fa' ? faCommitted(u).amt - (mine ? faHit(mine) : 0) : 0;
+  const poss = o.inc.filter(x => !incLikely(p, x)).reduce((s, x) => s + x.amt, 0);
+  const rows = base.map((b, k) => { const hit = round2(b + share + (k === 0 ? o.incL : o.incL)), room = round2(state.cap - futureCommit(u, k + off) - (k === 0 ? com : 0) - hit), dead = round2(o.gtd * (o.yrs - k) / o.yrs);
+    return `<tr><td>${state.season + 1 + off + k}</td><td class="num">${fmtMoney(b)}</td><td class="num">${fmtMoney(share)}</td>${o.inc.length ? `<td class="num">${o.incL ? fmtMoney(o.incL) : '—'}</td>` : ''}<td class="num"><b>${fmtMoney(hit)}</b></td><td class="num ${room < 0 ? 'bad' : ''}">${fmtMoney(room)}</td>${o.inc.length ? `<td class="num muted">${poss ? '+' + fmtMoney(poss) : '—'}</td>` : ''}<td class="num warn" title="Cut him before the ${state.season + 1 + off + k} season and this much of the signing bonus counts against your cap at once. You would no longer owe his salary.">${fmtMoney(dead)}</td></tr>`; }).join('');
+  return `<table class="tbl fa-cap"><thead><tr><th>Season</th><th class="num" title="His pay for the season">Salary</th><th class="num" title="The signing bonus, spread evenly over the deal">Bonus share</th>${o.inc.length ? '<th class="num" title="Incentives he reached last season: they count now">Likely incentives</th>' : ''}<th class="num" title="What he costs against the cap that season">Cap hit</th><th class="num" title="Your cap room that season with everything else already on the books">Room left</th>${o.inc.length ? '<th class="num" title="Incentives he did not reach last season: they cost nothing now, and are charged the season after if he earns them">If earned</th>' : ''}<th class="num" title="What counts against your cap if you cut him before that season">If you cut him</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="small muted" style="margin-top:4px">Cap hit is the certain number. ${o.inc.length ? 'Incentives he did not reach last year cost nothing now: you are charged the following season, and only if he gets there. ' : ''}The last column is what it costs to move on from him.</div>`;
+}
+// The contract itself. None of the language matters; it follows the terms as they change.
+function faDocHTML(p) {
+  const o = faDraft(p), u = state.userTid, t = T(u), a = agentOf(p), base = loadSched(o.sal, o.yrs, o.load), tot = o.sal * o.yrs + o.gtd, share = o.gtd / o.yrs, y0 = state.season + 1 + negOffset(p);
+  const words = n => ['zero', 'one', 'two', 'three', 'four', 'five'][n] || n, M = v => `<b>${fmtMoney(v)}</b>`, club = `${esc(t.region)} ${esc(t.name)}`;
+  const art = (n, title, body) => `<div class="fd-art"><div class="fd-h">ARTICLE ${n} — ${title}</div>${body}</div>`;
+  const sub = (n, body) => `<p><span class="fd-n">${n}</span>${body}</p>`;
+  let d = `<div class="fd-top">STANDARD PLAYER CONTRACT</div><div class="fd-mid">between<br><b>${club} Football Club</b> ("Club")<br>and<br><b>${esc(pname(p))}</b> ("Player")</div>`;
+  d += art('I', 'TERM', sub('1.1', `This Agreement covers ${words(o.yrs)} (${o.yrs}) football season${o.yrs === 1 ? '' : 's'}, commencing with the ${y0} League Year and concluding at the end of the ${y0 + o.yrs - 1} League Year, unless sooner terminated in accordance with Article VI.`)
+    + sub('1.2', `Player shall report to Club in good physical condition and shall render services as a professional football player at ${esc(p.lbl)}, or at such position as Club may reasonably direct.`));
+  d += art('II', 'SIGNING BONUS', o.gtd > 0 ? sub('2.1', `As additional consideration for the execution of this Agreement, Club shall pay Player a signing bonus in the amount of ${M(o.gtd)}, payable within thirty (30) days of execution.`)
+    + sub('2.2', `For purposes of the League salary cap, said bonus shall be allocated in ${words(o.yrs)} (${o.yrs}) equal instalment${o.yrs === 1 ? '' : 's'} of ${M(share)} to each League Year of the Term. Upon termination, any unallocated portion shall be charged in accordance with League rules.`)
+    : sub('2.1', 'No signing bonus is payable under this Agreement.'));
+  d += art('III', 'COMPENSATION', sub('3.1', `For performance of Player's services Club shall pay Player the following annual salary${o.yrs >= 2 && o.load !== 'even' ? ` (${o.load === 'front' ? 'declining' : 'escalating'} schedule)` : ''}:`)
+    + `<div class="fd-sched">${base.map((b, k) => `<span>${y0 + k} League Year</span><span>${fmtMoney(b)}</span>`).join('')}</div>`
+    + sub('3.2', `Salary shall be paid in equal weekly instalments over the course of the regular season. The aggregate value of this Agreement, inclusive of the signing bonus and exclusive of incentives, is ${M(tot)}.`));
+  d += art('IV', 'INCENTIVES', o.inc.length ? o.inc.map((x, k) => sub('4.' + (k + 1), `Should Player, in any League Year of the Term, ${incLabel(x, true)}, Club shall pay Player an additional ${M(x.amt)}. <i>(${incLikely(p, x) ? 'Likely to be earned' : 'Not likely to be earned'}, on the basis of the ${state.season} season.)</i>`)).join('')
+    + sub('4.' + (o.inc.length + 1), 'Incentives shall be treated for salary cap purposes in accordance with the League rules governing amounts likely and not likely to be earned.')
+    : sub('4.1', 'This Agreement contains no performance incentives.'));
+  d += art('V', 'REPRESENTATION', sub('5.1', `Player is represented in the negotiation of this Agreement by ${esc(agentName(a))}, a certified contract advisor, and acknowledges having had the opportunity to review its terms.`));
+  d += art('VI', 'TERMINATION', sub('6.1', 'Club may terminate this Agreement upon written notice if, in the sole judgment of Club, Player\'s skill or performance has been unsatisfactory as compared with that of other players competing for positions on Club\'s roster.')
+    + sub('6.2', 'Upon such termination Club shall have no further obligation in respect of salary not yet earned. Amounts paid under Article II shall be retained by Player.'));
+  const signed = p.tid === u;
+  d += `<div class="fd-sig"><div><span>${signed ? '<i class="fd-ink">' + esc(pname(p)) + '</i>' : ''}</span>Player</div><div><span>${signed ? '<i class="fd-ink">' + esc(T(u).abbr) + ' Football Club</i>' : ''}</span>For the Club</div></div>`;
+  return d;
+}
+function faIncNoteHTML(p, x) {
+  if (!x.k || !INC_STAT[x.k]) return ''; const last = incValue(p, x.k, state.season), lk = incLikely(p, x), hon = x.k === 'pb' || x.k === 'ap';
+  return `<div class="small muted fa-incn">${hon ? (last ? `He made it last season, so this is counted as <b>likely</b>` : `He did not make it last season, so this is counted as <b>unlikely</b>`) : `He had ${last.toLocaleString('en-US')} ${INC_STAT[x.k][0]} last season, so ${x.th.toLocaleString('en-US')} is counted as <b>${lk ? 'likely' : 'unlikely'}</b>`}: ${lk ? `it counts against this year's cap now, and comes back next year if he misses.` : `it costs nothing now, and is charged next year only if he gets there.`}</div>`;
+}
+// the controls beside the contract: what you can say next
+function faControlsHTML(p) {
+  const u = state.userTid, t = negTalkOf(p), mode = negMode(p), onMkt = mode === 'fa', i = faIn(p), o = faDraft(p), dis = !t || t.aav === null ? 'disabled' : '';
+  const seg = (fk, opts) => `<span class="seg">${opts.map(([v, l]) => `<button class="sm ${String(i[fk]) === String(v) ? 'on' : ''}" data-action="faSeg" data-pid="${p.id}" data-f="${fk}" data-v="${v}">${l}</button>`).join('')}</span>`;
+  const num = (fk, w, extra) => `<input type="number" step="0.1" min="0" data-fain="${fk}" data-pid="${p.id}" ${extra || ''} value="${fk === 'amt' ? '' : i[fk]}" style="width:${w}px">`;
+  if (!t) return '';
+  if (t.closed) return `<div class="small muted" style="margin-top:8px">${t.closed === 'done' ? 'The agent will not take your calls about this player again.' : onMkt ? 'The meeting is over for today. Advance the day to talk again.' : 'He has heard enough for now. Come back to it once some time has passed.'}</div>${onMkt ? `<div class="row" style="gap:6px;margin-top:8px"><button class="sm danger" data-action="faWalkA" data-pid="${p.id}">Walk away for good</button></div>` : ''}`;
+  let h = '';
+  if (t.step === 1) h += `<div class="fa-step"><div class="fa-h">1 · Length and signing bonus</div>
+      <div class="fa-ctl"><label>Length</label>${seg('yrs', [1, 2, 3, 4, 5].map(y => [y, y + (y === 1 ? ' yr' : ' yrs')]))}</div>
+      <div class="fa-ctl"><label title="Paid when he signs. Spread evenly across your cap. If you cut him, the rest counts at once.">Signing bonus $M</label>${num('bonus', 84)}<button class="primary" data-action="faCommit" data-pid="${p.id}">Propose</button></div>
+      <div class="small muted">The bonus is his the day he signs. It is what makes him costly to cut.</div></div>`;
+  else {
+    const opts = incOptions(p), incs = i.inc || [];
+    h += `<div class="fa-step"><div class="fa-h">2 · Salary <span class="muted small">· ${t.yrs} year${t.yrs === 1 ? '' : 's'}, ${fmtMoney(t.gtd)} to sign</span></div>
+      <div class="fa-ctl"><label>Salary per year $M</label>${num('sal', 84)}</div>
+      ${t.yrs >= 2 ? `<div class="fa-ctl"><label title="When the salary is paid. More now costs cap room this year and makes him cheap later.">Paid</label>${seg('load', [['even', 'Evenly'], ['front', 'More now'], ['back', 'More later']])}</div>` : ''}
+      <div class="fa-h" style="margin-top:10px">3 · Incentives <span class="muted small">· optional</span></div>
+      ${incs.map((x, k) => { const [ik, th] = String(x.m || '').split(':'); return `<div class="fa-ctl"><label>If he</label><select data-change="faIncM" data-pid="${p.id}" data-i="${k}">${opts.map(q => `<option value="${q.k}:${q.th}" ${x.m === q.k + ':' + q.th ? 'selected' : ''}>${esc(incLabel(q))}</option>`).join('')}</select><input type="number" step="0.1" min="0" data-fain="inc${k}" data-pid="${p.id}" value="${x.amt}" style="width:70px" title="$M"><button class="sm" data-action="faIncX" data-pid="${p.id}" data-i="${k}">×</button></div>${faIncNoteHTML(p, { k: ik, th: +th })}`; }).join('')}
+      ${incs.length < 2 ? `<button class="sm" data-action="faIncAdd" data-pid="${p.id}">+ Add a bonus if he…</button>` : ''}
+      <div class="row" style="gap:6px;margin-top:10px"><button class="primary" data-action="faSalary" data-pid="${p.id}">Make the offer</button>
+        <button class="sm" data-action="faHoldA" data-pid="${p.id}" ${dis} title="Repeat your last offer and see if he moves">Hold</button>
+        <button class="sm" data-action="faFinalA" data-pid="${p.id}" ${dis} title="Yes or no on your last offer. A no ends the talks.">Best and final</button></div>
+      <div class="row" style="gap:6px;margin-top:6px">
+        ${onMkt ? `<button class="sm" data-action="faLeaveA" data-pid="${p.id}" ${dis} title="Leave your last offer live and end the meeting. It is binding.">Leave it on the table</button>
+        <button class="sm" data-action="faLeaveA" data-dl="1" data-pid="${p.id}" ${dis} title="He must answer tonight or the offer is gone">Deadline: tonight</button>` : ''}
+        <button class="sm" data-action="faBack" data-pid="${p.id}" title="Go back to the length and the bonus. It costs patience.">Change length or bonus</button></div></div>`;
+  }
+  h += `<div class="row" style="gap:6px;margin-top:8px">${onMkt ? `<button class="sm" data-action="faStandA" data-pid="${p.id}" ${t.stood ? 'disabled' : ''}>Where do things stand?</button>` : ''}<button class="sm danger" data-action="faWalkA" data-pid="${p.id}">${onMkt ? 'Walk away' : 'Leave it for now'}</button></div>`;
+  return h;
+}
+// the negotiating table: the contract on the left writing itself, the agent on the right
+function faNegotiate(pid, replace) {
+  const p = P(pid); if (!p) return;
+  const mode = negMode(p), u = state.userTid;
+  if (!mode) { ui.faNeg = null; const c = p.tid === u ? (ui.faNegWas === 'extend' && p.contract.next ? p.contract.next : p.contract) : null;
+    if (c && c.role) openModal(`<div class="fa-neg signed"><div class="fa-neg-top"><div><h2 style="margin:0">${esc(pname(p))} has signed</h2><div class="muted small">${c.yrs} year${c.yrs === 1 ? '' : 's'} · ${fmtMoney(c.gtd)} signing bonus · ${fmtMoney(c.amt)} against the cap in the first year</div></div></div><div class="fa-doc" style="max-height:64vh">${faSignedDoc(p, c)}</div></div>`, replace);
+    else closeModal();
+    return; }
+  const t = faTalk(pid), a = agentOf(p), mine = faOffers(p).find(o => o.tid === u); ui.faNeg = pid; ui.faNegWas = mode;
+  const sub = mode === 'fa' ? `expected ${faExpTxt(p)} a year` : mode === 'resign' ? `his deal is up · he is asking about ${fmtMoney(p.ask)} a year` : `${p.contract.yrs} year${p.contract.yrs === 1 ? '' : 's'} left at ${fmtMoney(p.contract.amt)} · an extension would start in ${state.season + 1 + p.contract.yrs}`;
+  const html = `<div class="fa-neg"><div class="fa-neg-top"><div><h2 style="margin:0">${esc(pname(p))} <span class="pill">${esc(p.lbl)}</span> <span class="pill">${mode === 'fa' ? 'Free agent' : mode === 'resign' ? 'Re-signing' : 'Extension'}</span></h2>
+      <div class="muted small">Age ${p.age} · ${tierOf(p)} · ${sub} · represented by ${agentLink(a)}</div></div>
+      <div class="fa-headline" id="faHead">${faHeadHTML(p)}</div></div>
+    ${mine ? `<div class="callout" style="margin:8px 0">Your live offer: <b>${mine.yrs} yr, ${fmtMoney((mine.sal !== undefined ? mine.sal * mine.yrs + mine.gtd : mine.aav * mine.yrs))}</b>, ${fmtMoney(mine.gtd)} to sign · ${mine.night ? 'the agent took it to him: answer tomorrow' : mine.dl ? 'expires tonight' : 'on the table, binding'} <button class="sm" data-action="faPullA" data-pid="${p.id}">Withdraw</button></div>` : ''}
+    <div class="fa-neg-grid"><div class="fa-neg-l"><div class="fa-doc" id="faDoc">${faDocHTML(p)}</div><div id="faCap">${faCapTableHTML(p)}</div></div>
+      <div class="fa-neg-r"><div class="fa-agent"><b>${esc(agentName(a))}</b> <span class="muted small">· across the table</span></div>
+        <div class="fa-log" id="faLog">${t.log.map(l => `<div class="fa-line ${l.w}"><span>${esc(l.t)}</span></div>`).join('')}</div>
+        ${faControlsHTML(p)}</div></div></div>`;
+  openModal(html, replace);
+  const lg = document.getElementById('faLog'); if (lg) lg.scrollTop = lg.scrollHeight;
+}
+function faSignedDoc(p, c) { c = c || p.contract;
+  const keep = ui.faIn; ui.faIn = { [p.id]: { v: 2, yrs: c.yrs, bonus: c.bonus !== undefined ? c.bonus : c.gtd, sal: c.sal !== undefined ? c.sal : c.aav || c.amt, load: c.load || 'even', inc: (c.inc || []).map(x => ({ m: x.k + ':' + x.th, amt: x.amt })), max: 0 } };
+  const d = faDocHTML(p); ui.faIn = keep; return d; }
+// the right-hand panel on the Free Agents page: where things stand, and the way in
 function faSitHTML(p) {
   const u = state.userTid, a = agentOf(p), t = state.fa.talks[p.id], i = faIn(p), mine = faOffers(p).find(o => o.tid === u), ord = state.fa.orders[p.id];
   const hist = (state.agentHist[a.id] || []).slice(-3).reverse(), cl = agentClients(a).filter(x => x.id !== p.id).slice(0, 3);
   let h = `<div class="fa-agent"><div><b>${agentLink(a)}</b> <span class="muted small">· agent, ${agentAge(a)}</span></div>
     <div class="small muted">${cl.length ? 'Also represents ' + cl.map(x => playerLink(x, true)).join(', ') : 'A small client list'}</div>
     ${hist.length ? `<div class="small muted">Your dealings: ${hist.map(x => `${esc(x.n)} ${x.s} — ${x.r === 'signed' ? `signed, ${fmtMoney(x.aav)}/yr${x.ask ? ` (opened at ${fmtMoney(x.ask)})` : ''}` : x.r === 'lost' ? 'went elsewhere' : x.r === 'pulled' ? 'you pulled your offer' : 'you walked away'}`).join(' · ')}</div>` : ''}</div>`;
-  if (mine) h += `<div class="callout" style="margin:8px 0">Your offer: <b>${mine.yrs} yr, ${fmtMoney(mine.aav)}/yr, ${fmtMoney(mine.gtd)} guaranteed</b>${mine.load !== 'even' ? ` (${mine.load}-loaded)` : ''} · ${mine.night ? 'the agent took it to him: answer tomorrow' : mine.dl ? 'expires tonight' : 'on the table, binding'} <button class="sm" data-action="faPullA" data-pid="${p.id}">Withdraw</button></div>`;
-  if (!t) return h + `<div style="margin-top:10px"><button class="primary" data-action="faCall" data-pid="${p.id}">Sit down with ${esc(a.last)}</button></div>` + faOrderHTML(p, ord, i);
-  h += `<div class="fa-log" id="faLog">${t.log.map(l => `<div class="fa-line ${l.w}"><span>${esc(l.t)}</span></div>`).join('')}</div>`;
-  const seg = (fk, opts) => `<span class="seg">${opts.map(([v, l]) => `<button class="sm ${String(i[fk]) === String(v) ? 'on' : ''}" data-action="faSeg" data-pid="${p.id}" data-f="${fk}" data-v="${v}">${l}</button>`).join('')}</span>`;
-  const num = (fk, w, step) => `<input type="number" step="${step || 0.1}" min="0" data-fain="${fk}" data-pid="${p.id}" value="${i[fk]}" style="width:${w}px">`;
-  if (t.closed) h += `<div class="small muted" style="margin-top:8px">${t.closed === 'done' ? 'The agent will not take your calls about this player again.' : 'The meeting is over for today. Advance the day to talk again.'}</div>`;
-  else if (t.step === 1) {
-    const fam = FAMILIES.find(x => x[1].includes(p.spot)), spots = fam ? fam[1] : [p.spot];
-    h += `<div class="fa-step"><div class="fa-h">1 · The role</div><div class="row" style="gap:8px">
-      <select data-change="faSpot" data-pid="${p.id}">${spots.map(s => `<option value="${s}" ${i.spot === s ? 'selected' : ''}>${esc(SPOTS[s].l)}${s === p.spot ? '' : ' (new for him)'}</option>`).join('')}</select>
-      ${seg('role', [['start', 'Starter'], ['depth', 'Depth']])}<button class="primary" data-action="faRole" data-pid="${p.id}">Tell him</button></div></div>`;
-  } else if (t.step === 2) {
-    h += `<div class="fa-step"><div class="fa-h">2 · The commitment <span class="muted small">· ${t.role === 'start' ? 'starter' : 'depth'} at ${esc(SPOTS[t.spot].l)}</span></div><div class="row" style="gap:8px">
-      <label class="small muted">Years</label>${seg('yrs', [1, 2, 3, 4, 5].map(y => [y, y]))}
-      <label class="small muted">Guaranteed $M</label>${num('gtd', 80)}<button class="primary" data-action="faCommit" data-pid="${p.id}">Put it on the table</button></div>
-      <div class="small muted" style="margin-top:4px">Guaranteed money is owed even if you cut him.</div></div>`;
-  } else {
-    h += `<div class="fa-step"><div class="fa-h">3 · The salary <span class="muted small">· ${t.yrs} yr, ${fmtMoney(t.gtd)} guaranteed</span></div><div class="row" style="gap:8px">
-      <label class="small muted">Per year $M</label>${num('aav', 80)}${t.yrs >= 2 ? seg('load', [['even', 'Even'], ['front', 'Front-loaded'], ['back', 'Back-loaded']]) : ''}
-      <button class="primary" data-action="faSalary" data-pid="${p.id}">Offer</button></div>
-      <div class="small muted" id="faCalc" style="margin-top:4px">${faCalcTxt(p)}</div>
-      <div class="row" style="gap:6px;margin-top:8px">
-        <button class="sm" data-action="faHoldA" data-pid="${p.id}" ${t.aav === null ? 'disabled' : ''} title="Repeat your number and see if he moves">Hold</button>
-        <button class="sm" data-action="faFinalA" data-pid="${p.id}" ${t.aav === null ? 'disabled' : ''} title="Yes or no on your last offer. A no ends the talks.">Best and final</button>
-        <button class="sm" data-action="faLeaveA" data-pid="${p.id}" ${t.aav === null ? 'disabled' : ''} title="Leave your last offer live and end the meeting. It is binding.">Leave it on the table</button>
-        <button class="sm" data-action="faLeaveA" data-dl="1" data-pid="${p.id}" ${t.aav === null ? 'disabled' : ''} title="He must answer tonight or the offer is gone">Deadline: tonight</button>
-        <button class="sm" data-action="faBack" data-pid="${p.id}" title="Go back to years and guarantee. It costs patience.">Reopen years</button>
-      </div></div>`;
-  }
-  if (!t.closed || t.closed === 'day') h += `<div class="row" style="gap:6px;margin-top:8px">${t.closed ? '' : `<button class="sm" data-action="faStandA" data-pid="${p.id}" ${t.stood ? 'disabled' : ''}>Where do things stand?</button>`}<button class="sm danger" data-action="faWalkA" data-pid="${p.id}">Walk away</button></div>`;
+  if (mine) h += `<div class="callout" style="margin:8px 0">Your offer: <b>${mine.yrs} yr, ${fmtMoney(mine.sal !== undefined ? mine.sal * mine.yrs + mine.gtd : mine.aav * mine.yrs)}</b>, ${fmtMoney(mine.gtd)} to sign · ${mine.night ? 'the agent took it to him: answer tomorrow' : mine.dl ? 'expires tonight' : 'on the table, binding'} <button class="sm" data-action="faPullA" data-pid="${p.id}">Withdraw</button></div>`;
+  if (t && t.log.length) h += `<div class="fa-log" style="max-height:120px">${t.log.slice(-2).map(l => `<div class="fa-line ${l.w}"><span>${esc(l.t)}</span></div>`).join('')}</div>`;
+  h += `<div style="margin-top:10px"><button class="primary" data-action="faOpen" data-pid="${p.id}" ${t && t.closed === 'done' ? 'disabled' : ''}>${t ? (t.closed === 'done' ? 'Talks are over' : t.closed ? 'Back to the table (he is done for today)' : 'Back to the table') : 'Negotiate with ' + esc(a.last)}</button></div>`;
   return h + faOrderHTML(p, ord, i);
 }
 function faOrderHTML(p, ord, i) {
   return `<details class="fa-fo" ${ord ? 'open' : ''}><summary class="small">Hand it to the front office</summary><div class="row small" style="gap:8px;margin-top:6px">
-    ${ord ? `<span>Bidding up to <b>${fmtMoney(ord.max)}</b>/yr as ${ord.role === 'start' ? 'a starter' : 'depth'}.</span><button class="sm" data-action="faOrderX" data-pid="${p.id}">Call them off</button>`
+    ${ord ? `<span>Bidding up to <b>${fmtMoney(ord.max)}</b>/yr, for ${esc((ord.jobs || []).map(faJobLabel).join(' and ') || 'his usual job')}.</span><button class="sm" data-action="faOrderX" data-pid="${p.id}">Call them off</button>`
       : `<label class="muted">Ceiling per year $M</label><input type="number" step="0.1" min="0" data-fain="max" data-pid="${p.id}" value="${i.max}" style="width:80px"><button class="sm" data-action="faOrderA" data-pid="${p.id}">Let them bid</button>`}
     </div><div class="small muted" style="margin-top:4px">They make a standard offer each day and raise it when another club is ahead, never past your ceiling.</div></details>`;
 }
@@ -2700,12 +2782,12 @@ function playerModal(pid, replace) {
   if (p.tid === u && canTag(p)) left += `<button data-action="tag" data-pid="${p.id}">Franchise tag (${fmtMoney(tagAmount(p))})</button>`;
   if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && p.a && workSpots(p).length > 1) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Where he is working <span title="Sets the room he sits in during camp, the drills he takes, what the reports say about him, and where his comfort at a new spot grows.">ⓘ</span></div>${crossTrainSelect(p, true)}</div>`;
   if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && PRAC_SIDE[p.pos]) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">In the building${p.seenW ? ` · ${p.seenW} week${p.seenW === 1 ? '' : 's'} with your staff` : ''}</div><div class="small" style="margin-bottom:4px">Playbook ${pbBar(pbOf(p))} <span class="muted">${pbLabel(pbOf(p))}</span> · this week ${pracChip(p)}</div><div class="row small" style="gap:6px">${charPill(p, 'work')}${charPill(p, 'disc')}${charPill(p, 'lead')}</div>${p.tid === u && crossTrainSpots(p).length ? `<div class="small" style="margin-top:6px">Cross-train at ${crossTrainSelect(p).replace('data-pid=', 'data-card="1" data-pid=')}${p.xt ? ` <span class="muted">now ${comfortLabel(comfortOf(p, p.xt)).toLowerCase()} (${Math.round(comfortOf(p, p.xt))}/100)</span>` : ''}</div>` : ''}</div>`;
-  if (p.tid === u && extensionDue(p)) left += termButtons(p, 'extend');
+  if (p.tid === u && extensionDue(p)) left += `<button class="primary" data-action="faOpen" data-pid="${p.id}">Negotiate an extension</button>`;
   if (p.tid === u && state.phase === 'PRESEASON' && state.prePlan && p.pos !== 'K' && p.pos !== 'P') { const pl = state.prePlan, cur = pl.feat[p.id] ? 'feat' : pl.hold[p.id] ? 'hold' : ''; left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Preseason playing time${p.preS ? ` · ${p.preS.snp} snaps so far` : ''}</div><span class="seg">${[['', 'Normal'], ['feat', 'Feature'], ['hold', 'Hold out']].map(([k, l]) => `<button class="sm ${cur === k ? 'on' : ''}" data-action="preFeat" data-card="1" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span></div>`; }
   if (p.tid === -3 && p.psTid === u) left += `<button class="primary" data-action="promote" data-pid="${p.id}">Promote to 53</button><button class="danger" data-action="psRelease" data-pid="${p.id}">Release</button>`;
   if (p.tid === -1 && p.exp <= 6 && psRoom(u, p) && ['REG', 'PRESEASON', 'CUTDOWN', 'DRAFT', 'FA'].includes(state.phase)) left += `<button data-action="signPS" data-pid="${p.id}">Sign to practice squad (${fmtMoney(PS_SALARY)})</button>`;
   if (p.tid === u) {
-    if (p.expiring && state.phase === 'RESIGN') left += termButtons(p, 'resign');
+    if (p.expiring && state.phase === 'RESIGN') left += `<button class="primary" data-action="faOpen" data-pid="${p.id}">Negotiate a new contract</button>`;
     left += `<button class="danger" data-action="release" data-pid="${p.id}">Release</button>`;
   } else if (p.waiver) { left += '<div class="small muted">On waivers: claim him from the Waiver Wire tab.</div>';
   } else if (state.phase === 'UDFA' && state.udfa && isUdfa(p)) { const cur = state.udfa.offers[p.id], pl = udfaPathLabel(udfaPath(p, u)); left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Undrafted rookie · market: <b>${udfaInterest(p)}</b> · his view of your roster: <b>${pl}</b>${cur !== undefined ? ` · your offer: <b>${fmtBonus(cur)}</b>` : ''}</div><div class="row" style="gap:6px">${UDFA_BONUS.map(b => `<button class="sm ${cur === b ? 'primary' : ''}" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="${b}">${b ? fmtBonus(b) : 'No bonus'}</button>`).join('')}${cur !== undefined ? `<button class="sm danger" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="">Withdraw</button>` : ''}</div></div>`;
@@ -3112,7 +3194,7 @@ function rosterBlock() {
 }
 
 // ---------- actions ----------
-const faAct = fn => d => { const pid = +d.pid, err = fn(pid, d); if (err) toast(err); const p = P(pid); if (p && p.tid === state.userTid && !err) toast('Signed!'); save(); render(); const lg = document.getElementById('faLog'); if (lg) lg.scrollTop = lg.scrollHeight; };
+const faAct = fn => d => { const pid = +d.pid, was = negMode(P(pid)), err = fn(pid, d); if (err) toast(err); const p = P(pid); if (p && p.tid === state.userTid && was && !negMode(p) && !err) toast('Signed!'); save(); render(); if (ui.faNeg === pid) faNegotiate(pid, true); const lg = document.getElementById('faLog'); if (lg) lg.scrollTop = lg.scrollHeight; };
 const actions = {
   faPick: d => { ui.faSel = +d.pid; render(); const lg = document.getElementById('faLog'); if (lg) lg.scrollTop = lg.scrollHeight; },
   faGo: d => { ui.faSel = +d.pid; ui.faView = 'now'; ui.faPos = 'ALL'; ui.faF = null; view = 'fa'; closeModal(); render(); },
@@ -3120,19 +3202,21 @@ const actions = {
   faLV: d => { ui.faLV = d.v; render(); },
   agent: d => agentModal(+d.aid),
   faInboxX: () => { state.fa.inbox = []; save(); render(); },
-  faSeg: d => { const p = P(+d.pid); faIn(p)[d.f] = d.f === 'yrs' ? +d.v : d.v; render(); },
-  faCall: faAct(pid => (faTalk(pid) ? null : 'He is not on the market')),
-  faRole: faAct(pid => { const i = faIn(P(pid)); return faSayRole(pid, i.role, i.spot); }),
-  faCommit: faAct(pid => { const i = faIn(P(pid)); return faSayCommit(pid, +i.yrs, +i.gtd || 0); }),
-  faSalary: faAct(pid => { const i = faIn(P(pid)); return faSaySalary(pid, +i.aav || 0, i.load); }),
+  faSeg: d => { const p = P(+d.pid); faIn(p)[d.f] = d.f === 'yrs' ? +d.v : d.v; if (ui.faNeg === p.id) faNegotiate(p.id, true); else render(); },
+  faOpen: d => { faNegotiate(+d.pid); save(); render(); },
+  faIncAdd: d => { const p = P(+d.pid), i = faIn(p), o = incOptions(p), used = (i.inc || []).map(x => x.m), q = o.find(x => !used.some(m => m.split(':')[0] === x.k)) || o[0]; (i.inc = i.inc || []).push({ m: q.k + ':' + q.th, amt: round2(Math.max(0.1, faExp(p) * 0.08)) }); faNegotiate(p.id, true); },
+  faIncX: d => { const p = P(+d.pid); faIn(p).inc.splice(+d.i, 1); faNegotiate(p.id, true); },
+  faCall: d => { faNegotiate(+d.pid); save(); render(); },
+  faCommit: faAct(pid => { const i = faIn(P(pid)); return faSayCommit(pid, +i.yrs, +i.bonus || 0); }),
+  faSalary: faAct(pid => { const p = P(pid), i = faIn(p), o = faDraft(p); return faSaySalary(pid, +i.sal || 0, o.load, o.inc); }),
   faHoldA: faAct(pid => faHold(pid)),
   faFinalA: faAct(pid => faFinal(pid)),
   faStandA: faAct(pid => faStand(pid)),
   faLeaveA: faAct((pid, d) => faLeave(pid, !!d.dl)),
   faBack: faAct(pid => faBackToCommit(pid)),
-  faWalkA: faAct(pid => faWalk(pid)),
+  faWalkA: d => { const p = P(+d.pid); if (negMode(p) !== 'fa') { ui.faNeg = null; closeModal(); return; } faAct(pid => faWalk(pid))(d); },
   faPullA: faAct(pid => faWithdraw(pid)),
-  faOrderA: faAct(pid => { const i = faIn(P(pid)); return faOrder(pid, +i.max || 0, i.role); }),
+  faOrderA: faAct(pid => { const i = faIn(P(pid)); return faOrder(pid, +i.max || 0, i.jobs); }),
   faOrderX: faAct(pid => faOrder(pid, 0)),
   nav: d => { view = d.view; ui.more = false; render(); window.scrollTo(0, 0); },
   navHead: d => { const h = navTree().find(x => x[0] === d.h); if (!h) return; const last = (ui.navLast || {})[d.h], hot = navHot(), ok = v => h[2].some(y => y[0] === v); view = navHeadOf(view) === d.h ? view : ok(hot) ? hot : ok(last) ? last : h[2][0][0]; ui.more = false; render(); window.scrollTo(0, 0); },
@@ -3362,7 +3446,7 @@ const changes = {
   dotSet: v => { T(state.userTid).dot = +v; save(); },
   pbTabSet: v => { ui.pbTab = v; },
   eqbSet: v => { T(state.userTid).eqb = +v; save(); },
-  faSpot: (v, el) => { faIn(P(+el.dataset.pid)).spot = v; },
+  faIncM: (v, el) => { const p = P(+el.dataset.pid); faIn(p).inc[+el.dataset.i].m = v; setTimeout(() => { if (ui.faNeg === p.id) faNegotiate(p.id, true); }, 0); },
   rosterTeam: v => { ui.rosterTid = +v; },
   rosterView: v => { ui.rosterView = v; },
   msort: (v, el) => { sortState[el.dataset.table] = { k: v, dir: -1 }; },
@@ -3457,8 +3541,9 @@ document.addEventListener('click', e => {
 // numbers typed into the sit-down are kept without redrawing the page (a redraw between the keystroke and the click would eat the click)
 document.addEventListener('input', e => {
   const el = e.target.closest && e.target.closest('[data-fain]'); if (!el || !state) return;
-  const p = P(+el.dataset.pid); if (!p) return; faIn(p)[el.dataset.fain] = el.value === '' ? 0 : +el.value;
-  const c = document.getElementById('faCalc'); if (c && state.fa && state.fa.talks[p.id]) c.innerHTML = faCalcTxt(p);
+  const p = P(+el.dataset.pid); if (!p) return; const i = faIn(p), f = el.dataset.fain, v = el.value === '' ? 0 : +el.value;
+  if (f.startsWith('inc')) { const x = (i.inc || [])[+f.slice(3)]; if (x) x.amt = v; } else i[f] = v;
+  if (ui.faNeg === p.id) for (const [id, fn] of [['faHead', faHeadHTML], ['faDoc', faDocHTML], ['faCap', faCapTableHTML]]) { const n = document.getElementById(id); if (n) n.innerHTML = fn(p); } // the contract rewrites itself as you type
 });
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-change]');

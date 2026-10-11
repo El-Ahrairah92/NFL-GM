@@ -187,13 +187,15 @@ function aiContractDecisions(tid) {
 // ---------- league year rollover (start of offseason) ----------
 function rolloverContract(p) {
   const c = p.contract;
+  if (c.inc && typeof incSettle === 'function') incSettle(p); // incentives: pay what he earned and square the cap
   // guarantees work like a prorated bonus: an even share of what's left is used up each year
   c.gtd = round2((c.gtd || 0) * Math.max(0, c.yrs - 1) / Math.max(1, c.yrs));
   c.yrs--;
   if (c.sched) { c.sched.shift(); if (c.sched.length) c.amt = c.sched[0]; } // a front- or back-loaded deal: this year's cap hit is the next number on the schedule
+  if (c.inc && c.yrs > 0 && typeof incReclass === 'function') incReclass(p);
   if (c.yrs > 0) return;
   p.lastAmt = c.amt;
-  if (c.next) { p.contract = Object.assign({}, c.next, c.opt5 === 'exercised' ? { opt5: 'exercised' } : {}); return; }
+  if (c.next) { p.contract = Object.assign({}, c.next, c.opt5 === 'exercised' ? { opt5: 'exercised' } : {}); if (p.contract.inc && typeof incReclass === 'function') incReclass(p); return; }
   c.yrs = 0; p.expiring = true; p.ask = resignAsk(p);
 }
 function growCap() {
