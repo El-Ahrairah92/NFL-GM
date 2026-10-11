@@ -281,9 +281,11 @@ function pbLearn(p, reps, room, weeks) {
   if (!PB_RATE[p.pos] || pbOf(p) >= 100) return;
   ensureCharacter(p);
   const tid = p.tid >= 0 ? p.tid : p.psTid;
-  const f = (0.72 + p.h.work / 200 + (learnRate(p) - 1) * 0.4) * reps * (1 + room * 0.08) * (tid >= 0 && tid !== undefined ? teachMult(tid, p.pos) : 1) * (tid >= 0 && tid !== undefined && PRAC_SIDE[p.pos] === 'D' ? libLearn(tid) : 1);
+  const on = tid >= 0 && tid !== undefined, side = PRAC_SIDE[p.pos], pl = on ? installPlan(tid, side) : { lvl: 55, fast: 1, slow: 1, cap: 100 };
+  const f = (0.72 + p.h.work / 200 + (learnRate(p) - 1) * 0.4) * reps * (1 + room * 0.08) * (on ? sysLearn(tid, side) : 1);
   let k = pbOf(p);
-  for (let i = 0; i < (weeks || 1); i++) k += PB_RATE[p.pos] * Math.max(0.2, f) * (104 - k);
+  // the basics come quickly under a head coach who builds a team; the rest is the coordinator's install, and a poor one never gets it all in
+  for (let i = 0; i < (weeks || 1); i++) { if (k >= pl.cap) break; k = Math.min(pl.cap, k + PB_RATE[p.pos] * Math.max(0.2, f * (k < pl.lvl ? pl.fast : pl.slow)) * (104 - k)); }
   p.pb = Math.min(100, Math.round(k * 10) / 10);
 }
 // a new coordinator with a new system: everyone on that side starts over (partly)
@@ -353,26 +355,27 @@ function crossTrainWeek(p, weeks) {
   if (comfortOf(p, p.xt) >= 100) delete p.xt;
 }
 function practiceTeam(tid) {
-  const cul = knob(C(T(tid).hc), 'cul'), wk = state.season * 100 + (state.phase === 'REG' ? state.week : 0);
+  const rf = repFactors(tid), cul = knob(C(T(tid).hc), 'acc'), wk = state.season * 100 + (state.phase === 'REG' ? state.week : 0);
   for (const pos in PRAC_SIDE) {
     const rs = roomState(tid, pos), order = repsOrder(tid, pos), cd = roomDisc(tid, pos); // the position coach runs this room
     const squad = psOf(tid).filter(p => p.pos === pos);
     for (const p of [...rs.room, ...squad]) {
       ensureCharacter(p);
       const onPS = p.tid === -3, i = order.indexOf(p), tier = onPS || i < 0 ? 2 : repsTier(i, pos), raw = roomEffectOn(p, rs), eff = raw < 0 ? raw * clamp(1.25 - cd / 110, 0.4, 1.1) : raw; // a firm coach keeps a bad example from spreading
-      if (p.injury) { p.prac = { g: null, t: tier, wk, dnp: 1 }; pbLearn(p, 0.35, eff); continue; } // meetings only
+      if (p.injury) { p.prac = { g: null, t: tier, wk, dnp: 1, rf: rf[tier] }; pbLearn(p, 0.35, eff); continue; } // meetings only
       let noise = gauss(0, 10);
       if (noise < 0) noise *= clamp(1.3 - p.h.cons / 90, 0.3, 1.25); // steady players rarely have a bad week
       const xt = p.xt && (p.tid === tid || (onPS && p.psTid === tid)) ? 1 : 0; // splitting his week between two jobs
       const g = clamp(46 + (cd - 52) * 0.12 - xt * 3 + (p.h.work - 55) * 0.42 + (p.h.disc - 55) * 0.28 + eff * 9 + (pbOf(p) - 75) * 0.14 + (cul - 50) * 0.08 + noise, 5, 99);
-      p.prac = { g: Math.round(g), t: tier, wk };
+      p.prac = { g: Math.round(g), t: tier, wk, rf: rf[tier] }; // rf: his reps against an ordinary week, from how the head coach runs practice
       (p.pracH = p.pracH || []).push(Math.round(g)); if (p.pracH.length > 6) p.pracH.shift();
       p.pa = p.pa ? [p.pa[0] + g, p.pa[1] + 1] : [g, 1]; // what he has shown since the last checkpoint
-      pbLearn(p, REPS_MULT[tier] * (xt ? 0.85 : 1), eff);
+      pbLearn(p, Math.min(1, REPS_MULT[tier] * clamp(rf[tier], 0.5, 1.6)) * (xt ? 0.85 : 1), eff);
       if (xt) crossTrainWeek(p);
       if (p.tid === state.userTid || p.psTid === state.userTid) p.seenW = (p.seenW || 0) + 1; // your staff gets to know him
     }
   }
+  ensureChem(); chemCamp(tid); chemWeek(tid); // a week together
 }
 function practiceWeekAll() { for (const t of state.teams) practiceTeam(t.id); }
 // game day: the week of practice shows up as a small edge or drag; taking snaps without the reps costs a little

@@ -38,7 +38,7 @@ function campOn() { return !!(state.camp && state.camp.season === state.season);
 function campOf(p) { return p.camp && p.camp.s === state.season ? p.camp : (p.camp = { s: state.season, r: [0, 0, 0], oo: [[0, 0], [0, 0], [0, 0]], sc: [], notes: [], form: round1(hashGauss(p.id, 811, state.season) * 2.2) }); }
 // ---- the coach who runs his room, and how sharp his eye is ----
 function campCoach(tid, pos) { return pos === 'K' || pos === 'P' ? C(T(tid).stc) : posCoach(tid, pos); }
-function campCoachQ(c) { return !c ? 38 : typeof c.dev === 'number' && typeof c.disc === 'number' ? (c.dev + c.disc) / 2 : c.k && c.k.units !== undefined ? c.k.units : c.ovr || 50; }
+function campCoachQ(c) { return !c ? 38 : typeof c.dev === 'number' && typeof c.coh === 'number' ? (c.dev + c.coh) / 2 : c.k && c.k.cov !== undefined ? (c.k.cov + c.k.ret) / 2 : c.ovr || 50; }
 function campEyeWord(c) { const q = campCoachQ(c); return q >= 78 ? 'His reads are usually right' : q >= 62 ? 'A reliable evaluator' : q >= 48 ? 'Hit and miss as an evaluator' : 'His reads have missed before'; }
 // what a coach's temperament makes him lean toward (advisory only)
 function campBias(c, p) {
@@ -386,7 +386,7 @@ function coachBrief(tid, role) {
       sec('Jobs that are open', [starts.length ? `${starts.length} starting job${starts.length === 1 ? ' is' : 's are'} open as far as I am concerned: ${starts.map(b => `${b.label.toLowerCase()} (${briefList(battleBoard2(b), 3)})`).join('; ')}.` : 'Every starting job has a name on it going in. Somebody is welcome to change my mind.',
         spots.length ? `The back of the roster is tight at ${spots.map(b => POS_NAME_CAMP[b.pos]).join(', ')}. Those decisions get made on the practice field and on special teams.` : null]);
       sec('The rookies', [picks.length ? `${briefPL(picks[0])} was picked to play. ${picks.length > 1 ? `${briefList(picks.slice(1), 4)} have to earn it like everyone else.` : ''}` : null, rk.length - picks.length ? `${rk.length - picks.length} undrafted rookies are in camp. One or two of those always make somebody uncomfortable.` : null]);
-      sec('What I want out of camp', [knob(c, 'cul') >= 65 ? 'Details. I will not carry a man who costs us flags and assignments, whatever he runs.' : 'Competition. Nobody has a job because of what he did last year.',
+      sec('What I want out of camp', [knob(c, 'acc') >= 65 ? 'Details. I will not carry a man who costs us flags and assignments, whatever he runs.' : 'Competition. Nobody has a job because of what he did last year.',
         thin.length ? `Find answers in the ${thin[0]}. If they are not in this building, tell me early.` : 'Come out of it healthy and knowing who our best 53 are.', 'And every man on the bubble plays special teams. If he cannot help there, he had better be clearly better than the man next to him.']);
     } else {
       const [up, dn] = movers(ro), settled = (cm.settled || []).filter(s => s.blk === cm.blocks);

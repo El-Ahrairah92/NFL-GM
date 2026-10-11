@@ -65,6 +65,7 @@ function migrateState(st) {
   }
   st._needWeb = st.teams.some(t => t.staffBud === undefined);
   if (st.teams.some(t => !t.asst) && st.coaches && Object.keys(st.coaches).length) { for (const t of st.teams) ensureAssistants(t, true); fillAsstPool(3); for (const c of Object.values(st.coaches)) updateCoachOvr(c); addNews('League updated: every staff now has specialists and position coaches. Player development has moved from the coordinators to the position coaches.'); }
+  if (st.coaches) for (const c of Object.values(st.coaches)) migrateCoach(c, st.teams, st.coaches); // coach ratings rebuilt (DESIGN section 52)
   for (const id in st.players) { const p = st.players[id]; if (p.h && p.h.work === undefined) { ensureCharacter(p); if (p.tid >= 0) { p.pbTid = p.tid; p.pb = p.exp === 0 ? 80 : 96; p.seenW = p.tid === st.userTid ? 16 : 0; } } }
   if (st.version === 2) {
     // v3: five-coach staffs with knobs & tendencies — regenerate all coaches

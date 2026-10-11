@@ -975,3 +975,27 @@ input, textarea, select, .selectable { -webkit-user-select: text; user-select: t
 /* ---- the coaching carousel wrap-up ---- */
 .cw-tbl td { padding: 5px 8px; vertical-align: top; }
 .cw-tbl tr.mine { background: var(--panel2); box-shadow: inset 3px 0 0 var(--accent); }
+
+/* ---- coach ratings: a bar and a word ---- */
+.cr-list { display: grid; gap: 5px; }
+.cr { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(70px, 1.2fr) 86px; gap: 10px; align-items: center; font-size: 13px; }
+.cr-l i { font-style: normal; font-size: 11px; color: var(--muted); margin-left: 4px; }
+.cr-bar { height: 6px; border-radius: 3px; background: var(--line2); overflow: hidden; }
+.cr-bar i { display: block; height: 100%; border-radius: 3px; }
+.cr-w { text-align: right; font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+.cr.grey { opacity: .55; }
+.cr.grey .cr-w { font-weight: 500; font-style: italic; }
+.cc-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; margin-bottom: 10px; }
+@media (max-width: 800px) { .cc-grid { grid-template-columns: minmax(0, 1fr); } .cr { grid-template-columns: minmax(100px, 1fr) minmax(50px, 1fr) 80px; } }
+
+/* ---- chemistry bars and the playbook overview ---- */
+.chm-strip { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding: 8px 2px 2px; border-top: 1px solid var(--line2); margin-top: 8px; }
+.chm-h { font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+.chm { display: grid; grid-template-columns: auto 110px auto; gap: 8px; align-items: center; font-size: 12.5px; }
+.chm-col { display: grid; gap: 7px; }
+.chm-col .chm { grid-template-columns: minmax(150px, 1fr) minmax(90px, 1.4fr) 150px; }
+.chm-t { position: relative; height: 6px; border-radius: 3px; background: var(--line2); display: block; }
+.chm-t i { display: block; height: 100%; border-radius: 3px; }
+.chm-t b { position: absolute; top: -3px; width: 2px; height: 12px; background: var(--text); opacity: .55; border-radius: 1px; }
+.chm-w { font-weight: 600; white-space: nowrap; }
+.pb-ins { padding: 2px 0; }

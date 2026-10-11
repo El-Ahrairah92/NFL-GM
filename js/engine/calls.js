@@ -33,7 +33,9 @@ function filmKey(b, pers) { return b + '|' + pers; }
 function filmRunRate(tid, b, pers, g, s) {
   const f = (T(tid).film || {})[filmKey(b, pers)] || [0, 0];
   const live = g.liveFilm[s][filmKey(b, pers)] || [0, 0];
-  const runs = f[0] + live[0] * 2, passes = f[1] + live[1] * 2;
+  // the defense's plan for this offense (its specialists' Game Planning against the offense's Creativity), and how fast its caller adjusts to what he sees today
+  const dS = 1 - s, pf = g.cx ? clamp((g.cx[dS].dplan - 30) / 60, 0, 1) * clamp(1.3 - g.cx[s].cre / 100, 0.4, 1.1) : 0, af = g.cx ? clamp(0.3 + g.cx[dS].dadj / 71, 0.5, 1.6) : 1;
+  const runs = f[0] * pf * TUNE.filmRun + live[0] * 2 * af, passes = f[1] * pf * TUNE.filmRun + live[1] * 2 * af;
   return (runs + 2) / (runs + passes + 4);
 }
 function recordFilm(g, s, b, pers, isRun) {
@@ -46,7 +48,8 @@ function defFilm(tid) { return T(tid).dfilm || { n: 0, man: 0, blitz: 0, high: 0
 // more with every snap, so a defense that does one thing all afternoon stops surprising anyone.
 function newSeen() { return { n: 0, blitz: 0, man: 0, sl0: 0, sl1: 0, twist: 0, cov: {} }; }
 // what coverage to expect from this defense: the league's mix to start with, its own habits more with every snap
-function seenCov(g, s) { const f = g.dSeen && g.dSeen[s], out = {}; for (const k in COV_MIX) out[k] = ((f ? f.cov[k] || 0 : 0) + COV_MIX[k] * 10) / ((f ? f.n : 0) + 10); return out; }
+function seenCov(g, s) { const f = g.dSeen && g.dSeen[s], out = {}, W = 10 * (g.cx ? seenWeight(g, s) : 1), fm = g.cx ? T(g.tids[s]).dfilm : null, pt = fm && fm.s === state.season && fm.n > 0 ? planTrust(g, s) : 0;
+  for (const k in COV_MIX) { const prior = pt ? filmCov(g, s, k, COV_MIX[k]) : COV_MIX[k]; out[k] = ((f ? f.cov[k] || 0 : 0) + prior * W) / ((f ? f.n : 0) + W); } return out; }
 function conceptEdge(name, mix) { const c = CONCEPTS[name]; let e = 0; for (const k in mix) e += mix[k] * (c.vs[k] || 0); return e; }
 function recordSeen(g, s, dc) {
   const f = g.dSeen && g.dSeen[s]; if (!f) return;
@@ -57,7 +60,8 @@ function recordSeen(g, s, dc) {
   if (pl.slant) { const v = Object.values(pl.slant); if (v.some(x => x < 0)) f.sl0++; if (v.some(x => x > 0)) f.sl1++; }
   if (pl.twist ? pl.twist.length : dc.stunt) f.twist++;
 }
-function seenShare(g, s, k, prior) { const f = g.dSeen && g.dSeen[s]; return f ? (f[k] + prior * 8) / (f.n + 8) : prior; }
+// What the offense expects of this defense: the league's habits, corrected by its film as far as the game plan reaches, then by what it has seen today
+function seenShare(g, s, k, prior) { const f = g.dSeen && g.dSeen[s]; if (!f) return prior; const W = 8 * (g.cx ? seenWeight(g, s) : 1), p0 = g.cx ? filmShare(g, s, k, prior) : prior; return (f[k] + p0 * W) / (f.n + W); }
 
 function wpick(obj) {
   const ks = Object.keys(obj).filter(k => obj[k] > 0);
@@ -147,13 +151,14 @@ function offenseCall(g) {
     { const b = clamp(blitzy - 0.25, -0.2, 0.6) * pcF; w.QUICK *= 1 + b * 1.6; w.RBSCR *= 1 + b * 2.4; w.WRSCR *= 1 + b * 1.2; w.DEEP *= Math.max(0.3, 1 - b * 0.9); }
     call.type = wpick(w) || 'DROP';
     // the concept: from the coach's own book, leaning (as far as the play caller is sharp) toward what beats this defense's habits
-    { const book = cx.cb && cx.cb[call.type]; if (book) { const mix = seenCov(g, d), cw = {}; for (const k in book) cw[k] = book[k] * Math.exp(conceptEdge(k, mix) * TUNE.conceptPlan * pcF); call.cpt = wpick(cw) || null; } }
+    { const book = cx.cb && cx.cb[call.type]; if (book) { const mix = seenCov(g, d), cw = {}, vC = variety(g, o, 'O'), top = Object.keys(book).sort((a, b) => book[b] - book[a])[0]; for (const k in book) cw[k] = book[k] * (k === top ? 1 : vC) * Math.exp(conceptEdge(k, mix) * TUNE.conceptPlan * pcF); call.cpt = wpick(cw) || null; } }
   }
   // --- tags (spec §7a compatibility; Motion + one other, PA+Boot, Rub+Sideline)
   const key = call.type === 'RUN' ? (call.carrier === 'QB' ? 'RUN_QB' : call.carrier === 'FB' ? 'RUN_FB' : call.dir === 'IN' ? 'RUN_RB_IN' : 'RUN_RB_OUT') : call.type;
   const ok = new Set(TAG_OK[key] || []);
   const manRate = seenShare(g, d, 'man', 0.35);
-  if (ok.has('MOTION') && rand() < Math.min(0.85, ot.motion * (sit.hurry ? 0.25 : 1.25))) call.tags.add('MOTION');
+  const vO = variety(g, o, 'O'); // how much of the book the unit can run
+  if (ok.has('MOTION') && rand() < Math.min(0.85, ot.motion * (sit.hurry ? 0.25 : 1.25)) * vO) call.tags.add('MOTION');
   if (call.type === 'JET') call.tags.add('MOTION');
   if (ok.has('PA') && !sit.hurry && (g.down <= 2 || g.togo <= 3) && call.form !== 'EMP' && rand() < ot.pa * (call.form === 'SG' ? 3.8 : 6.0) * Math.exp(clamp(adv.PA || 0, -1, 1) * 0.3 * pcF)) call.tags.add('PA');
   if (ok.has('BOOT') && !sit.hurry && call.form !== 'EMP' && rand() < ot.boot * (call.tags.has('PA') ? 1.8 : 0.4)) call.tags.add('BOOT');
@@ -171,9 +176,10 @@ function offenseCall(g) {
   // less than where it puts people: that is read off the field once everyone is lined up.
   { const ft = cx.ft || {}, F = FORMS[call.pers] || {}, spread = ['10', '11'].includes(call.pers) && call.form !== 'UC'; let fm = null;
     if (call.form !== 'EMP') {
-      if (spread && F.Trips && rand() < (ot.trips || 0)) fm = 'Trips'; else if (spread && F.Bunch && rand() < (ot.bunch || 0) * clamp(1 + (seenShare(g, d, 'man', 0.35) - 0.35) * 3 * pcF, 0.5, 2.5)) fm = 'Bunch'; // more bunch against a defense that keeps playing man
-      else if (F.Tight && rand() < (ot.tight || 0)) fm = 'Tight';
-      else if (F.Doubles && FORM_HOME[call.pers] !== 'Doubles' && rand() < (ft.doubles || 0)) fm = 'Doubles'; else if (F.Wing && rand() < (ft.wing || 0)) fm = 'Wing';
+      const vF = variety(g, o, 'O');
+      if (spread && F.Trips && rand() < (ot.trips || 0) * vF) fm = 'Trips'; else if (spread && F.Bunch && rand() < (ot.bunch || 0) * vF * clamp(1 + (seenShare(g, d, 'man', 0.35) - 0.35) * 3 * pcF, 0.5, 2.5)) fm = 'Bunch'; // more bunch against a defense that keeps playing man
+      else if (F.Tight && rand() < (ot.tight || 0) * vF) fm = 'Tight';
+      else if (F.Doubles && FORM_HOME[call.pers] !== 'Doubles' && rand() < (ft.doubles || 0) * vF) fm = 'Doubles'; else if (F.Wing && rand() < (ft.wing || 0) * vF) fm = 'Wing';
       // two backs: in the gun they split either side of the quarterback; under center the fullback is in front of the tailback or offset to the strength
       if (!fm && F.Split) fm = call.form === 'SG' ? 'Split' : call.form === 'UC' && rand() < (ft.offI || 0) ? 'Offset' : null; }
     // from a hash the strength goes to the wide side or into the boundary, as the coach likes it
@@ -186,6 +192,7 @@ function offenseCall(g) {
   // a quarterback who is still learning the playbook gets a simpler menu
   { const qbP = starterQB(g, o); if (qbP && qbP.a) { const k = pbOf(qbP), need = offNeed(call); if (k < need && rand() < clamp((need - k) / 35, 0, 1)) { call.tags = new Set(); if (call.type === 'DEEP' || call.type === 'GADGET') call.type = 'DROP'; else if (call.type === 'OPTION' || call.type === 'JET') call.type = 'RUN'; call.simple = true; call.fm = FORM_HOME[call.pers]; for (const f of ['trips', 'bunch', 'tight', 'optrt', 'maxp', 'nohud', 'counter', 'duo']) delete call[f]; } } }
   call.isRun = RUN_TYPES.has(call.type);
+  trimOffCall(g, call, sit);
   return call;
 }
 
@@ -214,9 +221,10 @@ function defenseCall(g, oc) {
   const lib = dt.pk && dt.pk.lib, odd = call.front === '3-4' || call.front === 'Tite';
   if (lib && pkg !== 'GL' && call.front !== 'Bear' && call.front !== 'Under') {
     const fam = pkg === 'BASE' ? (odd ? 'odd' : 'even') : 'sub', list = fam === 'sub' ? lib.sub : lib.fam === fam ? lib.base : null;
-    if (list) { const w = {}; for (const [k, v] of list) { const L = LOOKS[fam][k]; if (L) w[k] = v * (L.k === 'run' ? 0.4 + runEst * 1.4 : L.k === 'rush' ? (sit.passDown ? 2.2 : 1.3 - runEst) : 1); }
+    const vD = variety(g, d, 'D');
+    if (list) { const w = {}; for (const [k, v] of list) { const L = LOOKS[fam][k]; if (L) w[k] = v * (k === list[0][0] ? 1 : vD) * (L.k === 'run' ? 0.4 + runEst * 1.4 : L.k === 'rush' ? (sit.passDown ? 2.2 : 1.3 - runEst) : 1); }
       const k = wpick(w); if (k) { call.look = k; call.lookT = { t: LOOKS[fam][k].t, n: k }; call.changeup = k !== list[0][0]; } }
-    if (pkg !== 'BASE' && lib.mug && rand() < lib.mug * (sit.passDown ? 2 : 0.6)) { call.lookT = Object.assign({}, call.lookT, { mug: true }); call.mug = true; }
+    if (pkg !== 'BASE' && lib.mug && rand() < lib.mug * vD * (sit.passDown ? 2 : 0.6)) { call.lookT = Object.assign({}, call.lookT, { mug: true }); call.mug = true; }
   }
   // coverage
   let man = dt.man, high = dt.high + 0.08, blitz = dt.blitz;
@@ -237,7 +245,7 @@ function defenseCall(g, oc) {
       if (k === 'T2' && (sit.gl || sit.red)) v *= 0.4; if (k === 'C0' && !(sit.red || g.down >= 3)) v *= 0.3; w[k] = Math.max(0.001, v); }
     call.cov = wpick(w) || 'C3';
     twoHigh = HIGH_SHELLS.includes(call.cov);
-    call.disg = rand() < (dt.pk.disg || 0);
+    call.disg = rand() < (dt.pk.disg || 0) * variety(g, d, 'D');
   } else {
     const isMan = rand() < clamp(man, 0.05, 0.9); twoHigh = rand() < clamp(high, 0.05, 0.95);
     if (isMan) call.cov = twoHigh ? 'C2M' : 'C1';
@@ -264,13 +272,14 @@ function defenseCall(g, oc) {
     const base = pkg === 'BASE', bear = call.front === 'Bear', under = call.front === 'Under';
     const N = !base ? { e: ['LE', 'RE'], i: ['DT1', 'DT2'] } : bear ? { e: ['LE', 'RE'], i: ['LT', 'RT'], n: 'NT' } : under ? { e: ['LE', 'RE'], i: ['DT', 'NT'] } : odd ? { e: ['LOLB', 'ROLB'], i: ['LDE', 'RDE'], n: 'NT' } : { e: ['LE', 'RE'], i: ['NT', 'DT'] };
     const plan = {};
-    if (rand() < lib.sl * (0.6 + runEst * 0.9)) { const d = wpick(lib.sd) || 'S';
+    if (rand() < lib.sl * variety(g, d, 'D') * (0.6 + runEst * 0.9)) { const d = wpick(lib.sd) || 'S';
       const sg = oc.str === -1 ? -1 : 1;
       if (d === 'P') plan.slant = { [N.i[0]]: sg, [N.i[1]]: -sg };
       else { const v = (d === 'S' ? 1 : -1) * sg; plan.slant = {}; for (const k of [...N.i, ...(N.n ? [N.n] : []), ...(base && odd ? [] : N.e)]) plan.slant[k] = v; } }
     if (call.stunt) { const s = rand() < 0.5 ? 0 : 1; plan.twist = rand() < lib.tt ? [rand() < 0.5 ? [N.i[0], N.i[1]] : [N.i[1], N.i[0]]] : [[N.i[s], N.e[s]]]; }
     if (plan.slant || plan.twist) call.plan = plan;
   }
+  trimDefCall(g, call, sit);
   return call;
 }
 
@@ -336,9 +345,10 @@ function preSnap(g, oc, dc, off, def) {
   if (!oc.checked && rand() < lic * 0.3) oc.dummy = true;
   if (!oc.checked && !oc.dummy) return;
   // the answer
-  const cap = def.filter(e => ['MLB', 'WLB', 'SAM', 'SS', 'FS'].includes(e.slot)).sort((a, b) => ea(g, b, 'prec') - ea(g, a, 'prec'))[0];
+  const cap = dotOnField(g, d, def); // the man with the green dot, or whoever is making the calls in his place
   if (!cap || dc.pres === 'FZ') return;
-  const prec = ea(g, cap, 'prec');
+  // how good he is at it (what he sees, how well he knows the system, whether they listen), and how well the unit plays together
+  const prec = ea(g, cap, 'prec') + (dotScore(cap.p) - (cap.p.a.prec || 40)) * TUNE.dotWeight + (g.chem ? g.chem[d].D * TUNE.chemD * 100 : 0);
   if (rand() >= clamp(0.1 + (prec - 60) * 0.012 + (g.cx[d].dpc - 60) * 0.002, 0.03, 0.5) * (oc.nohud ? 0.6 : 1) * TUNE.answerRate) return;
   const truth = oc.isRun ? 'run' : 'pass', right = oc.dummy ? rand() < 0.5 : rand() < clamp(0.55 + (prec - 65) * 0.01, 0.4, 0.8);
   const think = right ? truth : truth === 'run' ? 'pass' : 'run';

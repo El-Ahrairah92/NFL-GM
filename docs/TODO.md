@@ -2,17 +2,17 @@
 
 Things we have talked about and not built yet. Newest decisions win; cross items off by deleting them.
 
-## Coaches: the rebuild (in discussion, nothing built)
+## Coaches (after the rebuild, section 52)
 
-The ratings were written for the old play system and most of the new mechanics do not read them (defensive Adaptability does nothing in games; every caller picks looks, slants and concepts equally well). Agreed so far:
-
-- Coordinators keep three design ratings each (run, pass, protection; front, coverage, pressure).
-- Play Calling is shown only for a coach who calls plays. One who used to call and no longer does shows his last known rating greyed out with the year. One who never has shows nothing.
-- Head coach: Game Management, Accountability, Leading Practice, Team Building, Execution. Still to settle: what Execution means (situations, or composure in big moments), and who owns the staff working together, player development, opponent preparation and pull with free agents.
-- Pass and run game coordinators: Concept Creativity and Concept Execution.
-- Position coaches: Development, Leading Drills (the game-day technique of the room), Teaching.
-- **Leading Practice sets a weekly rep allowance: 80 to 120, 100 average, half a rep per rating point.** Starters take their share first; the extra (or the shortfall) lands on the second and third team. Reps feed progression, playbook learning, comfort at a new position and readiness. The position coach decides what a rep is worth. Wear and tear and the progression weights get tuned later; no steering of the budget yet.
-- Still open: one caller rating or two (calling and adjusting); whether the defense learns the offense's habits during a game; visible numbers or tiers for coaches.
+- **Coach progression deep dive.** How every rating changes over a career. Today the caller's two improve by calling games and the rest drift with age.
+- **Special teams Situations.** Fakes, onside kicks and real punt blocks, and a rating for whether they work and whether his side is fooled by them.
+- Fire a coach during the season, and who takes over.
+- Morale and individual behaviour, for Accountability and Team Building to act on.
+- Whether a defense learns the offense's concepts and formations during a game (today it learns run and pass by situation).
+- A center making protection calls, as the green dot does for the defense.
+- Other clubs choosing a green dot and an emergency quarterback with more thought than "the best one".
+- Ratings that work as built but do not show in a single game's result yet (coach value test, 1,500 games each): the caller's Adjustments on both sides, the defensive specialists' Creativity and Game Planning, defensive line chemistry, Conditioning, Game Management. Look at each and decide whether it should be worth more.
+- Accountability is strong: 20 points of it either way is about two penalties a game.
 
 ## Up next (agreed order)
 

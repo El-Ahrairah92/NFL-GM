@@ -202,6 +202,7 @@ function startOffseason() {
   devCheckpoint('off'); // the staff re-reads everyone after a winter of work
   ensureDraftClass(year, true);
   state.carSnap = carouselSnap(); // who held every coaching job before anyone was fired or retired
+  chemOffseason();
   coachOffseason();
   state.phase = 'COACHES';
   startCarousel();

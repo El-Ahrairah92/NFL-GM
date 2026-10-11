@@ -79,6 +79,11 @@ const TUNE = {
   hashCov: 0.05, hashSpace: 0.3, hashRun: 0.05, hashThrow: 1.5, // the hash: how much easier a zone is to throw on to the wide side, the room after a catch there, the room on an outside run there, and the arm the far throw takes
   helpRef: 64, helpSkill: 0.03, // zone help: the rating at which the second defender in an area helps the standard amount, and how much each point changes it
   containRead: 0.02, chaseSpeed: 0.02, // the ends: play recognition keeps contain (fewer escapes outside), speed runs an escaped quarterback down sooner
+  chemRef: 81,          // the chemistry of an ordinary settled unit: above it helps, below it hurts
+  chemOL: 2.6, chemDL: 2.0, chemLB: 2.2, chemDB: 0.3, chemQB: 0.4, chemD: 0.0025, chemKB: 0.3, // how much each unit's chemistry is worth where it acts
+  dotWeight: 0.5,       // how much of the gap between the signal-caller's eyes and his whole make-up (system, leadership) counts
+  filmRun: 0.6,        // how much a season of the opponent's run and pass habits counts against what the defense sees today
+  kickOp: 0.05,         // field goal percentage from a good or bad operation
   yacPower: 1,          // how much balance, strength and size break a tackle after the catch
   contestLabel: -0.15,  // how tight the window has to be before a target is charted as contested
   mugLate: 0.15,        // how much more open a route is when the man covering it started walked up in a gap
@@ -95,7 +100,7 @@ const TUNE = {
   slantHit: 0.3,        // chance a slant crosses an average blocker's face cleanly
   slantWin: 9, slantLose: 4, // pass-rush points when it does, and when he runs himself into the block
   // coverage / passing
-  openBase: -0.68,
+  openBase: -0.66,
   accScale: 0.042,      // how much ball placement decides whether a throw is catchable
   wrBlock: 12,         // receivers give up this many points to the corner they are blocking (they are not linemen)
   size: 1,             // master dial for every height and weight effect (0 switches them off)
@@ -218,7 +223,7 @@ function alignDefense(off, def, oc) {
 //   short:  he tightens down next to another receiver, a stack: he cannot be jammed and his defender has to play through traffic
 //   jet:    he is running flat across the formation at the snap, to take the ball or to make the linebackers think he might
 //   insert: a wing or H-back comes across to block on the side the run is going
-function sendMotion(off, def, oc, dc) {
+function sendMotion(off, def, oc, dc, g) {
   oc.mv = null; if (!oc.tags.has('MOTION')) return;
   const sg = e => Math.sign(e.x || 1), skill = off.filter(e => !OL_SLOTS.includes(e.slot) && !['QB', 'RB', 'FB', 'OL6'].includes(e.slot));
   const taken = (x, me) => skill.some(o => o !== me && Math.abs(o.x - x) < 0.7), spot = (s, me, list) => list.map(v => v * s).find(x => !taken(x, me));
@@ -247,7 +252,7 @@ function sendMotion(off, def, oc, dc) {
     if (f && !(isLB(f) && kind === 'jet')) { f.x = kind === 'jet' ? Math.sign(from) * 2 : to; f.trail = true; }
   } else if (kind === 'across') { // zone: the nickel bumps over to the side that now has the inside receivers, when the call gets made in time
     const inside = s => { const d = skill.filter(e => !isInline(e) && sg(e) === s); return Math.max(0, d.length - 1); }, n = def.find(e => e.slot === 'NCB' && e.depth > 0);
-    if (n && inside(-Math.sign(n.x)) > inside(Math.sign(n.x)) && rand() < TUNE.motionBump) n.x = -n.x; }
+    if (n && inside(-Math.sign(n.x)) > inside(Math.sign(n.x)) && rand() < TUNE.motionBump * (g && g.chem ? clamp(1 + g.chem[1 - g.poss].D * TUNE.chemD * 4, 0.6, 1.35) : 1)) n.x = -n.x; } // a defense that has played together gets the bump made
   formRead(off, oc);
 }
 
@@ -658,7 +663,7 @@ function tickFatigue(g, units) {
     if (!st) continue;
     const load = FAT[e.grp] ? FAT[e.grp][0] : 0.5;
     const stam = e.p.h ? e.p.h.stam : 60;
-    st.fat += load * (1.35 - stam / 100) * (1 + (e.p.wear || 0) * 0.02) * (e.extraLoad || 1) * (1 + bod(e).w * TUNE.sizeFat); // a heavier man tires sooner
+    st.fat += load * (g.cx && e.s !== undefined && g.cx[e.s] ? clamp(1.25 - g.cx[e.s].cond / 200, 0.8, 1.2) : 1) * (1.35 - stam / 100) * (1 + (e.p.wear || 0) * 0.02) * (e.extraLoad || 1) * (1 + bod(e).w * TUNE.sizeFat); // a heavier man tires sooner
     st.snp++;
     if (g.pre) { const sq = st.sq || (st.sq = [0, 0, 0]); sq[g.q <= 1 ? 0 : g.q === 2 ? 1 : 2]++; }
     st.last = e.name;

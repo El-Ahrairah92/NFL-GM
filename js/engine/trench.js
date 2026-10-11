@@ -136,7 +136,9 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
     if (edge) edge.chip = h;
   }
   // pickup checks: blitzers, simulated pressure and stunts test the protection's awareness
-  const design = clamp(designKnob(T(g.tids[d]), 'presD') - designKnob(T(g.tids[o]), 'passD'), -35, 35) * 0.0022;
+  const design0 = clamp(designKnob(T(g.tids[d]), 'presD') - designKnob(T(g.tids[o]), 'protD'), -35, 35) * 0.004;
+  // a line that has played together passes things off; a front that has played together runs its games in step
+  const chO = chemEdge(off, ['OL']) * TUNE.chemOL, chD = chemEdge(def, ['DL']) * TUNE.chemDL, design = design0 - chO, designT = design0 - chO + chD;
   // how much of a surprise each thing still is: something this defense has done on a quarter of today's snaps is the ordinary amount
   const fresh = (k, usual) => clamp(1.45 - 1.8 * seenShare(g, d, k, usual), 0.15, 1.3) / clamp(1.45 - 1.8 * usual, 0.15, 1.3);
   // A man coming from depth is a surprise. A man standing up near the line is one only as far as the look lied: if everyone who showed came, the count was right.
@@ -159,14 +161,14 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
   }
   for (const [pen, loop] of twists) {
     const aw = avg([pen, loop].map(a => ea(g, a.blockers[0], 'bawr')));
-    if (rand() < fresh('twist', 0.22) * lgt(lgtP(TUNE.stuntMiss) + design - (aw - 65) * 0.04)) { loop.free = true; loop.stuntWin = true; }
+    if (rand() < fresh('twist', 0.22) * lgt(lgtP(TUNE.stuntMiss) + designT - (aw - 65) * 0.04)) { loop.free = true; loop.stuntWin = true; }
     else { pen.stuntDelay = 0.15; loop.stuntDelay = 0.15; }
   }
   // slants: a rusher who crosses a blocker's face wins quickly if that blocker is slow to see it, and runs himself into the block if not
   for (const a of assign) {
     if (!a.e.mv || !blocked(a)) continue;
     const b = a.blockers[0];
-    a.slant = rand() < fresh(a.e.mv < 0 ? 'sl0' : 'sl1', 0.15) * lgt(lgtP(TUNE.slantHit) + design - (ea(g, b, 'bawr') - 65) * 0.04) ? TUNE.slantWin : -TUNE.slantLose;
+    a.slant = rand() < fresh(a.e.mv < 0 ? 'sl0' : 'sl1', 0.15) * lgt(lgtP(TUNE.slantHit) + design0 - chO * 0.5 + chD * 0.5 - (ea(g, b, 'bawr') - 65) * 0.04) ? TUNE.slantWin : -TUNE.slantLose;
   }
   // time for each rusher to get home
   const oNet = cx.pb;

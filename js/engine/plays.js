@@ -56,7 +56,7 @@ function nearestDef(list, x) { return list.filter(Boolean).sort((a, b) => Math.a
 // deception check: does this defender bite? (Play Recognition vs the coordinator's Deception and the call's credibility)
 function bites(g, e, strength) {
   const o = g.poss;
-  const dcp = knob(C(T(g.tids[o]).oc), 'dcp');
+  const dcp = offCreativity(T(g.tids[o]));
   return rand() < lgt(strength + clamp(dcp - 55, -35, 35) * 0.008 - soft(ea(g, e, 'prec') - 70, 18) * 0.045 - g.key * 0.9);
 }
 
@@ -108,7 +108,8 @@ function resolveRun(g, off, def, oc, dc) {
     trickHit = !bites(g, keyD, 0.1) ? 'read' : 'fooled';
   }
   // motion and zone flow: linebackers have to read it
-  const motion = !!oc.mv && oc.mv.kind === 'jet'; // a man running across the formation at the snap: flow the other way
+  const motion = !!oc.mv && oc.mv.kind === 'jet';
+  const lbChem = chemEdge(def, ['LB']) * TUNE.chemLB; // linebackers who have played together fit the run the same way // a man running across the formation at the snap: flow the other way
   // ---- build the contact sequence ----
   const levels = [];
   const fronts = blk.filter(r => r.lvl === 1), seconds = blk.filter(r => r.lvl === 2);
@@ -157,7 +158,7 @@ function resolveRun(g, off, def, oc, dc) {
   for (const r of seconds) {
     if (r.state === 'blocked' && rand() > r.win) { r.won = false; continue; }
     r.won = true;
-    let readOK = rand() < lgt(0.9 + (ea(g, r.e, 'prec') - 65) * 0.05 + g.key * 0.8 - (motion ? 0.3 : 0) - (draw ? 0.5 : 0) - (oc.counter ? 0.6 : 0) - (trickHit === 'fooled' ? 2 : 0));
+    let readOK = rand() < lgt(0.9 + lbChem + (ea(g, r.e, 'prec') - 65) * 0.05 + g.key * 0.8 - (motion ? 0.3 : 0) - (draw ? 0.5 : 0) - (oc.counter ? 0.6 : 0) - (trickHit === 'fooled' ? 2 : 0));
     const depthAt = (r.rotated ? 4 + TUNE.rotDepth : 3 - (outside ? TUNE.outsideFill : TUNE.insideFill)) + (outside && contain0 ? 1.5 : 0) + (readOK ? randInt(0, 2) : randInt(3, 6)) + (draw ? 1 : 0) + (dc.cov === 'T2' && r.e.slot === 'MLB' ? 1 : 0);
     levels.push({ e: r.e, at: Math.max(1, depthAt + burstD * TUNE.burGet - TUNE.meet), far: true, bonus: readOK ? (oc.duo ? 0.45 : 0) : -0.4 }); // duo leaves the linebackers for the back
   }
@@ -369,9 +370,10 @@ function resolvePass(g, off, def, oc, dc) {
   });
   if (!rlist.length) rlist.push({ e: rb || qb, band: 'S', dir: 'OUT', depth: 1, tb: 1.5, role: 3, endX: 2 });
   const mm = man ? manMatch(off, droppers, rlist.map(r => r.e)) : null;
+  const dbChem = chemEdge(droppers, ['CB', 'S']) * TUNE.chemDB;
   const zown = man ? null : zoneOwners(dc.cov, droppers);
   const pNet = cx.pb * 0; // protection already used the coach net; separation uses Pass Design vs Coverage Design:
-  const sepNet = clamp(designKnob(T(g.tids[o]), 'passD') - designKnob(T(g.tids[d]), 'covD'), -35, 35) * 0.0012;
+  const sepNet = clamp(designKnob(T(g.tids[o]), 'passD') - designKnob(T(g.tids[d]), 'covD'), -35, 35) * 0.002;
   // PA / RPO: underneath defenders who bite leave windows behind them
   const bit = new Set();
   if (pa) for (const e of droppers) if (['MLB', 'WLB', 'SAM', 'SS'].includes(e.slot) && bites(g, e, TUNE.paBite + (g.runCred[o] - 4.2) * 0.25)) bit.add(e);
@@ -434,6 +436,7 @@ function resolvePass(g, off, def, oc, dc) {
     if (e.slot === 'Z' && !e.moved) w += TUNE.zFree; // off the line he gets into his route clean
     if ((e.slot === 'SLOT' || e.slot === 'SLOT2') && r.band !== 'D') w += man ? TUNE.slotTwoWay : TUNE.slotTwoWay * 0.5; // a two-way release: the nickel cannot use the sideline
     if (cEdge && r.role !== 3) w += cEdge;
+    w += chemPairEdge(e, qb) * TUNE.chemQB * (r.role === 3 ? 0.5 : 1) - dbChem * (man ? 0.4 : 1); // timing with this quarterback; a secondary that passes routes off
     if (bit.size && r.band !== 'S') w += TUNE.paOpen;
     // formation and concept packages
     if (oc.trips) w += e.slot === oc.iso ? TUNE.tripsIso : -TUNE.tripsCrowd;                 // the back-side receiver is alone; the trips side draws a crowd

@@ -11,12 +11,14 @@ function coachCtx(tid, oppTid) {
   const ooc = C(opp.oc), odc = C(opp.dc), ostc = C(opp.stc);
   const net = (a, b) => clamp(a - b, -35, 35) * 0.025;
   return {
-    pb: net(designKnob(t, 'passD'), designKnob(opp, 'presD')) * 0.3,
+    pb: net(designKnob(t, 'protD'), designKnob(opp, 'presD')) * 0.5,
     rb: net(designKnob(t, 'runD'), designKnob(opp, 'frontD')) * 2.2,
     ot: offTend(t), dt: defTend(t), ft: formTraits(t), cb: conceptBook(t),
-    pc: knob(offCaller(t), 'pc'), adp: knob(offCaller(t), 'adp'), dpc: knob(defCaller(t), 'pc'),
+    pc: knob(offCaller(t), 'pc'), adp: knob(offCaller(t), 'adj'), dpc: knob(defCaller(t), 'pc'), dadj: knob(defCaller(t), 'adj'),
     gm: knob(hc, 'gm'), aggr: hc ? hc.t.aggr : 0.5, clock: hc ? hc.t.clock : 0.5,
-    st: clamp(knob(stc, 'units') - knob(ostc, 'units'), -40, 40),
+    st: clamp(knob(stc, 'ret') - knob(ostc, 'cov'), -40, 40), // when this club returns a kick: its return units against their coverage units
+    kop: knob(stc, 'kop'), cond: knob(C(t.sc), 'cond'),
+    plan: offPlanning(t), dplan: defPlanning(t), cre: offCreativity(t), dcre: defCreativity(t),
     famO: familiarityPenalty(t, 'O'), famD: familiarityPenalty(t, 'D'),
   };
 }
@@ -26,7 +28,7 @@ function newTS() {
 function durMult(p) {
   if (!p || !p.h) return 1;
   const sc = p.tid >= 0 ? C(T(p.tid).sc) : null;
-  return (1.6 - p.h.dur / 83) * (1.2 - knob(sc, 'prev') / 250) * (1 + (p.wear || 0) * 0.02);
+  return (1.6 - p.h.dur / 83) * (1.2 - knob(sc, 'dur') / 250) * (1 + (p.wear || 0) * 0.02);
 }
 
 // ---------- game ----------
@@ -44,11 +46,12 @@ function simGame(hTid, aTid, opts = {}) {
   // game-day form: Consistency (steadied by Culture), minus accumulated wear, plus home field & team form
   g.dressed = [...rosterOf(hTid), ...rosterOf(aTid)];
   for (const p of g.dressed) {
-    const s = p.tid === hTid ? 0 : 1, cul = knob(C(T(p.tid).hc), 'cul');
+    const s = p.tid === hTid ? 0 : 1, cul = knob(C(T(p.tid).hc), 'acc');
     // form: the week of practice (known beforehand) plus what nobody could see coming
     p._gs = (p.h ? gauss(0, (0.5 + (100 - p.h.cons) / 25) * (1.15 - cul / 330) * 0.78) + pracBump(p) - repPenalty(p) - wearPenalty(p) : 0) + bonus[s];
   }
   for (let s = 0; s < 2; s++) initSide(g, s);
+  ensureChem(); gameChem(g);
   for (let s = 0; s < 2; s++) {
     g.advEst[s] = gamePlanAdvantage(g, s);
     g.basePass[s] = basePassRate(g, s);
@@ -62,6 +65,7 @@ function simGame(hTid, aTid, opts = {}) {
     snap(g);
   }
   endDrive(g, 'End of Game');
+  foldFilm(g); // what each side showed goes on its film
   for (const id in g.ps) if (+id >= 0 && g.ps[id].snp && g.stats[id]) { g.stats[id].snp = g.ps[id].snp; if (g.ps[id].sp) g.stats[id].sp = g.ps[id].sp; if (g.ps[id].sq) g.stats[id].sq = g.ps[id].sq; }
   for (const p of g.dressed) delete p._gs;
   const box = {
@@ -223,11 +227,11 @@ function runPlay(g, oc, dc) {
   if (dc.travel) { const cbs = def.filter(e => e.slot === 'CB' && e.depth > 0), wrs = off.filter(e => e.slot === 'X' || e.slot === 'Z');
     if (cbs.length === 2 && wrs.length === 2) { const r = e => slotRating(e.p, e.spot), topW = r(wrs[0]) >= r(wrs[1]) ? wrs[0] : wrs[1], topC = r(cbs[0]) >= r(cbs[1]) ? cbs[0] : cbs[1], other = cbs[0] === topC ? cbs[1] : cbs[0];
       if (r(topC) - r(other) >= 3 && Math.sign(topC.x) !== Math.sign(topW.x || 1)) { const x = topC.x; topC.x = other.x; other.x = x; } } }
-  sendMotion(off, def, oc, dc);
+  sendMotion(off, def, oc, dc, g);
   preSnap(g, oc, dc, off, def); // each side's one move at the line
   // predictability: did the defense's film read match the call?
   const keyed = oc.isRun ? (dc.runEst - 0.5) * 2 : (0.5 - dc.runEst) * 2;
-  const dcp = knob(C(T(g.tids[o]).oc), 'dcp');
+  const dcp = offCreativity(T(g.tids[o])); // how hard this offense is to read: its pass and run game coordinators' creativity
   // the play-calling chess match: a sharper caller hides his tendencies and reads the other side's
   g.key = clamp(keyed * (0.35 + g.cx[d].dpc / 99 * 0.45) * (1.25 - dcp / 200) * 0.6 + (g.cx[d].dpc - g.cx[o].pc) * 0.003 + (dc.answer ? (dc.answerRight ? TUNE.answerKey : -TUNE.answerKey) : 0), -0.55, 0.55); // a defense that answered a check is leaning the way it guessed
   if (preSnapPenalty(g, off, def, oc)) return; // the flag comes out before the snap: no play
@@ -270,7 +274,7 @@ function discFactor(g, side, entries) {
   ps.forEach(p => { if (p.h.disc === undefined) ensureCharacter(p); });
   const tid = g.tids[side], own = ps.reduce((s, p) => s + p.h.disc, 0) / ps.length;
   const room = ps.reduce((s, p) => s + (ROOM_COACH[p.pos] ? roomDisc(tid, p.pos) : 52), 0) / ps.length;
-  return clamp(1 + (56 - (0.65 * own + 0.35 * room)) / 28, 0.45, 2.2) * clamp(1.2 - knob(C(T(tid).hc), 'cul') / 250, 0.8, 1.2);
+  return clamp(1 + (56 - (0.65 * own + 0.35 * room)) / 28, 0.45, 2.2) * clamp(1.2 - knob(C(T(tid).hc), 'acc') / 250, 0.8, 1.2);
 }
 // who the flag is on: the least disciplined are the likeliest
 function flagOn(entries) { const es = entries.filter(e => e.p && e.p.h); return es.length ? weightedPick(es, es.map(e => Math.max(30, 125 - (e.p.h.disc === undefined ? 55 : e.p.h.disc)))) : null; }
@@ -569,7 +573,10 @@ function recommend4th(g, dist, range) {
 function fieldGoal(g) {
   const o = g.poss, K = kickUnitPlayer(g, o, 'K'), dist = 117 - g.ydl;
   let p = fgProb(g, K, dist);
-  const blockP = 0.011 * (1.5 - ea(g, K, 'ktrj') / 100);
+  // the operation: snap, hold, protection. The coordinator's rating and how long the battery has worked together
+  const opq = (g.cx[o].kop - 50) / 100 + (g.chem ? g.chem[o].KB * TUNE.chemKB : 0);
+  p = clamp(p + opq * TUNE.kickOp, 0.01, 0.995);
+  const blockP = 0.011 * (1.5 - ea(g, K, 'ktrj') / 100) * clamp(1 - opq * 1.5, 0.5, 1.8);
   inc(g, K.p, 'fga');
   if (g.drive) g.drive.plays++;
   runClock(g, 5); g.running = false;

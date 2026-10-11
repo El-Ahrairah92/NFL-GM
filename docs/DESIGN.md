@@ -1100,3 +1100,46 @@ Each failed move costs patience; when it runs out the meeting ends for the day. 
 **The page.** A narrow list (position, name, age, tier, expected value, status) on the left; on the right the selected player's card: where he would fit on the user's roster, scouting, last season, positions, and the sit-down as a conversation. Across the top: the day, cap room, money tied up in live offers, roster count, live offers and overnight news.
 
 Not built: re-signing the user's own players at the same table; consequences for a broken role promise (waits for morale); other clubs using loaded contracts; agents gaining and losing clients over time.
+
+## 52. The staff, rebuilt
+
+The coach ratings were written for an older play system. They have been rebuilt so that every rating is one job and moves something that can be seen. A coach still has a system (what he likes to do: run and pass lean, formations, concepts, fronts, coverages); the ratings are how good he is at the jobs.
+
+**Head coach.**
+- Organizing Practice: the week has an allowance of reps, 100 for an ordinary practice and 80 to 120 by this rating (half a rep a point). The first team takes its share whatever happens. Extra reps fill up the second team before the third sees much; a short week comes out of the third team first. So a 10 percent better practice is about a quarter more work for everyone below the starters. Reps feed progression, the playbook, comfort at a new position and chemistry.
+- Game Management: fourth downs, timeouts, the clock, two-point tries.
+- Accountability: penalties and blown assignments.
+- Team Building: how fast a newcomer gets up to speed, in chemistry and in the first half of the playbook.
+
+**Coordinators.** Three design ratings each (run, pass and protection; front, coverage and pressure), which are how good the scheme is, and Install. Install sets how fast the unit learns past the basics and how much of the system it can ever hold: a coordinator below about 60 never gets all of a system in, and the bigger the system the further short his players stop. Until a unit knows its book the caller keeps to what it knows: fewer formations, concepts, looks and line games, which is plainer and easier for an opponent to read. When he is chasing a game or it is a down he must have he reaches for the rest anyway, and that is where the blown assignments come from.
+
+**Play Calling and Adjustments** belong to whoever calls the plays. Every head coach and coordinator has them, but they are shown only for a man who calls plays now. One who used to shows them greyed, as they were the last year he called. One who never has shows nothing: nobody knows. Calling games is how a caller improves.
+
+**Specialists** (pass game, run game, pass defense, run defense).
+- Concept Creativity: makes his side harder to learn. An opponent catches on to a repeated look or line game more slowly, and its game plan reaches less far. It also makes the system bigger, which costs learning time.
+- Game Planning: how much of the opponent's film his side walks in already knowing. What a defense shows each game goes on its film (older games count less; a new coordinator has none). A plan is knowing how this defense differs from the league. It matters most early in a game; what is seen today takes over.
+- The caller's Adjustments sets how fast what is seen today takes over.
+
+**Position coaches.** Cohesion is the ceiling on his room's chemistry. Technique is development.
+
+**Special teams coordinator.** Coverage Units and Return Units are separate now (your return units against their coverage units), Kicking Operation (field goal percentage and blocks, with the battery's chemistry), and Technique for the kickers and punters.
+
+**Strength and conditioning.** Durability (injury rate), Recovery (time out), Conditioning (fatigue within a game and wear over a season), Athletic Development (physical growth and how long older players hold it).
+
+**Chemistry.** Each player has a number for how well he knows his unit: offensive line, defensive line, linebackers, secondary, kicking battery. A back, receiver or tight end has one with each quarterback. It builds in two stages. Team Building takes a newcomer to a working level in weeks (about 47 to 63 by the rating). From there his position coach's Cohesion sets the ceiling (55 plus half the rating); past the ceiling progress all but stops. For a quarterback and his targets the quarterbacks coach sets how fast they find each other and the receiver's own coach sets the ceiling. A winter apart costs a few points; a new club starts a player over. Full chemistry takes an excellent coach, about two seasons and little turnover.
+- Offensive line: blitz pickup, twists passed off, slants seen.
+- Defensive line: twists and slants run in step.
+- Linebackers: run fits.
+- Secondary: routes passed off in coverage.
+- Quarterback and target: timing on every route.
+- The defense's chemistry is the average of its three rooms: the bump to motion, and answering a check at the line.
+- Kicking battery: field goals and blocks.
+Effects are measured against an ordinary settled unit (81), so an average team plays as before.
+
+**The green dot.** One defender gets the call and makes the checks. The club names him on the depth chart; the staff picks if it has not. How good he is at it is what he sees, how well he knows the system and whether the others listen. If he is off the field the best of the rest does it.
+
+**Saves.** Coaches from older saves are converted: each old rating goes to its nearest new one and the new ones are rolled around what kind of coach he was.
+
+**Screens.** Coach cards show every rating as a bar and a word. The depth chart shows each unit's chemistry with the ceiling its coach allows, and has the green dot and the emergency quarterback. The Playbook page is tabs (overview, offense, defense, on the field, self-scout, who plays) and shows how much of each side's system is installed.
+
+Not built: fakes, onside kicks and punt blocks for a special teams Situations rating; how coach ratings change over a career beyond the caller's two; morale and individual behaviour under Accountability and Team Building; firing a coach in season.

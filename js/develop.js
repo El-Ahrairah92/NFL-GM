@@ -68,18 +68,18 @@ function devTid(p) { return p.tid >= 0 ? p.tid : p.tid === -3 && p.psTid != null
 function nCoach(p) {
   const tid = devTid(p);
   if (tid < 0) return 0.35; // working out on his own
-  const v = ROOM_COACH[p.pos] ? roomDevVal(tid, p.pos) : knob(C(T(tid).stc), 'dSPEC');
+  const v = ROOM_COACH[p.pos] ? roomDevVal(tid, p.pos) : knob(C(T(tid).stc), 'tech');
   return clamp(0.15 + (v - 35) / 38, 0.15, 1.3); // a great teacher is worth a lot more than a poor one
 }
 function nWork(p) { return clamp(0.25 + (((p.h && p.h.work) || 55) - 30) / 55, 0.2, 1.2); }
-function nStrength(p) { const tid = devTid(p); if (tid < 0) return 0.45; const sc = C(T(tid).sc); return clamp(0.25 + ((knob(sc, 'dPOW') + knob(sc, 'dSPD')) / 2 - 35) / 50, 0.2, 1.2); }
+function nStrength(p) { const tid = devTid(p); if (tid < 0) return 0.45; const sc = C(T(tid).sc); return clamp(0.25 + (knob(sc, 'ath') - 35) / 50, 0.2, 1.2); }
 function pracAvg(p) {
   if (p.pa && p.pa[1]) return p.pa[0] / p.pa[1];
   const h = (p.pracH || []); if (h.length) return h.reduce((s, x) => s + x, 0) / h.length;
   const c = p.h || {}; return 46 + ((c.work || 55) - 55) * 0.42 + ((c.disc || 55) - 55) * 0.28; // what his habits would produce
 }
-function nPractice(p) { return devTid(p) < 0 ? 0.4 : clamp(0.72 + (pracAvg(p) - 46) / 42, 0.2, 1.2); }
-function nReps(p) { return p.tid < 0 ? 0.15 : [1, 0.5, 0.15][p.prac ? p.prac.t || 0 : 2]; }
+function nPractice(p) { return devTid(p) < 0 ? 0.4 : clamp(0.72 + (pracAvg(p) - 46) / 42, 0.2, 1.2) * clamp(1 + ((p.prac && p.prac.rf !== undefined ? p.prac.rf : 1) - 1) * 0.3, 0.75, 1.2); } // a good week, and enough reps in it to matter
+function nReps(p) { return repShare(p); } // his share of the week's reps: the head coach's practice decides how much reaches the second and third team
 // share of his unit's snaps since the last checkpoint: 60% is full credit, straight line below that
 function snapShare(p, weeks) { return p.tid < 0 ? 0 : clamp((((p.stats && p.stats.snp) || 0) - (p.cs || 0)) / (Math.max(1, weeks) * DEV.gameSnaps), 0, 1); }
 function nSnaps(p, weeks) {
@@ -127,7 +127,7 @@ function progressPlayer(p) {
   for (const g of AGE_GROUPS) {
     const pk = growPeak(p, g), ds = declStart(p, g);
     if (age >= ds) {
-      const y = Math.floor(age - ds) + 1, mf = dev ? (g === 'E' || g === 'P' ? clamp(1.25 - (knob(C(T(tid).sc), 'recov') || 50) * 0.005, 0.8, 1.25) : 1) : 1.1;
+      const y = Math.floor(age - ds) + 1, mf = dev ? (g === 'E' || g === 'P' ? clamp(1.25 - (knob(C(T(tid).sc), 'ath') || 50) * 0.005, 0.8, 1.25) : 1) : 1.1;
       shiftSoft(p, g, -(declineAt(g, y) * declRate(p) + (p.dc.t === 'c' ? CLIFF_EXTRA[g] : 0)) * mf * Math.max(0.3, gauss(1, 0.3)));
       p.grow[g] = 0;
     } else if (age < pk - 0.5 && p.grow[g] > 0.05) {
