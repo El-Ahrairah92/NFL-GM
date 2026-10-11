@@ -980,7 +980,7 @@ A look is resolved as a whole, not one spot at a time (which had made the answer
 3. **A job with two spots in the look starts the first two listed.** The card says "top 2 start" and draws a line under them.
 4. **Next man up moves.** When two jobs want the same man and he is a listed starter at one and the next healthy name at the other, he goes where he is needed and the job he left goes to its own next man. The list is the instruction: to keep him where he is, list someone else second.
 5. **First at two jobs in the same look:** he plays where the drop to the man behind him is bigger.
-6. **A rotation brings in the next man on that job's list who is not already on the field.** It never pulls another starter out of his job.
+6. **Anyone coming off for a breather** (a rotation snap, a tired man, a planned series off) is replaced by a man further down that job's list who is not on the field. It never moves anyone else, and with nobody behind him he stays in. Breathers are settled last, after every spot is filled.
 7. **A spot whose list has run out is filled by the staff for that game**, and the page says so.
 
 **Game-day actives.** Anyone the chart starts (as many per job as it has spots, plus the next man) and anyone pinned to a spot dresses. A second end the user chose to start had been sitting out because he graded low, and a better man from another job was playing for him.
@@ -988,4 +988,13 @@ A look is resolved as a whole, not one spot at a time (which had made the answer
 **On the page.** A spot not played by the first man on its list carries a small tag with the reason on hover ("Abbott is out", "Barber is at nose in this look", "staff"). The player card has "If he goes down": the field redraws without him and outlines every spot that changes hands.
 
 Preseason games keep their own first, second and third strings and do not use these rules.
+
+**Checked against the page.** A harness runs one club on a hand-set chart (reordered jobs, an override on each side of the ball, pass-down men) through 17 real games and compares every snap with what the page draws for that look.
+- Before kickoff: the page's lineup and the engine's agree at every spot in every look and scenario, and everyone the chart starts or pins dresses.
+- Defense, about 12,000 player-snaps: 92.6% exactly as the page shows; 3.8% rotation; 2.4% fatigue; 1.1% a man hurt during the game. Offense: 90.2% as shown; 3.7% the passing-down or short-yardage back; 2.7% in-game injuries; 2.4% rotation; 0.9% a planned series off.
+- Overrides: the pinned man was at his spot on every snap of that look (229 of 229 and 509 of 509).
+- Where men stand: identical to the page except when linebackers are walked up or a corner travels, which the page does not draw.
+- A second harness builds 6,000 lineups from random charts with random men unavailable or tired: eleven different men every time, nobody unavailable on the field, and a breather never changes any other spot.
+
+Two flaws it found, both fixed: a breather (rotation, fatigue, planned rest) could trigger the next-man-up rule and pull another starter out of his job; and a breather could take a man the staff was about to use to fill a spot whose list had run out.
 

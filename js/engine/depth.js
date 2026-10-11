@@ -272,8 +272,8 @@ function resolveChart(g, s, T_, slots, table, opts, chart, listFor) {
   if (opts.ov) for (const [name] of slots) { const id = opts.ov(name), p = id !== undefined && id !== null ? avail(id) : null; if (p && !taken.has(p.id)) { out[name] = { p, why: 'ov' }; taken.add(p.id); } }
   const need = {}, all = slots.map(([name, slot, x, depth]) => { const key = opts.keyOf(name, slot, x, depth); need[key] = (need[key] || 0) + 1; return { name, slot, x, depth, key, list: listFor(key) || [], grp: table[slot][1], spot: table[slot][0] }; });
   const rate = (q, p) => q.grp === 'DL' && !(q.depth > 0) && q.x !== undefined ? lineSlotRating(p, Math.abs(q.x)) : slotRating(p, q.spot);
-  const score = (q, p, i) => -i * 14 * (ROT_GAP[q.grp] || 1) - fatPenalty(g, p, q.grp) - (T_.rest && T_.rest.has(p.id) ? 40 : 0);
-  const ranked = (q, skip) => { const r = []; q.list.forEach((id, i) => { if (taken.has(id) || id === skip) return; const p = avail(id); if (p) r.push({ p, i, sc: score(q, p, i) }); }); return r.sort((a, b) => b.sc - a.sc); };
+  // the lineup itself follows the lists and who is available; who is tired or due a series off is settled afterwards
+  const ranked = (q, skip) => { const r = []; q.list.forEach((id, i) => { if (taken.has(id) || id === skip) return; const p = avail(id); if (p) r.push({ p, i }); }); return r; };
   let open = all.filter(q => !out[q.name]);
   for (let guard = 0; open.length && guard < 30; guard++) {
     const want = open.map(q => ({ q, t: ranked(q)[0] })).filter(w => w.t);
@@ -289,11 +289,7 @@ function resolveChart(g, s, T_, slots, table, opts, chart, listFor) {
       out[win.q.name] = { p: win.t.p, i: win.t.i, key: win.q.key, why: win.t.i >= need[win.q.key] ? 'up' : null }; taken.add(win.t.p.id); open = open.filter(q => q !== win.q);
     }
   }
-  // rotation: the starter sits this snap and the next man on that job's list who is not on the field goes in
-  if (!g.preview && !g.pre) for (const q of all) { const a = out[q.name]; if (!a || a.why === 'ov') continue;
-    const hit = opts.rot ? opts.rot(q.key) : rand() < rotOf(chart, ROT_BAND[q.key] || !opts.rotKeyOf ? q.key : opts.rotKeyOf(q.name));
-    if (!hit) continue; const sub = q.list.map((id, i) => ({ id, i })).find(x => x.i > a.i && !taken.has(x.id) && avail(x.id));
-    if (sub) { out[q.name] = { p: avail(sub.id), i: sub.i, key: q.key, why: 'rot' }; taken.add(sub.id); } }
+  out._slots = all;
   out._taken = taken;
   return out;
 }
@@ -361,9 +357,21 @@ function fillSlots(g, s, slots, table, opts = {}) {
     used.add(best.p.id);
     const pen = best.p.a ? (ax !== null ? linePen(best.p, ax) : comfortPen(best.p, spot)) : 0; // how well he knows this spot; his own attributes do the rest
     const ent = { p: best.p, slot, name, spot, grp, x, depth: depth || 0, pen, s }; if (ax !== null) ent.lw = lineBlend(ax);
-    if (plan) ent.why = pl ? pl.why : 'staff';
+    if (plan) ent.why = pl ? pl.why : 'staff'; if (ax !== null) ent.ax = ax;
     out.push(ent);
   }
+  // Coming off for a breather: a rotation snap, a tired man, a planned series off. Whoever comes off is replaced by a man further down
+  // that job's list who is not on the field (and is not himself sitting this snap out). It never moves anyone else, and with nobody
+  // behind him he stays in. Done last, once every spot is settled, so a breather cannot take a man another spot is counting on.
+  if (plan && !g.preview) { const onF = new Set(out.map(e => e.p.id));
+    const eff = (q, p, i) => -i * 14 * (ROT_GAP[q.grp] || 1) - fatPenalty(g, p, q.grp) - (T_.rest && T_.rest.has(p.id) ? 40 : 0);
+    for (const e of out) { const a = plan[e.name]; if (!a || a.why === 'ov') continue; const q = plan._slots.find(x => x.name === e.name);
+      const later = q.list.map((id, i) => ({ id, i, p: T_.roster.find(p => p.id === id) })).filter(x => x.i > a.i && x.p && !onF.has(x.id) && !plan._taken.has(x.id)); if (!later.length) continue;
+      const hit = g.pre ? false : opts.rot ? opts.rot(q.key) : rand() < rotOf(chart, ROT_BAND[q.key] || !opts.rotKeyOf ? q.key : opts.rotKeyOf(q.name));
+      let sub = null, why = 'rot';
+      if (hit) sub = later[0];
+      else { let bs = eff(q, a.p, a.i); for (const x of later) { const sc = eff(q, x.p, x.i); if (sc > bs) { bs = sc; sub = x; } } why = 'tired'; }
+      if (sub) { e.p = sub.p; e.why = why; e.pen = sub.p.a ? (e.ax !== undefined ? linePen(sub.p, e.ax) : comfortPen(sub.p, e.spot)) : 0; onF.add(sub.id); } } }
   return out;
 }
 // how much a playbook spreads the backfield work: 0 = one workhorse, 1 = a full committee

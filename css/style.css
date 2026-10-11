@@ -240,7 +240,7 @@ button.dc2-at { cursor: pointer; }
 .dc2-lk button.on i { color: rgba(255, 255, 255, .8); }
 .dc2-scen { display: inline-flex; gap: 4px; }
 /* the field: everyone stands where he really lines up */
-.dcf { position: relative; height: clamp(260px, 33vh, 380px); border-radius: 12px; background: linear-gradient(180deg, #14351f, #102a19); border: 1px solid #1f4a2d; overflow: hidden; }
+.dcf { position: relative; height: clamp(250px, 30vh, 380px); border-radius: 12px; background: linear-gradient(180deg, #14351f, #102a19); border: 1px solid #1f4a2d; overflow: hidden; }
 .dcf-los { position: absolute; left: 2%; right: 2%; height: 2px; background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .5) 0 8px, transparent 8px 14px); }
 .dcf.def .dcf-los { top: 95.5%; } .dcf.off .dcf-los { top: 4.5%; }
 .dcf-yl { position: absolute; left: 0; right: 0; height: 1px; background: rgba(255, 255, 255, .09); } .dcf-yl span { position: absolute; left: 8px; top: -15px; font-size: 10px; color: rgba(255, 255, 255, .3); }
@@ -257,7 +257,7 @@ button.dc2-at { cursor: pointer; }
 .dcs-why.bad { background: var(--bad); }
 .dcs.chg { outline: 2px dashed var(--warn); outline-offset: 2px; }
 .dc2-out { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; padding: 6px 10px; margin-bottom: 8px; border-radius: 8px; background: color-mix(in srgb, var(--warn) 12%, var(--panel)); border: 1px solid var(--warn-b); }
-.dcj-div { display: flex; align-items: center; gap: 6px; margin: 5px 0 2px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.dcj-div { display: flex; align-items: center; gap: 6px; margin: 2px 0 1px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .dcj-div::before, .dcj-div::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 .dcj-tag.two { color: var(--accent); border-color: var(--accent); font-weight: 600; }
 /* dots */
@@ -283,13 +283,15 @@ button.dc2-at { cursor: pointer; }
 .dcj:hover { border-color: var(--muted); } .dcj.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); } .dcj.bad { border-color: var(--bad); }
 .dcj-h { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; } .dcj-h b { flex: 1; }
 .dcj-tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; } .dcj-tag.bad { color: var(--bad); border-color: var(--bad-b); }
-.dcc { display: flex; align-items: center; gap: 6px; padding: 5px 6px; margin: 3px 0; border-radius: 7px; background: var(--panel2); border: 1px solid transparent; border-left: 3px solid var(--line); cursor: grab; }
+.dcc { display: flex; align-items: center; gap: 6px; padding: 1px 3px 1px 6px; margin: 2px 0; border-radius: 7px; background: var(--panel2); border: 1px solid transparent; border-left: 3px solid var(--line); cursor: grab; }
 .dcc.st { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--panel2)); }
-.dcc.pk { border-color: var(--accent); } .dcc:hover .dcc-x { opacity: 1; }
+.dcc.pk { border-color: var(--accent); }
 .dcc-n { width: 16px; text-align: center; font-weight: 800; color: var(--muted); font-size: 12px; }
-.dcc-nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .dcc-pos { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
-.dcc.pt-elite .dcc-nm { color: var(--elite); } .dcc.pt-allpro .dcc-nm { color: var(--good); } .dcc.pt-low .dcc-nm { color: var(--low); }
-.dcc-x { opacity: 0; border: none; background: none; padding: 0 4px; color: var(--muted); font-size: 15px; line-height: 1; }
+.dcc-nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; text-align: left; padding: 0; color: inherit; } .dcc-sp { flex: 1; }
+button.dcc-nm:hover { color: var(--accent); text-decoration: underline; }
+.dcc.pt-elite button.dcc-nm { color: var(--elite); } .dcc.pt-allpro button.dcc-nm { color: var(--good); } .dcc.pt-low button.dcc-nm { color: var(--low); }
+.dcc-x { flex: 0 0 auto; width: 24px; height: 24px; border: none; border-radius: 6px; background: none; padding: 0; color: var(--muted); font-size: 19px; line-height: 1; cursor: pointer; }
+.dcc-x:hover { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
 .dcj-drop { margin: 3px 0; padding: 5px; border: 1px dashed var(--line); border-radius: 7px; text-align: center; font-size: 12px; color: var(--muted); }
 body.dc-dragging .dcj-drop { border-color: var(--accent); color: var(--accent); }
 .dcj-more { margin-top: 4px; } .dcj-more > summary { cursor: pointer; font-size: 11.5px; color: var(--muted); }

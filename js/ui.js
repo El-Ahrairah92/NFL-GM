@@ -781,10 +781,10 @@ function dcDot(p, k) { const cf = comfortLabel(jobComfort(p, k)); return (cf !==
 function dcChip(p, k, i, starts) {
   const tr = jobTier(p, k);
   return `<div class="dcc ${tr ? TIER_CLS[tr] : ''} ${i < starts ? 'st' : ''} ${ui.dchPid === p.id ? 'pk' : ''}" draggable="true" data-dcp="${p.id}" data-dci="${i}" data-dcjob="${k}" data-action="dchMan" data-pid="${p.id}" title="${esc(pname(p))}${tr ? ' · ' + tr + ' at this job' : ''}">
-    <span class="dcc-n">${i + 1}</span><span class="dcc-nm">${esc(p.last)}</span>${dcDot(p, k)}<span class="dcc-pos">${esc(p.lbl)}</span><button class="dcc-x" data-action="dcRemove" data-key="${k}" data-i="${i}" title="Take him off this job">×</button></div>`;
+    <span class="dcc-n">${i + 1}</span><button class="link dcc-nm" data-action="player" data-pid="${p.id}" title="${esc(pname(p))} · ${esc(p.lbl)}${tr ? ' · ' + tr + ' at this job' : ''} — open his card">${esc(p.last)}</button>${dcDot(p, k)}<span class="dcc-sp"></span><button class="dcc-x" data-action="dcRemove" data-key="${k}" data-i="${i}" title="Take him off this job" aria-label="Remove ${esc(p.last)}">×</button></div>`;
 }
 function dcJobCard(t, c, k, need, where, prob) {
-  const u = t.id, list = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === u), n = Math.max(CHART_DEPTH[k] || 3, 3), on = ui.dcJob === k;
+  const u = t.id, list = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === u), n = chartMax(k), on = ui.dcJob === k;
   const rotNow = rotOf(c, k), rotList = rotOpts(k), rotPick = rotList.length ? rotList.reduce((a, o) => Math.abs(o[0] - rotNow) < Math.abs(a[0] - rotNow) ? o : a)[0] : 0;
   const rot = ROT_KEYS.has(k) && rotList.length > 1 ? `<div class="dcj-rot"><span>Next man's snaps</span><select data-change="dchRot" data-key="${k}">${rotList.map(([v, l]) => `<option value="${v}" ${v === rotPick ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : '';
   return `<div class="dcj ${on ? 'on' : ''} ${prob ? 'bad' : ''}" data-action="dcJob" data-key="${k}">
@@ -827,7 +827,7 @@ function depthChartHTML() {
     // why a spot is not being played by the first man on its list
     const whyText = (b, p) => { const w = lineup._why[b.name]; if (!w || w === 'ov' || auto) return null;
       if (w === 'staff') return ['staff', "Nobody left on this job's list: the staff put him here"];
-      if (w === 'rot') return ['rest', 'In for a rotation'];
+      if (w === 'rot' || w === 'tired') return ['rest', 'In while the man ahead of him takes a breather'];
       const list = c.lists[b.key] || [], above = list.slice(0, Math.max(0, list.indexOf(p.id))).map(id => P(id)).filter(Boolean), at = q => lay.find(x => lineup[x.name] === q);
       const why = above.map(q => (outP && q.id === outP.id) || q.injury ? `${q.last} is out` : at(q) ? `${q.last} is at ${at(q).label.toLowerCase()} in this look` : `${q.last} is not dressed`);
       return ['next up', why.length ? why.join(' · ') : 'Next man up']; };

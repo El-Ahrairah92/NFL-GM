@@ -188,13 +188,15 @@ function refreshChart(tid) {
   }
   for (const k in c.ov) if (!mine.has(c.ov[k])) delete c.ov[k];
 }
+// how many men a job's order can hold: five for any position, ten for a special teams unit
+function chartMax(key) { const k = baseKey(key); return Math.max(CHART_DEPTH[k] || 5, 5); }
 function setChart(tid, key, i, pid) {
   const c = ensureChart(tid), unit = CHART_UNIT(key);
   if (c.auto[unit]) setChartAuto(tid, unit, false); // taking control starts from the staff's chart as it stands
   const list = (c.lists[key] || []).slice();
   if (pid) { const j = list.indexOf(pid); if (j >= 0) list.splice(j, 1); list.splice(Math.min(i, list.length), 0, pid); }
   else list.splice(i, 1);
-  c.lists[key] = list.slice(0, Math.max(CHART_DEPTH[baseKey(key)] || 3, 3));
+  c.lists[key] = list.slice(0, chartMax(key));
 }
 // a position only a specialist can play: nobody lands there by accident
 function chartBlocked(tid, key, pid) {
