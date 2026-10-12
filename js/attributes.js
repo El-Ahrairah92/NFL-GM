@@ -351,32 +351,69 @@ function genAging() {
   return ag;
 }
 function fmtHeight(inches) { return `${Math.floor(inches / 12)}'${inches % 12}"`; }
-function genMeasurables(a, ht, wt, arm) {
-  // combine readings: taken around age 22 (≈2 pts below explosive peak) with measurement noise
-  const sp = a.spd - 2, bu = a.bur - 2, ag = a.agi - 2, jp = (a.jmp !== undefined ? a.jmp * 0.7 + a.bur * 0.3 : a.bur) - 2;
-  return {
-    ht, wt, arm,
-    forty: round2(clamp(5.55 - 0.0125 * sp + gauss(0, 0.035), 4.2, 5.8)),
-    ten: round2(clamp(1.98 - 0.0055 * bu + gauss(0, 0.025), 1.38, 2.0)),
-    cone: round2(clamp(8.2 - 0.016 * ag + gauss(0, 0.08), 6.4, 8.4)),
-    shut: round2(clamp(4.95 - 0.009 * ag + gauss(0, 0.05), 3.9, 5.0)),
-    bench: Math.max(0, Math.round((a.str - 20) * 0.45 + gauss(0, 2.5))),
-    vert: round1(clamp(14 + jp * 0.26 + gauss(0, 1.6), 22, 45)),
-    broad: Math.round(clamp(70 + (jp * 0.6 + bu * 0.4) * 0.55 + gauss(0, 3), 90, 145)),
-  };
+// ---------- the workout ----------
+// Each drill has a raw mark set by what it tests (per: the drill's units per rating point). Work ethic sets how far above the raw mark he can go
+// (the ceiling: two months of rehearsed starts and turns), consistency how far below it (the floor). The result is drawn from inside that range,
+// so a workout lies downward more easily than upward: a slow man cannot fake a fast time, but a fast man can run a bad one.
+const DRILLS = {
+  forty: { base: 5.55, per: -0.0125, mix: { spd: 0.7, bur: 0.3 }, main: 'spd', up: [0.02, 0.08], dn: [0.03, 0.10], lo: 4.2, hi: 5.8, r: round2 },
+  ten: { base: 1.98, per: -0.0055, mix: { bur: 0.75, str: 0.25 }, main: 'bur', up: [0.01, 0.03], dn: [0.01, 0.04], lo: 1.38, hi: 2.0, r: round2 },
+  vert: { base: 14, per: 0.26, mix: { jmp: 0.75, bur: 0.25 }, main: 'jmp', up: [0.5, 1.5], dn: [1, 3], lo: 20, hi: 46, r: v => Math.round(v * 2) / 2 },
+  broad: { base: 70, per: 0.55, mix: { jmp: 0.5, bur: 0.3, str: 0.2 }, main: 'jmp', up: [1, 3], dn: [2, 6], lo: 88, hi: 147, r: Math.round },
+  cone: { base: 8.2, per: -0.016, mix: { agi: 0.75, bur: 0.25 }, main: 'agi', up: [0.04, 0.16], dn: [0.05, 0.18], lo: 6.4, hi: 8.5, r: round2 },
+  shut: { base: 4.95, per: -0.009, mix: { agi: 0.55, bur: 0.45 }, main: 'agi', up: [0.02, 0.08], dn: [0.03, 0.10], lo: 3.85, hi: 5.05, r: round2 },
+  bench: { base: -9, per: 0.45, mix: { str: 1 }, main: 'str', up: [1, 5], dn: [1, 4], lo: 0, hi: 45, r: Math.round },
+};
+const DRILL_KEYS = Object.keys(DRILLS);
+for (const k of DRILL_KEYS) DRILLS[k].k = 1 / Math.sqrt(Object.values(DRILLS[k].mix).reduce((s, w) => s + w * w, 0)); // a blend of several ratings spreads men as widely as one would
+// the raw mark, as a rating: a starter at his spot, moved by how he differs from one in what the drill tests, and by his build
+// (taken around age 22, about two points short of his explosive peak)
+function drillRaw(p, k) {
+  const D = DRILLS[k], S = SPOTS[p.spot], t = S.t, a = p.a, T = j => t[j] !== undefined ? tMean(t[j]) : a[j] !== undefined ? a[j] : 40;
+  let dev = 0; for (const j in D.mix) dev += D.mix[j] * ((a[j] !== undefined ? a[j] : T(j)) - T(j));
+  let r = T(D.main) + dev * D.k - 2;
+  const b = S.body, dh = p.m.ht - b[0];
+  if (k === 'broad') r += dh * 0.9;          // long legs
+  else if (k === 'cone') r -= dh * 0.5;      // a tall man bends worse
+  else if (k === 'bench') r += ((p.m.wt - b[2]) / 15 - ((p.m.arm || b[4]) - (b[4] + dh * 0.35))) * 2.2; // long arms cost about a rep an inch; mass helps
+  return r;
 }
-// older players were measured before jumps were recorded: fill them in from their explosiveness
+function drillRange(p, k) {
+  const D = DRILLS[k], h = p.h || {}, wq = clamp(((h.work === undefined ? 56 : h.work) - 20) / 70, 0, 1), cq = clamp(((h.cons === undefined ? 55 : h.cons) - 20) / 70, 0, 1);
+  return { up: D.up[0] + (D.up[1] - D.up[0]) * wq, dn: D.dn[1] - (D.dn[1] - D.dn[0]) * cq, cq };
+}
+// day: how his whole day is going (shared by every drill he runs)
+function drillDraw(p, k, day) {
+  const D = DRILLS[k], g = drillRange(p, k), good = D.per > 0 ? 1 : -1;
+  let off = -g.dn + clamp(0.5 + (day || 0) * 0.1 + gauss(0, 0.17), 0, 1) * (g.up + g.dn);
+  if (rand() < 0.02 + 0.05 * (1 - g.cq)) off = -g.dn * (1.3 + rand()); // a slip or a false step: the one way to land under his floor
+  return D.r(clamp(D.base + D.per * drillRaw(p, k) + good * off, D.lo, D.hi));
+}
+const HAND_T = { QB: 9.6, RB: 9.2, FB: 9.5, WRX: 9.6, WRZ: 9.3, SLOT: 9.2, TEY: 10, TEH: 9.9, LT: 10.2, LG: 10.1, C: 10, RG: 10.1, RT: 10.2, NT: 10.1, DT: 10, DE: 10, EDGE: 9.9, MLB: 9.7, WLB: 9.6, CB: 9.2, NCB: 9.1, FS: 9.3, SS: 9.4, K: 9.1, P: 9.2 };
+function handSize(spot, ht, z) { return Math.round(clamp((HAND_T[spot] || 9.5) + (ht - SPOTS[spot].body[0]) * 0.07 + z * 0.4, 8, 11.75) * 8) / 8; }
+function genMeasurables(p) {
+  const day = gauss(0, 1); for (const k of DRILL_KEYS) p.m[k] = drillDraw(p, k, day);
+  return p.m;
+}
+// older players were measured before jumps were recorded: fill them in from their explosiveness (a drill a man chose not to do stays blank)
 function ensureJumps(p) {
-  if (!p.m || p.m.vert !== undefined || !p.a) return;
+  if (!p.m || p.m.vert !== undefined || !p.a || p.m.x) return;
   const bu = p.a.bur - 2;
   p.m.vert = Math.round(clamp(14 + bu * 0.26 + hashGauss(p.id, 91, 1) * 1.6, 22, 45) * 10) / 10;
   p.m.broad = Math.round(clamp(70 + bu * 0.55 + hashGauss(p.id, 92, 1) * 3, 90, 145));
+}
+// and before hands were measured: sized to his position and height, a little bigger on a sure-handed man
+function ensureHand(p) {
+  if (!p || !p.m || p.m.hand !== undefined || !SPOTS[p.spot]) return;
+  const t = SPOTS[p.spot].t, tilt = p.a && p.a.hnd !== undefined && t.hnd !== undefined ? clamp((p.a.hnd - tMean(t.hnd)) / 12, -1, 1) * 0.4 : 0;
+  p.m.hand = handSize(p.spot, p.m.ht, clamp(hashGauss(p.id || 0, 94, 1) * 0.9 + tilt, -2.6, 2.6));
 }
 // Relative Athletic Score: each test as a 0–10 percentile against his position, averaged (size, speed, explosion, agility, strength)
 const RAS_CACHE = {};
 function rasOf(p, peers) {
   if (!p.m) return null;
   ensureJumps(p);
+  if (DRILL_KEYS.filter(k => p.m[k] !== undefined).length < 4) return null; // too little of a workout to score
   const tests = [['ht', 1], ['wt', 1], ['forty', -1], ['ten', -1], ['vert', 1], ['broad', 1], ['cone', -1], ['shut', -1], ['bench', 1]];
   // sorted test results per position, cached briefly (a draft board asks for hundreds of these at once)
   const now = Date.now();
@@ -390,7 +427,7 @@ function rasOf(p, peers) {
   let s = 0, n = 0;
   for (const [k, dir] of tests) {
     const vals = RAS_CACHE.by[key][k];
-    if (vals.length < 5) continue;
+    if (vals.length < 5 || p.m[k] === undefined) continue;
     const below = vals.filter(v => v < p.m[k]).length, eq = vals.filter(v => v === p.m[k]).length;
     const pct = (below + eq / 2) / vals.length;
     s += (dir > 0 ? pct : 1 - pct) * 10; n++;
@@ -429,14 +466,18 @@ function genPlayer(spot, q, age, gf, raw) {
   }
   a.jmp += (a.bur - tMean(S.t.bur !== undefined ? S.t.bur : 30) - q * 3) * 0.45 - dw * 2; // an explosive man jumps; a heavy one less so
   a.spd -= dw * 2; a.agi -= dw * 1.5; a.str += dw * 3;
+  // hands: big ones hold on to the ball. A quarterback's most of all.
+  const hz = clamp(gauss(0, 1), -2.6, 2.6);
+  for (const [k, v] of [['hnd', 1.5], ['bsec', S.g === 'QB' ? 2 : 1.5], ['cth', 1], ['bsk', 1]]) if (a[k] !== undefined) a[k] += hz * v;
   for (const k in a) a[k] = clamp(Math.round(a[k]), 15, 99);
   a.siz = sizeScore(ht, wt, arm);
   const p = {
     id: state.nextPid++, first, last, age, spot, pos: S.g, lbl: S.l, a,
-    m: genMeasurables(a, ht, wt, arm), h: genHidden(), ag: genAging(), grow: { E: 0, P: 0, T: 0, M: 0 },
+    m: { ht, wt, arm, hand: handSize(spot, ht, hz) }, h: genHidden(), ag: genAging(), grow: { E: 0, P: 0, T: 0, M: 0 },
     ovr: 0, pot: 0, fit: {}, tid: -1, college: pickSchool(clamp(1 + ((q || 60) - 62) / 20, 0.85, 1.6)),
     contract: { amt: MIN_SALARY, yrs: 1 }, injury: null, stats: {}, career: [], draft: null, exp: 0,
   };
+  genMeasurables(p);
   genDecline(p);
   // age the peak profile back (still growing) or forward (declining) to the current age
   for (const g of AGE_GROUPS) {

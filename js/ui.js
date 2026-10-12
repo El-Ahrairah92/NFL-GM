@@ -2099,7 +2099,7 @@ function draftHTML() {
     { k: 'col', l: 'College', v: p => p.college, f: p => `<span class="muted">${esc(p.college)}</span>` },
     { k: 'age', l: 'Age', v: p => p.age, num: 1 },
     { k: 'ht', l: 'Ht', v: p => p.m.ht, f: p => `<span class="small muted">${fmtHeight(p.m.ht)}</span>`, num: 1 }, { k: 'wt', l: 'Wt', v: p => p.m.wt, f: p => `<span class="small muted">${p.m.wt}</span>`, num: 1 },
-    { k: 'forty', l: '40', v: p => -p.m.forty, f: p => p.m.forty.toFixed(2), num: 1 },
+    { k: 'forty', l: '40', v: p => -(p.m.forty !== undefined ? p.m.forty : p.pw && p.pw.forty !== undefined ? p.pw.forty : 9), f: p => p.m.forty !== undefined ? p.m.forty.toFixed(2) + (p.m.x && p.m.x.forty === 'p' ? '<span class="muted">*</span>' : '') : p.pw && p.pw.forty !== undefined ? `<span title="Your private workout">${p.pw.forty.toFixed(2)}†</span>` : `<span class="small muted" title="${((p.m.x && DRILL_WHY[p.m.x.forty]) || ['', 'No result'])[1]}">${p.m.x && p.m.x.forty === 'i' ? 'inj' : 'DNR'}</span>`, num: 1 },
     { k: 'ras', l: 'RAS', v: p => rasOf(p) || 0, f: p => rasHTML(p), num: 1, title: 'Relative Athletic Score (0–10) vs. his position' },
     { k: 'ovr', l: 'Now', v: tierSort, f: p => tierPill(p) + trueNums(p), title: 'Ready to contribute as…' },
     { k: 'pot', l: 'Upside', v: upSort, f: p => upsidePill(p) },
@@ -2705,9 +2705,22 @@ function advRankHTML(p, src) {
   }).join('');
   return `<div class="stat-tiles">${tiles}</div>`;
 }
-const COMBINE = [['ht', 'Height', m => fmtHeight(m.ht), 1], ['wt', 'Weight', m => m.wt, 1], ['arm', 'Arm', m => m.arm.toFixed(2) + '"', 1], ['forty', '40-yd', m => m.forty.toFixed(2), -1],
-  ['ten', '10-yd', m => m.ten.toFixed(2), -1], ['vert', 'Vertical', m => m.vert + '"', 1], ['broad', 'Broad', m => `${Math.floor(m.broad / 12)}'${m.broad % 12}"`, 1],
-  ['cone', '3-cone', m => m.cone.toFixed(2), -1], ['shut', 'Shuttle', m => m.shut.toFixed(2), -1], ['bench', 'Bench', m => m.bench, 1]];
+const COMBINE = [['ht', 'Height', v => fmtHeight(v), 1], ['wt', 'Weight', v => v, 1], ['arm', 'Arm', v => v.toFixed(2) + '"', 1], ['hand', 'Hand', v => v.toFixed(2) + '"', 1], ['forty', '40-yd', v => v.toFixed(2), -1],
+  ['ten', '10-yd', v => v.toFixed(2), -1], ['vert', 'Vertical', v => v + '"', 1], ['broad', 'Broad', v => `${Math.floor(v / 12)}'${v % 12}"`, 1],
+  ['cone', '3-cone', v => v.toFixed(2), -1], ['shut', 'Shuttle', v => v.toFixed(2), -1], ['bench', 'Bench', v => v, 1]];
+// why a drill is blank. A man who chose not to run and a man hiding something read the same.
+const DRILL_WHY = { i: ['Injured', 'Did not work out: injured'], s: ['Did not run', 'Chose not to do this drill'], n: ['No result', 'Never tested'], c: ['—', 'Not asked of his position'] };
+function drillFmt(k, v) { const c = COMBINE.find(x => x[0] === k); return c ? c[2](v) : v; }
+function workoutNoteHTML(p) {
+  const m = p.m || {}, x = m.x || {}, bits = [];
+  if (m.inj) bits.push(`<span class="bad">Did not work out fully: ${esc(m.inj)}</span>`);
+  if (m.pd) bits.push('Pro day numbers: a home track and a friendly stopwatch');
+  else if (Object.values(x).includes('p')) bits.push('Ran his 40 at his pro day, not the combine');
+  const sk = Object.keys(x).filter(k => x[k] === 's'); if (sk.length) bits.push(`Chose not to do: ${sk.map(k => COMBINE.find(c => c[0] === k)[1].toLowerCase()).join(', ')}`);
+  if (p.pw) bits.push('<span class="good">You worked him out privately</span>');
+  return bits.length ? `<div class="small muted" style="margin-top:6px">${bits.join(' · ')}</div>` : '';
+}
+function medPill(p) { const g = p.tid === -2 && p.m ? p.m.med : null; return g === 'flag' ? '<span class="pill bad" title="The doctors flagged him. They are not always right.">Medical flag</span>' : g === 'minor' ? '<span class="pill warn" title="The doctors noted a minor concern.">Medical: minor</span>' : ''; }
 function rasColor(r) { return r >= 9 ? '#1f8a4c' : r >= 8 ? '#2fa35f' : r >= 6.5 ? '#7cae3a' : r >= 5 ? '#c9a227' : r >= 3 ? '#d9822b' : '#c94a3a'; }
 function rasHTML(p, peers) {
   const r = rasOf(p, peers);
@@ -2723,12 +2736,15 @@ function gameLogHTML(p) {
 // combine numbers shaded by percentile against everyone at his position group
 function combineHTML(p) {
   const peers = Object.values(state.players).filter(q => q.m && q.pos === p.pos);
-  ensureJumps(p); peers.forEach(ensureJumps);
+  ensureJumps(p); peers.forEach(ensureJumps); ensureHand(p);
+  const x = p.m.x || {}, pw = p.pw || {};
   return `<div class="stat-tiles">${COMBINE.map(([k, l, f, dir]) => {
+    const v = p.m[k], mine = pw[k];
+    if (v === undefined) { const w = DRILL_WHY[x[k]] || ['—', '']; return `<div class="tile ${mine !== undefined ? 'tile-pw' : 'tile-dnp'}" title="${w[1]}${mine !== undefined ? ' · the number is from your private workout' : ''}"><div class="v" style="font-size:${mine !== undefined ? 15 : 12}px">${mine !== undefined ? f(mine) : w[0]}</div><div class="l">${l}</div>${mine !== undefined ? '<div class="rk">your workout</div>' : ''}</div>`; }
     let style = '', title = '';
-    if (dir) { const vals = peers.map(q => q.m[k]).sort((x, y) => x - y), below = vals.filter(x => x < p.m[k]).length, pct = vals.length > 1 ? below / (vals.length - 1) : 0.5; style = pctStyle(pct, dir); title = `${Math.round(100 * (dir > 0 ? pct : 1 - pct))}th percentile among ${p.pos}s`; }
-    return `<div class="tile" style="${style}" title="${title}"><div class="v" style="font-size:15px">${f(p.m)}</div><div class="l">${l}</div></div>`;
-  }).join('')}</div>`;
+    if (dir) { const vals = peers.map(q => q.m[k]).filter(z => z !== undefined && z !== null).sort((a, b) => a - b), below = vals.filter(z => z < v).length, pct = vals.length > 1 ? below / (vals.length - 1) : 0.5; style = pctStyle(pct, dir); title = `${Math.round(100 * (dir > 0 ? pct : 1 - pct))}th percentile among ${p.pos}s`; }
+    return `<div class="tile" style="${style}" title="${title}${x[k] === 'p' ? ' · pro day' : ''}"><div class="v" style="font-size:15px">${f(v)}${x[k] === 'p' ? '<span class="small muted">*</span>' : ''}</div><div class="l">${l}</div>${mine !== undefined ? `<div class="rk" title="Your private workout">yours ${f(mine)}</div>` : ''}</div>`;
+  }).join('')}</div>${workoutNoteHTML(p)}`;
 }
 function strengthsHTML(p) {
   const { str, weak, best } = scoutTraits(p);
@@ -2809,12 +2825,13 @@ function cardFourHTML(p, src) {
   return tiles.length ? `<div class="ds-four">${tiles.join('')}</div>` : `<div class="muted small">Not enough snaps on tape yet.</div>`;
 }
 // the five drills as a web, each spoke his percentile against his own position
-const SPIDER = [['forty', '40 yard', -1, v => v.toFixed(2)], ['bench', 'Bench', 1, v => v], ['shut', 'Shuttle', -1, v => v.toFixed(2)], ['cone', '3-cone', -1, v => v.toFixed(2)], ['vert', 'Vertical', 1, v => v + '"']];
+const SPIDER = [['forty', '40 yard', -1], ['bench', 'Bench', 1], ['shut', 'Shuttle', -1], ['cone', '3-cone', -1], ['vert', 'Vertical', 1]];
 function spiderHTML(p, peers) {
   if (!p.m) return '';
   ensureJumps(p); peers = peers || Object.values(state.players).filter(q => q.m && q.pos === p.pos); peers.forEach(ensureJumps);
   const cx = 115, cy = 94, R = 64, ang = i => (-90 + 72 * i) * Math.PI / 180, pt = (i, r) => `${(cx + Math.cos(ang(i)) * r).toFixed(1)},${(cy + Math.sin(ang(i)) * r).toFixed(1)}`;
-  const pcts = SPIDER.map(([k, , dir]) => { const v = p.m[k]; if (v === undefined || v === null) return null; const vals = peers.map(q => q.m[k]).filter(x => x !== undefined && x !== null), below = vals.filter(x => x < v).length, raw = vals.length > 1 ? below / (vals.length - 1) : 0.5; return clamp(dir > 0 ? raw : 1 - raw, 0, 1); });
+  const val = k => p.m[k] !== undefined && p.m[k] !== null ? p.m[k] : p.pw && p.pw[k] !== undefined ? p.pw[k] : null, x = p.m.x || {};
+  const pcts = SPIDER.map(([k, , dir]) => { const v = val(k); if (v === null) return null; const vals = peers.map(q => q.m[k]).filter(x => x !== undefined && x !== null), below = vals.filter(x => x < v).length, raw = vals.length > 1 ? below / (vals.length - 1) : 0.5; return clamp(dir > 0 ? raw : 1 - raw, 0, 1); });
   const ring = f => `<polygon points="${SPIDER.map((_, i) => pt(i, R * f)).join(' ')}" class="sp-ring"/>`;
   const LBL = [[115, 12, 'middle'], [181, 66, 'start'], [158, 160, 'middle'], [72, 160, 'middle'], [49, 66, 'end']];
   const yr = p.draft ? p.draft.year : p.tid === -2 ? p.draftYear : state.season - (p.exp || 0);
@@ -2822,8 +2839,8 @@ function spiderHTML(p, peers) {
     <svg viewBox="0 0 230 178" class="spider" role="img" aria-label="Combine results as percentiles at his position">${ring(1)}${ring(0.5)}
     ${SPIDER.map((_, i) => `<line x1="${cx}" y1="${cy}" x2="${pt(i, R).split(',')[0]}" y2="${pt(i, R).split(',')[1]}" class="sp-ax"/>`).join('')}
     <polygon points="${pcts.map((q, i) => pt(i, R * (q === null ? 0 : 0.08 + 0.92 * q))).join(' ')}" class="sp-me"/>
-    ${SPIDER.map(([k, l, , f], i) => `<text x="${LBL[i][0]}" y="${LBL[i][1]}" text-anchor="${LBL[i][2]}" class="sp-l">${l}</text><text x="${LBL[i][0]}" y="${LBL[i][1] + 13}" text-anchor="${LBL[i][2]}" class="sp-v">${p.m[k] === undefined || p.m[k] === null ? '—' : f(p.m[k])}${pcts[i] !== null ? `<title>${ordinal(Math.round(100 * pcts[i]))} percentile</title>` : ''}</text>`).join('')}</svg>
-    <div class="small muted" style="text-align:center">${p.tid === -2 ? 'This year’s workouts' : 'As measured in ' + yr}</div>`;
+    ${SPIDER.map(([k, l], i) => `<text x="${LBL[i][0]}" y="${LBL[i][1]}" text-anchor="${LBL[i][2]}" class="sp-l">${l}</text><text x="${LBL[i][0]}" y="${LBL[i][1] + 13}" text-anchor="${LBL[i][2]}" class="sp-v${val(k) === null ? ' sp-no' : ''}">${val(k) === null ? (x[k] === 'i' ? 'inj' : x[k] === 's' ? 'DNR' : '—') : drillFmt(k, val(k)) + (p.m[k] === undefined ? '†' : x[k] === 'p' ? '*' : '')}<title>${pcts[i] !== null ? ordinal(Math.round(100 * pcts[i])) + ' percentile' + (p.m[k] === undefined ? ' · your private workout' : x[k] === 'p' ? ' · pro day' : '') : (DRILL_WHY[x[k]] || ['', 'No result'])[1]}</title></text>`).join('')}</svg>
+    <div class="small muted" style="text-align:center">${p.tid === -2 ? (p.m.pd ? 'Pro day numbers' : 'This year’s combine') : 'As measured in ' + yr}${SPIDER.some(([k]) => p.m[k] === undefined && val(k) !== null) ? ' · † your workout' : ''}</div>${p.m.inj ? `<div class="small bad" style="text-align:center">Did not work out fully: ${esc(p.m.inj)}</div>` : ''}`;
 }
 // has he topped out, or is there more to come
 function devStatement(p) {
@@ -2874,7 +2891,7 @@ function cardHeadHTML(p) {
       <div class="ds-bio"><b>${JOB_NAME[p.spot] || esc(p.lbl)}</b> · Age <b>${p.age}</b> · <b>${p.m ? fmtHeight(p.m.ht) : '—'}</b> · <b>${p.m ? p.m.wt : '—'} lb</b> · ${yr} · ${esc(p.college)}</div>
       <div class="ds-sub">${team}${drafted ? ' · ' + drafted : ''}</div>
     </div>
-    <div class="ds-pills"><div><span class="pill">${esc(p.lbl)}</span> ${statusPills(p)} ${stars !== null && !prospect ? starHTML(stars) : ''}</div>
+    <div class="ds-pills"><div><span class="pill">${esc(p.lbl)}</span> ${statusPills(p)} ${medPill(p)} ${stars !== null && !prospect ? starHTML(stars) : ''}</div>
       <div><span title="${prospect ? 'Ready now as' : 'Tier'}">${tierPill(p)}</span> <span title="Upside">${upsidePill(p)}</span>${trueNums(p)} ${rasHTML(p)}</div></div></div>`;
 }
 function cardOverHTML(p) {
@@ -2993,6 +3010,7 @@ function cardButtonsHTML(p) {
   } else if (p.tid === -1 && faInMarket(p)) { left += `<button class="primary" data-action="faGo" data-pid="${p.id}">Sit down with his agent</button>`;
   } else if (p.tid === -1 && state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP') left += `<button class="primary" data-action="sign" data-pid="${p.id}">Sign (${fmtMoney(p.ask)})</button>`;
   else if (p.tid >= 0) left += `<button data-action="tradeFor" data-pid="${p.id}">Trade for ${esc(p.last)}</button>`;
+  if (p.tid === -2) { const n = pwState().left; left += p.pw ? '<span class="small muted">You have worked him out privately: your numbers are on the Scouting tab.</span>' : `<button ${n ? '' : 'disabled'} data-action="privateWorkout" data-pid="${p.id}" title="He runs every drill again for you alone, including any he skipped. The numbers are yours: the rest of the league does not see them.">Private workout</button><span class="small muted">${n} of ${PW_PER_CLASS} left for this class</span>`; }
   return left;
 }
 function playerModal(pid, replace) {
@@ -3465,6 +3483,7 @@ const actions = {
   schedPart: d => { ui.schedPart = d.part; ui.schedWeekA = 1; render(); },
   cardScope: d => { ui.cardScope = d.v; playerModal(+d.pid, true); },
   cardTab: d => { ui.cardTab = d.v; playerModal(+d.pid, true); },
+  privateWorkout: d => { const err = privateWorkout(+d.pid); if (err) toast(err); else { ui.cardTab = 'scout'; save(); } playerModal(+d.pid, true); },
   planView: d => { ui.planView = d.v; render(); },
   askYes: () => askDone(true),
   askNo: () => askDone(false),

@@ -346,6 +346,18 @@ function advanceFA() {
 
 // ---------- draft ----------
 function prospects() { return Object.values(state.players).filter(p => p.tid === -2); }
+// private workouts: a few prospects a class run every drill again for you alone, including the ones they skipped
+const PW_PER_CLASS = 12;
+function pwState() { const c = prospects()[0], yr = c ? c.draftYear : 0; if (!state.pw || state.pw.yr !== yr) state.pw = { yr, left: PW_PER_CLASS }; return state.pw; }
+function privateWorkout(pid) {
+  const p = P(pid);
+  if (!p || p.tid !== -2) return 'Only draft prospects can be worked out';
+  if (p.pw) return 'You have already worked him out';
+  const s = pwState(); if (s.left <= 0) return 'No private workouts left for this class';
+  const day = gauss(0, 1), o = {};
+  for (const k of DRILL_KEYS) if (!(k === 'bench' && ['QB', 'K', 'P'].includes(p.pos))) o[k] = drillDraw(p, k, day);
+  p.pw = o; s.left--; return null;
+}
 function currentPick() { return state.draft && state.draft.order[state.draft.idx]; }
 function draftPlayer(pid) {
   const d = state.draft, pk = d.order[d.idx], p = P(pid);

@@ -56,7 +56,7 @@ function newLeague(userTid) {
 const SAVE_VERSION = 3;
 // bring older saves up to date
 function migrateState(st) {
-  for (const id in st.players) ensureLeap(st.players[id]); // saves from before leaping was a rating
+  for (const id in st.players) { ensureLeap(st.players[id]); ensureHand(st.players[id]); } // saves from before leaping was a rating, and before hands were measured
   for (const id in st.retired || {}) ensureLeap(st.retired[id]);
   if (typeof ensureST === 'function') for (const id in st.players) ensureST(st.players[id]); // older leagues: everyone gets a special teams skill
   state = st;

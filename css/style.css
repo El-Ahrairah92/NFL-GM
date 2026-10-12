@@ -1064,3 +1064,6 @@ input, textarea, select, .selectable { -webkit-user-select: text; user-select: t
 .ds-foot { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); gap: 8px; flex-wrap: wrap; align-items: flex-start; }
 @media (max-width: 760px) { .modal-card:has(.dossier) { padding: 14px 12px; } .ds-head { flex-direction: column; padding-right: 40px; } .ds-pills { align-items: flex-start; text-align: left; }
   .ds-top { grid-template-columns: minmax(0, 1fr); } .ds-spider { max-width: 260px; margin: 0 auto; } .ds-four { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ds-tabs { overflow-x: auto; } .ds-name { font-size: 24px; } }
+.tile-dnp { border-style: dashed; } .tile-dnp .v { color: var(--muted); font-weight: 600; }
+.tile-pw { border-style: dashed; border-color: var(--accent); }
+.sp-no { fill: var(--muted); font-weight: 600; font-size: 10.5px; }

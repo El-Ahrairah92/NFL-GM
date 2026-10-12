@@ -120,9 +120,44 @@ function rookiePlayer(spot, qMean, qSd, maxAge) {
   p.qz = round1((q - DRAFT_Q.mean - (DRAFT_Q_ADJ[spot] || 0)) / DRAFT_Q.sd); // how far above his class he stands
   return p;
 }
+// ---- the combine: not every prospect does every drill, and nobody is told why ----
+const RUN_DRILLS = ['forty', 'ten', 'cone', 'shut'], KEY_DRILL = { QB: [], RB: ['forty'], FB: ['bench'], WR: ['forty'], TE: ['forty'], OL: ['bench'], DL: ['bench', 'ten'], LB: ['forty'], CB: ['forty'], S: ['forty'], K: [], P: [] };
+const COMBINE_INJ = [['hamstring', ['forty', 'ten', 'cone', 'shut', 'vert', 'broad'], 4], ['shoulder', ['bench'], 2], ['pectoral', ['bench'], 1], ['knee', DRILL_KEYS, 2], ['foot', ['forty', 'ten', 'cone', 'shut', 'vert', 'broad'], 2]];
+const PRO_DAY = { forty: -0.03, ten: -0.01, cone: -0.04, shut: -0.02, vert: 0.5, broad: 1, bench: 0 }; // a home track and a friendly stopwatch
+// x: why a number is missing. i injured · s chose not to (standing on his tape, or hiding something: the sheet does not say which) · n never tested · c not asked of his position · p run at his pro day instead
+function prospectWorkout(p, depth) {
+  const m = p.m, x = {}, ms = p.h.dur + gauss(0, 20);
+  m.med = ms < 15 ? 'flag' : ms < 31 ? 'minor' : 'clean'; // the doctors see durability through a fog: about one flag in three is a false alarm
+  const blank = (k, why) => { if (m[k] !== undefined) { delete m[k]; x[k] = why; } };
+  if (p.pos === 'QB' || p.pos === 'K' || p.pos === 'P') blank('bench', 'c');
+  if (depth) { // not invited: whatever his pro day produced
+    m.pd = 1;
+    for (const k of DRILL_KEYS) { if (m[k] === undefined) continue; if (rand() < 0.25) blank(k, 'n'); else m[k] = DRILLS[k].r(m[k] + PRO_DAY[k]); }
+  } else {
+    if (rand() < 0.04 + (m.med === 'flag' ? 0.25 : m.med === 'minor' ? 0.08 : 0)) { const inj = weightedPick(COMBINE_INJ, COMBINE_INJ.map(i => i[2])); m.inj = inj[0]; for (const k of inj[1]) blank(k, 'i'); }
+    const qz = p.qz || 0;
+    if (rand() < (qz >= 1.8 ? 0.5 : qz >= 1.2 ? 0.22 : qz >= 0.8 ? 0.06 : 0)) { // nothing to gain: he stands on his tape
+      for (const k of RUN_DRILLS) blank(k, 's');
+      if (rand() < 0.5) for (const k of ['vert', 'broad', 'bench']) blank(k, 's');
+      if (x.forty === 's' && rand() < 0.45) { m.forty = DRILLS.forty.r(drillDraw(p, 'forty', gauss(0, 1)) + PRO_DAY.forty); x.forty = 'p'; }
+    }
+    // hiding a weakness: the drill that is worst against the rest of his own workout, and short of a starter's, most of all the one his position is judged on
+    const dev = {}; for (const k of DRILL_KEYS) { const D = DRILLS[k], t = SPOTS[p.spot].t; dev[k] = drillRaw(p, k) + 2 - (t[D.main] !== undefined ? tMean(t[D.main]) : p.a[D.main]); }
+    const avg = DRILL_KEYS.reduce((s, k) => s + dev[k], 0) / DRILL_KEYS.length, key = KEY_DRILL[p.pos] || [];
+    for (const k of DRILL_KEYS) if (m[k] !== undefined && dev[k] < 0 && rand() < clamp((avg - dev[k] - 3) * 0.07, 0, 0.45) * (key.includes(k) ? 1 : 0.35)) blank(k, 's');
+  }
+  if (Object.keys(x).length) m.x = x;
+}
+// what the league makes of a workout: it reads the stopwatch, not the man. A number from a pro day is believed less; a flag from the doctors costs him.
+function workoutHype(p) {
+  const m = p.m, t = SPOTS[p.spot].t; let s = 0;
+  for (const [k, main] of [['forty', 'spd'], ['ten', 'bur']]) { if (m[k] === undefined) continue; s += ((m[k] - DRILLS[k].base) / DRILLS[k].per + 2 - (t[main] !== undefined ? tMean(t[main]) : 60)) * (m.pd || (m.x && m.x[k] === 'p') ? 0.7 : 1); }
+  return round1(clamp(s * 0.07 + gauss(0, 0.7) - (m.med === 'flag' ? 1 : m.med === 'minor' ? 0.3 : 0), -2.5, 2.5));
+}
+function workoutDone(p, depth) { prospectWorkout(p, depth); p.per.h0 = p.per.h = workoutHype(p); }
 function genProspect(draftYear, depth) {
   const spot = weightedPick(Object.keys(DRAFT_SPOT_W), depth ? Object.keys(DRAFT_SPOT_W).map(k => DRAFT_SPOT_W[k] * (DEPTH_MIX[k] || 1)) : Object.values(DRAFT_SPOT_W));
-  if (depth) { const p = rookiePlayer(spot, DRAFT_Q.mean + DRAFT_Q.udfa, DRAFT_Q.udfaSd, 24); setTid(p, -2); p.exp = 0; initPerception(p, 'prospect'); p.draftYear = draftYear;
+  if (depth) { const p = rookiePlayer(spot, DRAFT_Q.mean + DRAFT_Q.udfa, DRAFT_Q.udfaSd, 24); setTid(p, -2); p.exp = 0; initPerception(p, 'prospect'); workoutDone(p, true); p.draftYear = draftYear;
     // without the pedigree, a flash on tape is discounted by everyone: half of anything he shows above a rotation grade is believed
     p.college = classSchool(draftYear, p, p.per.b - 8, th(p).rotation); // the bottom of a class is where the small schools are
     const t = th(p), lim = t.rotation - 3; if (p.per.b > lim) p.per.b = round1(lim + (p.per.b - lim) * 0.5);
@@ -132,6 +167,7 @@ function genProspect(draftYear, depth) {
   setTid(p, -2); // draft prospect
   p.exp = 0;
   initPerception(p, 'prospect'); // scouting fog: everyone (you and the AI) sees prospects through it
+  workoutDone(p);
   p.draftYear = draftYear;
   p.college = classSchool(draftYear, p, p.per.b, th(p).rotation); // the better the tape, the bigger the programme, most of the time
   return p;
