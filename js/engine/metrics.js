@@ -27,29 +27,6 @@ const WIN_T = 3.0;
 
 function av(g, p) { if (!p || p.id < 0) return null; return g.adv[p.id] || (g.adv[p.id] = { tid: p.tid }); }
 function avInc(g, p, k, v = 1) { const a = av(g, p); if (a) a[k] = (a[k] || 0) + v; }
-// grading: credits per facet; a facet's grade comes from the average credit per graded snap
-const FACETS = { q: 'Passing', rec: 'Receiving', run: 'Rushing', pb: 'Pass Block', rb: 'Run Block', pr: 'Pass Rush', rd: 'Run Defense', cov: 'Coverage', tk: 'Tackling' };
-function grade(g, p, f, credit, extra) {
-  const a = av(g, p); if (!a) return;
-  const add = k => { a['g' + k] = (a['g' + k] || 0) + credit; a['n' + k] = (a['n' + k] || 0) + 1; };
-  add(f);
-  // situational splits ("grade vs man", "grade under pressure"...) share the facet's scale
-  for (const t of ctxTags(g, f)) if (t) add(f + '_' + t);
-  if (extra) for (const t of extra) if (t) add(f + '_' + t);
-}
-function ctxTags(g, f) {
-  const x = g.gx || {};
-  switch (f) {
-    case 'q': return [x.prs ? 'prs' : 'cln', x.air === undefined ? null : x.air >= 20 ? 'dp' : x.air >= 10 ? 'md' : 'sh', x.pa ? 'pa' : null, x.blz ? 'blz' : null];
-    case 'rec': case 'cov': return [x.man ? 'man' : 'zon'];
-    case 'run': case 'rb': return x.run ? [x.zone ? 'zn' : 'gp'] : [];
-    case 'pb': return [x.blz ? 'blz' : 'std'];
-    default: return [];
-  }
-}
-const SPLIT_LABELS = { q_cln: 'Clean pocket', q_prs: 'Under pressure', q_sh: 'Short (<10)', q_md: 'Intermediate', q_dp: 'Deep (20+)', q_pa: 'Play-action', q_blz: 'vs. Blitz',
-  rec_man: 'vs. Man', rec_zon: 'vs. Zone', rec_press: 'vs. Press', rec_ctd: 'Contested', run_zn: 'Zone runs', run_gp: 'Gap runs', rb_zn: 'Zone blocking', rb_gp: 'Gap blocking',
-  pb_std: 'vs. 4-man rush', pb_blz: 'vs. Blitz', pr_sgl: 'vs. Single block', pr_dbl: 'vs. Double team', cov_man: 'Man coverage', cov_zon: 'Zone coverage' };
 function tav(g, s, k, v = 1) { g.tadv[s][k] = (g.tadv[s][k] || 0) + v; }
 const LBS = new Set(['MLB', 'WLB', 'SAM']);
 
@@ -133,14 +110,6 @@ function chartPlay(g, oc, dc, res, before, off, def) {
       if (comp) { avInc(g, qb, 'pyds', yds); avInc(g, qb, 'pyac', Math.min(res.yac || 0, yds)); }
       for (const e of off) if (SKILL_SLOTS.has(e.slot)) { avInc(g, e.p, 'tmTgt'); avInc(g, e.p, 'tmAir', Math.max(0, res.air || 0)); }
     }
-    // QB grade: results (EPA) plus decision quality
-    let qc = clamp(epa * 0.42, -1.6, 1.6);
-    if (res.kind === 'int' && res.route && res.route.w < 0) qc -= 0.7;
-    if (res.kind === 'sack' && res.ttt > 3.1 && !(res.rushers && res.rushers.some(a => a.free))) qc -= 0.35;
-    if (res.throwaway && res.pressure) qc += 0.2;
-    if (comp && res.route && res.route.w < 0.2) qc += 0.3;
-    if (res.kind === 'scramble' && yds >= 5) qc += 0.25;
-    grade(g, qb, 'q', qc);
     for (const e of off) if (SKILL_SLOTS.has(e.slot)) avInc(g, e.p, 'pSnp');
     // receivers: every route run counts; targets get the real credit
     const tgtCredit = rp => {
@@ -161,14 +130,10 @@ function chartPlay(g, oc, dc, res, before, off, def) {
         avInc(g, rp, 'sep', sepYards(r.w)); avInc(g, rp, 'sepN'); avInc(g, rp, 'adot', r.depth); avInc(g, rp, 'epaTgt', epa);
         if (res.contested) { avInc(g, rp, 'cAtt'); avInc(g, rp, 'cWon', comp); }
         tgtCredit(rp);
-        const ow = r.w + (r.shade || 0); // graded against his man, not the bracket
-        const c = res.batted || res.uncatch ? clamp((ow - 0.45) * 0.3, -0.25, 0.25) : comp ? 0.45 + (res.yac || 0) / 12 + (res.contested ? 0.6 : 0) + Math.max(0, epa) * 0.15 + (r.shade || 0) * 0.5 : res.drop ? -1.3 : ow > 0.7 ? 0.08 : ow > 0.2 ? -0.03 : -0.3; // an off-target throw to an open man is on the QB
-        grade(g, rp, 'rec', c, [r.pressAtt ? 'press' : null, res.contested ? 'ctd' : null]);
-      } else { const ow = r.w + (r.shade || 0); grade(g, rp, 'rec', clamp((ow - 0.45) * 0.3, -0.25, 0.25), [r.pressAtt ? 'press' : null]); } // every route won or lost counts
+      }
     }
     if (res.target && res.target.slot !== 'QB' && !(res.routes || []).some(r => r.e === res.target)) { // screens
       const rp = res.target.p; avInc(g, rp, 'routes'); avInc(g, rp, 'sep', 4); avInc(g, rp, 'sepN'); avInc(g, rp, 'adot', res.air || 0); avInc(g, rp, 'epaTgt', epa); tgtCredit(rp);
-      grade(g, rp, 'rec', comp ? 0.3 + (res.yac || 0) / 12 : -0.2);
     }
     // protection & rush
     if (res.prot) {
@@ -185,22 +150,18 @@ function chartPlay(g, oc, dc, res, before, off, def) {
         if (tps) { avInc(g, rp, 'tpsR'); if (beat) avInc(g, rp, 'tpsRW'); }
         if (a.e.blitz && a.e.depth >= ON_LINE) { avInc(g, rp, 'blzN'); if (pressers.has(a.e)) avInc(g, rp, 'blzP'); }
         if (a.blockers.length > 1) for (const h of a.blockers) avInc(g, h.p, 'dblRep');
-        grade(g, rp, 'pr', (beat ? 0.45 : -0.08) + (pressers.has(a.e) ? 0.25 : 0) + (sacked ? 1.0 : 0) - (a.blockers.length > 1 && !beat ? -0.05 : 0), [a.blockers.length > 1 || a.chip ? 'dbl' : 'sgl']);
         const b = a.blockers[0];
         if (b) {
           const bp = b.p, lost = beat && !a.missed;
           avInc(g, bp, 'pbRep'); if (lost) { avInc(g, bp, 'pbRepL'); avInc(g, bp, 'tpaT', a.t); avInc(g, bp, 'tpaN'); if (a.t < BLOWN_T) avInc(g, bp, 'blown'); }
           if (tps && lost && OL_SLOTS.includes(b.slot)) avInc(g, bp, 'tpsLoss');
           if (a.e.blitz || a.tw) { avInc(g, bp, 'pbxRep'); if (lost) avInc(g, bp, 'pbxL'); }
-          if (beat && !a.missed) { avInc(g, bp, 'pbLoss'); if (pressers.has(a.e)) avInc(g, bp, 'prsA'); if (sacked) avInc(g, bp, 'sackA'); grade(g, bp, 'pb', -0.45 - (sacked ? 1.0 : 0)); }
-          else grade(g, bp, 'pb', 0.08);
-          for (const h of a.blockers.slice(1)) grade(g, h.p, 'pb', beat ? -0.15 : 0.08);
+          if (beat && !a.missed) { avInc(g, bp, 'pbLoss'); if (pressers.has(a.e)) avInc(g, bp, 'prsA'); if (sacked) avInc(g, bp, 'sackA'); }
         } else if (a.missed && pressers.has(a.e)) {
           // missed pickup: blame lands on the back/lineman who had him
         }
       }
       // spare linemen who had nobody still get a (winning) rep
-      for (const e of off) if (OL_SLOTS.includes(e.slot) && !res.prot.rushers.some(a => a.blockers.includes(e))) grade(g, e.p, 'pb', 0.05);
       // coverage
       for (const e of res.prot.droppers) {
         avInc(g, e.p, 'covSnaps');
@@ -209,11 +170,6 @@ function chartPlay(g, oc, dc, res, before, off, def) {
           if (res.kind === 'int' && res.intBy === e) avInc(g, e.p, 'intA');
           if (res.pbu === e || (res.kind === 'int' && res.intBy === e)) avInc(g, e.p, 'fInc');
           if (comp) { avInc(g, e.p, 'yacA', Math.min(res.yac || 0, yds)); if (yds >= 20) avInc(g, e.p, 'explA'); }
-          const c = res.kind === 'int' && res.intBy === e ? 1.5 : comp ? -(0.3 + yds / 15) - (td ? 0.6 : 0) : res.pbu === e ? 0.8 : 0.35;
-          grade(g, e.p, 'cov', c);
-        } else {
-          const mine = (res.routes || []).find(r => r.def === e);
-          grade(g, e.p, 'cov', mine ? (mine.w < -0.3 ? 0.1 : mine.w > 1.1 ? -0.25 : 0.02) : 0.02);
         }
       }
     }
@@ -228,71 +184,168 @@ function chartPlay(g, oc, dc, res, before, off, def) {
     if (res.xYds !== undefined) { avInc(g, cp, 'xRushN'); avInc(g, cp, 'xRush', res.xYds); avInc(g, cp, 'xRushY', yds); }
     if (res.box !== undefined) { avInc(g, cp, 'boxN'); if (res.box > res.hats) avInc(g, cp, 'box8'); } // more men in the box than there are blockers for
     if (before.togo <= 2 && (before.down >= 3 || before.ydl >= 98)) { avInc(g, cp, 'syN'); if (conv) avInc(g, cp, 'syCv'); }
-    grade(g, cp, 'run', clamp(epa * 0.3, -1, 1) + (yds - ybc - 1.6) * 0.15 + (res.missed || []).length * 0.45 - (res.fumble ? 1.5 : 0));
   }
   if (carrier && res.missed) {
     if (res.kind === 'comp') { avInc(g, carrier.p, 'mtfRec', res.missed.length); avInc(g, carrier.p, 'recs'); }
     avInc(g, carrier.p, 'mtf', res.missed.length);
-    for (const m of res.missed) { avInc(g, m.p, 'mt'); avInc(g, m.p, 'tkAtt'); grade(g, m.p, 'tk', -0.7); } // a miss is an attempt whether or not anyone got him down in the end
+    for (const m of res.missed) { avInc(g, m.p, 'mt'); avInc(g, m.p, 'tkAtt'); } // a miss is an attempt whether or not anyone got him down in the end
   }
   if (res.tackler && carrier) {
     avInc(g, res.tackler.p, 'tkAtt');
     if (res.kind === 'run') { avInc(g, res.tackler.p, 'tkRunN'); avInc(g, res.tackler.p, 'tkRunY', Math.max(-5, yds)); } // how far downfield his tackles on runs are made
-    grade(g, res.tackler.p, 'tk', 0.15);
-    if (!success) { avInc(g, res.tackler.p, 'stops'); grade(g, res.tackler.p, oc.isRun ? 'rd' : 'cov', 0.25); }
+    if (!success) { avInc(g, res.tackler.p, 'stops'); }
   }
   if (res.blk) {
     for (const r of res.blk) {
       if (r.won === undefined) continue; // backside / uncontested: not charted
       const won = r.won;
       avInc(g, r.e.p, 'rdSnaps'); if (won) avInc(g, r.e.p, 'rdWins');
-      grade(g, r.e.p, 'rd', won ? (r.penetrated ? 0.75 : 0.42) : r.state === 'free' ? 0 : -0.08);
       for (const b of r.blockers) {
         if (!b || !b.p) continue;
         avInc(g, b.p, 'rbSnaps'); if (!won) avInc(g, b.p, 'rbWins'); if (won && r.penetrated) avInc(g, b.p, 'blown');
         if (res.poa !== undefined && Math.abs(r.px - res.poa) <= 1.6) { avInc(g, b.p, 'gapRuns'); avInc(g, b.p, 'gapYbc', Math.min(res.ybc !== undefined ? res.ybc : yds, yds)); } // the runs that came through his gap
-        grade(g, b.p, 'rb', won ? (r.penetrated ? -0.85 : -0.45) : 0.13);
       }
     }
   }
+  gradePlay(g, oc, dc, res, before, off, def, yds, td, res.kind === 'comp' ? 1 : 0, isPass);
 }
 
 // ---------- derived metrics (for display) ----------
-// grade for one facet from summed credits; regresses small samples toward an average 60
-// league-average credit per snap (base) and spread (scale) per facet, measured from simulated seasons,
-// so an average starter grades ~62 and the season spread is ~10 points
-const GRADE_BASE = { q: 0.015, rec: -0.012, run: 0.165, pb: 0.022, rb: -0.074, pr: 0.03, rd: 0.153, cov: -0.03, tk: 0.022 };
-const GRADE_SCALE = { q: 0.2, rec: 0.17, run: 0.32, pb: 0.094, rb: 0.104, pr: 0.118, rd: 0.14, cov: 0.157, tk: 0.2 };
-function facetGrade(a, f, minN) {
-  const n = a['n' + f] || 0;
+// =====================================================================
+//  GRADES. Twelve categories, the same for everyone who does the job. On every play where a man had a job, a grader watching the tape
+//  marks it from -2 (a clear loss) to +2 (a clear win), and most plays are a zero. The mark is what happened against what an ordinary
+//  man at his position would have been expected to do in the same spot: an ordinary blocker against that rusher, an ordinary back behind
+//  that blocking, an ordinary receiver on that route against that defender. The grader sees results, not ratings, and not minds:
+//  he does not know the play call or the read. He also gets one in twenty wrong by a step.
+// =====================================================================
+const FACETS = { pass: 'Passing', rush: 'Rushing', rec: 'Receiving', pb: 'Pass Blocking', rb: 'Run Blocking', rd: 'Run Defense', pr: 'Pass Rush', man: 'Man Coverage', zone: 'Zone Coverage', fg: 'Field Goals', ko: 'Kickoffs', punt: 'Punting' };
+const GR_MISREAD = 0.05;
+function score(g, p, cat, step) {
+  const a = av(g, p); if (!a) return;
+  step = clamp(Math.round(step), -2, 2);
+  if (rand() < GR_MISREAD) step = clamp(step + (rand() < 0.5 ? -1 : 1), -2, 2);
+  a['G' + cat] = (a['G' + cat] || 0) + step; a['N' + cat] = (a['N' + cat] || 0) + 1;
+}
+const stepOf = (m, t1, t2) => m >= t2 ? 2 : m >= t1 ? 1 : m <= -t2 ? -2 : m <= -t1 ? -1 : 0;
+// how a tackle attempt reads: making one an ordinary man would miss is a win; missing one he would make is a loss
+function tackleStep(t) { return t.made ? (t.x <= 0.25 ? 2 : t.x <= 0.42 ? 1 : 0) : (t.x >= 0.75 ? -2 : t.x >= 0.5 ? -1 : 0); }
+function gradePlay(g, oc, dc, res, before, off, def, yds, td, comp, isPass) {
+  const conv = td || yds >= before.togo, covCat = g.gx.man ? 'man' : 'zone';
+  const attempt = (res.kind === 'comp' || res.kind === 'inc' || res.kind === 'int') && !res.throwaway && res.target;
+  const routes = res.routes || [], seen = !res.batted && !res.uncatch && !res.hail; // a ball batted at the line or heaved away tells the grader nothing about the men downfield
+  // ---- passing: the throw, the decision, the pocket ----
+  if (isPass && res.qb && !res.hail) {
+    let s = 0; const anyOpen = routes.some(r => sepYards(r.w) >= 3.4);
+    if (res.kind === 'sack') { const free = res.rushers && res.rushers.some(a => a.free); s = (res.ttt || 0) >= 3.3 && anyOpen ? -2 : (res.ttt || 0) >= 2.7 && anyOpen && !free ? -1 : 0; } // he held it with a man open
+    else if (res.throwaway) s = res.pressure && !anyOpen && rand() < 0.5 ? 1 : 0;                                                                                           // nothing there: live for the next down
+    else if (attempt && seen) {
+      const xq = res.xcQ !== undefined ? res.xcQ : res.xc !== undefined ? res.xc : 0.65, caught = comp || res.drop; // a drop is graded as the catch it should have been
+      if (caught) s = xq <= 0.45 || ((res.air || 0) >= 20 && xq <= 0.58) ? 2 : xq <= 0.72 ? 1 : 0;
+      else { s = xq >= 0.74 ? -2 : xq >= 0.5 ? -1 : 0; if (res.pbu && s < 0) s++; } // a defender who made a play on it takes some of the blame off the throw
+      // what he could see: a blanketed man with another standing open, a ball a defender had a play on
+      if ((res.xint || 0) >= 0.1) s--;
+      if (res.route && sepYards(res.route.w) <= 1.3 && routes.some(r => r.e !== res.target && sepYards(r.w) >= 4.2)) s--;
+      if (res.kind === 'int') s--;
+    }
+    score(g, res.qb.p, 'pass', s);
+  }
+  // ---- rushing: yards against an ordinary man with the same blocking in front of him ----
+  if ((res.kind === 'run' || res.kind === 'scramble') && res.carrier && oc.type !== 'SNEAK') {
+    const x = res.xYds !== undefined ? res.xYds : res.kind === 'scramble' ? 5.5 : 4.4, m = yds - x;
+    let s = m >= 7 ? 2 : m >= 2 ? 1 : m <= -4.5 ? -2 : m <= -2 ? -1 : 0;
+    if (res.missed && res.missed.length && s < 2) s++; // he made a man miss: anyone can see that
+    if (before.togo <= 2 && conv && x < before.togo && s < 1) s = 1; // he got the yard an ordinary back would not have
+    if (res.fumble) s = -2;
+    score(g, res.carrier.p, 'rush', s);
+  }
+  // ---- receiving: getting open, the catch, after the catch. Every route counts, thrown to or not. ----
+  if (isPass && res.qb && !res.hail) {
+    const tgtStep = () => { let s = 0; if (!attempt || !seen) return 0;
+      const xr = res.xcR !== undefined ? res.xcR : res.xc !== undefined ? res.xc : 0.65;
+      if (comp) { s += xr <= 0.25 ? 2 : xr <= 0.45 ? 1 : 0; if (res.xYac !== undefined) { const ym = Math.min(res.yac || 0, yds) - res.xYac; s += ym >= 9 ? 2 : ym >= 4 ? 1 : ym <= -3.5 ? -1 : 0; } if (res.fumble) s = -2; }
+      else if (res.drop) s -= 2; else if (xr >= 0.8 && res.kind !== 'int') s -= 1; // a ball an ordinary receiver catches
+      return s; };
+    for (const r of routes) {
+      const lk = r.w0 !== undefined && r.wPre !== undefined ? r.w0 - r.wPre : 0; // how the route went on the day, over and above who was running and covering it
+      let s = stepOf((r.sx || 0) / 1.4 + lk, 0.75, 1.4);
+      if (res.target && r.e === res.target) s += tgtStep();
+      score(g, r.e.p, 'rec', s);
+      // ---- coverage, man or zone: the same route from the other side ----
+      if (r.def && r.def.p) { let c = stepOf((r.dx || 0) / 1.4 - lk, 0.75, 1.4);
+        if (res.target && r.e === res.target && res.def === r.def && attempt && seen) { if (res.kind === 'int' && res.intBy === r.def) c += 2; else if (res.pbu === r.def) c += 1; else if (comp && (td || yds >= 25)) c -= 1; }
+        score(g, r.def.p, covCat, c); }
+    }
+    if (res.target && res.target.slot !== 'QB' && !routes.some(r => r.e === res.target)) score(g, res.target.p, 'rec', tgtStep()); // screens: the catch and what he does with it
+    if (res.kind === 'int' && res.intBy && res.intBy.p && res.intBy !== res.def) score(g, res.intBy.p, covCat, 2);                 // the man who came off his own job to take it
+  }
+  // ---- the pass rush and the men blocking it ----
+  if (isPass && res.prot) {
+    const pressers = new Set((res.rushers || []).map(a => a.e));
+    for (const a of res.prot.rushers) {
+      const beat = a.free || a.t < WIN_T, sacked = res.kind === 'sack' && res.sacker === a.e, xR = a.free ? 1 : a.xR !== undefined ? a.xR : 0.15;
+      // unblocked, an ordinary man gets home too: the free run earns nothing
+      let s = beat ? (xR <= 0.1 ? 2 : xR <= 0.3 ? 1 : 0) : (xR >= 0.6 ? -1 : 0);
+      if (!a.free && sacked) s = Math.min(2, Math.max(1, s + 1)); else if (!a.free && beat && pressers.has(a.e) && s < 1) s = 1;
+      if (!a.free) score(g, a.e.p, 'pr', s); // a free run is not a rep
+      const b = a.blockers[0]; if (!b) continue; // nobody to block him: the defense sent more than the protection had, and that is on no one
+      let k;
+      if (a.missed) k = pressers.has(a.e) ? -2 : -1;                 // he had him and never saw him
+      else if (a.free) k = -1;                                       // a twist that was not passed off
+      else { const xB = a.xB !== undefined ? a.xB : 0.15; k = beat ? (sacked || a.t < BLOWN_T || xB <= 0.1 ? -2 : -1) : (xB >= 0.5 ? 2 : xB >= 0.3 ? 1 : 0); } // holding a man an ordinary blocker loses to is the win
+      score(g, b.p, 'pb', k);
+      if (!a.free) for (const h of a.blockers.slice(1)) score(g, h.p, 'pb', beat ? -1 : 0); // two men on one rusher are expected to hold him
+    }
+  }
+  // ---- the run game up front ----
+  if (res.blk) for (const r of res.blk) {
+    if (r.won === undefined) continue; // away from the play
+    const free = r.state === 'free' || !r.blockers.length, xD = free ? 1 : r.xD !== undefined ? r.xD : r.win;
+    let s = r.won ? (xD <= 0.22 ? 2 : xD <= 0.42 ? 1 : 0) : (xD >= 0.58 ? -2 : xD >= 0.4 ? -1 : 0);
+    if (r.won && r.penetrated && !free) s = Math.min(2, s + 1);
+    if (!free) score(g, r.e.p, 'rd', s); // unblocked, he is expected to be there
+    r.blockers.forEach((b, i) => { if (!b || !b.p) return; const xB = r.xB !== undefined ? r.xB : r.win;
+      let k = r.won ? (r.penetrated || xB <= 0.22 ? -2 : -1) : (xB >= 0.6 ? 2 : xB >= 0.42 ? 1 : 0);
+      if (i > 0) k = clamp(k, -1, 1); // the second man on a combination
+      score(g, b.p, 'rb', k); });
+  }
+  if (res.edge && res.kind === 'run') { const E = res.edge; // a receiver's block on the force defender
+    score(g, E.b.p, 'rb', E.hit ? (E.x <= 0.4 ? -2 : E.x <= 0.58 ? -1 : 0) : (E.x >= 0.75 ? 2 : E.x >= 0.6 ? 1 : 0));
+    if (E.d && E.d.p) score(g, E.d.p, 'rd', E.hit ? (E.x <= 0.45 ? 1 : 0) : (E.x >= 0.75 ? -1 : 0)); }
+  // ---- tackling: in whatever the play was ----
+  if (res.tk) for (const t of res.tk) { const k = t.e && t.e.p ? tackleStep(t) : 0; if (k) score(g, t.e.p, res.kind === 'comp' ? covCat : 'rd', k); } // a routine tackle is not marked at all
+}
+// kicks are marked where they happen (game.js): made or missed against an ordinary kicker from there, where the punt left them
+function scoreKick(g, e, cat, step) { if (e && e.p) score(g, e.p, cat, step); }
+function fgStep(made, x) { return made ? (x <= 0.6 ? 2 : x <= 0.82 ? 1 : 0) : (x >= 0.9 ? -2 : x >= 0.7 ? -1 : 0); }
+
+// ---- from marks to a grade ----
+// Grades are by position: 62 is the ordinary man who plays real snaps there, and ten points is one step of the spread between players.
+// 80 elite, 70 a good starter, 60 a decent starter, 50 a rotation man, 40 a liability. [mean mark per play, spread between players], measured over simulated seasons.
+const GR_K = {QB:{pass:[0.1455,0.0617],rush:[-0.2188,0.2616]},RB:{rush:[-0.1588,0.1492],rec:[-0.028,0.068]},FB:{rb:[-0.3163,0.0725]},WR:{rec:[-0.0348,0.0692],rb:[-0.4105,0.1324]},TE:{rec:[-0.0199,0.0648],pb:[-0.0286,0.0565],rb:[-0.3526,0.1141]},OT:{pb:[-0.144,0.0973],rb:[-0.3009,0.0832]},IOL:{pb:[-0.1504,0.0708],rb:[-0.3136,0.0911]},IDL:{rd:[0.1379,0.2258],pr:[0.1257,0.0609]},EDGE:{rd:[-0.0369,0.1649],pr:[0.1671,0.0656],zone:[-0.0424,0.078]},LB:{rd:[0.2244,0.0636],pr:[0.1498,0.0823],man:[-0.0303,0.0931],zone:[-0.0278,0.0717]},CB:{rd:[0.1928,0.0733],man:[-0.0597,0.137],zone:[-0.0671,0.1249]},S:{rd:[0.092,0.1304],man:[-0.1157,0.1494],zone:[-0.0833,0.1209]},K:{fg:[-0.0048,0.1103],ko:[0.0681,0.0654]},P:{punt:[0.1467,0.1696]},WRX:{rec:[-0.0212,0.0731],rb:[-0.3946,0.1257]},WRZ:{rec:[-0.0339,0.0687],rb:[-0.4136,0.1288]},SLOT:{rec:[-0.045,0.0649],rb:[-0.4362,0.1532]},TEY:{rec:[-0.0199,0.066],pb:[-0.0271,0.0551],rb:[-0.3195,0.0993]},TEH:{rec:[-0.0203,0.0604],rb:[-0.4343,0.1072]},LT:{pb:[-0.1503,0.1069],rb:[-0.3095,0.0864]},LG:{pb:[-0.1576,0.0803],rb:[-0.3138,0.1025]},C:{pb:[-0.1357,0.0634],rb:[-0.3132,0.0768]},RG:{pb:[-0.1578,0.0659],rb:[-0.3136,0.0924]},RT:{pb:[-0.1337,0.0783],rb:[-0.2877,0.0761]},NT:{rd:[0.2943,0.1663],pr:[0.1091,0.0663]},DE:{rd:[0.29,0.1504],pr:[0.1033,0.0479]},DT:{rd:[-0.0075,0.1797],pr:[0.1456,0.0592]},MLB:{rd:[0.2355,0.0597],pr:[0.1417,0.0675],man:[-0.0527,0.0812],zone:[-0.0381,0.0713]},NCB:{rd:[0.1852,0.0846],man:[-0.0851,0.1347],zone:[-0.06,0.1103]},FS:{rd:[0.0397,0.152],man:[-0.1351,0.1509],zone:[-0.063,0.1235]},SS:{rd:[0.1103,0.1165],man:[-0.1059,0.1476],zone:[-0.0995,0.1163]},WLB:{rd:[0.2119,0.0655],pr:[0.1556,0.091],man:[-0.0086,0.0986],zone:[-0.0183,0.0709]}};
+const GR_ALL = {pass:[0.1455,0.0617],rush:[-0.1646,0.1654],rec:[-0.0301,0.0683],pb:[-0.1434,0.0843],rb:[-0.3323,0.107],rd:[0.145,0.1735],pr:[0.1414,0.0671],man:[-0.069,0.1369],zone:[-0.0605,0.1128],fg:[-0.0048,0.1103],ko:[0.0681,0.0654],punt:[0.1467,0.1696]};
+const GR_OV = {QB:[-0.0175,0.9118],RB:[0.0437,0.6925],FB:[-0.0216,0.6718],WR:[0.0665,0.8434],TE:[-0.0433,0.7327],OT:[0.0562,0.8244],IOL:[0.0758,0.7638],IDL:[0.0637,0.7887],EDGE:[0.0764,0.7825],LB:[-0.0393,0.6416],CB:[-0.0725,0.8246],S:[-0.2391,0.6523],K:[-0.0019,0.7928],P:[0.0018,0.7798],WRX:[0.0567,0.8476],WRZ:[0.0746,0.8143],SLOT:[0.0669,0.8632],TEY:[-0.0389,0.755],TEH:[-0.0534,0.6783],LT:[0.093,0.8118],LG:[0.0964,0.7686],C:[0.0576,0.7728],RG:[0.0743,0.7505],RT:[0.0009,0.8401],NT:[0.0484,0.8262],DE:[0.0807,0.7538],DT:[0.0596,0.7937],MLB:[-0.0482,0.6598],NCB:[-0.0859,0.7976],FS:[-0.3044,0.6773],SS:[-0.1878,0.6272],WLB:[-0.0294,0.6208]};
+const GR_SHRINK = 18; // a handful of plays is pulled toward the ordinary man; a few hundred are not
+const GR_SHOW = { QB: ['pass', 'rush'], RB: ['rush', 'rec', 'pb'], FB: ['rb', 'pb', 'rec', 'rush'], WR: ['rec', 'rb', 'rush'], TE: ['rec', 'rb', 'pb'], OT: ['pb', 'rb'], IOL: ['pb', 'rb'], IDL: ['pr', 'rd'], EDGE: ['pr', 'rd', 'zone', 'man'], LB: ['rd', 'zone', 'man', 'pr'], CB: ['man', 'zone', 'rd', 'pr'], S: ['zone', 'man', 'rd', 'pr'], K: ['fg', 'ko'], P: ['punt'] };
+function gradeGroup(spot) { return GRADE_RANK_GROUP[spot] || (spot === 'K' ? 'K' : spot === 'P' ? 'P' : null); }
+// (by the spot he plays where enough men play it to measure: a box safety is not asked what a deep one is)
+function gradeConst(spot, f) { const grp = gradeGroup(spot); return (GR_K[spot] && GR_K[spot][f]) || (grp && GR_K[grp] && GR_K[grp][f]) || GR_ALL[f] || [0, 0.12]; }
+function gradeN(a, f) { return a ? a['N' + f] || 0 : 0; }
+function gradeZ(a, f, spot) { const n = a['N' + f] || 0, c = gradeConst(spot, f); return (((a['G' + f] || 0) + c[0] * GR_SHRINK) / (n + GR_SHRINK) - c[0]) / (c[1] || 0.12); }
+function facetGrade(a, f, minN, spot) {
+  if (!a) return null; const n = a['N' + f] || 0;
   if (!n || n < (minN || 1)) return null;
-  const b = f.split('_')[0];
-  const avgC = ((a['g' + f] || 0) + GRADE_BASE[b] * 6) / (n + 6); // small samples regress to average
-  return clamp(Math.round(62 + 40 * Math.tanh((avgC - GRADE_BASE[b]) / (GRADE_SCALE[b] * 0.9))), 25, 99);
+  return clamp(Math.round(62 + 10 * gradeZ(a, f, spot)), 25, 99);
 }
-// which facets make up a player's overall grade
-function gradeFacets(spot) {
-  if (spot === 'QB') return { q: 1 };
-  if (spot === 'RB') return { run: 0.65, rec: 0.25, pb: 0.1 };
-  if (spot === 'FB') return { rb: 0.6, run: 0.2, rec: 0.2 };
-  if (['WRX', 'WRZ', 'SLOT'].includes(spot)) return { rec: 0.9, rb: 0.1 };
-  if (spot === 'TEY' || spot === 'TEH') return { rec: 0.55, rb: 0.3, pb: 0.15 };
-  if (['LT', 'LG', 'C', 'RG', 'RT'].includes(spot)) return { pb: 0.55, rb: 0.45 };
-  if (['NT', 'DT', 'DE', 'EDGE'].includes(spot)) return { pr: 0.5, rd: 0.4, tk: 0.1 };
-  if (spot === 'MLB' || spot === 'WLB') return { rd: 0.4, cov: 0.4, tk: 0.1, pr: 0.1 };
-  if (['CB', 'NCB', 'FS', 'SS'].includes(spot)) return { cov: 0.75, rd: 0.1, tk: 0.15 };
-  return {};
-}
+// which categories a man at this spot is shown in, in order
+function gradeFacets(spot) { const o = {}; for (const f of GR_SHOW[gradeGroup(spot)] || []) o[f] = 1; return o; }
+// the whole of his work: every category weighted by the plays where he had a job in it
 function overallGrade(a, spot) {
   if (!a) return null;
   let s = 0, w = 0;
-  for (const [f, wt] of Object.entries(gradeFacets(spot))) {
-    const gr = facetGrade(a, f);
-    if (gr === null) continue;
-    const vol = Math.min(1, (a['n' + f] || 0) / 15); // facets with real volume count fully
-    s += gr * wt * vol; w += wt * vol;
-  }
-  return w ? Math.round(s / w) : null;
+  for (const f in FACETS) { const n = a['N' + f] || 0; if (n < 3 || f === 'ko') continue; s += gradeZ(a, f, spot) * n; w += n; } // (a kickoff is the coverage unit's play more than the kicker's)
+  if (!w) return null;
+  const c = GR_OV[spot] || GR_OV[gradeGroup(spot)] || [0, 0.75];
+  return clamp(Math.round(62 + 10 * (s / w - c[0]) / (c[1] || 0.75)), 25, 99);
 }
 function addAdv(into, a) { for (const k in a) if (k !== 'tid') into[k] = (into[k] || 0) + a[k]; }
 const r1 = x => Math.round(x * 10) / 10, r2 = x => (Math.round(x * 100) / 100).toFixed(2), pctM = (a, b) => b ? Math.round(100 * a / b) + '%' : '—';
@@ -381,7 +434,7 @@ const CAREER_ADV_KEYS = ['recs', 'mtfRec', 'db', 'epaDb', 'att', 'cmp', 'xc', 'a
   'pbSnaps', 'pbLoss', 'prsA', 'sackA', 'rbSnaps', 'rbWins', 'prSnaps', 'prWins', 'rdSnaps', 'rdWins', 'stops', 'tgtA', 'cmpA', 'ydsA', 'tdA', 'intA', 'covSnaps', 'mt', 'tkAtt'];
 function careerAdv(a, spot) {
   const out = { g: overallGrade(a, spot) };
-  for (const f in FACETS) { const gr = facetGrade(a, f); if (gr !== null && (a['n' + f] || 0) >= 25) out['g' + f] = gr; }
+  for (const f in FACETS) { const gr = facetGrade(a, f, 25, spot); if (gr !== null) out['g' + f] = gr; }
   for (const k of CAREER_ADV_KEYS) if (a[k]) out[k] = Math.round(a[k] * 100) / 100;
   return out;
 }

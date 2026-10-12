@@ -58,6 +58,8 @@ function playerValue(p, forTid) {
   return Math.max(0.1, val);
 }
 function pickValue(pk) {
+  // once the order is set a pick is a slot, and a slot has a price
+  { const o = state.draft && pk.season === state.draft.year && typeof draftChart === 'function' ? state.draft.order.find(z => z.pickId === pk.id) : null; if (o) return draftChart(o.pick) * 0.012; }
   const base = [0, 14, 6.5, 3.5, 2.2, 1.4, 0.9, 0.6][pk.round];
   // earlier-projected picks (from bad teams) are worth more
   const rec = teamRecord(pk.orig);

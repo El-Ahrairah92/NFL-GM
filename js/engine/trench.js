@@ -10,6 +10,7 @@
 // =====================================================================
 function lgt(x) { return 1 / (1 + Math.exp(-x)); }
 function lgtP(p) { return Math.log(p / (1 - p)); }
+function normCdf(x) { const t = 1 / (1 + 0.2316419 * Math.abs(x)), d = 0.3989423 * Math.exp(-x * x / 2), p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return x > 0 ? 1 - p : p; }
 
 // ---------- geometry ----------
 // A pressure plan says who is coming and how. Any of its parts may be left out:
@@ -181,7 +182,8 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
       a.t = (a.stuntWin ? 1.45 : 1.05 + r.depth * 0.07) + Math.abs(a.rx - (qbE ? qbE.x : 0)) * 0.06 + (75 - ea(g, r, 'bur')) * 0.01 + gauss(0, 0.12);
     } else {
       const b = a.blockers[0];
-      let diff = rushVsBlock(g, r, b, oNet);
+      const base = rushVsBlock(g, r, b, oNet);
+      let diff = base;
       if (a.blockers.length > 1) diff -= TUNE.doubleBonus + (ea(g, a.blockers[1], 'pbk') - 70) * 0.3;
       if (a.chip) diff -= TUNE.chipBonus * clamp(0.55 + (ea(g, a.chip, 'pbk') * 0.6 + ea(g, a.chip, 'str') * 0.4 - 50) / 45, 0.4, 1.5);
       // the angle: a blocker who has to go a long way to his man gives up the corner; a man head-up on a blocker is reading, not rushing
@@ -191,6 +193,11 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
       const med = TUNE.passProMedian * Math.exp(-soft(diff, 14) * TUNE.rushScale);
       a.t = med * Math.exp(gauss(0, 0.38)) * (Math.abs(r.x) < 2 ? TUNE.insideRush : 1) + (a.chip ? 0.25 : 0) + (a.stuntDelay || 0) // the inside path to the QB is the crowded one
         + Math.max(0, Math.abs(a.rx) - 2.9) * TUNE.widePath + r.depth * TUNE.deepPath; // the widest path is the longest, and a man coming from depth has ground to cover first
+      // the chance this rusher wins in time against an ordinary blocker (xB), and the chance an ordinary rusher wins against this one (xR): the grader's yardstick
+      { const adj = diff - base, kk = Math.abs(r.x) < 2 ? TUNE.insideRush : 1, c0 = (a.chip ? 0.25 : 0) + (a.stuntDelay || 0) + Math.max(0, Math.abs(a.rx) - 2.9) * TUNE.widePath + r.depth * TUNE.deepPath;
+        const pw = dd => { const lim = 3.0 - c0; return lim <= 0.75 ? 0 : normCdf(Math.log(lim / (TUNE.passProMedian * Math.exp(-soft(dd, 14) * TUNE.rushScale) * kk)) / 0.38); };
+        const ab = avgEnt(g, b), ar = avgEnt(g, r);
+        a.xB = ab ? pw(rushVsBlock(g, r, ab, oNet) + adj) : pw(diff); a.xR = ar ? pw(rushVsBlock(g, ar, b, oNet) + adj) : pw(diff); }
     }
     a.t = Math.max(0.75, a.t);
   }
@@ -272,6 +279,12 @@ function runBlocking(g, off, def, oc, dc, target, carrierSlot) {
       r.lev = r.kick ? 0.4 : clamp(Math.tanh((target - r.px) / 0.5) * (b.x - r.px), -1, 1);
       block += r.lev * TUNE.levRun - (r.kick ? TUNE.kickOut : 0); // a kick-out is a back or a guard on the move against a man set in the hole
       r.win = lgt(TUNE.runWin + soft(shedScore + spotFit - block, 14) * TUNE.runScale);
+      { const ab = avgEnt(g, b), ae = avgEnt(g, e);
+        const bSelf = q => ea(g, q, 'rbk') * 0.5 + (zone ? ea(g, q, 'agi') : ea(g, q, 'str')) * 0.27 + ea(g, q, 'bawr') * 0.13 + ea(g, q, 'bur') * (wideRun ? 0.04 : 0.1) + (wideRun ? ea(g, q, 'spd') * 0.06 : 0) + (zone ? bod(q).len * 0.6 - bod(q).w * 0.3 : bod(q).w * 2.4 - bod(q).h * 0.3) * zs;
+        const dSelf = q => { const Q = bod(q); let v = ea(g, q, 'shed') * 0.5 + (zone ? (ea(g, q, 'bur') * 0.25 + ea(g, q, 'agi') * 0.25) : ea(g, q, 'str') * 0.5) + (zone ? Q.len * 1.2 - Q.w * 0.4 : Q.w * 2.4 - Q.h * 0.3 + Q.len * 0.4) * zs;
+          if (e.depth < ON_LINE && TUNE.lineBody) { const ax = Math.abs(e.x), wide = clamp((ax - 2) / 1.5, 0, 1), ins = clamp((1.4 - ax) / 1.2, 0, 1); v += TUNE.lineBody * (lineMass(q.p, ax) * (2.5 - 1.5 * wide) + ins * (ea(g, q, 'str') - 78) * 0.25 + wide * (ea(g, q, 'bur') - 76) * 0.2); } return v; };
+        r.xB = ab ? lgt(TUNE.runWin + soft(shedScore + spotFit - (block - bSelf(b) + bSelf(ab)), 14) * TUNE.runScale) : r.win; // the defender's chance against an ordinary blocker
+        r.xD = ae ? lgt(TUNE.runWin + soft(dSelf(ae) - block, 14) * TUNE.runScale) : r.win; }                                  // an ordinary defender's chance against this blocker
       // getting into the backfield: a man slanting toward the play is already moving that way; a man head-up on his blocker is holding two gaps, not shooting one
       const toward = e.mv && Math.sign(e.mv) === Math.sign(target - e.x), twoGap = !e.mv && !e.blitz && Math.abs(b.x - e.x) < 0.2;
       r.pen = r.win * clamp((0.38 + (ea(g, e, 'bur') - 72) * 0.012) * (toward || e.blitz ? TUNE.slantPen : twoGap ? TUNE.twoGapPen : 1), 0.12, 0.8);
@@ -286,6 +299,8 @@ function runBlocking(g, off, def, oc, dc, target, carrierSlot) {
       const lbScore = ea(g, e, 'shed') * 0.4 + ea(g, e, 'spd') * 0.3 + ea(g, e, 'prec') * 0.3 + E.w * 1.5 * zs; // a bigger linebacker can take on a lineman
       const climbScore = ea(g, b, 'rbk') * 0.45 + ea(g, b, 'agi') * 0.22 + ea(g, b, 'str') * 0.15 + ea(g, b, 'spd') * 0.18 + dNet + (r.climb && r.climb.lead ? 2 : 0) - bod(b).w * 0.3 * zs; // he has to get there first, and the heavy ones are a little late
       r.win = lgt(-1.0 + soft(lbScore - climbScore, 14) * 0.06);
+      { const ab = avgEnt(g, b), ae = avgEnt(g, e), clOf = q => ea(g, q, 'rbk') * 0.45 + ea(g, q, 'agi') * 0.22 + ea(g, q, 'str') * 0.15 + ea(g, q, 'spd') * 0.18 - bod(q).w * 0.3 * zs, lbOf = q => ea(g, q, 'shed') * 0.4 + ea(g, q, 'spd') * 0.3 + ea(g, q, 'prec') * 0.3 + bod(q).w * 1.5 * zs;
+        r.xB = ab ? lgt(-1.0 + soft(lbScore - (climbScore - clOf(b) + clOf(ab)), 14) * 0.06) : r.win; r.xD = ae ? lgt(-1.0 + soft(lbOf(ae) - climbScore, 14) * 0.06) : r.win; }
     }
   }
   return res;

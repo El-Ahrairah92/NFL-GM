@@ -1199,3 +1199,51 @@ Nobody can watch the games, so the chart has to do it. Every metric answers one 
 
 **Two audits stand behind this.** Accuracy: the chart is recounted against the box score game by game (catches, yards, carries, sacks, drops must match; routes, reps and alignments must add up), and the expected numbers are checked against what happened across the league. Usefulness: over ten simulated seasons each metric is measured for how well the odd weeks of a season predict the even weeks, and for how closely it follows the ratings it should. That is where the trust in each number comes from, and it removed several that were noise: pressure-to-sack for rushers, missed tackles for linemen, time before a blocker is beaten, drop rate and pass blocking for backs, and target-based coverage numbers for linebackers.
 
+## 56. Grades
+
+The old grades were torn out. They restated results (the quarterback's was his EPA under another name), sat on a scale that meant different things at different positions, moved with alignment and teammates, and carried facets that measured nothing.
+
+**Twelve categories, the same for everyone who does the job.** Passing, Rushing, Receiving, Pass Blocking, Run Blocking; Run Defense, Pass Rush, Man Coverage, Zone Coverage; Field Goals, Kickoffs, Punting. A player is graded in whichever of them he does. There is no tackling grade: a tackle or a miss counts in the play it happened on. The advanced sheet (section 55) tells the rest.
+
+**One rule.** On every play where a man had a job, a grader marks it from -2 (a clear loss) to +2 (a clear win), and most plays are a zero. The mark is what happened against what an ordinary man at his position would have been expected to do in the same spot: an ordinary blocker against that rusher, an ordinary back behind that blocking, an ordinary receiver on that route against that defender, an ordinary kicker from that distance. So a block held against a rusher an ordinary man loses to is a win, and a block held against one he always beats is a zero. A free rusher earns nothing for the free run, because an ordinary man gets home too.
+
+- The grader sees what a man watching the tape sees. A quarterback is marked for the throw (against an ordinary passer's chance of completing it, a drop counted as the catch it should have been), for throwing into a blanketed man with another standing open, for a ball a defender had a play on, and for a sack he held the ball into with someone open. Nothing is read from the play call or the progression.
+- Receivers and the men covering them are marked on every route, thrown to or not: how open the route came, over and above who was running and covering it.
+- A missed pickup is charged to the man whose rusher it was. An overload, more rushers than blockers, is charged to nobody.
+- Real outcomes are used, not the true odds, so luck stays in a grade and it is evidence about a player and not the answer. The grader also gets about one play in twenty wrong by a step.
+
+**The scale** is by the spot he plays: 62 is the ordinary man who gets real snaps there, and ten points is one step of the spread between players. 80 elite, 70 a good starter, 60 a decent starter, 50 a rotation man, 40 a liability. It is fixed from simulated seasons, so a strong or weak year at a position can show. A handful of plays is pulled toward the ordinary man; a few hundred are not. The overall grade is his categories weighted by the plays where he had a job in each; kickoffs are shown but left out of a kicker's overall, because the return is the coverage unit's play.
+
+Seasons graded before this keep the numbers they had. Checked over ten simulated seasons: every position averages 62 with a spread of ten; slot, split end and flanker grade within two points of each other at equal rating; corners repeat from half-season to half-season at 0.77 and follow rating at 0.78 (0.55 and 0.63 before).
+
+## 57. The draft: specialists, and trades on the clock
+
+**Specialists.** A kicker or punter arrives close to what he will ever be, so on a board built for raw rookies he read like an instant starter and went at the top of the draft. Clubs now treat them as late-round picks, and only a club without a starter-level one looks at all.
+
+**Trades during the draft.** The trade window is open through the draft. Once the order is set a pick is a slot with a price (a chart that is steep at the top and flat at the bottom), and a pick already made cannot be traded. A club that wants a man it does not expect to last comes up for him, paying the difference on the chart in its own picks, this year's first and then next year's; the club on the clock takes it when it gives up little by sliding, and never moves off a quarterback it needs. Roughly five to fifteen such trades happen in a draft, nearly all in the first three rounds. When you are on the clock the phone may ring with one or two offers for your pick, and you can build any trade of your own on the trade screen.
+
+## 58. Preseason: the reps chart and the Preseason page (the skeleton)
+
+**The calendar.** Camp opens, and nothing is practiced until you say so. Then two weeks of camp, three exhibitions with a practice week after each of the first two, and the cuts. One stop was added to what there was before: the one between camp opening and camp being run.
+
+**The reps chart.** For every job (X, Z, slot, each line spot, edge, the corners and so on), who takes the first, second and third string reps. Your coaches fill it in from their own boards. A job you change becomes yours and stays as you set it; a job you have not touched keeps following its coach; you can hand any job back. A man can be listed at two jobs.
+
+- In practice his string decides who he faces (the ones against the ones) and how many reps he gets.
+- It takes over "where he is working" through camp: his best job is his spot, a second job gets a share of his reps.
+- In the exhibitions the ones start, and the threes wait for the second half.
+
+**The meeting.** Before each step, every position coach reports on his room: who stood out, who worries him, the man he rates higher than you do, and each place he would draw the chart differently, with one button to take his advice.
+
+**The roster, man by man.** All ninety, by room: job and string, where the staff has him (lock, likely, bubble, practice squad, long shot), camp grade week by week, one-on-one record, exhibition snaps and grade. A row opens into his weeks: each kind of rep with its record (routes against coverage, pass protection, pass rush, run blocking, run fits, open-field running and tackling, coverage), his record against the ones, the plays that stood out in team periods, and the coach's note. Practice was already simulated a rep at a time; this keeps what used to be thrown away.
+
+Other clubs run camp as before, by their coaches' boards. The roster planner is untouched.
+
+**Changes after the first look.** The staff meeting shows one coach at a time: pick him from a row of rooms at the top (a badge counts the changes he wants to your chart), and his window has what he tells you, where he would change the chart, and his room in his order with where the staff has each man, his place on your chart, his camp grade and his one-on-one record. The reps chart is dragged: a man's name opens his file, the × takes him off a job, and dropping him on a string or in front of another man puts him there; a job he cannot work will not take him. The year runs across the top of every page as a strip, from the season through the playoffs, the review, the staff, re-signing, free agency, the draft, the rookies, camp, the cuts and waivers, with the current stage opened up (the weeks of the season coloured by result, the days of free agency, the rounds of the draft, the steps of camp) and the button that moves the calendar on at the end of it.
+
+
+### Second revision: the chart rebuilt, the planner folded in, the phone dock
+
+- **The reps chart is the depth chart's twin.** Same page furniture (unit tabs, group selector, job cards with numbered men, dividers for the ones, twos and threes, a bench on the right of everyone who could work the selected job) and the same drag code: drop a man on a place in a job's order. From another card he moves; from the bench he is added (`repsPlace`). `+` gives him a look, `×` takes him off, his name opens his card.
+- **The roster planner is part of the Preseason page.** One nav entry (`pre`), called Roster Planner until camp opens and Preseason after. Tabs: Staff meeting, Reps chart, Man by man (camp only), The cuts (cutdown day), The 53 (the staff's bubble: five printed figures, one side of the ball at a time), Compare (your own groups; column labels once at the head of each list). The old Practice report is the tracker's week-by-week. Old `camp` and `cutdown` views route here.
+- **Every name on these tabs opens the player card.** The card's look (serif figures, mono labels, ink stamps) is the guide for new pages.
+- **Phones have no header and no calendar strip.** A dock at the bottom carries the date, the record and cap, the continue button and the six headers; a header with more than one page opens a small menu above the dock. Sims live in the Settings menu.

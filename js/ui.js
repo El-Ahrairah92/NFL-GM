@@ -201,7 +201,7 @@ function render() {
   let page;
   try { page = pageHTML(); } catch (e) { showError(e, `drawing the ${view} page`); page = `<div class="callout bad">This page hit an error (details at the bottom of the screen).</div>`; }
   const SC = '.tbl-wrap, .scroll, .dc-cands, .dc-side, nav.tabs, .subnav, .subtabs, .msheet-card', keep = [...app.querySelectorAll(SC)].map(e => [e.scrollLeft, e.scrollTop]), wy = window.scrollY, same = app.dataset.view === view;
-  app.innerHTML = topbarHTML() + `<main>${page}</main>` + mobileNavHTML();
+  app.innerHTML = topbarHTML() + `<main>${page}</main>` + mobileNavHTML(); { const cc = app.querySelector('.cal-st.cur'), ct = app.querySelector('.cal-track'); if (cc && ct) ct.scrollLeft = cc.offsetLeft - ct.offsetLeft - ct.clientWidth / 2 + cc.offsetWidth / 2; } // keep where we are in the year in view
   app.dataset.view = view;
   if (same) { [...app.querySelectorAll(SC)].forEach((e, i) => { if (keep[i]) { e.scrollLeft = keep[i][0]; e.scrollTop = keep[i][1]; } }); if (Math.abs(window.scrollY - wy) > 2) window.scrollTo(0, wy); }
   else { const nav = app.querySelector('nav.tabs'), i = [...app.querySelectorAll(SC)].indexOf(nav); if (nav && keep[i]) nav.scrollLeft = keep[i][0]; }
@@ -244,10 +244,32 @@ function continueLabel() {
     case 'FA': { const d = state.fa && state.fa.yr === state.season ? state.fa.day : 0; return d >= FA_DAYS - 1 ? 'Close Free Agency →' : `Next Day of Free Agency (${d + 1} of ${FA_DAYS}) →`; }
     case 'DRAFT': { const pk = currentPick(); return pk && pk.owner === state.userTid ? 'Auto-pick for Me' : 'Sim to My Pick'; }
     case 'UDFA': return state.udfa && state.udfa.round >= UDFA_ROUNDS - 1 ? 'Final Round: Send Offers & Open Camp →' : `Send Offers (Round ${(state.udfa ? state.udfa.round : 0) + 1} of ${UDFA_ROUNDS}) →`;
-    case 'PRESEASON': return state.pre ? `▶ Play Preseason Game ${state.pre.wk + 1}` : '▶ Open Training Camp';
+    case 'PRESEASON': return !state.pre ? '▶ Open Training Camp' : !preCamped() ? '▶ Run Training Camp (two weeks)' : `▶ Play Preseason Game ${state.pre.wk + 1}`;
     case 'CUTDOWN': return 'Finalize Cuts → Waiver Wire';
     case 'WAIVERS': return `Process Claims & Start ${state.season + 1} Season →`;
   }
+}
+// the year as a strip: where the league is, what is behind it, and the button that moves it on
+const CAL = [['REG', 'Season'], ['PLAYOFFS', 'Playoffs'], ['RECAP', 'Review'], ['COACHES', 'Staff'], ['RESIGN', 'Re-signing'], ['FA', 'Free agency'], ['DRAFT', 'Draft'], ['UDFA', 'Rookies'], ['PRESEASON', 'Camp'], ['CUTDOWN', 'Cuts'], ['WAIVERS', 'Waivers']];
+function calSubHTML() {
+  const u = state.userTid, tk = (cls, title) => `<b class="${cls}" title="${esc(title || '')}"></b>`;
+  switch (state.phase) {
+    case 'REG': { let h = ''; for (let w = 1; w <= SEASON_WEEKS; w++) { const m = (state.schedule[w - 1] || []).find(x => x.h === u || x.a === u), opp = m ? (m.h === u ? 'vs ' : 'at ') + T(m.h === u ? m.a : m.h).abbr : 'bye';
+        if (m && m.score) { const a = m.h === u ? m.score[0] : m.score[1], b = m.h === u ? m.score[1] : m.score[0]; h += tk(a > b ? 'w' : a < b ? 'l' : 't', `Week ${w}: ${a > b ? 'won' : a < b ? 'lost' : 'tied'} ${a}–${b} ${opp}`); }
+        else h += tk(w === state.week ? 'cur' : m ? '' : 'bye', `Week ${w}: ${opp}`); }
+      return `<span class="cal-n">Week ${Math.min(state.week, SEASON_WEEKS)} of ${SEASON_WEEKS}</span><span class="cal-t">${h}</span>`; }
+    case 'PLAYOFFS': { const r = state.playoffs ? state.playoffs.round : 0; return `<span class="cal-n">${ROUND_NAMES[r] || ''}</span><span class="cal-t">${ROUND_NAMES.map((n, i) => tk(i < r ? 'done' : i === r ? 'cur' : '', n)).join('')}</span>`; }
+    case 'FA': { const d = state.fa ? state.fa.day : 0; let h = ''; for (let i = 0; i < FA_DAYS; i++) h += tk(i < d ? 'done' : i === d ? 'cur' : '', 'Day ' + (i + 1)); return `<span class="cal-n">Day ${Math.min(d + 1, FA_DAYS)} of ${FA_DAYS}</span><span class="cal-t">${h}</span>`; }
+    case 'DRAFT': { const pk = currentPick(), r = pk ? pk.round : DRAFT_ROUNDS; let h = ''; for (let i = 1; i <= DRAFT_ROUNDS; i++) h += tk(i < r ? 'done' : i === r ? 'cur' : '', 'Round ' + i); return `<span class="cal-n">${pk ? `Round ${pk.round}, pick ${pk.pick}` : 'Done'}</span><span class="cal-t">${h}</span>`; }
+    case 'UDFA': { const r = state.udfa ? state.udfa.round : 0; let h = ''; for (let i = 0; i < UDFA_ROUNDS; i++) h += tk(i < r ? 'done' : i === r ? 'cur' : '', 'Round ' + (i + 1)); return `<span class="cal-n">Round ${r + 1} of ${UDFA_ROUNDS}</span><span class="cal-t">${h}</span>`; }
+    case 'PRESEASON': { const st = preSteps().filter(x => x.k !== 'cut'), c = st.find(x => x.cur); return `<span class="cal-n">${c ? c.l : 'Camp'}</span><span class="cal-t">${st.map(x => tk(x.done ? 'done' : x.cur ? 'cur' : '', x.l)).join('')}</span>`; }
+  }
+  return '';
+}
+function calendarHTML() {
+  const cur = CAL.findIndex(c => c[0] === state.phase);
+  return `<div class="cal"><div class="cal-track">${CAL.map(([k, l], i) => i === cur ? `<div class="cal-st cur"><span class="cal-l">${l}</span>${calSubHTML()}</div>` : `<div class="cal-st ${i < cur ? 'done' : ''}" title="${i < cur ? 'Done' : 'Still to come'}"><span class="cal-d">${i < cur ? '✓' : ''}</span><span class="cal-l">${l}</span></div>`).join('<i></i>')}</div>
+    <button class="primary cal-go" data-action="continue">${continueLabel()}</button></div>`;
 }
 function topbarHTML() {
   const t = T(state.userTid), recs = standings();
@@ -262,10 +284,9 @@ function topbarHTML() {
     <div class="spacer"></div>
     <div class="teambadge"><span class="dot" style="background:${t.color}"></span>${esc(t.region + ' ' + t.name)} <span class="muted">${recOf(t.id, recs)}</span></div>
     <span class="muted small">Cap ${fmtMoney(capRoom(t.id))}</span>${rosterOver() && !['CUTDOWN', 'WAIVERS'].includes(state.phase) ? `<button class="sm danger" data-action="nav" data-view="roster" title="You are over the roster limit: make a move before the next game">Roster ${rosterCount(t.id)}/${rosterLimit()}</button>` : ''}
-    <button class="primary" data-action="continue">${continueLabel()}</button>
     ${sim2}
     <button data-action="simYear" title="Auto-manages your team through the rest of this season and the offseason">⏭ Sim to Next Season</button>
-  </div>${navHTML()}</div>`;
+  </div>${calendarHTML()}${navHTML()}</div>`;
 }
 // phones: a bottom bar with the pages you live in, and a sheet with everything else
 const MNAV_ICON = { home: '⌂', roster: '☰', depth: '▦', practice: '◔', coaches: '♜', playbook: '✎', schedule: '▤', standings: '≡', stats: '∑', trade: '⇄', fa: '✚', search: '⌕', draft: '◆', news: '✉', history: '★', settings: '⚙', cutdown: '✂', waivers: '☑' };
@@ -274,7 +295,7 @@ function navTree() {
   const hist = state.history && state.history.length;
   return [
     ['home', 'Home', [['home', 'Overview'], ['news', 'News']]],
-    ['team', 'Team', [['roster', 'Roster'], ...(planOn() ? [['camp', 'Roster Planner']] : []), ['depth', 'Depth Chart'], ['practice', 'Practice']]],
+    ['team', 'Team', [['roster', 'Roster'], ...(preOpen() ? [['pre', preCampOn() ? 'Preseason' : 'Roster Planner']] : []), ['depth', 'Depth Chart'], ['practice', 'Practice']]],
     ['staff', 'Staff', [['coaches', 'Coaches'], ['playbook', 'Playbook']]],
     ['league', 'League', [['schedule', 'Schedule'], ['standings', 'Standings'], ['stats', 'League Stats'], ['history', 'History'], ...(hist ? [['season', 'Season Review']] : [])]],
     ['players', 'Players', [['fa', 'Free Agents'], ['trade', 'Trade'], ['search', 'Player Search'], ['draft', 'Draft'], ...(state.phase === 'WAIVERS' ? [['waivers', 'Waiver Wire']] : [])]],
@@ -282,20 +303,26 @@ function navTree() {
   ];
 }
 // the page where this phase's business is done
-function navHot() { return { RECAP: 'season', COACHES: 'coaches', RESIGN: 'roster', FA: 'fa', DRAFT: 'draft', UDFA: 'fa', PRESEASON: state.pre ? 'camp' : 'coaches', CUTDOWN: 'camp', WAIVERS: 'waivers' }[state.phase] || null; }
-function navHeadOf(v, tree) { v = v === 'cutdown' ? 'camp' : v; const h = (tree || navTree()).find(x => x[2].some(y => y[0] === v)); return h ? h[0] : 'home'; }
+function navHot() { return { RECAP: 'season', COACHES: 'coaches', RESIGN: 'roster', FA: 'fa', DRAFT: 'draft', UDFA: 'fa', PRESEASON: state.pre ? 'pre' : 'coaches', CUTDOWN: 'pre', WAIVERS: 'waivers' }[state.phase] || null; }
+function navHeadOf(v, tree) { v = v === 'cutdown' || v === 'camp' ? 'pre' : v; const h = (tree || navTree()).find(x => x[2].some(y => y[0] === v)); return h ? h[0] : 'home'; }
 const NAV_ICON = { home: '⌂', team: '☰', staff: '♜', league: '≡', players: '✚', settings: '⚙' };
 function navHTML() {
-  const tree = navTree(), cur = navHeadOf(view, tree), hot = navHot(), v = view === 'cutdown' ? 'camp' : view, dot = '<i class="nav-dot" title="This is where the current phase happens"></i>';
+  const tree = navTree(), cur = navHeadOf(view, tree), hot = navHot(), v = view === 'cutdown' || view === 'camp' ? 'pre' : view, dot = '<i class="nav-dot" title="This is where the current phase happens"></i>';
   (ui.navLast = ui.navLast || {})[cur] = v;
   const head = tree.find(x => x[0] === cur);
   return `<nav class="tabs">${tree.map(([k, l, subs]) => `<button class="${k === cur ? 'on' : ''}" data-action="navHead" data-h="${k}">${l}${hot && k !== cur && subs.some(y => y[0] === hot) ? dot : ''}</button>`).join('')}</nav>${head[2].length > 1 ? `<nav class="subnav">${head[2].map(([k, l]) => `<button class="${k === v ? 'on' : ''}" data-action="nav" data-view="${k}">${l}${k === hot && k !== v ? dot : ''}</button>`).join('')}</nav>` : ''}`;
 }
-// phones: the six headers along the bottom; the pages of the one you are in sit under the top bar
+// phones: no header and no calendar strip. A dock at the bottom holds where the year is, the button that moves it on, and the six headers;
+// a header with more than one page opens a small menu above the dock.
+function isPhone() { return typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches; }
 function mobileNavHTML() {
   if (!state) return '';
-  const tree = navTree(), cur = navHeadOf(view, tree), hot = navHot();
-  return `<nav class="mnav">${tree.map(([k, l, subs]) => `<button class="${k === cur ? 'on' : ''}" data-action="navHead" data-h="${k}"><i>${NAV_ICON[k]}</i><span>${l}${hot && k !== cur && subs.some(y => y[0] === hot) ? ' •' : ''}</span></button>`).join('')}</nav>`;
+  const tree = navTree(), cur = navHeadOf(view, tree), hot = navHot(), t = T(state.userTid), v = view === 'cutdown' || view === 'camp' ? 'pre' : view, pop = ui.mPop ? tree.find(x => x[0] === ui.mPop) : null;
+  const sims = state.phase === 'REG' ? [['simPlayoffs', '⏩ Sim to the playoffs']] : state.phase === 'PLAYOFFS' ? [['simPlayoffs', '⏩ Finish the playoffs']] : state.phase === 'DRAFT' ? [['simDraft', '⏩ Sim the draft']] : [];
+  const menu = !pop ? '' : `<div class="mpop-bg" data-action="mPop" data-h=""></div><div class="mpop"><div class="mpop-h">${pop[1]}</div>${pop[2].map(([k, l]) => `<button class="${k === v ? 'on' : ''}" data-action="nav" data-view="${k}">${l}${k === hot ? '<i class="nav-dot"></i>' : ''}</button>`).join('')}
+    ${pop[0] === 'settings' ? [...sims, ['simYear', '⏭ Sim to next season']].map(([a, l]) => `<button class="mpop-x" data-action="${a}">${l}</button>`).join('') : ''}</div>`;
+  return `${menu}<div class="mdock"><div class="mgo"><div class="mgo-w"><b>${state.season} · ${PHASE_LABEL[state.phase]}${state.phase === 'REG' ? ' · Wk ' + state.week : ''}</b><span>${esc(t.abbr)} ${recOf(t.id, standings())} · cap ${fmtMoney(capRoom(t.id))}</span></div><button class="primary" data-action="continue">${continueLabel()}</button></div>
+    <nav class="mnav">${tree.map(([k, l, subs]) => `<button class="${k === cur ? 'on' : ''} ${pop && pop[0] === k ? 'open' : ''}" data-action="navHead" data-h="${k}"><i>${NAV_ICON[k]}</i><span>${l}${hot && k !== cur && subs.some(y => y[0] === hot) ? ' •' : ''}</span></button>`).join('')}</nav></div>`;
 }
 function pageHTML() {
   switch (view) {
@@ -310,7 +337,7 @@ function pageHTML() {
     case 'practice': return practiceHTML();
     case 'fa': return faHTML();
     case 'search': return searchHTML();
-    case 'cutdown': return state.phase === 'CUTDOWN' ? campHTML() : homeHTML(); // cutdown day now lives in the roster planner
+    case 'cutdown': return state.phase === 'CUTDOWN' ? preHubHTML() : homeHTML(); // cutdown day lives on the preseason page
     case 'waivers': return state.phase === 'WAIVERS' ? waiversHTML() : homeHTML();
     case 'draft': return draftHTML();
     case 'coaches': return coachesHTML();
@@ -318,7 +345,8 @@ function pageHTML() {
     case 'news': return newsHTML();
     case 'history': return historyHTML();
     case 'season': return seasonHTML();
-    case 'camp': return campHTML();
+    case 'camp': return preHubHTML();
+    case 'pre': return preHubHTML();
     case 'settings': return settingsHTML();
   }
   return '';
@@ -460,6 +488,8 @@ function campPlayerBits(p) {
 }
 // one player's line in the planner: everything camp has shown about him, side by side with the men next to him
 const PLAN_VIEWS = [['camp', 'Camp'], ['scout', 'Scouting'], ['contract', 'Contract'], ['st', 'Special teams']];
+const PLAN_COLS = { camp: ['Coach has him', 'Reps', 'Camp', 'One-on-ones', 'Games'], scout: ['Coach has him', 'Build', 'Fit', 'Track', 'The read'], contract: ['Salary', 'Years', 'Guaranteed', 'If cut', 'Dead money if cut'], st: ['Special teams', 'Grade', 'Snaps', 'Tackles', 'Units'] };
+function planHeadHTML() { const v = PLAN_VIEWS.some(x => x[0] === ui.planView) ? ui.planView : 'camp'; return `<div class="pl-r pl-hd"><span>Player</span>${PLAN_COLS[v].map(l => `<span>${l}</span>`).join('')}<span></span></div>`; }
 function planRowHTML(p, bub, rank, g, i) {
   const view = PLAN_VIEWS.some(v => v[0] === ui.planView) ? ui.planView : 'camp', x = campPlayerBits(p), cat = bub[p.id] ? CAMP_CAT[bub[p.id].cat] : null, wl = workLabel(p), cell = (k, body) => `<div class="pl-c"><span class="camp-k">${k}</span>${body}</div>`;
   let mid = '', foot = '';
@@ -468,7 +498,7 @@ function planRowHTML(p, bub, rank, g, i) {
   const cutCtl = !cutDay ? '' : `<div class="pl-cut"><span class="seg">${[['keep', 'Keep'], ['cut', 'Cut'], ['ps', 'Practice squad']].map(([k, l]) => `<button class="sm ${(state.cut.plan[p.id] || 'keep') === k ? (k === 'keep' ? 'primary' : k === 'cut' ? 'danger' : 'on') : ''}" data-action="cutSet" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span><span class="small ${/Will be/.test(risk) ? 'bad' : /Could/.test(risk) ? 'warn' : 'muted'}" title="The staff's read on what happens if you waive him. A player who is claimed cannot come back to your practice squad.">If waived: <b>${risk}</b></span></div>`;
   if (view === 'camp') {
     mid = cell('Coach has him', rank ? `<b>${rank[0]}</b> <span class="small muted">of ${rank[1]}</span>` : '—') + cell('Reps', x.reps) + cell('Camp', `${x.grade}<div class="camp-wks" title="Practice blocks, oldest first">${x.weeks}</div>`) + cell('Drills', `${x.drills}<div class="small muted">vs ones ${x.vs1}</div>`)
-      + `<div class="pl-c pl-game">${!x.snaps && x.lastYr ? `<span class="camp-k">Last season</span>${gradeChip(x.lastYr.adv ? x.lastYr.adv.g : null)} <span class="small muted">${x.lastYr.snp || 0} snaps · ${x.lastYr.gs || 0} starts</span><div class="small">${p.pos === 'OL' ? '' : esc(statSummary(x.lastYr, p.pos))}</div>` : `<span class="camp-k">Games</span>${x.pre} <span class="small muted">${x.snaps ? x.snaps + ' snaps' : 'no snaps'}</span>${x.when ? `<div class="small muted">${x.when}</div>` : ''}${x.line ? `<div class="small">${esc(x.line)}</div>` : ''}`}</div>`;
+      + `<div class="pl-c pl-game">${!x.snaps && x.lastYr ? `<span class="small muted">Last season</span> ${gradeChip(x.lastYr.adv ? x.lastYr.adv.g : null)} <span class="small muted">${x.lastYr.snp || 0} snaps · ${x.lastYr.gs || 0} starts</span><div class="small">${p.pos === 'OL' ? '' : esc(statSummary(x.lastYr, p.pos))}</div>` : `<span class="camp-k">Games</span>${x.pre} <span class="small muted">${x.snaps ? x.snaps + ' snaps' : 'no snaps'}</span>${x.when ? `<div class="small muted">${x.when}</div>` : ''}${x.line ? `<div class="small">${esc(x.line)}</div>` : ''}`}</div>`;
     foot = `${x.traits}${x.note ? ` <span class="small">${x.note}</span>` : ''}`;
   } else if (view === 'scout') {
     const t = scoutTraits(p), dev = isDeveloping(p);
@@ -488,27 +518,168 @@ function planRowHTML(p, bub, rank, g, i) {
     ${mid}<div class="pl-note">${foot}</div>
     <div class="pl-act">${cutCtl}${g ? `<button class="sm" data-action="planMove" data-gid="${g.id}" data-pid="${p.id}" data-dir="-1" title="Move up" ${i === 0 ? 'disabled' : ''}>▲</button><button class="sm" data-action="planMove" data-gid="${g.id}" data-pid="${p.id}" data-dir="1" title="Move down" ${i === g.pids.length - 1 ? 'disabled' : ''}>▼</button><button class="sm" data-action="planRemove" data-gid="${g.id}" data-pid="${p.id}" title="Take him out of this group">✕</button>` : ''}</div></div>`;
 }
-function campHTML() {
-  const u = state.userTid;
-  if (!planOn()) return '<div class="pagehead"><div><h1>Roster planner</h1></div></div><div class="card"><p class="muted">The roster planner opens when the season ends and stays through the coaching search, free agency, the draft and camp, until your cuts are final.</p></div>';
-  const cutDay = state.phase === 'CUTDOWN' && !!state.cut;
-  const camp = campOn(), cm = camp ? state.camp : { battles: [], blocks: 0 }, tab = ui.campTab === 'bubble' || (ui.campTab === 'report' && camp) || (ui.campTab === 'cut' && cutDay) ? ui.campTab : 'plan', ro = rosterOf(u), on = ro.filter(countsOn53), games = state.pre ? state.pre.wk : PRESEASON_GAMES;
-  let html = `<div class="pagehead"><div><h1>Roster planner</h1><div class="sub">${camp ? `${esc(cm.label || 'Camp')} · practice week ${cm.blocks} of ${CAMP_BLOCKS} · ${games} of ${PRESEASON_GAMES} exhibitions played · ` : `${PHASE_LABEL[state.phase]} · camp has not opened, so practice and game columns are empty · `}${on.length} on the roster, ${on.length > ROSTER_MAX ? on.length - ROSTER_MAX + ' over ' + ROSTER_MAX : ROSTER_MAX - on.length + ' under ' + ROSTER_MAX}</div></div></div>
-    <div class="subtabs">${[['plan', 'Squad planner'], ...(cutDay ? [['cut', 'Cut list']] : []), ['bubble', 'The bubble'], ...(camp ? [['report', 'Practice report']] : [])].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="campTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
-  if (tab === 'cut') return html + cutdownHTML();
-  if (cutDay) { // the count that matters today, on every tab
-    const plan = state.cut.plan, gone = v => v === 'cut' || v === 'ps', keeps = on.filter(p => !gone(plan[p.id])), need = keeps.length - ROSTER_MAX, psN = on.filter(p => plan[p.id] === 'ps').length;
-    html += `<div class="card" style="margin-bottom:12px"><div class="row"><div><div class="big ${need > 0 ? 'bad' : 'good'}">${keeps.length} / ${ROSTER_MAX}</div><div class="small muted">${need > 0 ? `Cut ${need} more to get to ${ROSTER_MAX}` : need < 0 ? `${-need} open spot${need === -1 ? '' : 's'}: nobody will be signed for you` : 'Roster is set'} · practice squad ${psN}/${PS_MAX} marked · ${ro.length - on.length} heading to IR</div></div>
-      <span class="spacer"></span><button data-action="cutStaff">Use the staff's recommendations</button><button data-action="cutClear">Clear my cuts</button></div>
-      <div class="small muted" style="margin-top:8px"><b>Cutdown day.</b> Make each call right on the player's row: Keep, Cut or Practice squad. The Cut list tab has every player in one table with the staff's reasoning. Press <b>Finalize Roster</b> at the top when the count is right.</div></div>` + campObjectionsHTML(u, plan);
-  }
-  if (tab === 'plan') {
+// =====================================================================
+//  THE PRESEASON PAGE: the calendar, the staff meeting, the reps chart, and all ninety men followed week to week.
+//  One thing on screen at a time; the detail is a click down, not spread across the page.
+// =====================================================================
+const PRE_ROOMS = [['ALL', 'Everyone'], ['QB', 'QB'], ['RB', 'RB'], ['WR', 'WR'], ['TE', 'TE'], ['OL', 'OL'], ['DL', 'DL'], ['LB', 'LB'], ['DB', 'DB'], ['ST', 'K/P']];
+function preRoomOf(p) { const c = cpos(p); return c === 'CB' || c === 'S' ? 'DB' : c === 'K' || c === 'P' ? 'ST' : c; }
+function preCamped() { return !!(state.pre && (state.pre.camped || (state.camp && state.camp.blocks >= 2))); }
+function preNextLabel() { return !state.pre ? 'camp opens' : !preCamped() ? 'two weeks of camp' : state.phase === 'CUTDOWN' ? 'the cuts' : `exhibition ${state.pre.wk + 1}`; }
+// camp is on the field (the meeting, the chart and the tracker have something to show); the page itself opens with the offseason
+function preCampOn() { return !!(state && state.pre && state.camp && ['PRESEASON', 'CUTDOWN'].includes(state.phase)); }
+function preOpen() { return !!state && (planOn() || preCampOn()); }
+function preTabs() { const cut = state.phase === 'CUTDOWN' && !!state.cut;
+  return [...(preCampOn() ? [['meet', 'Staff meeting'], ['reps', 'Reps chart'], ['track', 'Man by man']] : []), ...(cut ? [['cut', 'The cuts']] : []), ['bubble', `The ${ROSTER_MAX}`], ['plan', 'Compare']]; }
+function preTabNow() { const t = preTabs(); return t.some(x => x[0] === ui.preTab) ? ui.preTab : t[0][0]; }
+function preHubHTML() {
+  if (!preOpen()) return '<div class="pagehead"><div><h1>Roster planner</h1></div></div><div class="card"><p class="muted">This page opens when the season ends and stays through the coaching search, free agency, the draft and camp, until your cuts are final.</p></div>';
+  const camp = preCampOn(), u = state.userTid, ro = rosterOf(u), on = ro.filter(countsOn53), d = on.length - ROSTER_MAX; if (camp) ensureReps();
+  const tabs = preTabs(), tab = preTabNow();
+  return `<div class="pagehead"><div><h1>${camp ? 'Preseason' : 'Roster planner'}</h1><div class="sub">${camp ? `${ro.length} men, ${ROSTER_MAX} jobs. Next: ${preNextLabel()}.` : `${PHASE_LABEL[state.phase]} · camp has not opened · ${on.length} on the roster, ${d > 0 ? d + ' over ' + ROSTER_MAX : -d + ' under ' + ROSTER_MAX}`}</div></div></div>
+    <div class="ph-tabs">${tabs.map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="preTab" data-v="${k}">${l}</button>`).join('')}</div>
+    ${tab === 'reps' ? preRepsHTML() : tab === 'track' ? preTrackHTML() : tab === 'meet' ? preMeetHTML() : tab === 'cut' ? cutdownHTML() : preCutBarHTML() + (tab === 'bubble' ? preBubbleHTML() : preCompareHTML())}`;
+}
+// ---- the meeting: one coach at a time, in his own words, with his room in front of you ----
+function preMeetHTML() {
+  const u = state.userTid, rooms = campMeeting(u), adv = repsAdvice(u), own = Object.keys(state.reps.own).length, pl = p => playerLink(p, true), bub = campBubble(u);
+  const inRoom = (r, p) => r.role === 'ST' ? ['K', 'P'].includes(cpos(p)) : (CAMP_ROOMS.find(x => x[0] === r.role) || [0, []])[1].includes(cpos(p));
+  const asks = r => adv.filter(a => { const p = P(a.pid); return p && inRoom(r, p); });
+  const r = rooms.find(x => x.role === ui.meetRole) || rooms.find(x => asks(x).length) || rooms[0]; if (!r) return '<div class="callout">Nobody to meet with.</div>';
+  const mine = asks(r), say = (cs, ms) => `${cs < ms ? 'up' : 'down'} with the <b>${REP_STRING[cs].toLowerCase()}</b>`, note = p => { const n = campLastNote(p); return n ? ` <span class="muted">${esc(n[2])}</span>` : ''; };
+  let h = `<div class="mt-pick">${rooms.map(x => { const n = asks(x).length; return `<button class="${x === r ? 'on' : ''}" data-action="meetRole" data-v="${x.role}"><b>${x.role === 'ST' ? 'K/P' : x.role}</b><span>${x.c ? esc(x.c.last) : 'Vacant'}</span>${n ? `<i>${n}</i>` : ''}</button>`; }).join('')}
+    ${own ? `<button class="mt-all" data-action="repsRs" data-k="" title="Every job goes back to the order its coach would set">Use the coaches’ chart everywhere</button>` : ''}</div>`;
+  const said = [];
+  if (r.star) said.push(['good', 'Standing out', pl(r.star) + note(r.star)]);
+  if (r.worry) said.push(['bad', 'A concern', pl(r.worry) + note(r.worry)]);
+  if (r.push) said.push(['note', 'His man', `${pl(r.push.p)} <span class="muted">He rates him above where you have him${r.push.why ? ': ' + esc(r.push.why) : '.'}</span>`]);
+  if (r.cool) said.push(['', 'Cooler on', `${pl(r.cool)} <span class="muted">He is not as sold as the room’s reputation.</span>`]);
+  h += `<div class="card mt-card"><div class="mt-head"><div class="mt-face">${r.c ? esc((r.c.first || ' ')[0] + (r.c.last || ' ')[0]) : '—'}</div><div><h2>${r.c ? esc(cname(r.c)) : 'No coach in this room'}</h2><div class="muted">${esc({ QB: 'Quarterbacks', RB: 'Running backs', WR: 'Receivers', TE: 'Tight ends', OL: 'Offensive line', DL: 'Defensive line', LB: 'Linebackers', DB: 'Secondary', ST: 'Specialists' }[r.role] || r.role)} · ${r.n} men · ${esc(r.eye)}</div></div>
+      <span style="flex:1"></span><div class="mt-when">Before ${preNextLabel()}</div></div>
+    <div class="mt-cols"><div>
+      <div class="mt-h">What he tells you</div>${said.length ? said.map(([c, t, x]) => `<div class="mt-say"><span class="ph-tag ${c}">${t}</span><div>${x}</div></div>`).join('') : '<div class="muted small" style="padding:6px 0">He has nothing for you yet. Ask him again after a week of practice.</div>'}
+      <div class="mt-h mt-hx" style="margin-top:14px"><span>Where he would change your chart</span>${mine.length > 1 ? `<button class="sm" data-action="meetAll" data-v="${r.role}">Take all ${mine.length}</button>` : ''}</div>
+      ${mine.length ? mine.map(a => `<div class="mt-say mt-ask"><span class="ph-tag warn">${esc(a.k)}</span><div>He would have ${pl(P(a.pid))} ${say(a.cs, a.ms)} at ${esc(REP_JOB[a.k][1].toLowerCase())}. <span class="muted">You have him with the ${REP_STRING[a.ms].toLowerCase()}.</span></div><button class="sm" data-action="repsDo" data-k="${a.k}" data-pid="${a.pid}" data-s="${a.cs}">Do it</button></div>`).join('') : `<div class="muted small" style="padding:6px 0">${own ? 'Nothing: he would draw this room the way you have.' : 'Nothing: the chart for his room is still his own.'}</div>`}
+    </div><div>
+      <div class="mt-h">His room, in his order</div>
+      <div class="mt-ord head"><span></span><span>Player</span><span>Staff has him</span><span>Your chart</span><span class="ph-num">Camp</span><span class="ph-num">One-on-ones</span></div>
+      ${r.order.map((o, i) => { const p = o.p, x = campPlayerBits(p), cat = CAMP_CAT[o.cat], jobs = repsJobsOf(p.id);
+        return `<div class="mt-ord"><span class="mt-rk">${i + 1}</span><span class="ph-who">${pl(p)}<span class="muted"> ${esc(p.lbl)} · ${p.age}</span></span><span>${cat ? `<span class="pill ${cat[1]}">${cat[0]}</span>` : ''}</span><span>${jobs.map(j => `<span class="ph-js s${j.s}">${esc(j.k)} ${j.s + 1}s</span>`).join('')}</span><span class="ph-num">${x.grade}</span><span class="ph-num">${x.drills}</span></div>`; }).join('')}
+    </div></div></div>`;
+  return h;
+}
+// ---- the reps chart ----
+function repChipTone(p) { const c = p.camp && p.camp.s === state.season ? p.camp : null, sc = c ? c.sc.filter(v => v !== undefined && v !== null) : []; if (p.injury) return 'inj'; if (sc.length < 2) return ''; const d = sc[sc.length - 1] - sc[sc.length - 2]; return d >= 6 ? 'up' : d <= -6 ? 'dn' : ''; }
+// Built like the depth chart, and worked the same way: pick a unit and a group, each job is a card with its men in order,
+// the bench on the right lists everyone who could work the job you have selected. Drag a man to a place, + to add him, × to take him off.
+const REP_GROUPS = { off: [['Backfield', ['QB', 'RB', 'FB']], ['Receivers', ['X', 'Z', 'SLOT']], ['Tight ends', ['Y', 'H']], ['Offensive line', ['LT', 'LG', 'C', 'RG', 'RT']]],
+  def: [['Defensive line', ['EDGE', 'DE', 'DT', 'NT']], ['Linebackers', ['MLB', 'WLB']], ['Secondary', ['CB', 'NCB', 'FS', 'SS']]], st: [['Kicking game', ['K', 'P']]] };
+function repChip(p, k, i, n) {
+  const tone = repChipTone(p), two = repsJobsOf(p.id), second = two.length > 1 && two[0].k !== k;
+  return `<div class="dcc ${i < n ? 'st' : ''} ${ui.repsPid === p.id ? 'pk' : ''} rp-${tone}" draggable="true" data-rpp="${p.id}" data-rpjob="${k}" data-rpi="${i}" data-action="repsMan" data-pid="${p.id}" data-k="${k}" title="${esc(pname(p))} · ${esc(p.lbl)} · age ${p.age}${second ? ' · his second job' : ''}${p.injury ? ' · ' + esc(p.injury.name) : ''}">
+    <span class="dcc-n">${i + 1}</span><button class="link dcc-nm" data-action="player" data-pid="${p.id}" title="${esc(pname(p))} — open his card">${esc(p.last)}</button>${second ? '<span class="rp-2" title="His second job">2nd</span>' : ''}${tone === 'up' ? '<span class="good" title="Better this week">▲</span>' : tone === 'dn' ? '<span class="bad" title="Worse this week">▼</span>' : tone === 'inj' ? '<span class="warn" title="Hurt">✚</span>' : ''}<span class="dcc-sp"></span><button class="dcc-x" data-action="repsRm" data-k="${k}" data-pid="${p.id}" title="Take him off this job" aria-label="Remove ${esc(p.last)}">×</button></div>`;
+}
+function repJobCard(k, R) {
+  const J = REP_JOB[k], n = J[3], list = (R.jobs[k] || []).map(P).filter(Boolean), on = ui.repsJob === k, own = !!R.own[k];
+  return `<div class="dcj ${on ? 'on' : ''}" data-action="repsJob" data-k="${k}" data-rpjob="${k}">
+    <div class="dcj-h"><b>${esc(J[1])}</b>${n > 1 ? `<span class="dcj-tag two" title="Two men work with each string at this job">${n} a string</span>` : ''}${own ? `<span class="dcj-tag rp-own" title="You have changed this job. It stays as you set it until you hand it back.">yours</span><button class="rp-back" data-action="repsRs" data-k="${k}" title="Hand this job back to its coach">↺</button>` : `<span class="dcj-tag" title="In the order its coach sees it. It follows his board until you change it.">coach</span>`}</div>
+    <div class="dcj-list">${list.length ? '<div class="dcj-div first"><span>the ones</span></div>' : ''}${list.map((p, i) => (i === n ? '<div class="dcj-div"><span>the twos</span></div>' : i === 2 * n ? '<div class="dcj-div"><span>the threes</span></div>' : '') + repChip(p, k, i, n)).join('')}<div class="dcj-drop ${list.length ? 'more' : ''}" data-rpjob="${k}" data-rpi="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div></div></div>`;
+}
+function preRepsHTML() {
+  const u = state.userTid, R = state.reps, unit = ['off', 'def', 'st'].includes(ui.repsUnit) ? ui.repsUnit : 'off', ro = rosterOf(u), bub = campBubble(u);
+  const groups = REP_GROUPS[unit]; ui.repsGrp = ui.repsGrp || {};
+  let grp = groups.find(g => g[0] === ui.repsGrp[unit]) || groups[0];
+  if (ui.repsJob && REP_JOB[ui.repsJob] && REP_JOB[ui.repsJob][4] === unit && !grp[1].includes(ui.repsJob)) grp = groups.find(g => g[1].includes(ui.repsJob)) || grp;
+  ui.repsGrp[unit] = grp[0];
+  const job = grp[1].includes(ui.repsJob) ? ui.repsJob : grp[1][0]; ui.repsJob = job;
+  const J = REP_JOB[job], list = R.jobs[job] || [];
+  const tabs = `<div class="dc2-tabs">${[['off', 'Offense'], ['def', 'Defense'], ['st', 'Kicking']].map(([k, l]) => `<button class="${k === unit ? 'on' : ''}" data-action="repsUnit" data-v="${k}">${l}</button>`).join('')}</div>`;
+  const nOwn = Object.keys(R.own).length, ctl = `<div class="dc2-ctl"><span class="small muted">${nOwn ? `You have set ${nOwn} job${nOwn === 1 ? '' : 's'}; the coaches set the rest.` : 'The coaches have set every job.'}</span>${nOwn ? `<button class="sm" data-action="repsRs" data-k="">Hand it all back</button>` : ''}</div>`;
+  const grpSel = `<div class="dc2-gsel">${groups.map(([title]) => `<button class="${title === grp[0] ? 'on' : ''}" data-action="repsGrp" data-v="${esc(title)}">${esc(title)}</button>`).join('')}</div>`;
+  const cards = `<div class="dc2-cards one" style="--n:${grp[1].length}">${grp[1].map(k => repJobCard(k, R)).join('')}</div>`;
+  // the bench: everyone who could work the selected job, best first by the coach's read of him there
+  const can = ro.filter(p => repsCanWork(p, job)).sort((a, b) => (b.a ? jobRead(b, J[2], u) : b.ovr) - (a.a ? jobRead(a, J[2], u) : a.ovr));
+  const pickP = ui.repsPid && ro.some(p => p.id === ui.repsPid) ? P(ui.repsPid) : list.length ? P(list[0]) : can[0] || null;
+  const benchRow = p => { const on = list.includes(p.id), cat = bub[p.id] ? CAMP_CAT[bub[p.id].cat] : null, js = repsJobsOf(p.id).filter(x => x.k !== job);
+    return `<div class="dcb ${pickP && pickP.id === p.id ? 'pk' : ''} ${on ? 'in' : ''}" draggable="true" data-rpp="${p.id}" data-action="repsMan" data-pid="${p.id}"><span class="dcb-nm"><button class="link" data-action="player" data-pid="${p.id}" title="Open his full card">${esc(pname(p))}</button></span><span class="dcb-pos">${esc(p.lbl)} · ${p.age}</span>
+      ${cat ? `<span class="pill ${cat[1]}">${cat[0]}</span>` : ''}${js.map(x => `<span class="pill muted" title="Also on the chart at ${esc(REP_JOB[x.k][1].toLowerCase())}">${esc(x.k)} ${x.s + 1}s</span>`).join('')}
+      ${on ? '<span class="dcb-in">on the card</span>' : `<button class="sm" data-action="repsPut" data-k="${job}" data-pid="${p.id}" title="Give him a look at this job">+</button>`}</div>`; };
+  let big = '';
+  if (pickP) { const x = campPlayerBits(pickP), js = repsJobsOf(pickP.id), cat = bub[pickP.id] ? CAMP_CAT[bub[pickP.id].cat] : null, note = campLastNote(pickP), here = js.find(q => q.k === job);
+    big = `<div class="card rp-big"><div class="row" style="gap:8px"><button class="link rp-nm" data-action="player" data-pid="${pickP.id}" title="Open his card">${esc(pname(pickP))}</button><span class="muted">${esc(pickP.lbl)} · ${pickP.age}${pickP.exp === 0 ? ' · rookie' : ''}</span><span class="spacer"></span>${cat ? `<span class="pill ${cat[1]}">${cat[0]}</span>` : ''}</div>
+      <div class="rp-kv"><span>On your chart</span><b>${js.map(q => `${esc(REP_JOB[q.k][1])}, ${REP_STRING[q.s].toLowerCase()}`).join(' · ') || 'nowhere'}</b></div>
+      <div class="rp-kv"><span>Camp grade</span><b>${x.grade}${x.weeks ? ' ' + x.weeks : ''}</b></div><div class="rp-kv"><span>One-on-ones</span><b>${x.drills} <span class="muted small">(${x.vs1} against the ones)</span></b></div>
+      ${note ? `<div class="ph-note" style="margin-top:6px">“${esc(note[2])}”</div>` : ''}
+      <div class="row" style="gap:8px;margin-top:10px">${here || repsCanWork(pickP, job) ? `<span class="seg">${[0, 1, 2].map(st => `<button class="sm ${here && here.s === st ? 'on' : ''}" data-action="repsDo" data-k="${job}" data-pid="${pickP.id}" data-s="${st}" title="${esc(J[1])}: with the ${REP_STRING[st].toLowerCase()}">${REP_STRING[st]}</button>`).join('')}</span><span class="small muted">at ${esc(J[1].toLowerCase())}</span>` : `<span class="small muted">He cannot work at ${esc(J[1].toLowerCase())}.</span>`}<span class="spacer"></span><button class="sm" data-action="player" data-pid="${pickP.id}">His file</button></div></div>`; }
+  const benchCard = `<div class="dc2-side rp-side"><div class="card dc2-bench"><div class="dc2-bh"><div><div class="dc2-bk">Who could work at</div><h3 style="margin:0">${esc(J[1])}</h3></div><span class="small muted">${can.length} men</span></div>
+    <div class="dc2-bl">${can.map(benchRow).join('') || '<div class="muted small">Nobody on the roster can work here.</div>'}</div></div>${big}</div>`;
+  return `<div class="dc2"><div class="dc2-top">${tabs}${ctl}</div>
+    <div class="dc2-main"><div class="dc2-left"><div class="dc2-jobs">${grpSel}${cards}</div>
+      <div class="small muted" style="margin-top:8px"><b>Drag a man</b> to a place in a job’s order, from the list on the right or from another card. <b>+</b> gives him a look at the job you have selected; <b>×</b> takes him off; his name opens his card. The ones face the ones in practice and start the exhibitions; the threes get the second half.</div></div>${benchCard}</div></div>`;
+}
+// ---- the roster, man by man ----
+function preTrackRow(p, bub, open) {
+  const x = campPlayerBits(p), jobs = repsJobsOf(p.id), cat = bub[p.id] ? CAMP_CAT[bub[p.id].cat] : null, c = p.camp && p.camp.s === state.season ? p.camp : null, pre = p.preS;
+  let h = `<div class="ph-row ${open ? 'open' : ''}" data-action="trk" data-pid="${p.id}"><div class="ph-who"><button class="link" data-action="player" data-pid="${p.id}" title="Open his card"><b>${esc(pname(p))}</b></button><span class="muted"> ${esc(p.lbl)} · ${p.age}${p.exp === 0 ? ' · rookie' : ''}</span>${p.injury ? ` <span class="pill inj" title="${esc(p.injury.name)}">${p.injury.weeks}w</span>` : ''}</div>
+    <div class="ph-job1">${jobs.length ? jobs.map(j => `<span class="ph-js s${j.s}" title="${esc(REP_JOB[j.k][1])}: with the ${REP_STRING[j.s].toLowerCase()}">${esc(j.k)} ${j.s + 1}s</span>`).join('') : '<span class="muted">—</span>'}</div>
+    <div>${cat ? `<span class="pill ${cat[1]}">${cat[0]}</span>` : ''}</div>
+    <div class="ph-num">${x.grade}${x.weeks ? `<span class="ph-wks">${x.weeks}</span>` : ''}</div>
+    <div class="ph-num">${x.drills}<span class="muted small"> · ${x.vs1} v ones</span></div>
+    <div class="ph-num">${pre && pre.snp ? `${pre.snp} snaps ${gradeChip(preGrade(p))}` : '<span class="muted">—</span>'}</div><span class="ph-chev">▾</span></div>`;
+  if (!open) return h;
+  const log = (c && c.log) || [], wk = log.map((w, b) => { if (!w) return ''; const ty = Object.keys(w.ty || {}).map(k => `<div class="ph-kv"><span>${REP_DRILL[k] || k}</span><b>${w.ty[k][0]}–${w.ty[k][1]}</b></div>`).join(''), note = (c.notes || []).find(n => n[0] === b);
+    return `<div class="ph-wk"><div class="ph-wh"><b>${esc(w.lb || 'Week ' + (b + 1))}</b><span class="ph-js s${w.t}">${REP_STRING[w.t]}</span>${gradeChip(c.sc[b])}</div>
+      ${ty || '<div class="muted small">No one-on-one work.</div>'}${w.v1 && w.v1[0] + w.v1[1] ? `<div class="ph-kv"><span>Against the ones</span><b>${w.v1[0]}–${w.v1[1]}</b></div>` : ''}
+      ${w.up || w.dn ? `<div class="ph-kv"><span>Team periods</span><b>${w.up ? `<span class="good">${w.up} that stood out</span>` : ''}${w.up && w.dn ? ', ' : ''}${w.dn ? `<span class="bad">${w.dn} bad</span>` : ''}</b></div>` : ''}
+      ${w.line ? `<div class="small muted">${esc(w.line)}</div>` : ''}${note ? `<div class="ph-note">“${esc(note[2])}”</div>` : ''}</div>`; }).join('');
+  const games = ((pre && pre.log) || []).map(g => `<div class="ph-wk game"><div class="ph-wh"><b>Exhibition ${g.wk}</b>${gradeChip(g.g)}</div><div class="ph-kv"><span>Snaps</span><b>${g.snp || 0}</b></div>${g.line ? `<div class="small muted">${esc(g.line)}</div>` : ''}</div>`).join('');
+  return h + `<div class="ph-detail">${wk || games ? wk + games : '<div class="muted small">Nothing on him yet: camp has not started.</div>'}
+    <div class="ph-dact"><button class="sm" data-action="player" data-pid="${p.id}">Open his file</button>${jobs[0] ? `<button class="sm" data-action="repsGo" data-k="${jobs[0].k}" data-pid="${p.id}">Find him on the chart</button>` : ''}</div></div>`;
+}
+function preTrackHTML() {
+  const u = state.userTid, bub = campBubble(u), room = PRE_ROOMS.some(r => r[0] === ui.trkRoom) ? ui.trkRoom : 'ALL', sort = ui.trkSort || 'chart', open = ui.trkOpen || {};
+  const move = p => { const c = p.camp && p.camp.s === state.season ? p.camp : null, sc = c ? c.sc.filter(v => v !== undefined && v !== null) : []; return sc.length >= 2 ? sc[sc.length - 1] - sc[sc.length - 2] : 0; };
+  const key = { chart: p => repsString(p.id) * 100 + (bub[p.id] ? bub[p.id].i : 50), grade: p => -(campGrade(p) || 0), move: p => -move(p), fall: p => move(p), bubble: p => ({ bubble: 0, ps: 1, likely: 2, long: 3, lock: 4, ir: 5 }[bub[p.id] ? bub[p.id].cat : 'long']) }[sort] || (p => 0);
+  let h = `<div class="ph-bar"><span class="seg">${PRE_ROOMS.map(([k, l]) => `<button class="sm ${k === room ? 'on' : ''}" data-action="trkRoom" data-v="${k}">${l}</button>`).join('')}</span>
+    <label class="small muted">Order by</label><select data-change="trkSort">${[['chart', 'The chart'], ['grade', 'Camp grade'], ['move', 'Rising'], ['fall', 'Falling'], ['bubble', 'On the bubble first']].map(([k, l]) => `<option value="${k}" ${k === sort ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <span class="small muted">Click a man for his week-by-week.</span></div>
+    <div class="ph-thead"><span>Player</span><span>Job · string</span><span>Staff has him</span><span class="ph-num">Camp grade</span><span class="ph-num">One-on-ones</span><span class="ph-num">Exhibitions</span><span></span></div>`;
+  for (const [rk, rl] of PRE_ROOMS.slice(1)) { if (room !== 'ALL' && room !== rk) continue;
+    const l = rosterOf(u).filter(p => preRoomOf(p) === rk).sort((a, b) => key(a) - key(b)); if (!l.length) continue;
+    h += `<div class="ph-group"><span>${rl}</span><span class="muted">${l.length} men</span></div>` + l.map(p => preTrackRow(p, bub, !!open[p.id])).join(''); }
+  return `<div class="card ph-track">${h}</div>`;
+}
+// cutdown day: the count that matters, above the planner and the bubble
+function preCutBarHTML() {
+  if (state.phase !== 'CUTDOWN' || !state.cut) return '';
+  const u = state.userTid, ro = rosterOf(u), on = ro.filter(countsOn53), plan = state.cut.plan, gone = v => v === 'cut' || v === 'ps', keeps = on.filter(p => !gone(plan[p.id])), need = keeps.length - ROSTER_MAX, psN = on.filter(p => plan[p.id] === 'ps').length;
+  return `<div class="card bb-cut"><div class="row"><div class="fig-v ${need > 0 ? 'bad' : 'good'}">${keeps.length}<span class="bb-of"> / ${ROSTER_MAX}</span></div><div class="small muted">${need > 0 ? `Cut ${need} more to get to ${ROSTER_MAX}` : need < 0 ? `${-need} open spot${need === -1 ? '' : 's'}: nobody will be signed for you` : 'Roster is set'}<br>practice squad ${psN}/${PS_MAX} marked · ${ro.length - on.length} heading to IR</div>
+    <span class="spacer"></span><button data-action="cutStaff">Use the staff's recommendations</button><button data-action="cutClear">Clear my cuts</button><button class="primary" data-action="preTab" data-v="cut">The cut list</button></div></div>` + campObjectionsHTML(u, plan);
+}
+// the staff's roster as it stands: five printed figures, then one side of the ball at a time, each room in its coach's order
+const BUB_UNITS = [['off', 'Offense', ['QB', 'RB', 'WR', 'TE', 'OL']], ['def', 'Defense', ['DL', 'LB', 'CB', 'S']], ['st', 'Specialists', ['K', 'P']]];
+function preBubbleHTML() {
+  const u = state.userTid, ro = rosterOf(u), on = ro.filter(countsOn53), bub = campBubble(u), cnt = k => on.filter(p => bub[p.id] && bub[p.id].cat === k).length, d = on.length - ROSTER_MAX;
+  const fig = (v, l, st, cls, i) => `<div class="fig"><div class="fig-v">${v}</div><div class="fig-l">${l}</div>${st ? `<span class="stamp ${cls} s${i}">${st}</span>` : ''}</div>`;
+  const unit = BUB_UNITS.find(x => x[0] === ui.bubUnit) || BUB_UNITS[0];
+  let h = `<div class="card bb-top"><div class="ds-lb">The staff’s ${ROSTER_MAX}, as it stands today</div><div class="figs five">
+      ${fig(on.length, 'on the roster', d > 0 ? d + ' to cut' : d < 0 ? 'room for ' + -d : 'at the limit', d > 0 ? 'bad' : 'good', 0)}${fig(cnt('lock') + cnt('likely'), 'locks and likely', 'safe', 'good', 1)}${fig(cnt('bubble'), 'on the bubble', 'undecided', 'note', 2)}${fig(cnt('ps'), 'practice-squad candidates', 'stash', '', 3)}${fig(cnt('long'), 'long shots', 'long odds', 'bad', 0)}</div>
+    <div class="ds-devl">Room by room, in each coach’s order. The line is where he would stop if he had to cut today${ro.length - on.length ? `; ${ro.length - on.length} more are heading to injured reserve and do not count` : ''}. It is his opinion, and it sharpens as camp goes on.</div></div>
+    <div class="row bb-bar"><span class="seg">${BUB_UNITS.map(([k, l, ps]) => `<button class="sm ${k === unit[0] ? 'on' : ''}" data-action="bubUnit" data-v="${k}">${l} <span class="muted">${on.filter(p => ps.includes(cpos(p))).length}</span></button>`).join('')}</span></div><div class="camp-bub bb-rooms" style="--n:${unit[2].length}">`;
+  for (const pos of unit[2]) { const l = ro.filter(p => cpos(p) === pos && bub[p.id]).sort((a, b) => bub[a.id].i - bub[b.id].i); if (!l.length) continue; const line = ROSTER_TEMPLATE[pos], c = campCoach(u, pos);
+    h += `<div class="card camp-room bb-room"><div class="bb-rh"><div><h3>${ROOM_NAME[pos] || (pos === 'K' ? 'Kickers' : 'Punters')}</h3><div class="ds-lb">${c ? esc(c.last) : 'no coach'} · carrying ${l.filter(p => countsOn53(p)).length} · keeps ${line}</div></div></div>
+      ${l.map((p, i) => { const cat = CAMP_CAT[bub[p.id].cat], g = campGrade(p); return `${i === line && bub[p.id].cat !== 'ir' ? '<div class="camp-line"><span>the line</span></div>' : ''}<div class="camp-br ${i >= line ? 'out' : ''}"><span class="mt-rk">${i + 1}</span>${playerLink(p, true)} <span class="small muted">${p.age}</span><span class="spacer"></span><span class="pill ${cat[1]}">${cat[0]}</span>${gradeChip(g)}</div>`; }).join('')}</div>`; }
+  return h + '</div>';
+}
+// your own comparisons: any men, in any groups, side by side. It changes nothing on the chart or the roster.
+function preCompareHTML() {
+  const u = state.userTid, ro = rosterOf(u), camp = campOn(), cm = camp ? state.camp : { battles: [], blocks: 0 }; let html = '';
     const pl = ensurePlan(), bub = campBubble(u), room = PLAN_ROOMS.find(r => r[0] === ui.campRoom) || PLAN_ROOMS[0], [rk, rname, poss] = room;
     const all = ro.filter(p => p.a && poss.includes(cpos(p))), groups = (pl.groups[rk] || []);
     for (const g of groups) g.pids = g.pids.filter(id => { const p = P(id); return p && p.tid === u; });
     // each coach's order in his room, as a rank
     const rankOf = {}; for (const pos of poss) { const l = all.filter(p => cpos(p) === pos).sort((a, b) => coachRead(b, u) - coachRead(a, u)); l.forEach((p, i) => rankOf[p.id] = [i + 1, l.length]); }
-    html += `<div class="pl-rooms">${PLAN_ROOMS.map(r => { const n = ro.filter(p => r[2].includes(cpos(p))).length; return `<button class="${r[0] === rk ? 'on' : ''}" data-action="campRoom" data-room="${r[0]}">${r[0]}<span>${n}</span></button>`; }).join('')}<span class="spacer"></span><span class="subtabs" style="margin:0">${PLAN_VIEWS.map(([k, l]) => `<button class="${(ui.planView || 'camp') === k ? 'on' : ''}" data-action="planView" data-v="${k}">${l}</button>`).join('')}</span><button class="sm" data-action="campRoomStep" data-dir="-1" title="Previous room (←)">←</button><button class="sm" data-action="campRoomStep" data-dir="1" title="Next room (→)">→</button></div>`;
+    html += `<div class="pl-rooms">${PLAN_ROOMS.map(r => { const n = ro.filter(p => r[2].includes(cpos(p))).length; return `<button class="${r[0] === rk ? 'on' : ''}" data-action="campRoom" data-room="${r[0]}">${r[0]}<span>${n}</span></button>`; }).join('')}<span class="spacer"></span><span class="seg" title="What to show beside each man">${PLAN_VIEWS.map(([k, l]) => `<button class="sm ${(ui.planView || 'camp') === k ? 'on' : ''}" data-action="planView" data-v="${k}">${l}</button>`).join('')}</span><button class="sm" data-action="campRoomStep" data-dir="-1" title="Previous room (←)">←</button><button class="sm" data-action="campRoomStep" data-dir="1" title="Next room (→)">→</button></div>`;
     // the coach's word on this room
     const meet = !camp ? (() => { const c = campCoach(u, poss[0]); return { c, eye: campEyeWord(c), star: null, push: null, cool: null, worry: null }; })() : campMeeting(u).filter(m => (m.role === 'ST' ? ['K', 'P'] : m.role === 'DB' ? ['CB', 'S'] : [m.role]).some(x => poss.includes(x)))[0];
     const say = []; if (meet) { const inRoom = p => p && poss.includes(p.pos);
@@ -527,30 +698,13 @@ function campHTML() {
       html += `<div class="card pl-g"><div class="row pl-gh"><input type="text" class="pl-name" value="${esc(g.name)}" maxlength="40" data-change="planName" data-gid="${g.id}" title="Rename this group"><span class="small muted">${ps.length} ${ps.length === 1 ? 'man' : 'men'}</span><span class="spacer"></span>
         <select data-change="planAdd" data-gid="${g.id}"><option value="">Add a player…</option>${free.map(p => `<option value="${p.id}">${esc(p.lbl)} ${esc(pname(p))}${grouped.has(p.id) ? '' : ' ·'}</option>`).join('')}<option value="other">Someone from another room…</option></select>
         <button class="sm" data-action="planGroupMove" data-gid="${g.id}" data-dir="-1" title="Move this group up">▲</button><button class="sm" data-action="planGroupMove" data-gid="${g.id}" data-dir="1" title="Move this group down">▼</button><button class="sm danger" data-action="planDelete" data-gid="${g.id}" title="Delete this group">Delete</button></div>
-        ${ps.length ? `<div class="pl-rows">${ps.map((p, i) => planRowHTML(p, bub, rankOf[p.id] || null, g, i)).join('')}</div>` : '<div class="small muted" style="padding:8px 0">Empty. Add anyone you want to compare here.</div>'}</div>`;
+        ${ps.length ? `<div class="pl-rows">${planHeadHTML()}${ps.map((p, i) => planRowHTML(p, bub, rankOf[p.id] || null, g, i)).join('')}</div>` : '<div class="small muted" style="padding:8px 0">Empty. Add anyone you want to compare here.</div>'}</div>`;
     }
     if (ui.planOther) { const g = planGroup(ui.planOther), others = ro.filter(p => p.a && !poss.includes(p.pos) && !(g && g.pids.includes(p.id))).sort((a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos) || uOvr(b) - uOvr(a));
       if (g) html += `<div class="callout small">Add a player from another room to <b>${esc(g.name)}</b>: <select data-change="planAdd" data-gid="${g.id}"><option value="">Choose…</option>${others.map(p => `<option value="${p.id}">${esc(p.lbl)} ${esc(pname(p))}</option>`).join('')}</select> <button class="sm" data-action="planOtherClose">Done</button></div>`; }
     const rest = all.filter(p => !grouped.has(p.id)).sort((a, b) => POSITIONS.indexOf(a.pos) - POSITIONS.indexOf(b.pos) || rankOf[a.id][0] - rankOf[b.id][0]);
-    html += `<div class="card pl-g"><div class="row pl-gh"><h3 style="margin:0">Not in a group</h3><span class="small muted">${rest.length} · in the coach's order</span></div>${rest.length ? `<div class="pl-rows">${rest.map(p => planRowHTML(p, bub, rankOf[p.id], null, 0)).join('')}</div>` : '<div class="small muted" style="padding:8px 0">Everyone in this room is in one of your groups.</div>'}</div>
+    html += `<div class="card pl-g"><div class="row pl-gh"><h3 style="margin:0">Not in a group</h3><span class="small muted">${rest.length} · in the coach's order</span></div>${rest.length ? `<div class="pl-rows">${planHeadHTML()}${rest.map(p => planRowHTML(p, bub, rankOf[p.id], null, 0)).join('')}</div>` : '<div class="small muted" style="padding:8px 0">Everyone in this room is in one of your groups.</div>'}</div>
       <div class="small muted" style="margin-top:8px">This is your scratch pad. Groups, names and order are yours and change nothing on the real depth chart or the roster. A player can sit in more than one group. "Coach has him" is the position coach's order in his room, which is an opinion that sharpens as camp goes on.</div>`;
-  } else if (tab === 'bubble') {
-    const bub = campBubble(u), cnt = k => on.filter(p => bub[p.id] && bub[p.id].cat === k).length;
-    html += `<div class="card"><div class="wr-stat"><div><b>${cnt('lock') + cnt('likely')}</b><span>locks and likely</span></div><div><b>${cnt('bubble')}</b><span>on the bubble</span></div><div><b>${cnt('ps')}</b><span>practice-squad candidates</span></div><div><b>${cnt('long')}</b><span>long shots</span></div><div><b>${ro.length - on.length}</b><span>heading to IR</span></div></div>
-      <p class="small muted" style="margin:10px 0 0">The staff's ${ROSTER_MAX} as it stands today, room by room, in each coach's order. The line is where he would stop if he had to cut now. It is his opinion: your own read of each player is the pill beside his name.</p></div><div class="camp-bub">`;
-    for (const pos of POSITIONS) { const l = ro.filter(p => cpos(p) === pos && bub[p.id]).sort((a, b) => bub[a.id].i - bub[b.id].i); if (!l.length) continue; const line = ROSTER_TEMPLATE[pos];
-      html += `<div class="card camp-room"><div class="row"><h3 style="margin:0">${ROOM_NAME[pos] || (pos === 'K' ? 'Kickers' : 'Punters')}</h3><span class="spacer"></span><span class="small muted">carrying ${l.filter(p => countsOn53(p)).length} · staff keeps ${line}</span></div>${l.map((p, i) => { const cat = CAMP_CAT[bub[p.id].cat], g = campGrade(p); return `${i === line && bub[p.id].cat !== 'ir' ? '<div class="camp-line"><span>the line</span></div>' : ''}<div class="camp-br"><span class="pill ${cat[1]}">${cat[0]}</span> ${playerLink(p, true)} <span class="small muted">${p.age}</span><span class="spacer"></span><span class="pill">${tierOf(p)}</span> ${gradeChip(g)}</div>`; }).join('')}</div>`; }
-    html += '</div>';
-  } else {
-    const blk = cm.blocks - 1, rows = ro.filter(p => p.camp && p.camp.s === state.season && p.camp.sc[blk] !== undefined).map(p => ({ p, wk: p.camp.sc[blk], n: p.camp.notes.filter(x => x[0] === blk).pop() }));
-    html += `<div class="card"><h3>Practice report · week ${cm.blocks}</h3><div class="small muted" style="margin-bottom:8px">This week's work in drills and team periods. One week is a small sample: the camp grade is the running total.</div>` + table('campRep', [
-      { k: 'pos', l: 'Pos', v: x => x.p.lbl, f: x => esc(x.p.lbl) }, { k: 'n', l: 'Name', v: x => x.p.last, f: x => playerLink(x.p) },
-      { k: 't', l: 'Reps', v: x => -(x.p.camp.t || 0), f: x => `<span class="small">${['Ones', 'Twos', 'Threes'][x.p.camp.t || 0]}</span>` },
-      { k: 'w', l: 'Working at', v: x => workOf(x.p).a, f: x => `<span class="small">${esc(workLabel(x.p) || SPOTS[x.p.spot].l)}</span>` },
-      { k: 'wk', l: 'This week', v: x => x.wk, f: x => gradeChip(x.wk), num: 1 }, { k: 'cg', l: 'Camp', v: x => campGrade(x.p) || 0, f: x => gradeChip(campGrade(x.p)), num: 1 },
-      { k: 'note', l: 'What the coaches saw', f: x => x.n ? `<span class="small ${x.n[1] > 0 ? 'good' : x.n[1] < 0 ? 'bad' : 'muted'}">${esc(x.n[2])}</span>` : '' },
-    ], rows, { sort: 'wk', limit: 100 }) + '</div>';
-  }
   return html;
 }
 // on cutdown day: where a position coach would not make the cut you are making
@@ -663,8 +817,8 @@ function rosterHTML() {
     { k: 'line', l: 'Season', v: p => hypeMetric(p, p.stats), f: p => `<span class="small">${p.stats.gp ? statSummary(p.stats, p.pos) : ''}</span>` },
     { ...STAT_NUM('tkl'), l: 'Tkl' }, { ...STAT_NUM('sck'), l: 'Sck' }, { ...STAT_NUM('dint'), l: 'INT' }, { ...STAT_NUM('pd'), l: 'PD' }, grade];
   else if (vw === 'adv') {
-    const fg = (k, l) => ({ k: 'f' + k, l, v: p => (p.advS && facetGrade(p.advS, k)) || 0, f: p => gradeChip(p.advS ? facetGrade(p.advS, k) : null), num: 1 });
-    cols = [...base, stars, grade, fg('q', 'Pass'), fg('rec', 'Recv'), fg('run', 'Rush'), fg('pb', 'Pass blk'), fg('rb', 'Run blk'), fg('pr', 'Pass rush'), fg('rd', 'Run def'), fg('cov', 'Cover'), fg('tk', 'Tackle'),
+    const fg = (k, l) => ({ k: 'f' + k, l, v: p => (p.advS && facetGrade(p.advS, k, 20, p.spot)) || 0, f: p => gradeChip(p.advS ? facetGrade(p.advS, k, 20, p.spot) : null), num: 1 });
+    cols = [...base, stars, grade, fg('pass', 'Pass'), fg('rush', 'Rush'), fg('rec', 'Recv'), fg('pb', 'Pass blk'), fg('rb', 'Run blk'), fg('rd', 'Run def'), fg('pr', 'Pass rush'), fg('man', 'Man cov'), fg('zone', 'Zone cov'),
       { k: 'snp', l: 'Snaps', v: p => p.stats.snp || 0, num: 1 }];
   } else if (vw === 'comfort') cols = [...base, tier,
     { k: 'cf', l: 'Positional comfort', v: p => Object.keys(p.cf || {}).length, f: p => Object.entries(p.cf || {}).sort((a, b) => b[1] - a[1]).map(([s, c]) => `<span class="pill ${CF_CLS[comfortLabel(c)]}" title="${Math.round(c)}">${SPOTS[s].l} · ${comfortLabel(c)}</span>`).join(' ') },
@@ -1994,7 +2148,7 @@ function cutdownHTML() {
   const film = ui.cutView === 'film';
   const fam_ = p => (FAMILIES.find(([, spots]) => spots.includes(p.spot)) || [p.pos])[0];
   const roomRank = {}; { const by = {}; for (const p of on) if (preGrade(p) !== null) (by[fam_(p)] = by[fam_(p)] || []).push(p); for (const k in by) by[k].sort((x, y) => preGrade(y) - preGrade(x)).forEach((p, i) => roomRank[p.id] = [i + 1, by[k].length]); }
-  const facets = p => !p.preS ? '' : Object.keys(FACETS).map(k => [k, (p.preS.adv['n' + k] || 0) >= 8 ? facetGrade(p.preS.adv, k) : null]).filter(x => x[1] !== null).map(([k, g]) => `<span class="small" style="white-space:nowrap;margin-right:8px">${FACETS[k]} ${gradeChip(g)}</span>`).join('');
+  const facets = p => !p.preS ? '' : Object.keys(FACETS).map(k => [k, gradeN(p.preS.adv, k) >= 8 ? facetGrade(p.preS.adv, k, 0, p.spot) : null]).filter(x => x[1] !== null).map(([k, g]) => `<span class="small" style="white-space:nowrap;margin-right:8px">${FACETS[k]} ${gradeChip(g)}</span>`).join('');
   const mid = film ? [
     { k: 'pgp', l: 'GP', v: p => p.preS ? p.preS.gp : 0, num: 1 },
     { k: 'psn', l: 'Snaps', v: p => p.preS ? p.preS.snp : 0, f: p => p.preS ? `${p.preS.snp}${p.preS.snp < 30 ? ' <span class="small warn" title="Thin sample: grades on this little film are unreliable">thin</span>' : ''}` : '<span class="muted small">sat</span>', num: 1 },
@@ -2087,10 +2241,15 @@ function draftHTML() {
   const onClock = state.phase === 'DRAFT' && pk && pk.owner === u;
   let pros = prospects();
   pros = pros.filter(p => inFamily(p, ui.draftPos));
-  const grade = p => uOvr(p) + 0.55 * p.per.g + ({ QB: 3, RB: -2, K: -10, P: -12 }[p.pos] || 0); // consensus big board
+  const grade = p => uOvr(p) + 0.55 * p.per.g + ({ QB: 3, RB: -2, K: -22, P: -24 }[p.pos] || 0); // consensus big board
   const ranked = prospects().sort((a, b) => grade(b) - grade(a));
   const rankOf = new Map(ranked.map((p, i) => [p.id, i + 1]));
   html += `<div class="callout">${['REG', 'PLAYOFFS', 'RECAP'].includes(state.phase) ? `<b>${prospects()[0].draftYear} draft class.</b> Reports sharpen as the college season goes on, but stay foggy until these players are in the league. ` : ''}${state.phase !== 'DRAFT' ? `Draft preview — the draft happens after free agency. Everything here is your scouts' read: prospects are the foggiest players in football, and workout numbers get overhyped.` : onClock ? `<b>You're on the clock</b> with pick #${pk.pick} (Round ${pk.round}). Choose a player below.` : pk ? `Pick #${pk.pick}: ${T(pk.owner).abbr} on the clock.` : ''}</div>`;
+  if (state.phase === 'DRAFT') { // the phones: offers for your pick, and the trade desk
+    const offs = onClock && d.offer && d.offer.idx === d.idx ? d.offer.list : [];
+    html += `<div class="card" style="margin-bottom:12px"><div class="row" style="justify-content:space-between;gap:10px"><h3 style="margin:0">The phones</h3><span class="small muted">Trades are open during the draft: build one on Players → Trade, picks included.</span></div>
+      ${offs.length ? offs.map((o, i) => `<div class="row" style="gap:10px;margin-top:8px"><span>${teamLink(o.tid)} want to come up to <b>pick ${pk.pick}</b>. They offer ${o.give.map(id => { const x = state.picks.find(z => z.id === id); return x ? `<b>${esc(pickLabel(x))}</b>` : ''; }).join(' and ')}.</span><button class="sm primary" data-action="draftOffer" data-i="${i}">Take it</button></div>`).join('') : `<div class="small muted" style="margin-top:6px">${onClock ? 'Nobody has called about this pick.' : 'Quiet for now. Clubs call when you are on the clock.'}</div>`}</div>`;
+  }
   html += `<div class="grid" style="grid-template-columns:minmax(0,3fr) minmax(260px,1fr)"><div class="card"><h3>Prospects</h3>
     <div class="subtabs">${famTabs(ui.draftPos, 'draftPos')}</div>` + table('draft', [
     { k: 'rk', l: 'Rank', v: p => rankOf.get(p.id), num: 1 },
@@ -2654,7 +2813,7 @@ function pctStyle(pct, dir) {
   const alpha = ((0.12 + Math.abs(q - 0.5) * 0.9) * (dark ? 1 : 0.55)).toFixed(2);
   return dark ? `background:hsla(${hue},65%,38%,${alpha});border-color:hsla(${hue},70%,45%,.6)` : `background:hsla(${hue},70%,48%,${alpha});border-color:hsla(${hue},60%,42%,.55)`;
 }
-function gradeColor(v) { return v >= 85 ? 'var(--elite)' : v >= 72 ? 'var(--good)' : v >= 60 ? 'var(--mid)' : v >= 50 ? 'var(--warn)' : 'var(--bad)'; }
+function gradeColor(v) { return v >= 80 ? 'var(--elite)' : v >= 70 ? 'var(--good)' : v >= 60 ? 'var(--mid)' : v >= 50 ? 'var(--warn)' : 'var(--bad)'; }
 const GLANCE = {
   QB: [['q', 'Passing'], ['q_cln'], ['q_prs'], ['q_sh'], ['q_md'], ['q_dp'], ['q_pa'], ['q_blz']],
   RB: [['run', 'Rushing'], ['run_zn'], ['run_gp'], ['rec', 'Receiving'], ['pb', 'Pass protection']],
@@ -2671,19 +2830,13 @@ function cardAdv(p) { // the season the card reads from
   if (p.advPrev) return { a: p.advPrev, season: p.advPrev.season, cur: false };
   return null;
 }
+const GRADE_BAND = v => v >= 80 ? ['Elite', 'good'] : v >= 70 ? ['Good starter', 'good'] : v >= 60 ? ['Decent starter', ''] : v >= 50 ? ['Rotation', 'mid'] : ['Liability', 'bad'];
 function glanceHTML(p, src) {
-  const rows = GLANCE[p.pos];
-  if (!rows || !src) return `<div class="muted small">No snaps on tape yet.</div>`;
-  const a = src.a;
-  let h = '';
-  for (const [k, l] of rows) {
-    const sub = k.includes('_'), v = facetGrade(a, k, sub ? 15 : 8);
-    if (v === null && sub) continue;
-    const n = a['n' + k] || 0;
-    h += `<div class="glance ${sub ? 'sub' : ''}" title="${n} graded snaps"><span class="gl-l">${esc(l || SPLIT_LABELS[k] || k)}</span>
-      <span class="gl-bar"><i style="width:${v === null ? 0 : v}%;background:${v === null ? 'transparent' : gradeColor(v)}"></i></span><span class="gl-v">${v === null ? '—' : v}</span></div>`;
-  }
-  return h || `<div class="muted small">Not enough snaps on tape yet.</div>`;
+  if (!src) return `<div class="muted small">No snaps on tape yet.</div>`;
+  const a = src.a, first = Object.keys(gradeFacets(p.spot)), cats = first.concat(Object.keys(FACETS).filter(f => !first.includes(f))).filter(f => gradeN(a, f) >= 15);
+  if (!cats.length) return `<div class="muted small">${Object.keys(a).some(k => /^g[a-z]/.test(k)) && !Object.keys(a).some(k => /^G[a-z]/.test(k)) ? 'Graded under the old system: the new grades start with his next game.' : 'Not enough plays on tape yet.'}</div>`;
+  return cats.map(f => { const v = facetGrade(a, f, 0, p.spot), n = gradeN(a, f), b = GRADE_BAND(v);
+    return `<div class="adv-r" title="${n} plays where he had a job in it"><span class="adv-l">${FACETS[f]}</span><span class="adv-v" style="color:${gradeColor(v)};font-size:15px">${v}</span><span class="adv-tag ${b[1]}">${b[0]}</span><span class="adv-rk">${n}</span></div>`; }).join('');
 }
 const ADV_DIR = { 'EPA/db': 1, CPOE: 1, TTT: 0, aDOT: 0, 'Pressured%': -1, Routes: 0, 'Sep (yds)': 1, 'Tgt/Route%': 1, 'EPA/Tgt': 1, 'YBC/att': 1, 'YACo/att': 1, 'MTF/att%': 1, 'Stuff%': -1, 'EPA/rush': 1,
   'PB win%': 1, 'Pressure% allowed': -1, 'Sack% allowed': -1, 'RB win%': 1, 'PR win%': 1, 'Double%': 1, 'RS win%': 1, 'Stop%': 1, 'Targeted%': 0, 'Comp%': -1, 'Yds/snap': -1, 'Rtg allowed': -1, 'MT%': -1 };
@@ -2935,23 +3088,66 @@ function cardOverHTML(p) {
   h += `<div class="ds-rule"></div><div class="ds-sec"><span><span class="ds-lb">Contract</span> <span class="ds-con">${cardContractLine(p)}</span></span>${prospect ? '' : more('contract', 'The deal')}</div>`;
   return h;
 }
-function cardScoutHTML(p) {
-  const u = state.userTid, prospect = p.tid === -2;
-  let left = devPanelHTML(p);
-  left += scoutingHTML(p).replace(/<div class="row small" style="margin-top:6px">[\s\S]*?<\/div>/, '');
-  left += `<div class="section-title">Strengths &amp; Weaknesses</div>` + strengthsHTML(p);
-  if (!prospect) {
-    left += `<div class="section-title">Positional Comfort</div><div class="row small">${comfortHTML(p)}</div>`;
-    if (p.tid >= 0 && (CH_UNIT[p.pos] || ['RB', 'WR', 'TE'].includes(p.pos))) { ensureChem(); const qb = repsOrder(p.tid, 'QB')[0], v = CH_UNIT[p.pos] ? chemOf(p) : chemPair(p, qb);
-      left += `<div class="section-title">Chemistry</div><div class="chm" style="grid-template-columns:auto 130px auto"><span class="chm-l small muted">${CH_UNIT[p.pos] ? 'With the ' + CH_NAME[CH_UNIT[p.pos]].toLowerCase() : qb ? 'With ' + esc(pshort(qb)) : 'With his quarterback'}</span><span class="chm-t"><i style="width:${Math.round(v)}%;background:${gradeColor(v)}"></i></span><span class="chm-w">${chemWord(v)}</span></div>`; }
-    const fitTeams = [...new Set([p.tid >= 0 ? p.tid : null, u].filter(t => t !== null && t >= 0))];
-    if (SPOTS[p.spot].side === 'off' || SPOTS[p.spot].side === 'def') left += `<div class="section-title">Scheme Fit</div><div class="row small">${fitTeams.map(t => { const f = schemeFit(p, t), sk = SPOTS[p.spot].side === 'off' ? offArch(T(t)) : defArch(T(t)), lab = sk ? (SPOTS[p.spot].side === 'off' ? OFF_ARCH : DEF_ARCH)[sk].l : '—'; return `<span class="pill">${T(t).abbr} ${esc(lab)}: <b class="${f >= 1 ? 'good' : f <= -1 ? 'bad' : ''}">${fitLabel(f)}</b>${trueOn() ? ` ${f > 0 ? '+' : ''}${f}` : ''}</span>`; }).join(' ')}</div>`;
+// ---- the scouting page of the file: the report, what he does and where, and the physical sheet, on one screen ----
+const CF_PIPS = { Natural: 4, Comfortable: 3, Decent: 2, Raw: 1, Unfamiliar: 0 };
+function pipsHTML(n, cls) { return `<span class="pips ${cls || ''}">${[0, 1, 2, 3].map(i => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`; }
+function scReportHTML(p) {
+  const prospect = p.tid === -2, own = p.tid === state.userTid || (p.tid === -3 && p.psTid === state.userTid), buzz = buzzLabel(p);
+  const tierT = tierOf(p), upT = upsideOf(p), young = p.age <= 25 && upT !== tierT;
+  const DAY1 = { Elite: 'a franchise-changing talent', 'All-Pro': 'an instant-impact player', Starter: 'a day-one starter', Rotation: 'a rotational contributor', Backup: 'a backup early on', Depth: 'a depth player early on', Project: 'a developmental prospect', Fringe: 'a developmental prospect', Washed: 'a developmental prospect' };
+  const line = prospect ? `Scouts see ${DAY1[tierT]} with ${upT.toLowerCase()} upside.` : `Viewed as ${/^[AEIOU]/.test(tierT) ? 'an' : 'a'} ${tierT.toLowerCase()} today${young ? ` with ${upT.toLowerCase()} upside` : ''}.`;
+  let h = `<div class="ds-lb">The report</div><div class="ds-read sc-read">${esc(scoutProfile(p))}.</div><div class="sc-note">${esc(line)}</div>
+    <div class="sc-meta"><span class="stamp ${own || confLabel(p) === 'High' ? 'good' : confLabel(p) === 'Low' ? 'bad' : ''}" title="How sure your staff is of this read">${own ? 'Seen daily' : confLabel(p) + ' confidence'}</span>${buzz ? ` <span class="stamp note">${esc(buzz)}</span>` : ''}</div>`;
+  // the finished product
+  if (p.a && p.per && p.grow) {
+    const dev = isDeveloping(p), m = p.upM, moved = m && !prospect ? `<div class="sc-note ${m.d > 0 ? 'good' : 'bad'}">${m.d > 0 ? '▲' : '▼'} Upside ${m.d > 0 ? 'raised' : 'lowered'} from ${m.from} after ${esc(m.why)} (${m.s}).</div>` : '';
+    if (dev) { const r = finishedRemark(p), c = compFor(p), b = compFor(p, true), same = b && c && ((b.id !== undefined && b.id === c.id) || (b.rid !== undefined && b.rid === c.rid));
+      h += `<div class="ds-rule"></div><div class="ds-lb">The finished product ${prospect ? '' : trackPill(p)}</div><div class="sc-fin">${esc(r.line || 'Too little to go on yet.')}.</div>
+        ${c ? `<div class="sc-note">Plays like ${compLink(c)}${compBuild(p, c)}${b && !same ? `<br>Best case ${compLink(b)}${compBuild(p, b)}` : ''}</div>` : ''}<div class="sc-fine">A projection from ${filmBasis(p)}; rewritten as the film comes in.</div>${moved}`; }
+    else if (!prospect) { const t = trackOf(p);
+      h += `<div class="ds-rule"></div><div class="ds-lb">The finished product ${trackPill(p)}</div><div class="sc-fin">${t === 'fall' ? 'The decline is real and it is moving fast.' : t === 'slip' ? 'He has lost a step from his best.' : 'He is what he is: this report is the finished article.'}</div>${moved}`; }
   }
-  { const w = typeof stWord === 'function' ? stWord(p) : null, sg = stGrade(p.stats); if (w) left += `<div class="section-title">Special teams</div><div class="small"><span class="pill ${w[1]}">${w[0]}</span>${p.stats && p.stats.sts ? ` <span class="muted">${p.stats.sts} snaps · ${p.stats.stk || 0} tackles this season</span> ${sg !== null ? gradeChip(sg) : ''}` : ''}</div>`; }
-  if (p.awards && p.awards.length) left += `<div class="section-title">Awards</div>${p.awards.map(x => `<div class="small">🏅 ${esc(x)}</div>`).join('')}`;
-  left += cardManageHTML(p);
-  const right = `<div class="section-title" style="margin-top:0">Physical ${rasHTML(p)} <span class="small muted">· shaded by percentile at his position</span></div>${combineHTML(p)}`;
-  return `<div class="grid card-cols"><div>${left}</div><div>${right}</div></div>${trueOn() ? attributesHTML(p) : ''}`;
+  return h;
+}
+function scTraitsHTML(p) {
+  const { str, weak, best } = scoutTraits(p), li = (t, c, m) => `<div class="sw-i ${c}"><b>${m}</b><span>${esc(t)}</span></div>`;
+  return `<div class="ds-lb">Strengths</div>${str.map(t => li(t, 'good', '+')).join('') || (best.length ? '' : '<div class="sc-note">Nothing that stands out.</div>')}${str.length < 2 ? best.map(t => li(t, 'rel', '·')).join('') : ''}
+    <div class="ds-lb" style="margin-top:10px">Weaknesses</div>${weak.map(t => li(t, 'bad', '−')).join('') || '<div class="sc-note">No glaring holes.</div>'}`;
+}
+function scWhereHTML(p) {
+  if (p.tid === -2) return '';
+  const u = state.userTid, cf = Object.entries(p.cf || {}).sort((a, b) => b[1] - a[1]).slice(0, 5); let h = '';
+  if (cf.length) h += `<div class="ds-rule"></div><div class="ds-lb">Where he can play <span class="sc-lbr">learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an ordinary pace'}</span></div>${lineStripHTML(p)}
+    <div class="sc-spots">${cf.map(([s, c]) => { const l = comfortLabel(c); return `<div class="sc-spot" title="${trueOn() ? Math.round(c) : ''}"><b>${esc(SPOTS[s].l)}</b>${pipsHTML(CF_PIPS[l], CF_CLS[l])}<span>${l}</span></div>`; }).join('')}</div>`;
+  const side = SPOTS[p.spot].side, fitTeams = [...new Set([p.tid >= 0 ? p.tid : null, u].filter(t => t !== null && t >= 0))];
+  const rows = [];
+  if (side === 'off' || side === 'def') for (const t of fitTeams) { const f = schemeFit(p, t), sk = side === 'off' ? offArch(T(t)) : defArch(T(t)), lab = sk ? (side === 'off' ? OFF_ARCH : DEF_ARCH)[sk].l : '—';
+    rows.push(`<div class="sc-kv"><span>${T(t).abbr} · ${esc(lab)}</span><b class="${f >= 1 ? 'good' : f <= -1 ? 'bad' : ''}">${fitLabel(f)}${trueOn() ? ` ${f > 0 ? '+' : ''}${f}` : ''}</b></div>`); }
+  if (p.tid >= 0 && (CH_UNIT[p.pos] || ['RB', 'WR', 'TE'].includes(p.pos))) { ensureChem(); const qb = repsOrder(p.tid, 'QB')[0], v = CH_UNIT[p.pos] ? chemOf(p) : chemPair(p, qb);
+    rows.push(`<div class="sc-kv"><span>Chemistry ${CH_UNIT[p.pos] ? 'with the ' + CH_NAME[CH_UNIT[p.pos]].toLowerCase() : qb ? 'with ' + esc(pshort(qb)) : 'with his quarterback'}</span><b style="color:${gradeColor(v)}">${chemWord(v)}</b></div>`); }
+  { const w = typeof stWord === 'function' ? stWord(p) : null, sg = stGrade(p.stats); if (w) rows.push(`<div class="sc-kv"><span>Special teams${p.stats && p.stats.sts ? ` · ${p.stats.sts} snaps` : ''}</span><b class="${w[1]}">${w[0]}${sg !== null && p.stats && p.stats.sts ? ' · ' + sg : ''}</b></div>`); }
+  if (rows.length) h += `<div class="ds-rule"></div><div class="ds-lb">Fit</div>${rows.join('')}`;
+  if (p.awards && p.awards.length) h += `<div class="ds-rule"></div><div class="ds-lb">Honours</div><div class="sc-note">${p.awards.slice(-4).map(esc).join(' · ')}${p.awards.length > 4 ? ` · and ${p.awards.length - 4} more` : ''}</div>`;
+  return h;
+}
+function scPhysicalHTML(p) {
+  const peers = Object.values(state.players).filter(q => q.m && q.pos === p.pos);
+  ensureJumps(p); peers.forEach(ensureJumps); ensureHand(p);
+  const x = p.m.x || {}, pw = p.pw || {}, r = rasOf(p);
+  const rows = COMBINE.map(([k, l, f, dir]) => { const v = p.m[k], mine = pw[k];
+    if (v === undefined) { const w = DRILL_WHY[x[k]] || ['—', '']; return `<div class="ph-r" title="${w[1]}"><span>${l}</span><b class="${mine !== undefined ? '' : 'muted'}">${mine !== undefined ? f(mine) + '†' : w[0]}</b><i></i></div>`; }
+    const vals = peers.map(q => q.m[k]).filter(z => z !== undefined && z !== null), below = vals.filter(z => z < v).length, raw = vals.length > 1 ? below / (vals.length - 1) : 0.5, pct = Math.round(100 * (dir > 0 ? raw : 1 - raw));
+    const size = k === 'ht' || k === 'wt' || k === 'arm' || k === 'hand', tone = size ? 'note' : pct >= 75 ? 'good' : pct <= 25 ? 'bad' : 'mid';
+    return `<div class="ph-r" title="${ordinal(pct)} percentile among ${p.pos}s${x[k] === 'p' ? ' · pro day' : ''}${mine !== undefined ? ' · your workout: ' + f(mine) : ''}"><span>${l}</span><b>${f(v)}${x[k] === 'p' ? '*' : ''}${mine !== undefined ? `<em>${f(mine)}†</em>` : ''}</b><i class="adv-tag ${tone}">${ordinal(pct)}</i></div>`; }).join('');
+  const yr = p.draft ? p.draft.year : p.tid === -2 ? p.draftYear : state.season - (p.exp || 0);
+  return `<div class="ds-lb">Physical <span class="sc-lbr">${p.tid === -2 ? (p.m.pd ? 'pro day' : 'this year’s combine') : 'measured ' + yr}</span></div>
+    <div class="sc-ras">${r === null ? '<span class="sc-note">Too little of a workout for an athletic score.</span>' : `<span class="fig-v" style="font-size:24px;color:${rasColor(r)}">${r.toFixed(2)}</span><span class="sc-note">athletic score out of 10, against ${esc(p.pos)}s</span>`}</div>
+    ${rows}${workoutNoteHTML(p)}${p.tid === -2 && p.m.med && p.m.med !== 'clean' ? `<div class="sc-note ${p.m.med === 'flag' ? 'bad' : 'warn'}" style="margin-top:6px">${p.m.med === 'flag' ? 'The doctors flagged him.' : 'The doctors noted a minor concern.'} They are not always right.</div>` : ''}`;
+}
+function cardScoutHTML(p) {
+  const manage = cardManageHTML(p);
+  return `<div class="sc-grid"><div class="sc-col">${scReportHTML(p)}${manage ? `<div class="ds-rule"></div><div class="sc-manage">${manage}</div>` : ''}</div>
+    <div class="sc-col">${scTraitsHTML(p)}${scWhereHTML(p)}</div><div class="sc-col">${scPhysicalHTML(p)}</div></div>${trueOn() ? attributesHTML(p) : ''}`;
 }
 function cardStatsHTML(p) {
   let html = gameLogHTML(p);
@@ -2979,7 +3175,8 @@ function cardStatsHTML(p) {
     else {
       // grades every season, plus how your staff rated him at the end of each year
       const ga = r => r.cur ? (p.advS ? careerAdv(p.advS, p.spot) : {}) : (r.adv || {});
-      const fcols = Object.keys(FACETS).filter(f => rows.some(r => ga(r)['g' + f])).map(f => ({ k: f, l: FACETS[f], num: 1, f: r => gradeChip(ga(r)['g' + f] || null) }));
+      const OLDF = { pass: 'q', rush: 'run', zone: 'cov' }, gf = (r, f) => ga(r)['g' + f] || (OLDF[f] ? ga(r)['g' + OLDF[f]] : null) || null;
+      const fcols = Object.keys(FACETS).filter(f => rows.some(r => gf(r, f))).map(f => ({ k: f, l: FACETS[f], num: 1, f: r => gradeChip(gf(r, f)) }));
       html += table('careerR', [{ k: 's', l: 'Season', f: r => r.season + (r.cur ? '*' : '') }, { k: 't', l: 'Tm', f: r => r.tid >= 0 ? T(r.tid).abbr : 'FA' }, { k: 'snp', l: 'Snaps', f: r => r.snp || 0, num: 1 },
         { k: 'g', l: 'Overall', num: 1, f: r => gradeChip(ga(r).g || null) + (seasonRank(p, r) ? '<br>' + gradeRankTxt(seasonRank(p, r)) : '') }, ...fcols,
         { k: 'ti', l: 'Tier', f: r => r.cur ? tierPill(p) : r.ti ? `<span class="pill ${TIER_CLS[r.ti] || ''}">${r.ti}</span>` : '<span class="muted">—</span>' },
@@ -2994,7 +3191,7 @@ function cardStatsHTML(p) {
 }
 function cardAdvHTML(p) {
   const src = cardAdv(p), S = src ? advSheetOf(p, src) : null;
-  const facets = `<div class="adv-sec"><div class="ds-lb">Grades by facet${src ? ` · ${src.season}${src.cur ? ' to date' : ''}` : ''}</div>${glanceHTML(p, src)}</div>`;
+  const facets = `<div class="adv-sec"><div class="ds-lb">Grades${src ? ` · ${src.season}${src.cur ? ' to date' : ''}` : ''} <span style="float:right">plays</span></div>${glanceHTML(p, src)}</div>`;
   if (!S) { const adv = advRankHTML(p, src); return `<div class="grid card-cols"><div>${facets}</div><div>${adv ? `<div class="ds-lb">Tracking</div>${adv}` : '<div class="muted small">No tracking numbers at his position.</div>'}</div></div>${advancedSeasonHTML(p)}`; }
   const outs = new Set(advOutliers(S.sheet, 4, S.grp).map(m => m.id));
   const secs = Object.keys(ADV_SEC).map(k => { const ms = S.sheet.filter(m => m.sec === k); if (!ms.length) return '';
@@ -3177,7 +3374,7 @@ function gradeRankTxt(rk) { return rk ? `<span class="small muted" title="Rank a
 function seasonRank(p, r) { return r.cur ? gradeRanks()[p.id] : r.adv && r.adv.rk ? [r.adv.rk, r.adv.rkN, r.adv.rkG] : null; }
 function gradeChip(v) {
   if (v === null || v === undefined) return '<span class="muted">—</span>';
-  const c = v >= 85 ? 'r-elite' : v >= 72 ? 'r-good' : v >= 55 ? 'r-avg' : 'bad';
+  const c = v >= 80 ? 'r-elite' : v >= 70 ? 'r-good' : v >= 50 ? 'r-avg' : 'bad';
   return `<span class="r ${c}">${v}</span>`;
 }
 function teamAdvRows(ta) {
@@ -3204,7 +3401,7 @@ function filmRoomHTML(b) {
       { k: 'n', l: T(tid).abbr + ' grades', f: r => `<button class="link" data-action="film" data-gid="${b.id}" data-pid="${r.p.id}">${esc(pshort(r.p))}</button> <span class="muted small">${esc(r.p.lbl)}</span>` },
       { k: 's', l: 'Snaps', f: r => r.snp, num: 1 },
       { k: 'g', l: 'Grade', f: r => gradeChip(r.gr), num: 1 },
-      { k: 'f', l: '', f: r => `<span class="small muted">${Object.keys(gradeFacets(r.p.spot)).map(f => facetGrade(r.x, f) !== null && (r.x['n' + f] || 0) >= 4 ? `${FACETS[f]} ${facetGrade(r.x, f)}` : '').filter(Boolean).slice(0, 2).join(' · ')}</span>` },
+      { k: 'f', l: '', f: r => `<span class="small muted">${Object.keys(gradeFacets(r.p.spot)).map(f => gradeN(r.x, f) >= 4 ? `${FACETS[f]} ${facetGrade(r.x, f, 0, r.p.spot)}` : '').filter(Boolean).slice(0, 2).join(' · ')}</span>` },
     ], rows, { nosort: 1 }) + '</div>';
   }
   return html + '</div><div class="muted small">Grades are charted on every snap (0–100, average starter ≈ 62). Click a player for his film.</div>';
@@ -3216,7 +3413,7 @@ function filmModal(gid, pid) {
   const opp = T(b.tids[0] === p.tid ? b.tids[1] : b.tids[0]).abbr;
   let html = `<span></span>
     <div class="row" style="margin-top:8px"><h2 style="margin:0">${esc(pname(p))}</h2><span class="pill">${esc(p.lbl)}</span> <span class="muted">vs ${opp} · ${b.playoff || 'Week ' + b.week} · ${line.snp || 0} snaps</span></div>
-    <div class="row" style="margin:10px 0;gap:14px"><span>Game grade ${gradeChip(overallGrade(x, p.spot))}</span>${Object.keys(FACETS).filter(f => (x['n' + f] || 0) >= 3).map(f => `<span class="small">${FACETS[f]} ${gradeChip(facetGrade(x, f))} <span class="muted">(${x['n' + f]})</span></span>`).join('')}</div>`;
+    <div class="row" style="margin:10px 0;gap:14px"><span>Game grade ${gradeChip(overallGrade(x, p.spot))}</span>${Object.keys(FACETS).filter(f => gradeN(x, f) >= 3).map(f => `<span class="small">${FACETS[f]} ${gradeChip(facetGrade(x, f, 0, p.spot))} <span class="muted">(${gradeN(x, f)})</span></span>`).join('')}</div>`;
   const m = advMetrics(x, p.spot);
   if (m.length) html += `<div class="section-title">Tracking</div><div class="stat-tiles">${m.map(([l, v, hint]) => `<div class="tile" title="${esc(hint)}"><div class="v" style="font-size:16px">${v}</div><div class="l">${l}</div></div>`).join('')}</div>`;
   if (b.pbp) {
@@ -3377,7 +3574,7 @@ function stepContinue() {
     case 'FA': advanceFA(); break;
     case 'DRAFT': { const pk = currentPick(); if (pk && pk.owner === state.userTid) simDraftPick(); else simDraftToUser(); break; }
     case 'UDFA': { const res = resolveUdfaRound(); if (!state.settings.autoUser) ui.udfaResult = res; break; }
-    case 'PRESEASON': simPreseasonWeek(); if (state.phase === 'CUTDOWN' && !state.settings.autoUser) { view = 'camp'; ui.campTab = 'plan'; } break;
+    case 'PRESEASON': simPreseasonWeek(); if (state.phase === 'CUTDOWN' && !state.settings.autoUser) { view = 'pre'; ui.preTab = 'cut'; } break;
     case 'CUTDOWN': beginWaivers(); if (state.settings.autoUser) resolveWaivers(); else view = 'waivers'; break;
     case 'WAIVERS': { const r = resolveWaivers(); if (!state.settings.autoUser) ui.wvResult = r; if (view === 'waivers') view = 'home'; break; }
   }
@@ -3420,8 +3617,9 @@ const actions = {
   faPullA: faAct(pid => faWithdraw(pid)),
   faOrderA: faAct(pid => { const i = faIn(P(pid)); return faOrder(pid, +i.max || 0, i.jobs); }),
   faOrderX: faAct(pid => faOrder(pid, 0)),
-  nav: d => { view = d.view; ui.more = false; render(); window.scrollTo(0, 0); },
-  navHead: d => { const h = navTree().find(x => x[0] === d.h); if (!h) return; const last = (ui.navLast || {})[d.h], hot = navHot(), ok = v => h[2].some(y => y[0] === v); view = navHeadOf(view) === d.h ? view : ok(hot) ? hot : ok(last) ? last : h[2][0][0]; ui.more = false; render(); window.scrollTo(0, 0); },
+  nav: d => { view = d.view; ui.more = false; ui.mPop = null; render(); window.scrollTo(0, 0); },
+  mPop: d => { ui.mPop = d.h || null; render(); },
+  navHead: d => { const h = navTree().find(x => x[0] === d.h); if (!h) return; if (isPhone() && (h[2].length > 1 || h[0] === 'settings')) { ui.mPop = ui.mPop === d.h ? null : d.h; render(); return; } ui.mPop = null; const last = (ui.navLast || {})[d.h], hot = navHot(), ok = v => h[2].some(y => y[0] === v); view = navHeadOf(view) === d.h ? view : ok(hot) ? hot : ok(last) ? last : h[2][0][0]; ui.more = false; render(); window.scrollTo(0, 0); },
   more: () => { ui.more = !ui.more; render(); },
   dchUp: d => { const k = d.key, i = +d.i, list = (ensureChart(state.userTid).lists[k] || []); if (i > 0 && list[i]) { setChart(state.userTid, k, i - 1, list[i]); save(); render(); } },
   newLeague: d => { busy('Building league…'); setTimeout(() => { newLeague(+d.tid); save(); view = 'home'; busy(null); render(); }, 10); },
@@ -3444,7 +3642,7 @@ const actions = {
       const short = rosterShortfalls(state.userTid), have = rosterOf(state.userTid).filter(p => countsOn53(p) && !gone(state.cut.plan[p.id])).length;
       if ((short.length || have < ROSTER_MAX) && !await ask(`${have < ROSTER_MAX ? `You only have ${have} of ${ROSTER_MAX} roster spots filled. ` : ''}${short.length ? `You are short at: ${short.join(', ')}. ` : ''}Nobody will be signed for you. Start the season anyway?`)) return;
       const left = have - ROSTER_MAX;
-      if (left > 0) { await ask({ title: 'Roster is not set', body: `You still need to cut ${left} more player${left === 1 ? '' : 's'} to reach ${ROSTER_MAX}. Nobody is cut for you: make the calls on the Roster Planner, or press "Use the staff's recommendations" there.`, yes: 'Go to the planner', no: 'Close' }); view = 'camp'; ui.campTab = 'plan'; render(); return; }
+      if (left > 0) { await ask({ title: 'Roster is not set', body: `You still need to cut ${left} more player${left === 1 ? '' : 's'} to reach ${ROSTER_MAX}. Nobody is cut for you: make the calls on the Preseason page, or press "Use the staff's recommendations" there.`, yes: 'Go to the cuts', no: 'Close' }); view = 'pre'; ui.preTab = 'cut'; render(); return; }
     }
     if (state.phase === 'COACHES' && !state.settings.autoUser && state.car && state.car.raids && state.car.raids.length) {
       if (!await ask({ title: 'Unanswered offers', body: 'These coaches leave your staff if you advance without answering:', list: state.car.raids.map(r => `${cname(C(r.cid))} → ${T(r.tid).abbr} ${roleName(r.role).toLowerCase()}`), yes: 'Let them go', no: 'Go back', danger: true })) { view = 'coaches'; render(); return; }
@@ -3459,7 +3657,8 @@ const actions = {
       if (short.length && !await ask(`You are short-handed at ${short.join(', ')}. Nobody will be promoted or signed for you. Play anyway?`)) return;
     }
     if (state.phase === 'REG' || state.phase === 'PLAYOFFS' || state.phase === 'PRESEASON') {
-      if (state.phase === 'PRESEASON' && !state.pre) { if (!await ask({ title: 'Open training camp?', body: 'Two weeks of practice are run before the first exhibition, and every coach will have a camp report for you. Other clubs fill their camp rosters now.', yes: 'Open camp', no: 'Not yet' })) return; startPreseason(); ui.staffTid = null; ui.staffSel = T(state.userTid).hc; view = 'coaches'; save(); render(); window.scrollTo(0, 0); return; }
+      if (state.phase === 'PRESEASON' && !state.pre) { if (!await ask({ title: 'Open training camp?', body: 'Camp opens with a staff meeting and the reps chart: who works where, and with which string. Nothing is practiced until you say so. Other clubs fill their camp rosters now.', yes: 'Open camp', no: 'Not yet' })) return; startPreseason(); ui.preTab = 'meet'; view = 'pre'; save(); render(); window.scrollTo(0, 0); return; }
+      if (state.phase === 'PRESEASON' && state.pre && !preCamped() && !state.settings.autoUser) { campRun(); ui.preTab = 'track'; ui.trkSort = 'grade'; view = 'pre'; save(); render(); window.scrollTo(0, 0); return; } // two weeks of camp, then stop and look
       if (state.settings.gamePopups !== false && userMatchup()) { pregameModal(); return; }
       playWeek(false);
     } else { stepContinue(); save(); render(); if (ui.udfaResult) { const r = ui.udfaResult; ui.udfaResult = null; udfaResultModal(r); } if (ui.wvResult) { const r = ui.wvResult; ui.wvResult = null; waiverResultModal(r); } }
@@ -3496,7 +3695,8 @@ const actions = {
   team: d => { ui.rosterTid = +d.tid; view = 'roster'; closeModal(); render(); window.scrollTo(0, 0); },
   box: d => boxModal(+d.gid),
   seasonOpen: d => { ui.seasonYr = d && d.s ? +d.s : null; view = 'season'; closeModal(true); render(); window.scrollTo(0, 0); },
-  campTab: d => { ui.campTab = d.tab; render(); },
+  campTab: d => { ui.preTab = d.tab === 'report' ? 'track' : d.tab; render(); },
+  bubUnit: d => { ui.bubUnit = d.v; render(); },
   campRoom: d => { ui.campRoom = d.room; ui.planOther = null; render(); },
   campRoomStep: d => { const i = Math.max(0, PLAN_ROOMS.findIndex(r => r[0] === ui.campRoom)); ui.campRoom = PLAN_ROOMS[(i + +d.dir + PLAN_ROOMS.length) % PLAN_ROOMS.length][0]; ui.planOther = null; render(); },
   planMove: d => { planMove(+d.gid, +d.pid, +d.dir); save(); render(); },
@@ -3509,6 +3709,22 @@ const actions = {
   schedPart: d => { ui.schedPart = d.part; ui.schedWeekA = 1; render(); },
   cardScope: d => { ui.cardScope = d.v; playerModal(+d.pid, true); },
   cardTab: d => { ui.cardTab = d.v; playerModal(+d.pid, true); },
+  preTab: d => { ui.preTab = d.v; render(); },
+  meetRole: d => { ui.meetRole = d.v; render(); },
+  meetAll: d => { const u = state.userTid, room = d.v; for (const a of repsAdvice(u)) { const p = P(a.pid); if (!p) continue; const rk = preRoomOf(p); if (rk === room) repsToString(a.k, a.pid, a.cs); } save(); render(); },
+  repsUnit: d => { ui.repsUnit = d.v; ui.repsJob = null; ui.repsPid = null; render(); },
+  repsGrp: d => { const un = ['off', 'def', 'st'].includes(ui.repsUnit) ? ui.repsUnit : 'off'; (ui.repsGrp = ui.repsGrp || {})[un] = d.v; ui.repsJob = null; render(); },
+  repsJob: d => { ui.repsJob = d.k; render(); },
+  repsMan: d => { ui.repsPid = +d.pid; if (d.k) ui.repsJob = d.k; render(); },
+  repsPut: d => { const e = repsPlace(null, +d.pid, d.k, (state.reps.jobs[d.k] || []).length); if (e) toast(e); else ui.repsPid = +d.pid; save(); render(); },
+  repsSel: d => { const s = ui.repsSel; ui.repsSel = s && s.k === d.k && s.pid === +d.pid ? null : { k: d.k, pid: +d.pid }; render(); },
+  repsMv: d => { repsMove(d.k, +d.pid, +d.d); save(); render(); },
+  repsDo: d => { repsToString(d.k, +d.pid, +d.s); save(); render(); },
+  repsRm: d => { const e = repsRemove(d.k, +d.pid); if (e) toast(e); else ui.repsSel = null; save(); render(); },
+  repsRs: d => { repsReset(d.k || null); ui.repsSel = null; save(); render(); },
+  repsGo: d => { const j = REP_JOB[d.k]; ui.preTab = 'reps'; ui.repsUnit = j ? j[4] : 'off'; ui.repsJob = d.k; ui.repsPid = +d.pid; render(); },
+  trk: d => { const o = ui.trkOpen || (ui.trkOpen = {}); if (o[d.pid]) delete o[d.pid]; else o[d.pid] = 1; render(); },
+  trkRoom: d => { ui.trkRoom = d.v; render(); },
   privateWorkout: d => { const err = privateWorkout(+d.pid); if (err) toast(err); else { ui.cardTab = 'scout'; save(); } playerModal(+d.pid, true); },
   planView: d => { ui.planView = d.v; render(); },
   askYes: () => askDone(true),
@@ -3600,6 +3816,7 @@ const actions = {
   rosterPos: d => { ui.rosterPos = d.pos; render(); },
   draftPos: d => { ui.draftPos = d.pos; render(); },
   newsMine: d => { ui.newsMine = d.v === '1'; render(); },
+  draftOffer: d => { const err = draftAcceptOffer(+d.i); if (err) toast(err); else { toast('Trade made.'); simDraftToUser(); } save(); render(); },
   draftPick: d => {
     draftPlayer(+d.pid);
     simDraftToUser();
@@ -3681,6 +3898,9 @@ const changes = {
   schedWeekA: v => { ui.schedWeekA = +v; },
   planNew: (v, el) => { planNew(el.dataset.room, v); save(); },
   planName: (v, el) => { const g = planGroup(+el.dataset.gid), n = String(v || '').trim().slice(0, 40); if (g && n) g.name = n; save(); },
+  repsAdd: (v, el) => { if (!v) return; const e = repsAdd(el.dataset.k, +v); if (e) toast(e); else ui.repsHi = +v; save(); render(); },
+  repsAlso: (v, el) => { if (!v) return; const e = repsAdd(v, +el.dataset.pid); if (e) toast(e); save(); render(); },
+  trkSort: v => { ui.trkSort = v; render(); },
   planAdd: (v, el) => { if (v === 'other') { ui.planOther = +el.dataset.gid; return; } if (v) planAdd(+el.dataset.gid, +v); save(); },
   autoUser: (v, el) => { state.settings.autoUser = el.checked; save(); toast(el.checked ? 'Auto-manage on.' : 'Auto-manage off.'); },
   showTrue: (v, el) => { state.settings.showTrue = el.checked; save(); },
@@ -3758,7 +3978,7 @@ document.addEventListener('change', e => {
 document.addEventListener('toggle', e => { const el = e.target; if (el && el.dataset && el.dataset.fold) (ui.fold || (ui.fold = {}))[el.dataset.fold] = el.open; }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (askResolve) askDone(false); else closeModal(); } });
 document.addEventListener('keydown', e => { // ← → walks the rooms of the squad planner
-  if (!state || view !== 'camp' || !planOn() || (ui.campTab && ui.campTab !== 'plan' && ui.campTab !== 'battles') || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+  if (!state || !['pre', 'camp', 'cutdown'].includes(view) || !preOpen() || preTabNow() !== 'plan' || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
   const tg = e.target; if (tg && tg.closest && tg.closest('input, select, textarea')) return;
   if (!$('#modal').classList.contains('hidden') || askResolve) return;
   actions.campRoomStep({ dir: e.key === 'ArrowLeft' ? -1 : 1 }); e.preventDefault();
@@ -3794,3 +4014,16 @@ document.addEventListener('mouseover', e => {
 });
 document.addEventListener('mouseout', e => { const a = e.target.closest && e.target.closest('[data-tip]'), b = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('[data-tip]'); if (a !== b) tipHide(); });
 document.addEventListener('scroll', tipHide, true); document.addEventListener('mousedown', tipHide); document.addEventListener('keydown', tipHide);
+// ---- the reps chart: drag a man (from the bench or a card) to a place in a job's order, as on the depth chart ----
+let repDrag = null;
+if (typeof document !== 'undefined') {
+  const rpTarget = e => e.target.closest && (e.target.closest('[data-rpi]') || e.target.closest('.dcj[data-rpjob]'));
+  const rpClear = () => document.querySelectorAll('.dc-over').forEach(x => x.classList.remove('dc-over'));
+  document.addEventListener('dragstart', e => { const el = e.target.closest && e.target.closest('[data-rpp]'); if (!el) return; repDrag = { pid: +el.dataset.rpp, k: el.dataset.rpjob || null };
+    el.classList.add('drag'); document.body.classList.add('dc-dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(repDrag.pid)); } catch (x) { /* some browsers refuse */ } });
+  document.addEventListener('dragend', () => { if (!repDrag) return; repDrag = null; document.querySelectorAll('.drag').forEach(x => x.classList.remove('drag')); rpClear(); document.body.classList.remove('dc-dragging'); });
+  document.addEventListener('dragover', e => { const t = repDrag && rpTarget(e); if (!t) return; const p = P(repDrag.pid); if (!p || !repsCanWork(p, t.dataset.rpjob)) { rpClear(); return; } e.preventDefault(); document.querySelectorAll('.dc-over').forEach(x => x !== t && x.classList.remove('dc-over')); t.classList.add('dc-over'); });
+  document.addEventListener('drop', e => { const t = repDrag && rpTarget(e); if (!t) return; e.preventDefault(); const d = repDrag; repDrag = null; document.body.classList.remove('dc-dragging');
+    const k = t.dataset.rpjob, err = repsPlace(d.k, d.pid, k, t.dataset.rpi !== undefined ? +t.dataset.rpi : (state.reps.jobs[k] || []).length);
+    if (err) toast(err); else { ui.repsJob = k; ui.repsPid = d.pid; } save(); render(); });
+}

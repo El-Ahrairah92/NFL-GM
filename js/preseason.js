@@ -184,6 +184,7 @@ function prePlanFor(tid) {
 }
 function preStarters(tid, g) {
   if (g && g.preStart && g.preStart[tid]) return g.preStart[tid];
+  if (tid === state.userTid && repsOn() && state.reps) { const s2 = new Set(); for (const p of rosterOf(tid)) if (p.a && repsString(p.id) === 0) s2.add(p.id); if (s2.size >= 18) { if (g) (g.preStart = g.preStart || {})[tid] = s2; return s2; } }
   const dv = depthView(tid), s = new Set();
   for (const e of [...dv.off, ...dv.nickel, ...dv.base]) if (e.p.a) s.add(e.p.id);
   if (g) (g.preStart = g.preStart || {})[tid] = s;
@@ -202,6 +203,7 @@ function preseasonActives(tid, g) {
   const elapsed = !g ? 0 : q > 4 ? 1 : ((q - 1) * 900 + (900 - Math.max(0, Math.min(900, g.clock === undefined ? 900 : g.clock)))) / 3600; // share of the game played so far
   for (const p of ro) {
     if (plan.hold[p.id]) sit.add(p.id);
+    else if (tid === state.userTid && repsOn() && state.reps && !plan.feat[p.id] && p.pos !== 'K' && p.pos !== 'P' && repsString(p.id) >= 2 && elapsed < 0.5) sit.add(p.id); // the threes get the second half
     else if (preByChart(tid, p)) chartMen.add(p.id); // everyone dresses: the chart decides who is in, string by string
     else if (starters.has(p.id) && !plan.feat[p.id]) { const s = plan.share(p.pos); if (!(s > 0 && (elapsed < s || (s <= 0.12 && snp(p.id) < 8 && q <= 1)))) sit.add(p.id); } // each group plays its share; a "series" is at least a handful of snaps
   }
@@ -220,6 +222,7 @@ function preseasonActives(tid, g) {
 }
 function simPreseasonWeek() {
   if (!state.pre) startPreseason();
+  if (!state.pre.camped) campRun();
   const n = state.pre.wk + 1, u = state.userTid;
   for (const m of state.pre.sched[state.pre.wk]) {
     const mine = m.h === u || m.a === u;
@@ -246,6 +249,7 @@ function applyPreBox(box, keep) {
     s.snp += l.snp; s.gp++;
     if (l.sq) { s.sq = s.sq || [0, 0, 0]; l.sq.forEach((v, i) => s.sq[i] += v); }
     s.last = { wk: box.pre, snp: l.snp, sq: l.sq || null, g: box.adv && box.adv[pid] && l.snp >= 10 ? overallGrade(box.adv[pid], p.spot) : null, line: statSummary(l, p.pos) };
+    (s.log = s.log || []).push(s.last); // every exhibition, for the tracker
     if (box.adv && box.adv[pid]) addAdv(s.adv, box.adv[pid]);
     const st = Object.assign({}, l); delete st.sp; delete st.nm; delete st.sq;
     addStats(s.st, st);

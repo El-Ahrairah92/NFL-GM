@@ -131,7 +131,8 @@ function ensurePicks() {
 }
 function pickLabel(pk) {
   const own = pk.orig === pk.owner ? '' : ` (${T(pk.orig).abbr})`;
-  return `${pk.season} Rd ${pk.round}${own}`;
+  const o = state.draft && pk.season === state.draft.year ? state.draft.order.find(z => z.pickId === pk.id) : null; // once the order is set, the slot
+  return `${pk.season} Rd ${pk.round}${o ? ` · pick ${o.pick}` : ''}${own}`;
 }
 
 function addNews(text, tids = [], type = '') {

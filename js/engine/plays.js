@@ -26,7 +26,12 @@ function runToContact(g, carrier, levels, opts = {}) {
     // A receiver with the ball: balance and strength run through an arm tackle, and so does thirty pounds on the man trying to make it.
     const power = opts.power && carrier.p.m && d.p.m ? clamp(((bal + cs) / 2 - 66) * 0.014 + (carrier.p.m.wt - d.p.m.wt) * 0.006, -0.3, 0.5) * opts.power : 0;
     const make = lgt(TUNE.tackleBase - power - space * 0.55 + soft(tk - ev, 15) * TUNE.tackleScale - clamp(slip + read, -TUNE.slipCap, TUNE.slipCap) + (lv.bonus || 0) + (opts.tackleBonus || 0));
+    { const ad = avgEnt(g, d); let x = make;
+      if (ad) { const AD_ = bod(ad), tkA = (space ? AD_.w * 0.4 + AD_.len * 0.8 : AD_.w * 1.8 + AD_.len * 0.3) * zz + (space ? ea(g, ad, 'tkl') * 0.5 + ea(g, ad, 'spd') * 0.2 + ea(g, ad, 'agi') * 0.2 + ea(g, ad, 'str') * 0.1 : ea(g, ad, 'tkl') * 0.6 + ea(g, ad, 'spd') * 0.15 + ea(g, ad, 'str') * 0.25);
+        x = lgt(TUNE.tackleBase - power - space * 0.55 + soft(tkA - ev, 15) * TUNE.tackleScale - clamp(slip + read, -TUNE.slipCap, TUNE.slipCap) + (lv.bonus || 0) + (opts.tackleBonus || 0)); }
+      (res.tk = res.tk || []).push({ e: d, x }); }
     if (rand() < make) {
+      res.tk[res.tk.length - 1].made = true;
       res.tackler = d;
       // yards after contact: little when hit in the backfield, more when met downhill at the second level
       const ab = (opts.afterBase || 1.2) * (lv.at <= 0 ? 0.25 : lv.at <= 2 ? 0.7 : 1) + (lv.far ? TUNE.meet : 0); // past the line the tackler meets him sooner and he carries him: same spot, more of it after contact
@@ -159,7 +164,10 @@ function resolveRun(g, off, def, oc, dc) {
     // the receiver on that side has to block him: a willing, strong blocker springs the run; a poor one lets the corner make the play
     const wrB = off.filter(e => ['X', 'Z', 'SLOT', 'SLOT2', 'Y', 'H'].includes(e.slot) && Math.sign(e.x || 1) === Math.sign(target)).sort((a, b) => Math.abs(b.x) - Math.abs(a.x))[0];
     const edgeBlk = wrB && force ? clamp((ea(g, wrB, 'rbk') * 0.5 + ea(g, wrB, 'str') * 0.3 + ea(g, wrB, 'agi') * 0.2 + bod(wrB).w * 2 * TUNE.size) - (ea(g, force, 'shed') * 0.4 + ea(g, force, 'tkl') * 0.3 + ea(g, force, 'str') * 0.3 + bod(force).w * 1.5 * TUNE.size) + TUNE.wrBlock, -30, 30) * 0.02 : 0;
-    if (force && rand() < clamp((oc.wide || oc.tight ? 0.5 : 0.62) * TUNE.force * (noContain ? TUNE.noContain : 1) - edgeBlk, 0.15, 0.85)) levels.push({ e: force, at: Math.max(1, (lost ? randInt(4, 8) : randInt(3, 6)) + Math.round(edgeBlk * 5)), bonus: (lost ? -0.3 : 0) - edgeBlk * 0.5 }); // the corner has a receiver's block to beat first
+    const forceP0 = (oc.wide || oc.tight ? 0.5 : 0.62) * TUNE.force * (noContain ? TUNE.noContain : 1), forceHit = !!force && rand() < clamp(forceP0 - edgeBlk, 0.15, 0.85);
+    if (real && wrB && force) { const aw = avgEnt(g, wrB), self = q => ea(g, q, 'rbk') * 0.5 + ea(g, q, 'str') * 0.3 + ea(g, q, 'agi') * 0.2 + bod(q).w * 2 * TUNE.size;
+      res.edge = { b: wrB, d: force, hit: forceHit, x: clamp(forceP0 - (aw ? clamp(edgeBlk / 0.02 - self(wrB) + self(aw), -30, 30) * 0.02 : edgeBlk), 0.15, 0.85) }; } // x: the corner's chance of getting there past an ordinary blocker
+    if (forceHit) levels.push({ e: force, at: Math.max(1, (lost ? randInt(4, 8) : randInt(3, 6)) + Math.round(edgeBlk * 5)), bonus: (lost ? -0.3 : 0) - edgeBlk * 0.5 }); // the corner has a receiver's block to beat first
   }
   // linebackers: blocked, or free to fill (if they read it)
   const contain0 = outside && trickHit !== 'fooled' && (() => { const eR = fronts.filter(r => Math.sign(r.px) === Math.sign(target)).sort((a, b) => Math.abs(b.px) - Math.abs(a.px))[0]; return (!eR || !eR.won) && (!eR || Math.abs(eR.px) < Math.abs(target) - 0.3); })();
@@ -183,7 +191,7 @@ function resolveRun(g, off, def, oc, dc) {
   if (carrierSlot === 'RB' || carrierSlot === 'FB') { const am = avgEnt(g, carrier); if (am) { const cap = 100 - g.ydl; let t = 0; for (let i = 0; i < TUNE.xN; i++) t += Math.min(finish(am, false).r.yds, cap); res.xYds = t / TUNE.xN; } }
   const { r, lane } = finish(carrier, true);
   res.poa = target; res.lane = lane; res.box = def.filter(e => (!e.used || e === readRemoved) && e.depth <= 5.5 && Math.abs(e.x) <= 5).length; res.hats = off.filter(e => OL_SLOTS.includes(e.slot) || isInline(e) || e.slot === 'FB').length;
-  res.yds = r.yds; res.tackler = r.tackler; res.assist = r.assist; res.fumble = res.fumble || r.fumble; res.breakaway = r.breakaway;
+  res.yds = r.yds; res.tackler = r.tackler; res.assist = r.assist; res.fumble = res.fumble || r.fumble; res.breakaway = r.breakaway; res.tk = r.tk;
   res.tfl = res.yds < 0;
   res.blk = blk; res.ybc = r.contactAt !== undefined ? Math.min(r.contactAt, r.yds) : r.yds; res.missed = r.missed;
   res.desc = runDesc(oc, carrier, res, lane);
@@ -591,7 +599,7 @@ function resolvePass(g, off, def, oc, dc) {
     if (rand() < scrambleP) {
       const ql = def.filter(e => !e.blitz && ['MLB', 'WLB', 'SAM', 'NCB', 'SS'].includes(e.slot));
       const r = runToContact(g, qb, [{ e: rusher.e, at: randInt(-1, 2), bonus: escaped ? -2.8 : -1.7 }, { e: nearestDef(ql, 0), at: randInt(5, 11), bonus: -0.3 }, { e: def.find(e => e.slot === 'FS'), at: randInt(9, 14) }], { pursuit: def.filter(e => e.slot === 'CB' || e.slot === 'FS') });
-      Object.assign(res, { kind: 'scramble', carrier: qb, yds: r.yds, tackler: r.tackler, fumble: r.fumble, missed: r.missed, ybc: r.contactAt !== undefined ? Math.min(r.contactAt, r.yds) : r.yds, slide: r.yds >= 4 && rand() < 0.6, desc: `${pshort(qb.p)} scrambles` });
+      Object.assign(res, { kind: 'scramble', carrier: qb, yds: r.yds, tackler: r.tackler, fumble: r.fumble, missed: r.missed, tk: r.tk, ybc: r.contactAt !== undefined ? Math.min(r.contactAt, r.yds) : r.yds, slide: r.yds >= 4 && rand() < 0.6, desc: `${pshort(qb.p)} scrambles` });
       res.involved = [qb.p];
       return res;
     }
@@ -691,7 +699,7 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
     let yds = Math.max(airY, rr.yds);
     if (oc.tags.has('SIDE') && r.dir === 'OUT') { yds = Math.min(yds, airY + randInt(0, 3)); res.oob = rand() < 0.75; }
     else res.oob = r.dir === 'OUT' && rand() < 0.38;
-    Object.assign(res, { kind: 'comp', yds, yac: yds - airY, tackler: rr.tackler, assist: rr.assist, fumble: rr.fumble, missed: rr.missed, desc: tag });
+    Object.assign(res, { kind: 'comp', yds, yac: yds - airY, tackler: rr.tackler, assist: rr.assist, fumble: rr.fumble, missed: rr.missed, tk: rr.tk, desc: tag });
     res.involved = [e.p, rr.tackler && rr.tackler.p];
     return res;
   }

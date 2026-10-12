@@ -642,7 +642,9 @@ function bod(e) {
 }
 // the ordinary man at a job: the play is run again with him to say what it was worth before the player made it better or worse
 const AVG_GRP = { QB: [['QB'], 32], RB: [['RB'], 48], FB: [['FB'], 16], WRX: [['WRX', 'WRZ', 'SLOT'], 96], WRZ: [['WRX', 'WRZ', 'SLOT'], 96], SLOT: [['WRX', 'WRZ', 'SLOT'], 96], TEY: [['TEY', 'TEH'], 48], TEH: [['TEY', 'TEH'], 48],
-  CB: [['CB', 'NCB'], 80], NCB: [['CB', 'NCB'], 80], FS: [['FS', 'SS'], 64], SS: [['FS', 'SS'], 64], MLB: [['MLB', 'WLB'], 64], WLB: [['MLB', 'WLB'], 64] };
+  CB: [['CB', 'NCB'], 80], NCB: [['CB', 'NCB'], 80], FS: [['FS', 'SS'], 64], SS: [['FS', 'SS'], 64], MLB: [['MLB', 'WLB'], 64], WLB: [['MLB', 'WLB'], 64],
+  LT: [['LT', 'RT'], 64], RT: [['LT', 'RT'], 64], LG: [['LG', 'C', 'RG'], 96], C: [['LG', 'C', 'RG'], 96], RG: [['LG', 'C', 'RG'], 96],
+  NT: [['NT', 'DT'], 80], DT: [['NT', 'DT'], 80], DE: [['DE', 'EDGE'], 80], EDGE: [['DE', 'EDGE'], 80], K: [['K'], 32], P: [['P'], 32] };
 function avgMan(g, spot) {
   const G = AVG_GRP[spot]; if (!G) return null;
   const c = g._avg || (g._avg = {}), key = G[0][0]; if (c[key] !== undefined) return c[key];

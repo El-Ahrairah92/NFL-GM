@@ -119,3 +119,36 @@ After the trench work: re-measure attribute values and refit rating weights.
 - Only 42% of sacks and 48% of pressured dropbacks are charged to a blocker; the rest are unblocked rushers, missed assignments and coverage sacks. Decide whether more should be charged.
 - Pass-block win rate (95%) and pass-rush win rate (7%) sit outside the published real ranges (about 88 to 90% and 10 to 15%). The definition (beaten inside three seconds) may want tuning. Touches pass rush, which is on hold.
 - About 7% of attempts have no target (throwaways and passes batted at the line together). Check the split against the real league (throwaways about 3%).
+
+## Salary cap overhaul (from the seven-season cap audit)
+
+What the audit found: clubs leave 10 to 17% of the cap unspent in week 1 (the real league is nearer 3 to 6%); dead money is a fraction of the real figure; four in ten contracts end up in their final year and 600 to 700 expire each offseason; players over 30 go from 19% to nearly 30% of rosters; a third of the league ends up on the minimum.
+
+- Re-price the market: aim for week-1 room of about 5% of the cap. The yearly re-pricing toward 93% spending moves too slowly to catch up.
+- Put the extra money into the second tier of stars. Quarterbacks are right; the best-paid edge, tackle, corner, receiver and back are well short of their real share of the cap (edge 8% against about 13%, tackle 7% against 10%, corner 6.5% against 10%).
+- Lengthen deals: three to five years for starters in free agency and re-signing, so the final-year share settles near a quarter.
+- Make commitments cost something: larger signing bonuses on other clubs' deals, so a cut leaves real dead money and a tight club has to restructure or sell.
+- Fix the age drift: fewer one-year minimum deals for veterans over 30, and check retirement timing.
+- Unused cap room carries over to the next year.
+- A minimum-salary scale by experience.
+- Other clubs restructure deals to create room.
+- A club occasionally ends the draft a few million over the cap.
+- Each of the first three changes the others: re-check over several seasons after each.
+
+## Free agency and the draft (from the cycle review)
+
+- Clubs should plan across the two: shop free agency with the draft class in mind, weigh need in the draft, and sign veterans after the draft to fill what is left.
+- Clubs' boards are scattered far from consensus; the best talents go too evenly through the rounds; rounds five to seven are the same quality.
+- Your scouting tools: a board of your own, scout assignments, a mock draft.
+- Compensatory picks; restricted free agency; other clubs trading among themselves in the offseason.
+- Other clubs give up future first-round picks readily to move up: watch in play.
+
+## Preseason (after the skeleton, section 58)
+
+- Joint practices: pick another club for a camp week, so your men's reps come against their players.
+- Emphasis per player: give a man extra looks, or a kind of work (run game, pass protection), at someone else's expense.
+- More life between games: practice injuries, a rookie flashing, a veteran coasting, coaches arguing for their man, a story of the week.
+- Game reps in more detail than "the threes get the second half": who plays which quarter, by string and by man.
+- Fold the cutdown into the Preseason page, and retire or rebuild the roster planner once this covers what it does.
+- The chart for special teams units (who covers kicks) as well as kicker and punter.
+

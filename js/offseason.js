@@ -372,34 +372,97 @@ function draftPlayer(pid) {
   if (d.idx >= d.order.length) finishDraft();
 }
 function teamNeedsQB(tid) { const q = rosterOf(tid).filter(p => p.pos === 'QB').sort((a, b) => viewOvr(b, tid) - viewOvr(a, tid))[0]; return !q || viewOvr(q, tid) < th(q).mid || q.age >= 34; }
-function aiDraftChoice(tid) {
-  let best = null, bs = -1e9; const qbNeed = [];
+// A specialist arrives close to what he will ever be, so on a board built for raw rookies he reads like an instant starter.
+// Clubs know better: kickers and punters are late-round picks, and only for a club that needs one.
+const DRAFT_SPEC = { K: -22, P: -24 };
+// one club's board: every prospect scored once, with the club's needs counted once
+function draftBoard(tid, noise) {
+  const need = {}, def = {}, qbNeed = teamNeedsQB(tid) ? 8 : -4, out = [];
+  const N = pos => need[pos] || (need[pos] = needAt(tid, pos)), D = s => def[s] !== undefined ? def[s] : (def[s] = spotDeficit(tid, s));
   for (const p of prospects()) {
-    const n = needAt(tid, p.pos);
-    const v = viewOvr(p, tid);
+    const n = N(p.pos), v = viewOvr(p, tid);
     // judged against the starters at his own position (a quarterback is not graded on a guard's scale)
-    let s = v - th(p).starter + 74 + 0.55 * viewGrowth(p, tid) + schemeFit(p, tid) * 0.5 + ({ K: -10, P: -12, RB: -2 }[p.pos] || 0);
-    if (p.pos === 'QB') s += qbNeed[0] === undefined ? (qbNeed[0] = teamNeedsQB(tid) ? 8 : -4) : qbNeed[0];
+    let s = v - th(p).starter + 74 + 0.55 * viewGrowth(p, tid) + schemeFit(p, tid) * 0.5 + (p.pos === 'RB' ? -2 : 0);
+    if (DRAFT_SPEC[p.pos]) s += DRAFT_SPEC[p.pos] - (n.arr[0] && viewOvr(n.arr[0], tid) >= th(p).starter - 3 ? 12 : 0);
+    if (p.pos === 'QB') s += qbNeed;
     if (n.count < ROSTER_MIN[p.pos]) s += 4;
     if (v > n.floor) s += 2;
-    s += spotNeedBonus(tid, p) * 1.5;
+    let sb = 0; for (const k in (p.cf || { [p.spot]: 100 })) if (comfortOf(p, k) >= 60) sb = Math.max(sb, D(k));
+    s += sb * 1.5;
     if (n.count >= ROSTER_TEMPLATE[p.pos] + 1) s -= 5;
-    s += gauss(0, 1.5);
-    if (s > bs) { bs = s; best = p; }
+    if (noise) s += gauss(0, 1.5);
+    out.push({ p, s });
   }
-  return best;
+  return out.sort((a, b) => b.s - a.s);
+}
+function aiDraftChoice(tid) { const b = draftBoard(tid, true); return b.length ? b[0].p : null; }
+// ---- trades on the clock ----
+// what a slot is worth: the chart every front office carries, steep at the top and flat at the bottom
+function draftChart(n) { return 2200 * Math.exp(-0.09 * (n - 1)) + 800 * Math.exp(-0.02 * (n - 1)); }
+function draftSlotOf(pickId) { const d = state.draft; return d ? d.order.find(o => o.pickId === pickId) || null : null; }
+// a club behind this pick that wants a man it does not think will last: what it would give to come up for him
+function draftSuitors(T0, limit) {
+  const d = state.draft, pk = currentPick(), out = []; if (!pk || !pk.pickId) return out;
+  const seen = new Set([T0]);
+  for (let i = d.idx + 2; i < Math.min(d.order.length, d.idx + 30) && seen.size < 14; i++) {
+    const o = d.order[i], B = o.owner; if (seen.has(B) || !isAI(B) || !o.pickId) continue; seen.add(B);
+    const board = draftBoard(B, false); if (board.length < 40) continue;
+    const top = board[0], left = board[Math.min(board.length - 1, Math.ceil((o.pick - pk.pick) * 0.55))]; // what he expects to be looking at if he waits
+    const gain = top.s - left.s + (top.p.pos === 'QB' && teamNeedsQB(B) ? 4 : 0);
+    if (gain < 3.5 + pk.round) continue;
+    // the price: the difference on the chart, paid in picks of his own, this year's first
+    const owe = (draftChart(pk.pick) - draftChart(o.pick)) * (1.02 + rand() * 0.14), give = [o.pickId]; let paid = 0;
+    const mine = state.picks.filter(x => x.owner === B && x.id !== o.pickId && !(draftSlotOf(x.id) && draftSlotOf(x.id).pid)).map(x => ({ x, v: draftSlotOf(x.id) ? draftChart(draftSlotOf(x.id).pick) : pickValue(x) / 0.012 * 0.9 })).filter(q => q.v > 3).sort((a, b) => a.v - b.v);
+    while (paid < owe && mine.length) { // the smallest pick that finishes the job, or the biggest one left that does not overshoot it
+      let k = mine.findIndex(q => q.v >= owe - paid); if (k < 0) k = mine.length - 1; else if (mine[k].v > (owe - paid) * 1.6 && k > 0) k--;
+      const q = mine.splice(k, 1)[0]; if (q.v > (owe - paid) * 2.2 && give.length > 1) break; give.push(q.x.id); paid += q.v; }
+    if (paid < owe * 0.92 || paid > owe * 1.5 || give.length > 4) continue;
+    out.push({ tid: B, give, for: pk.pickId, target: top.p.id, gain, paid, owe, slot: o.pick });
+  }
+  return out.sort((a, b) => b.gain - a.gain).slice(0, limit || 3);
+}
+function draftSwap(T0, off) {
+  const tp = P(off.target);
+  executeTrade(T0, off.tid, { players: [], picks: [off.for] }, { players: [], picks: off.give });
+  if (tp) addNews(`${T(off.tid).abbr} trade up with ${T(T0).abbr} to pick ${currentPick().pick}.`, [off.tid, T0], 'draft');
+}
+// another club on the clock: most picks are made where they stand, but a club that will not miss much by sliding listens
+function aiDraftTrade() {
+  const pk = currentPick(); if (!pk || pk.round > 4 || !isAI(pk.owner) || !pk.pickId) return null;
+  if (rand() > (pk.round === 1 ? 0.3 : pk.round === 2 ? 0.2 : 0.1)) return null;
+  const T0 = pk.owner, mine = draftBoard(T0, false); if (mine.length < 40) return null;
+  if (mine[0].p.pos === 'QB' && teamNeedsQB(T0)) return null; // he is not moving off his quarterback
+  for (const off of draftSuitors(T0, 3)) {
+    const back = mine[Math.min(mine.length - 1, Math.ceil((off.slot - pk.pick) * 0.55))];
+    if (mine[0].s - back.s > 2.5 + (off.paid / Math.max(1, off.owe) - 1) * 12) continue; // what he gives up by sliding, against what he is paid over the chart
+    draftSwap(T0, off); return off;
+  }
+  return null;
+}
+// the phone rings when you are on the clock
+function draftUserOffers() {
+  const d = state.draft, pk = currentPick(); if (!d || !pk || pk.owner !== state.userTid || isAI(state.userTid)) return;
+  if (d.offer && d.offer.idx === d.idx) return;
+  d.offer = { idx: d.idx, list: pk.round <= 4 && rand() < (pk.round === 1 ? 0.85 : pk.round === 2 ? 0.65 : 0.45) ? draftSuitors(state.userTid, 2).map(o => ({ tid: o.tid, give: o.give, for: o.for })) : [] };
+}
+function draftAcceptOffer(i) {
+  const d = state.draft, pk = currentPick(), off = d && d.offer && d.offer.idx === d.idx ? d.offer.list[i] : null;
+  if (!off || !pk || pk.owner !== state.userTid) return 'That offer is gone';
+  executeTrade(state.userTid, off.tid, { players: [], picks: [off.for] }, { players: [], picks: off.give });
+  d.offer = null; return null;
 }
 function simDraftPick() {
   const pk = currentPick();
   if (!pk) return;
-  const choice = aiDraftChoice(pk.owner);
+  const moved = aiDraftTrade(), now = currentPick();
+  const choice = moved && P(moved.target) && P(moved.target).tid === -2 ? P(moved.target) : aiDraftChoice(now.owner);
   if (choice) draftPlayer(choice.id);
 }
 function simDraftToUser() {
   while (state.phase === 'DRAFT') {
     const pk = currentPick();
     if (!pk) break;
-    if (pk.owner === state.userTid && !state.settings.autoUser) break;
+    if (pk.owner === state.userTid && !state.settings.autoUser) { draftUserOffers(); break; }
     simDraftPick();
   }
 }

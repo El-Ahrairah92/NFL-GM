@@ -4,10 +4,11 @@
 // =====================================================================
 function tradeWindowOpen() {
   if (state.phase === 'REG') return state.week <= TRADE_DEADLINE;
-  return ['RECAP', 'COACHES', 'RESIGN', 'FA', 'UDFA', 'PRESEASON', 'CUTDOWN'].includes(state.phase);
+  return ['RECAP', 'COACHES', 'RESIGN', 'FA', 'DRAFT', 'UDFA', 'PRESEASON', 'CUTDOWN'].includes(state.phase);
 }
 function tradablePicks(tid) {
-  return state.picks.filter(pk => pk.owner === tid).sort((a, b) => a.season - b.season || a.round - b.round);
+  const used = new Set(state.draft ? state.draft.order.filter(o => o.pid && o.pickId).map(o => o.pickId) : []); // a pick already made is not a pick
+  return state.picks.filter(pk => pk.owner === tid && !used.has(pk.id)).sort((a, b) => a.season - b.season || a.round - b.round);
 }
 // how much the AI team values an asset (it values its own starters a bit more)
 function aiAssetValue(p, aiTid, giving) {

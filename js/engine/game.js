@@ -584,15 +584,17 @@ function fieldGoal(g) {
   inc(g, K.p, 'fga');
   if (g.drive) g.drive.plays++;
   runClock(g, 5); g.running = false;
+  const xK = (() => { const ak = avgEnt(g, K); return ak ? clamp(fgProb(g, ak, dist) + opq * TUNE.kickOp, 0.01, 0.995) : p; })(); // an ordinary kicker's chance from here
   if (rand() < blockP) { pbpLog(g, `${pshort(K.p)} ${dist} yd field goal BLOCKED`); changePoss(g, Math.max(1, 100 - g.ydl), 'Blocked FG'); return; }
   if (rand() < p) {
-    inc(g, K.p, 'fgm'); mx(g, K.p, 'fgLng', dist);
+    inc(g, K.p, 'fgm'); mx(g, K.p, 'fgLng', dist); scoreKick(g, K, 'fg', fgStep(true, xK));
     if (dist >= 50) inc(g, K.p, 'fg50');
     pbpLog(g, `${pshort(K.p)} ${dist} yd field goal is GOOD`);
     endDrive(g, 'Field Goal');
     addScore(g, o, 3, `${pshort(K.p)} ${dist} yd field goal`);
     kickoff(g, o);
   } else {
+    scoreKick(g, K, 'fg', fgStep(false, xK));
     pbpLog(g, `${pshort(K.p)} ${dist} yd field goal is no good`);
     changePoss(g, Math.max(20, 107 - g.ydl), 'Missed FG');
   }
@@ -639,6 +641,8 @@ function punt(g) {
       if (recv >= 100) { pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds — ${pshort(ret.p)} RETURNS IT FOR A TOUCHDOWN`); endDrive(g, 'Punt'); g.drive = null; g.poss = d; inc(g, ret.p, 'prTD'); touchdown(g, d, `${pshort(ret.p)} ${land} yd punt return`); return; }
     }
   }
+  { const y0 = g.ydl, xS = Math.max(11, 100 - y0 - 43), m = xS - recv; // where an ordinary punt from here leaves them, against where this one did
+    scoreKick(g, Pn, 'punt', text === 'touchback' && y0 >= 55 ? -1 : m >= 15 ? 2 : m >= 7 ? 1 : m <= -17 ? -2 : m <= -9 ? -1 : 0); }
   if (recv < 20 && text !== 'touchback') inc(g, Pn.p, 'pi20'); // the receiving club takes over inside its own 20
   inc(g, Pn.p, 'pntY', gross);
   pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds, ${text}`);
@@ -650,7 +654,7 @@ function kickoff(g, kickSide, safetyKick) {
   const ret = returner(g, recv), KO = stUnits(g, kickSide).KO, KRU = stUnits(g, recv).KRU, mKo = stAvg(KRU, stBlock) - stAvg(KO, stCover) - ST0.ko;
   let start;
   const tbP = safetyKick ? 0 : clamp(0.18 + (ea(g, K, 'krng') - 70) * 0.008 + (ea(g, K, 'ktrj') - 70) * 0.003, 0.05, 0.6);
-  if (rand() < tbP) { start = 35; pbpLog(g, `${pshort(K.p)} kicks off — touchback`, false); }
+  if (rand() < tbP) { start = 35; scoreKick(g, K, 'ko', 0); pbpLog(g, `${pshort(K.p)} kicks off — touchback`, false); }
   else {
     const rc = ea(g, ret, 'elu') * 0.3 + ea(g, ret, 'vis') * 0.25 + ea(g, ret, 'spd') * 0.3 + ea(g, ret, 'bur') * 0.15;
     const expS = (safetyKick ? 38 : 27) + (rc - 62) * 0.12 + g.cx[recv].st * 0.025 - (ea(g, K, 'ktrj') - 70) * 0.04;
@@ -659,6 +663,7 @@ function kickoff(g, kickSide, safetyKick) {
     if (rand() < 0.012 * Math.exp(clamp(mKo, -12, 12) / 7)) start += randInt(20, 45);
     stShare(g, KO, clamp(expS - start, -15, 8)); stShare(g, KRU, clamp(start - expS, -8, 15)); if (start < 95) stTackle(g, KO);
     start = clamp(start, 5, 99);
+    if (!safetyKick) scoreKick(g, K, 'ko', start <= 14 ? 2 : start <= 21 ? 1 : start >= 55 ? -2 : start >= 40 ? -1 : 0); // where the return left them
     const r = start - (safetyKick ? 20 : 0);
     const caught = safetyKick ? clamp(Math.round(gauss(22, 6)), 8, 40) : clamp(Math.round(gauss(2, 4)), 0, 14); // where he fields it: return yards are counted from there
     inc(g, ret.p, 'krA'); inc(g, ret.p, 'krY', Math.max(0, start - caught));
@@ -709,8 +714,8 @@ function touchdown(g, side, text) {
     } else {
       const K = kickUnitPlayer(g, side, 'K');
       inc(g, K.p, 'xpa');
-      if (rand() < fgProb(g, K, 33) * 0.995) { inc(g, K.p, 'xpm'); g.score[side] += 1; g.qs[side][Math.min(g.q, 5) - 1] += 1; entry.text += ` (${pshort(K.p)} kick)`; }
-      else { entry.text += ' (kick failed)'; pbpLog(g, 'Extra point is no good', false); }
+      if (rand() < fgProb(g, K, 33) * 0.995) { scoreKick(g, K, 'fg', 0); inc(g, K.p, 'xpm'); g.score[side] += 1; g.qs[side][Math.min(g.q, 5) - 1] += 1; entry.text += ` (${pshort(K.p)} kick)`; }
+      else { scoreKick(g, K, 'fg', -2); entry.text += ' (kick failed)'; pbpLog(g, 'Extra point is no good', false); }
     }
     checkOT(g);
   }
