@@ -104,7 +104,7 @@ const TUNE = {
   slantHit: 0.3,        // chance a slant crosses an average blocker's face cleanly
   slantWin: 9, slantLose: 4, // pass-rush points when it does, and when he runs himself into the block
   // coverage / passing
-  radius: 1.5, cthW: 0.62, leapPick: 0.0015, catchPt: -9.4, reachShort: 0.6, leapW: 1.8, trafficStr: 0.25, trafficHnd: 0.15, trafficD: 0.25, catchPtD: 0, radCatch: 0.012, radRef: 2, batLeap: 0.02, openBase: -0.66,
+  xN: 3, radius: 1.5, cthW: 0.62, leapPick: 0.0015, catchPt: -9.4, reachShort: 0.6, leapW: 1.8, trafficStr: 0.25, trafficHnd: 0.15, trafficD: 0.25, catchPtD: 0, radCatch: 0.012, radRef: 2, batLeap: 0.02, openBase: -0.66,
   accScale: 0.042,      // how much ball placement decides whether a throw is catchable
   wrBlock: 12,         // receivers give up this many points to the corner they are blocking (they are not linemen)
   size: 1,             // master dial for every height and weight effect (0 switches them off)
@@ -640,6 +640,19 @@ function bod(e) {
   const v = { s: p.spot, wt: p.m.wt, ht: p.m.ht, w, h, len: clamp(h * 0.65 + arm * 0.35, -2.5, 2.5) };
   BODY_CACHE.set(p, v); return v;
 }
+// the ordinary man at a job: the play is run again with him to say what it was worth before the player made it better or worse
+const AVG_GRP = { QB: [['QB'], 32], RB: [['RB'], 48], FB: [['FB'], 16], WRX: [['WRX', 'WRZ', 'SLOT'], 96], WRZ: [['WRX', 'WRZ', 'SLOT'], 96], SLOT: [['WRX', 'WRZ', 'SLOT'], 96], TEY: [['TEY', 'TEH'], 48], TEH: [['TEY', 'TEH'], 48],
+  CB: [['CB', 'NCB'], 80], NCB: [['CB', 'NCB'], 80], FS: [['FS', 'SS'], 64], SS: [['FS', 'SS'], 64], MLB: [['MLB', 'WLB'], 64], WLB: [['MLB', 'WLB'], 64] };
+function avgMan(g, spot) {
+  const G = AVG_GRP[spot]; if (!G) return null;
+  const c = g._avg || (g._avg = {}), key = G[0][0]; if (c[key] !== undefined) return c[key];
+  const pool = Object.values(state.players).filter(p => p.a && p.m && p.tid >= 0 && G[0].includes(p.spot)).sort((a, b) => b.ovr - a.ovr).slice(0, G[1]);
+  if (pool.length < 4) return c[key] = null;
+  const a = {}, m = { ht: 0, wt: 0, arm: 0 }, n = pool.length;
+  for (const p of pool) { for (const k in p.a) a[k] = (a[k] || 0) + p.a[k] / n; m.ht += p.m.ht / n; m.wt += p.m.wt / n; m.arm += (p.m.arm || 32) / n; }
+  return c[key] = { id: -9, a, m, spot: key, pos: pool[0].pos, pb: 96 };
+}
+function avgEnt(g, e) { const p = e && e.p ? avgMan(g, e.p.spot) : null; return p ? Object.assign({}, e, { p, pen: 0, bust: false }) : null; }
 // catch radius, in inches over a six-foot man with 32-inch arms and an ordinary leap: height, arms, and how high he gets
 // up: how much of a jump ball this throw is (0 a slant in traffic, 1 a fade or a deep ball). Reach counts everywhere, less underneath.
 function radius(g, e, up) {

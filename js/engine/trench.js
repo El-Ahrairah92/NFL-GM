@@ -162,6 +162,7 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
     if (inside.length >= 2) { inside.sort((a, b) => ea(g, b.e, 'agi') - ea(g, a.e, 'agi')); twists.push([inside[1], inside[0]]); }
   }
   for (const [pen, loop] of twists) {
+    pen.tw = loop.tw = true; // charted: these two blockers had a game to pass off
     const aw = avg([pen, loop].map(a => ea(g, a.blockers[0], 'bawr')));
     if (rand() < fresh('twist', 0.22) * lgt(lgtP(TUNE.stuntMiss) + designT - (aw - 65) * 0.04)) { loop.free = true; loop.stuntWin = true; }
     else { pen.stuntDelay = 0.15; loop.stuntDelay = 0.15; }

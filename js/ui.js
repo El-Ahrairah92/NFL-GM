@@ -2804,7 +2804,29 @@ function cardSrc(p) {
   if (p.pos === 'K' || p.pos === 'P') { if (p.stats && p.stats.gp) return { a: {}, season: state.season, cur: true }; const r = (p.career || [])[p.career.length - 1]; return r ? { a: {}, season: r.season, cur: false } : null; }
   return null;
 }
+// ---- his sheet against the men who played enough at his position, and the four numbers that say most about him ----
+let ADV_POOL = { key: '', by: {} };
+function advPoolFor(p, src) {
+  const grp = advGroupOf(p); if (!grp || !ADV_POS[grp] || !src) return null;
+  const k = src.cur ? clamp((state.week - 1) / 17, 1 / 17, 1) : 1, key = state.season + ':' + state.week + ':' + state.phase + ':' + src.season + ':' + src.cur;
+  if (ADV_POOL.key !== key) ADV_POOL = { key, by: {} };
+  if (!ADV_POOL.by[grp]) { const pool = [];
+    for (const id in state.players) { const q = state.players[id]; if (advGroupOf(q) !== grp) continue; const a = src.cur ? q.advS : q.advPrev && q.advPrev.season === src.season ? q.advPrev : null; if (a && advQualified(grp, a, k)) pool.push([a, cardBox(q, src.season, src.cur) || {}]); }
+    ADV_POOL.by[grp] = pool; }
+  return { grp, k, pool: ADV_POOL.by[grp] };
+}
+function advSheetOf(p, src) { const P_ = advPoolFor(p, src); return P_ ? { grp: P_.grp, n: P_.pool.length, qual: advQualified(P_.grp, src.a, P_.k), sheet: advSheet(P_.grp, src.a, cardBox(p, src.season, src.cur) || {}, P_.pool, P_.k) } : null; }
+function advTag(m) { const q = Math.round(100 * m.pct); return m.dir === 0 ? (q >= 85 ? 'Among the highest' : q <= 15 ? 'Among the lowest' : ordinal(q) + ' percentile') : q >= 90 ? `Top ${Math.max(1, 100 - q)}%` : q <= 10 ? `Bottom ${Math.max(1, q)}%` : ordinal(q) + ' percentile'; }
+function advTone(m) { return m.dir === 0 || m.z === null ? '' : m.z >= 0.8 ? 'good' : m.z <= -0.8 ? 'bad' : ''; }
+function cardOutliersHTML(p, src) {
+  const S = advSheetOf(p, src); if (!S) return null;
+  const out = advOutliers(S.sheet, 4, S.grp);
+  if (!out.length) return `<div class="muted small">${S.qual ? 'Nothing stands out.' : 'Not enough snaps on tape yet.'}</div>`;
+  return `<div class="figs">${out.map((m, n) => { const tone = advTone(m);
+    return `<div class="fig" title="${esc(m.label)} · ${esc(ADV_SEC[m.sec])}${m.rank ? ` · ${m.rank}${m.dir === 0 ? '' : ordinal(m.rank).replace(/\d+/, '')} of ${m.n} qualified` : ''}${m.dir < 0 ? ' · lower is better' : m.dir === 0 ? ' · a description, not a grade' : ''}"><div class="fig-v ${tone}">${advFmt(m.id, m.v)}</div><div class="fig-l">${esc(m.label.replace(/ \(.*/, ''))}</div><span class="stamp ${tone || (m.dir === 0 ? 'note' : '')} s${n % 4}">${advTag(m)}</span></div>`; }).join('')}</div>${S.qual ? '' : '<div class="small muted" style="margin-top:4px">Short of the snaps to qualify: read these loosely.</div>'}`;
+}
 function cardFourHTML(p, src) {
+  { const o = src ? cardOutliersHTML(p, src) : null; if (o !== null) return o; }
   const ids = JOB_MET[p.spot];
   if (!ids || !src) return `<div class="muted small">Nothing on tape yet.</div>`;
   const gk = Object.keys(ADV_GROUPS).find(k => ADV_GROUPS[k].spots.includes(p.spot)), G = gk ? ADV_GROUPS[gk] : null;
@@ -2909,7 +2931,7 @@ function cardOverHTML(p) {
       ${box ? `<div class="ds-boxl">${box}</div>` : ''}`;
   }
   let h = `<div class="ds-top"><div>${left}</div><div class="ds-spider">${spiderHTML(p)}</div></div>`;
-  if (!prospect) h += `<div class="ds-rule"></div><div class="ds-sec"><span class="ds-lb">Advanced · ${(JOB_NAME[p.spot] || p.lbl).replace(/ \(.*/, '')}${src ? ` · ${src.season}${src.cur ? '' : ' (last season)'}` : ''}</span>${more('adv', 'All of them')}</div>${cardFourHTML(p, src)}`;
+  if (!prospect) h += `<div class="ds-rule"></div><div class="ds-sec"><span class="ds-lb">What stands out${src ? ` · ${src.season}${src.cur ? '' : ' (last season)'}` : ''}</span>${more('adv', 'All of them')}</div>${cardFourHTML(p, src)}`;
   h += `<div class="ds-rule"></div><div class="ds-sec"><span><span class="ds-lb">Contract</span> <span class="ds-con">${cardContractLine(p)}</span></span>${prospect ? '' : more('contract', 'The deal')}</div>`;
   return h;
 }
@@ -2971,11 +2993,14 @@ function cardStatsHTML(p) {
   return html || '<div class="muted small">Nothing on record yet.</div>';
 }
 function cardAdvHTML(p) {
-  const src = cardAdv(p);
-  let left = `<div class="section-title" style="margin-top:0">Grades by facet${src ? ` · ${src.season}${src.cur ? ' season to date' : ''}` : ''}</div>${glanceHTML(p, src)}`;
-  const adv = advRankHTML(p, src);
-  const right = adv ? `<div class="section-title" style="margin-top:0">Tracking <span class="small muted">· rank among qualified ${p.pos}s</span></div>${adv}` : '<div class="muted small">No tracking numbers at his position yet.</div>';
-  return `<div class="grid card-cols"><div>${left}</div><div>${right}</div></div>${advancedSeasonHTML(p)}`;
+  const src = cardAdv(p), S = src ? advSheetOf(p, src) : null;
+  const facets = `<div class="adv-sec"><div class="ds-lb">Grades by facet${src ? ` · ${src.season}${src.cur ? ' to date' : ''}` : ''}</div>${glanceHTML(p, src)}</div>`;
+  if (!S) { const adv = advRankHTML(p, src); return `<div class="grid card-cols"><div>${facets}</div><div>${adv ? `<div class="ds-lb">Tracking</div>${adv}` : '<div class="muted small">No tracking numbers at his position.</div>'}</div></div>${advancedSeasonHTML(p)}`; }
+  const outs = new Set(advOutliers(S.sheet, 4, S.grp).map(m => m.id));
+  const secs = Object.keys(ADV_SEC).map(k => { const ms = S.sheet.filter(m => m.sec === k); if (!ms.length) return '';
+    return `<div class="adv-sec"><div class="ds-lb">${ADV_SEC[k]}</div>${ms.map(m => { const has = m.v !== null && m.ok, tone = has ? advTone(m) : '', col = tone === 'good' ? 'var(--good)' : tone === 'bad' ? 'var(--bad)' : m.dir === 0 ? 'var(--accent)' : 'var(--mid)';
+      return `<div class="adv-r ${outs.has(m.id) ? 'out' : ''}" title="${m.dir < 0 ? 'Lower is better' : m.dir === 0 ? 'A description, not a grade' : 'Higher is better'}${has && m.pct !== null ? ' · ' + advTag(m) : m.v !== null ? ' · too small a sample to rank' : ''}"><span class="adv-l">${esc(m.label)}</span><span class="adv-v ${tone} ${has ? '' : 'muted'}">${advFmt(m.id, m.v)}</span><span class="adv-tag ${has && m.pct !== null ? tone || (m.dir === 0 ? 'note' : 'mid') : 'none'}">${has && m.pct !== null ? advTag(m).replace(' percentile', '').replace('Among the highest', 'High').replace('Among the lowest', 'Low') : m.v !== null ? 'few snaps' : ''}</span><span class="adv-rk">${has && m.rank ? m.rank + '/' + m.n : ''}</span></div>`; }).join('')}</div>`; }).join('');
+  return `<div class="small muted" style="margin-bottom:8px">Against ${S.n} ${esc(S.grp)} who have played enough to qualify${S.qual ? '' : ' (he has not)'} · the tag is where he stands among them · <b class="adv-key">marked</b> rows are the four on his overview</div><div class="adv-grid">${facets}${secs}</div>${advancedSeasonHTML(p)}`;
 }
 function cardContractHTML(p) {
   const c = p.contract || {};
@@ -3162,6 +3187,7 @@ function teamAdvRows(ta) {
     ['EPA / play', x => per(x, 'epa', 'plays')], ['Success rate', x => pc(x, 'succ', 'plays')], ['Explosive plays', x => (x && x.expl) || 0],
     ['Pass EPA / dropback', x => per(x, 'passEpa', 'db')], ['Rush EPA / carry', x => per(x, 'rushEpa', 'rushN')], ['Pressure rate allowed', x => pc(x, 'prs', 'db')],
     ['Time to throw', x => x && x.tttN ? (x.ttt / x.tttN).toFixed(2) + 's' : '—'], ['aDOT', x => per(x, 'air', 'airN', 1)], ['Early-down pass rate', x => pc(x, 'earlyPass', 'early')],
+    ['Runs stuffed', x => pc(x, 'ly0', 'lyN')], ['Line yards / carry (first 5)', x => per(x, 'ly5', 'lyN')], ['Second-level yards / carry', x => per(x, 'ly10', 'lyN')], ['Open-field yards / carry', x => per(x, 'lyOpen', 'lyN')], ['Pressure without a blitz (defense)', x => pc(x, 'nbPrs', 'nbDb')],
   ];
 }
 function filmRoomHTML(b) {

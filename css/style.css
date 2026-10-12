@@ -1067,3 +1067,29 @@ input, textarea, select, .selectable { -webkit-user-select: text; user-select: t
 .tile-dnp { border-style: dashed; } .tile-dnp .v { color: var(--muted); font-weight: 600; }
 .tile-pw { border-style: dashed; border-color: var(--accent); }
 .sp-no { fill: var(--muted); font-weight: 600; font-size: 10.5px; }
+/* the four outliers, and the full sheet */
+.ds-o.good { border-color: var(--good-b); } .ds-o.bad { border-color: var(--bad-b); }
+.ds-mt { font-size: 11px; color: var(--muted); margin-top: 4px; font-weight: 600; } .ds-mt.good { color: var(--good); } .ds-mt.bad { color: var(--bad); }
+.adv-grid { columns: 2; column-gap: 30px; }
+.adv-sec { break-inside: avoid; margin-bottom: 14px; }
+.adv-sec .ds-lb { border-bottom: 1px solid var(--line); padding-bottom: 3px; margin-bottom: 4px; }
+.adv-r { display: grid; grid-template-columns: minmax(0, 1fr) 60px 84px 46px; gap: 8px; align-items: center; font-size: 13px; padding: 3px 4px; border-radius: 3px; }
+.adv-r.out { background: var(--panel2); box-shadow: inset 2px 0 0 var(--text); }
+.adv-key { box-shadow: inset 2px 0 0 var(--text); background: var(--panel2); padding: 0 5px; font-weight: 600; }
+.adv-l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adv-bar { height: 4px; background: var(--panel2); border-radius: 2px; } .adv-r.out .adv-bar { background: var(--line); } .adv-bar i { display: block; height: 4px; border-radius: 2px; }
+.adv-v { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; } .adv-v.good { color: var(--good); } .adv-v.bad { color: var(--bad); }
+.adv-rk { text-align: right; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) { .adv-grid { columns: 1; } }
+/* the four figures: set like a printed report, each with the scout's rubber stamp under it */
+.figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 10px; }
+.fig { padding: 2px 16px 4px; border-left: 1px solid var(--line); } .fig:first-child { border-left: none; padding-left: 2px; }
+.fig-v { font-family: Georgia, 'Times New Roman', serif; font-size: 30px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--text); }
+.fig-v.good { color: var(--good); } .fig-v.bad { color: var(--bad); }
+.fig-l { font-size: 13px; line-height: 1.3; margin: 3px 0 8px; min-height: 34px; }
+.stamp { display: inline-block; font-family: 'Courier New', ui-monospace, Consolas, monospace; font-weight: 700; font-size: 11.5px; letter-spacing: 1.2px; text-transform: uppercase; padding: 2px 8px 1px; border: 1.5px solid currentColor; border-radius: 3px; color: #4a4638; opacity: .88; }
+.stamp.good { color: var(--good); } .stamp.bad { color: var(--bad); } .stamp.note { color: #24457c; }
+.stamp.s0 { transform: rotate(-2.5deg); } .stamp.s1 { transform: rotate(1.5deg); } .stamp.s2 { transform: rotate(-1deg); } .stamp.s3 { transform: rotate(2deg); }
+.adv-tag { justify-self: start; font-family: 'Courier New', ui-monospace, Consolas, monospace; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; font-size: 10.5px; padding: 1px 6px 0; border: 1px solid currentColor; border-radius: 3px; color: #4a4638; white-space: nowrap; }
+.adv-tag.good { color: var(--good); } .adv-tag.bad { color: var(--bad); } .adv-tag.note { color: #24457c; } .adv-tag.mid { color: #6f6a5c; } .adv-tag.none { border: none; color: var(--muted); padding-left: 0; }
+@media (max-width: 760px) { .figs { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; } .fig:nth-child(odd) { border-left: none; padding-left: 2px; } }
