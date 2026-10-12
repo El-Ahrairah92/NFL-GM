@@ -1153,3 +1153,22 @@ Effects are measured against an ordinary settled unit (81), so an average team p
 **Screens.** Coach cards show every rating as a bar and a word. The depth chart shows each unit's chemistry with the ceiling its coach allows, and has the green dot and the emergency quarterback. The Playbook page is tabs (overview, offense, defense, on the field, self-scout, who plays) and shows how much of each side's system is installed.
 
 Not built: fakes, onside kicks and punt blocks for a special teams Situations rating; how coach ratings change over a career beyond the caller's two; morale and individual behaviour under Accountability and Team Building; firing a coach in season.
+
+## 53. The player file, and leaping
+
+**The player file.** A player's card is a dossier: a bio header that never moves (name, job, age, height, weight, year, school, club, with tier, upside and status as pills) and five tabs under it. The card remembers the tab from one player to the next. A prospect has Overview and Scouting only.
+
+- Overview: the scout's one-line read; whether he is still improving, near his ceiling, topped out or declining, with a sentence; the season grade with his last five games in parentheses and his rank; a box-score line; the five drills as a web (40, bench, shuttle, 3-cone, vertical), each spoke his percentile at his position; four advanced numbers chosen by the job he holds; the contract in one line. It reads last season until he has 100 snaps this year. It fits on one screen.
+- Scouting: the finished-product panel, the report, strengths and weaknesses, comfort by spot, chemistry, scheme fit, the full physical sheet, and the controls for where he works and his preseason snaps.
+- Stats: grades by game and the career tables. Advanced: grades by facet and the tracked numbers with ranks. Contract: the summary, the cap hit by season, and incentives.
+
+The four numbers by job come from what is tracked today; the fuller list (eight per position, with the over-expected numbers) is to come.
+
+**Leaping.** A fifth athletic rating, in the explosive group, so it ages with speed and burst. An explosive man tends to jump well and a heavy one less well, but it is its own roll. Older saves fill it in from the vertical each man was measured at.
+
+What decides a ball in the air is catch radius: height, arm length and how high he gets, counted in inches, the same for the receiver and the man covering him. It replaces the league-wide size rating at the catch point, where a receiver was being scored against a 245-pound centre. How much of it counts depends on the throw. A deep ball, or anything thrown into the end zone from inside the 25, is a jump ball: reach and leap count in full, and leap for more than its inches, because the man who gets up first wins. An intermediate throw is half that. Underneath, nobody is jumping: reach counts for less, leap for nothing, and a contested catch in traffic goes to strength and hands on both sides. A defender who wins a jump ball is likelier to come down with it if he is a leaper. A big radius also makes an off-target ball a little more catchable, and linemen who get off the ground bat a few more passes. Weight still counts for boxing out. Contested Catch is still the largest part of the receiver's side and Ball Skills of the defender's.
+
+The vertical and the broad jump now read leaping first and burst second.
+
+**Vision.** A zone run is a read. When the playside is jammed the cutback is there, and whether the back finds it is vision (with the feet to make the cut). The linebackers flow with a zone run, so the cutback goes behind them and a back who misses it runs into where they are going. When it is not jammed, vision is pressing the lane until the crease shows. Behind pullers in a gap scheme there is one hole and vision is only the patience to let it open, which counts for much less. Past the line, in any scheme, vision sets up the next defender. Measured with every club forced into one scheme: a thirty-point gap in vision between two clubs' backs is worth about 0.28 yards a carry in zone and 0.15 in gap (it was 0.10 and 0.12).
+

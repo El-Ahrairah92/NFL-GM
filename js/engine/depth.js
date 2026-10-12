@@ -104,7 +104,7 @@ const TUNE = {
   slantHit: 0.3,        // chance a slant crosses an average blocker's face cleanly
   slantWin: 9, slantLose: 4, // pass-rush points when it does, and when he runs himself into the block
   // coverage / passing
-  openBase: -0.66,
+  radius: 1.5, cthW: 0.62, leapPick: 0.0015, catchPt: -9.4, reachShort: 0.6, leapW: 1.8, trafficStr: 0.25, trafficHnd: 0.15, trafficD: 0.25, catchPtD: 0, radCatch: 0.012, radRef: 2, batLeap: 0.02, openBase: -0.66,
   accScale: 0.042,      // how much ball placement decides whether a throw is catchable
   wrBlock: 12,         // receivers give up this many points to the corner they are blocking (they are not linemen)
   size: 1,             // master dial for every height and weight effect (0 switches them off)
@@ -125,7 +125,7 @@ const TUNE = {
   // tackling
   tackleBase: 2.3,
   tackleScale: 0.03,
-  eluMiss: 0.012, eluMid: 70, burMiss: 0.016, visMiss: 0.014,
+  eluMiss: 0.012, eluMid: 70, burMiss: 0.016, visMiss: 0.014, visLane: 0.14, visLaneBase: 0.3, cutFlow: 3, jamFill: 2.5, visZone: 0.012, visGap: 0.002,
   burHole: 0.004, burGet: 0.035, burScreen: 0.1, // burst: the hole stays open for a quick back, he is on the linebackers sooner, and a screen is upfield before the defense turns // how much a carrier's elusiveness (and burst at the line) makes a tackler miss
   runAfter: 0.3,        // yards a back typically adds after first contact
   carryLoad: 3.8,      // how much more a carry tires a back than an ordinary snap
@@ -640,6 +640,15 @@ function bod(e) {
   const v = { s: p.spot, wt: p.m.wt, ht: p.m.ht, w, h, len: clamp(h * 0.65 + arm * 0.35, -2.5, 2.5) };
   BODY_CACHE.set(p, v); return v;
 }
+// catch radius, in inches over a six-foot man with 32-inch arms and an ordinary leap: height, arms, and how high he gets
+// up: how much of a jump ball this throw is (0 a slant in traffic, 1 a fade or a deep ball). Reach counts everywhere, less underneath.
+function radius(g, e, up) {
+  const p = e && e.p; if (!p || !p.m) return 0;
+  if (up === undefined) up = 1;
+  return ((p.m.ht - 72) + ((p.m.arm || 32) - 32)) * (TUNE.reachShort + (1 - TUNE.reachShort) * up) + (p.a && p.a.jmp !== undefined ? (ea(g, e, 'jmp') - 70) * 0.26 * up * TUNE.leapW : 0); // on a true jump ball the leap is worth more than the inches alone: he is the one who gets there first
+}
+// 0 under about six yards, half at thirteen, all of it at twenty and on anything thrown into the end zone
+function jumpBall(air, toGoal) { return air >= toGoal - 1 && toGoal <= 25 && air >= 3 ? 1 : clamp((air - 6) / 14, 0, 1); }
 function ea(g, e, k) {
   const p = e.p;
   if (!p.a) return 45 + (p._gs || 0);

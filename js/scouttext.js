@@ -15,6 +15,8 @@ const TRAITS = {
     n: [['A little tight in the hips', 'Rounds off his cuts', 'Straight-line athlete'], ['Stiff hips', 'Struggles to redirect', 'Labored change of direction', 'Plays tall and tight'], ['Robotic mover', 'Cannot change direction', 'Turns like a cruise ship']] },
   str: { p: [['Functional strength', 'Holds his ground', 'Plays stronger than he looks'], ['Powerful at the point of attack', 'Heavy hands', 'Moves people'], ['Rare play strength', 'Bully', 'Overpowers grown men', 'Weight-room freak']],
     n: [['Could add strength', 'Average power', 'Needs a year in the weight room'], ['Gets pushed around', 'Lacks anchor strength', 'Loses the leverage battle', 'Overpowered too often'], ['Gets tossed aside', 'Badly underpowered', 'Folds on contact']] },
+  jmp: { p: [['Gets off the ground well', 'Good leaper'], ['Explosive leaper', 'Plays above the rim', 'High-points the ball'], ['Rare vertical explosion', 'Jumps out of the building', 'Wins everything in the air']],
+    n: [['Ordinary leaper', 'Plays below the rim'], ['Earthbound', 'Does not win in the air'], ['Cannot get off the ground']] },
   siz: { p: [['Good size', 'Well put together'], ['Prototype size', 'Looks the part', 'Ideal frame'], ['Rare size', 'Enormous frame', 'Built in a lab']],
     n: [['A touch undersized', 'Lean frame'], ['Undersized', 'Lacks ideal length', 'Small for the position'], ['Tiny for the position', 'Size is a major question']] },
   sacc: { p: [['Accurate underneath', 'Throws a catchable ball'], ['Very accurate short and intermediate', 'Puts it on the numbers', 'Hits receivers in stride'], ['Pinpoint ball placement', 'Surgical underneath', 'Throws receivers open']],
@@ -80,7 +82,7 @@ const TRAITS = {
   pspn: { p: [['Controls the bounce'], ['Kills it dead'], ['Master of the backspin']], n: [['Bounces are unpredictable'], ['Touchback-prone'], ['Touchback machine']] },
 };
 // noun for "X is the best part of his game"
-const TRAIT_NOUN = { st: 'special teams work', spd: 'long speed', bur: 'burst', agi: 'lateral quickness', str: 'play strength', siz: 'size', sacc: 'short accuracy', dacc: 'deep ball', arm: 'arm strength', proc: 'processing',
+const TRAIT_NOUN = { st: 'special teams work', spd: 'long speed', bur: 'burst', agi: 'lateral quickness', str: 'play strength', siz: 'size', jmp: 'leaping ability', sacc: 'short accuracy', dacc: 'deep ball', arm: 'arm strength', proc: 'processing',
   dec: 'decision-making', pkt: 'pocket presence', tor: 'ability to throw on the move', vis: 'vision', elu: 'elusiveness', bal: 'contact balance', bsec: 'ball security', rte: 'route running',
   rel: 'release', hnd: 'hands', cth: 'contested-catch ability', pbk: 'pass protection', rbk: 'run blocking', bawr: 'assignment awareness', prsh: 'pass rush', shed: 'block shedding',
   tkl: 'tackling', strp: 'knack for forcing fumbles', prec: 'instincts', man: 'man coverage', zone: 'zone coverage', prs: 'press technique', bsk: 'ball skills',
@@ -91,14 +93,14 @@ const PROFILE_ATTRS = {
   QB: ['sacc', 'dacc', 'arm', 'proc', 'dec', 'pkt', 'tor', 'spd', 'elu'],
   RB: ['vis', 'elu', 'bal', 'bsec', 'spd', 'bur', 'str', 'hnd', 'rte', 'pbk', 'st'],
   FB: ['rbk', 'pbk', 'bawr', 'str', 'hnd', 'bal', 'vis', 'st'],
-  WR: ['rte', 'rel', 'hnd', 'cth', 'spd', 'bur', 'agi', 'elu', 'siz', 'rbk', 'st'],
-  TE: ['rte', 'hnd', 'cth', 'spd', 'rbk', 'pbk', 'bawr', 'str', 'elu', 'siz', 'st'],
+  WR: ['rte', 'rel', 'hnd', 'cth', 'spd', 'bur', 'agi', 'jmp', 'elu', 'siz', 'rbk', 'st'],
+  TE: ['rte', 'hnd', 'cth', 'spd', 'jmp', 'rbk', 'pbk', 'bawr', 'str', 'elu', 'siz', 'st'],
   OL: ['pbk', 'rbk', 'bawr', 'agi', 'str', 'siz'],
   IDL: ['prsh', 'shed', 'tkl', 'prec', 'bur', 'str', 'siz'],
   EDGE: ['prsh', 'shed', 'tkl', 'prec', 'bur', 'spd', 'agi', 'str', 'st'],
   LB: ['tkl', 'shed', 'prec', 'zone', 'man', 'prsh', 'spd', 'str', 'st'],
-  CB: ['man', 'zone', 'prs', 'bsk', 'prec', 'tkl', 'spd', 'agi', 'siz', 'st'],
-  S: ['zone', 'man', 'bsk', 'prec', 'tkl', 'shed', 'spd', 'str', 'st'],
+  CB: ['man', 'zone', 'prs', 'bsk', 'prec', 'tkl', 'spd', 'agi', 'jmp', 'siz', 'st'],
+  S: ['zone', 'man', 'bsk', 'prec', 'tkl', 'shed', 'spd', 'jmp', 'str', 'st'],
   K: ['kcon', 'krng', 'kfal', 'ktrj'], P: ['pdis', 'pplc', 'phng', 'pspn'],
 };
 const PROFILE_GROUP = { QB: 'QB', RB: 'RB', FB: 'FB', WRX: 'WR', WRZ: 'WR', SLOT: 'WR', TEY: 'TE', TEH: 'TE', LT: 'OL', LG: 'OL', C: 'OL', RG: 'OL', RT: 'OL',
@@ -115,7 +117,7 @@ const ROLES = {
   FB: { rbk: ['lead-blocking fullback', 'old-school hammer', 'iso-lead thumper'], pbk: ['protection-first fullback'], bawr: ['smart, assignment-sure fullback'], str: ['short-yardage battering ram'], hnd: ['pass-catching fullback', 'H-back type'], bal: ['fullback who can carry it'], vis: ['fullback with tailback instincts'] },
   WR: { rte: ['route technician', 'separator', 'chain-moving route runner'], rel: ['press-beating receiver', 'release artist'], hnd: ['sure-handed possession receiver', 'reliable chain mover'], cth: ['contested-catch specialist', 'jump-ball receiver', 'red-zone target'],
     spd: ['field stretcher', 'vertical threat', 'take-the-top-off burner'], bur: ['quick-twitch separator', 'sudden underneath receiver'], agi: ['shifty slot type', 'option-route specialist'], elu: ['run-after-catch weapon', 'catch-and-run playmaker', 'gadget player'],
-    siz: ['big-bodied boundary receiver', 'size mismatch'], rbk: ['blocking receiver', 'run-game enforcer'] },
+    siz: ['big-bodied boundary receiver', 'size mismatch'], jmp: ['above-the-rim receiver', 'high-pointing receiver'], rbk: ['blocking receiver', 'run-game enforcer'] },
   TE: { rte: ['move tight end', 'route-running tight end', 'big slot type'], hnd: ['reliable safety-valve tight end', 'chain-moving tight end'], cth: ['red-zone tight end', 'seam-stretching target'], spd: ['seam-stretching tight end', 'vertical tight end'],
     rbk: ['in-line blocking tight end', 'sixth lineman type', 'run-game tight end'], pbk: ['protection tight end', 'max-protect specialist'], bawr: ['smart blocking tight end'], str: ['point-of-attack mauler'], elu: ['run-after-catch tight end'], siz: ['oversized in-line tight end'] },
   OL: { pbk: ['pass-protecting technician', 'blind-side protector type', 'finesse pass blocker'], rbk: ['run-game mauler', 'road grader', 'drive blocker'], bawr: ['cerebral lineman', 'assignment-sure anchor of the line', 'smart, steady veteran type'],
@@ -127,8 +129,8 @@ const ROLES = {
   LB: { tkl: ['tackling machine', 'downhill thumper', 'box linebacker'], shed: ['take-on linebacker', 'block-destroying run stopper'], prec: ['instinctive green-dot linebacker', 'quarterback of the defense'], zone: ['coverage linebacker', 'zone-dropping linebacker'],
     man: ['matchup linebacker', 'tight-end eraser'], prsh: ['blitzing linebacker', 'pressure-package weapon'], spd: ['sideline-to-sideline run-and-chase linebacker', 'modern space linebacker'], str: ['old-school thumper'] },
   CB: { man: ['man-coverage corner', 'travel corner', 'sticky cover man'], zone: ['zone corner', 'off-coverage playmaker', 'instinctive zone defender'], prs: ['press corner', 'physical boundary corner'], bsk: ['ballhawking corner', 'takeaway artist'],
-    prec: ['smart, instinctive corner'], tkl: ['run-support corner', 'physical tackling corner'], spd: ['recovery-speed corner', 'deep-speed cover man'], agi: ['quick-footed slot corner', 'mirror-and-match nickel'], siz: ['long, rangy boundary corner', 'big-bodied press corner'] },
-  S: { zone: ['center-field safety', 'rangy deep-middle safety', 'single-high free safety'], man: ['matchup safety', 'big nickel type'], bsk: ['ballhawking safety', 'turnover machine'], prec: ['instinctive last line of defense', 'smart, communicative safety'],
+    prec: ['smart, instinctive corner'], tkl: ['run-support corner', 'physical tackling corner'], spd: ['recovery-speed corner', 'deep-speed cover man'], agi: ['quick-footed slot corner', 'mirror-and-match nickel'], siz: ['long, rangy boundary corner', 'big-bodied press corner'], jmp: ['high-pointing corner'] },
+  S: { zone: ['center-field safety', 'rangy deep-middle safety', 'single-high free safety'], man: ['matchup safety', 'big nickel type'], bsk: ['ballhawking safety', 'turnover machine'], jmp: ['high-pointing safety'], prec: ['instinctive last line of defense', 'smart, communicative safety'],
     tkl: ['box safety', 'downhill enforcer', 'run-support safety'], shed: ['hybrid linebacker-safety'], spd: ['rangy sideline-to-sideline safety'], str: ['thumping strong safety'] },
   K: { kcon: ['consistent kicker'], krng: ['big-legged kicker'], kfal: ['long-range specialist'], ktrj: ['clean-striking kicker'] },
   P: { pdis: ['big-legged punter'], pplc: ['directional punter'], phng: ['hang-time punter'], pspn: ['pooch-punt specialist'] },
@@ -178,6 +180,7 @@ const ROLE_IMPLIES = [[/press/i, ['prs']], [/slot|shifty|quick-footed|mirror|sud
   [/run stuffer|two-gap|block-eating|stack-and-shed|edge-set|take-on|run stopper|block-destroy|hybrid/i, ['shed']], [/pass-protect|protector|pass-pro|blitz-pickup|protection|pocket anchor|max-protect/i, ['pbk']], [/run-game|road grader|drive blocker|lead-block|blocking|in-line|sixth lineman|sealed|point-of-attack|zone blocker|iso-lead/i, ['rbk']],
   [/scrambler|escape|off-script|creator/i, ['elu']], [/pocket|poised/i, ['pkt']], [/game manager|caretaker|low-risk/i, ['dec']], [/big-armed|arm-talent|power thrower/i, ['arm']], [/vertical passer|downfield|shot-play/i, ['dacc']], [/rhythm|timing|ball-control|distributor/i, ['sacc']],
   [/movement passer|bootleg|off-script/i, ['tor']], [/tackle-breaking|yards-after-contact|contact|grinder|banger/i, ['bal']], [/ball-security|trustworthy|clock-killer/i, ['bsec']], [/patient|one-cut|between-the-tackles|tailback instincts/i, ['vis']],
+  [/above-the-rim|high-pointing|wins in the air/i, ['jmp']],
   [/shifty|make-you-miss|jitterbug|scatback|run-after-catch|catch-and-run|gadget|space back/i, ['elu']], [/release|press-beating/i, ['rel']], [/special team|coverage-unit|kick/i, ['st', 'tkl', 'bur']], [/instincts|sees the field|assignments/i, ['prec', 'bawr', 'proc']], [/can run|real speed/i, ['spd', 'bur']], [/quick feet|changes direction/i, ['agi']], [/real power|plays strong/i, ['str']], [/big|long|wide-bodied|massive|oversized|size/i, ['siz']]];
 function roleImplied(phrase) { const out = new Set(); for (const [re, ks] of ROLE_IMPLIES) if (re.test(phrase)) ks.forEach(k => out.add(k)); return out; }
 // a starter is not described by his special teams work, and a backup who brings none has a real hole
@@ -190,7 +193,7 @@ function rolesFor(p) {
   return out;
 }
 // "…with ___" add-ons for a second calling card
-const MODS = { st: ['who is a core special teamer', 'who covers kicks', 'who earns his keep on special teams'], spd: ['with real speed', 'who can run'], bur: ['with a quick first step', 'with good burst'], agi: ['with quick feet', 'who changes direction well'], str: ['with real power', 'who plays strong'], siz: ['with good size'],
+const MODS = { st: ['who is a core special teamer', 'who covers kicks', 'who earns his keep on special teams'], spd: ['with real speed', 'who can run'], bur: ['with a quick first step', 'with good burst'], agi: ['with quick feet', 'who changes direction well'], str: ['with real power', 'who plays strong'], siz: ['with good size'], jmp: ['who plays above the rim', 'who wins in the air'],
   sacc: ['who is accurate underneath'], dacc: ['who can hit the deep ball'], arm: ['with a live arm'], proc: ['who sees the field well'], dec: ['who protects the football'], pkt: ['who stays calm in the pocket'], tor: ['who can throw on the move'],
   vis: ['with good vision', 'who finds the crease'], elu: ['with some wiggle', 'who can make a man miss'], bal: ['who runs through contact', 'with good contact balance'], bsec: ['who holds onto the ball'], rte: ['who runs good routes', 'with route polish'],
   rel: ['who beats press'], hnd: ['with reliable hands', 'who catches the ball well'], cth: ['who wins in traffic'], pbk: ['who holds up in pass protection', 'you can trust in pass pro'], rbk: ['who helps in the run game', 'who blocks'],
@@ -199,7 +202,7 @@ const MODS = { st: ['who is a core special teamer', 'who covers kicks', 'who ear
   pdis: ['with a big leg'], pplc: ['with good placement'], phng: ['with good hang time'], pspn: ['with touch'] };
 // "…who ___" caveats: [mild, bad, awful]
 const CAVEATS = { st: [['who adds little on special teams'], ['who does not help on special teams'], ['who offers nothing on special teams']], spd: [['without real long speed', 'who is not a burner'], ['who lacks top-end speed', 'who gets caught from behind'], ['with no speed to speak of']], bur: [['who is not sudden'], ['who is slow to accelerate', 'without a second gear'], ['who is heavy-footed']],
-  agi: [['who is a little stiff'], ['with stiff hips', 'who struggles to change direction'], ['who cannot redirect']], str: [['who could be stronger'], ['who gets pushed around', 'who lacks play strength'], ['who is badly underpowered']], siz: [['who is a bit undersized'], ['who is undersized'], ['who is tiny for the position']],
+  agi: [['who is a little stiff'], ['with stiff hips', 'who struggles to change direction'], ['who cannot redirect']], str: [['who could be stronger'], ['who gets pushed around', 'who lacks play strength'], ['who is badly underpowered']], siz: [['who is a bit undersized'], ['who is undersized'], ['who is tiny for the position']], jmp: [['who is an ordinary leaper'], ['who plays below the rim'], ['who cannot get off the ground']],
   sacc: [['whose ball placement wanders'], ['who sprays the ball underneath'], ['who misses the easy ones']], dacc: [['whose deep ball comes and goes'], ['with an erratic deep ball'], ['who cannot connect downfield']], arm: [['with an average arm'], ['with a limited arm'], ['with a noodle arm']],
   proc: [['who is a beat slow through his reads'], ['who is slow through progressions'], ['who cannot read a defense']], dec: [['who will force a throw'], ['who forces too many throws', 'who is turnover-prone'], ['who is reckless with the ball']], pkt: [['who gets antsy in the pocket'], ['who panics under pressure'], ['who melts against the rush']],
   tor: [['who is better from a set base'], ['who struggles outside the pocket'], ['who cannot throw on the move']], vis: [['who leaves yards on the field'], ['who misses running lanes'], ['with no feel for running lanes']], elu: [['with little wiggle'], ['who will not make anyone miss'], ['who goes down to the first man every time']],

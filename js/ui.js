@@ -2748,26 +2748,158 @@ function comfortHTML(p) {
   return lineStripHTML(p) + cf.map(([s, c]) => `<span class="pill ${CF_CLS[comfortLabel(c)]}" title="${trueOn() ? Math.round(c) : ''}">${SPOTS[s].l} · ${comfortLabel(c)}</span>`).join(' ') +
     ` <span class="small muted">· learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an average pace'}</span>`;
 }
-function playerModal(pid, replace) {
-  const p = P(pid);
-  if (!p) return;
-  const u = state.userTid, prospect = p.tid === -2, src = cardAdv(p);
-  const team = p.tid >= 0 ? teamLink(p.tid, true) : p.tid === -3 ? `Practice squad · ${teamLink(p.psTid, true)}` : p.tid === -1 ? '<span class="muted">Free Agent</span>' : '<span class="muted">Draft Prospect</span>';
-  const tierT = tierOf(p), upT = upsideOf(p), stars = starsOf(p);
-  const sg = src ? overallGrade(src.a, p.spot) : null, form = (p.form || []).slice(-5);
-  let html = `<div class="row"><h2 style="margin:0">${esc(pname(p))}</h2><span class="pill">${esc(p.lbl)}</span> ${statusPills(p)} ${stars !== null && !prospect ? starHTML(stars) : ''} ${rasHTML(p)}</div>
-    <div class="muted" style="margin:4px 0 12px">${team} · Age ${p.age} · ${esc(p.college)} · ${p.draft ? `Drafted ${p.draft.year} Rd ${p.draft.round} (#${p.draft.pick}) by ${T(p.draft.tid).abbr}` : prospect ? `${p.draftYear} draft prospect` : 'Undrafted'} · ${p.exp} yr${p.exp === 1 ? '' : 's'} exp</div>
-    <div class="stat-tiles" style="margin-bottom:12px">
-      <div class="tile"><div class="v ${TIER_CLS[tierT]}" style="font-size:16px">${tierT}</div><div class="l">${prospect ? 'Ready now as' : 'Tier'}${trueOn() ? ` · true ${p.ovr}` : ''}</div></div>
-      <div class="tile"><div class="v ${UP_CLS[upT]}" style="font-size:14px">${upT}${upMark(p)}</div><div class="l">Upside${trueOn() ? ` · true ${p.pot}` : ''}</div></div>
-      ${prospect ? '' : `<div class="tile"><div class="v" style="font-size:15px">${p.tid === -1 ? faExpTxt(p) : fmtContract(p)}</div><div class="l">${p.tid === -1 ? (faInMarket(p) ? 'Expected / yr' : 'Asking / yr') : 'Contract'}</div></div>
-      <div class="tile"><div class="v">${gradeChip(sg)}</div><div class="l">${src ? `${src.season} grade${src.cur ? '' : ' (last season)'}` : 'Season grade'}</div>${src ? `<div class="rk">${gradeRankTxt(src.cur ? gradeRanks()[p.id] : seasonRank(p, p.career.find(r => r.season === src.season) || {})) || (sg !== null ? 'below min. snaps' : '')}</div>` : ''}</div>
-      <div class="tile"><div class="v" style="font-size:14px">${form.length ? form.map(g => gradeChip(Math.round(g))).join(' ') : '—'}</div><div class="l">Recent games</div></div>`}
-    </div>`;
-  html += devPanelHTML(p);
-  if (p.injury) html += `<div class="callout"><b class="bad">Injured:</b> ${esc(p.injury.name)} — out ${p.injury.weeks} more week${p.injury.weeks > 1 ? 's' : ''}${onIR(p) ? ' (IR)' : ''}.</div>`;
-  // ---- left: the scouting read, comfort, fit, contract ----
-  let left = scoutingHTML(p).replace(/<div class="row small" style="margin-top:6px">[\s\S]*?<\/div>/, '');
+// ---------- the player file: a bio header that never moves, and tabs under it ----------
+const CARD_TABS = [['over', 'Overview'], ['scout', 'Scouting'], ['stats', 'Stats'], ['adv', 'Advanced'], ['contract', 'Contract']];
+const JOB_NAME = { QB: 'Quarterback', RB: 'Running back', FB: 'Fullback', WRX: 'Split end (X)', WRZ: 'Flanker (Z)', SLOT: 'Slot receiver', TEY: 'In-line tight end', TEH: 'Move tight end', LT: 'Left tackle', LG: 'Left guard', C: 'Center', RG: 'Right guard', RT: 'Right tackle',
+  NT: 'Nose tackle', DT: 'Defensive tackle', DE: 'Defensive end', EDGE: 'Edge rusher', MLB: 'Middle linebacker', WLB: 'Coverage linebacker', CB: 'Outside corner', NCB: 'Slot corner', FS: 'Deep safety', SS: 'Box safety', K: 'Kicker', P: 'Punter' };
+// what the overview can show: [label, (advanced, box score) => value or null, decimals, direction (0: no judgment), unit]
+const cardPct = (n, d) => d ? 100 * (n || 0) / d : null;
+const CARD_MET = {
+  epaDb: ['EPA per dropback', a => a.db ? a.epaDb / a.db : null, 2, 1], cpoe: ['Completion % over expected', a => a.att ? 100 * (a.cmp - a.xc) / a.att : null, 1, 1],
+  adot: ['Depth of target', a => a.att ? a.air / a.att : null, 1, 0], ttt: ['Time to throw', a => a.tttN ? a.ttt / a.tttN : null, 2, 0, 's'], prsd: ['Pressured', a => cardPct(a.prsd, a.db), 0, -1, '%'],
+  yaco: ['Yards after contact', a => a.rush ? a.yaco / a.rush : null, 2, 1], mtf: ['Missed tackles forced', a => cardPct(a.mtf, a.rush), 0, 1, '%'], ybc: ['Yards before contact', a => a.rush ? a.ybc / a.rush : null, 2, 1],
+  stuff: ['Stuffed', a => cardPct(a.stuff, a.rush), 0, -1, '%'], epaRush: ['EPA per carry', a => a.rush ? (a.epaRush || 0) / a.rush : null, 2, 1],
+  yprr: ['Yards per route', (a, s) => a.routes && s ? (s.recY || 0) / a.routes : null, 2, 1], sep: ['Separation', a => a.sepR && a.routes ? a.sepR / a.routes : a.sepN ? a.sep / a.sepN : null, 2, 1, ' yd'],
+  tpr: ['Targets per route', a => cardPct(a.sepN, a.routes), 0, 1, '%'], radot: ['Depth of target', a => a.sepN ? a.adot / a.sepN : null, 1, 0], epaTgt: ['EPA per target', a => a.sepN ? (a.epaTgt || 0) / a.sepN : null, 2, 1],
+  ctd: ['Contested catches', a => facetGrade(a, 'rec_ctd', 15), 0, 1, '', 1], rbg: ['Run blocking', a => facetGrade(a, 'rb', 15), 0, 1, '', 1], pbg: ['Pass protection', a => facetGrade(a, 'pb', 15), 0, 1, '', 1],
+  pbw: ['Pass-block win rate', a => a.pbSnaps ? 100 - 100 * (a.pbLoss || 0) / a.pbSnaps : null, 1, 1, '%'], prsA: ['Pressure allowed', a => cardPct(a.prsA, a.pbSnaps), 1, -1, '%'],
+  sackA: ['Sacks allowed', a => a.pbSnaps ? a.sackA || 0 : null, 0, -1], rbw: ['Run-block win rate', a => cardPct(a.rbWins, a.rbSnaps), 1, 1, '%'],
+  prw: ['Pass-rush win rate', a => cardPct(a.prWins, a.prSnaps), 1, 1, '%'], prsR: ['Pressure rate', (a, s) => a.prSnaps && s ? 100 * (s.prs || 0) / a.prSnaps : null, 1, 1, '%'], dbl: ['Double-teamed', a => cardPct(a.dbl, a.prSnaps), 0, 0, '%'],
+  rsw: ['Run-defense win rate', a => cardPct(a.rdWins, a.rdSnaps), 1, 1, '%'], stop: ['Run-stop rate', a => cardPct(a.stops, a.rdSnaps), 1, 1, '%'],
+  tgtd: ['Targeted', a => cardPct(a.tgtA, a.covSnaps), 1, 0, '%'], cmpA: ['Completion % allowed', a => cardPct(a.cmpA, a.tgtA), 0, -1, '%'], ypcs: ['Yards per coverage snap', a => a.covSnaps ? (a.ydsA || 0) / a.covSnaps : null, 2, -1],
+  rtgA: ['Passer rating allowed', a => a.tgtA ? ratingAllowed(a) || 0 : null, 1, -1], mt: ['Missed tackles', a => cardPct(a.mt, a.tkAtt), 0, -1, '%'],
+  fgp: ['Field goals', (a, s) => s && s.fga ? 100 * (s.fgm || 0) / s.fga : null, 0, 1, '%'], fgl: ['Longest', (a, s) => s && s.fga ? s.fgLng || 0 : null, 0, 1], xpp: ['Extra points', (a, s) => s && s.xpa ? 100 * (s.xpm || 0) / s.xpa : null, 0, 1, '%'],
+  pavg: ['Punt average', (a, s) => s && s.pnt ? s.pntY / s.pnt : null, 1, 1], pi20: ['Inside the 20', (a, s) => s && s.pnt ? 100 * (s.pi20 || 0) / s.pnt : null, 0, 1, '%'], ptb: ['Touchbacks', (a, s) => s && s.pnt ? 100 * (s.ptb || 0) / s.pnt : null, 0, -1, '%'],
+};
+// the four a man is judged on, by the job he holds; the next ones in line fill in for a number he has not produced
+const JOB_MET = { QB: ['epaDb', 'cpoe', 'adot', 'ttt', 'prsd'], RB: ['yaco', 'mtf', 'ybc', 'stuff', 'epaRush'], FB: ['rbg', 'yaco', 'yprr', 'pbg', 'stuff'],
+  WRX: ['yprr', 'ctd', 'radot', 'tpr', 'sep'], WRZ: ['yprr', 'sep', 'radot', 'epaTgt', 'tpr'], SLOT: ['yprr', 'sep', 'tpr', 'epaTgt', 'radot'], TEY: ['rbg', 'pbg', 'yprr', 'tpr', 'sep'], TEH: ['yprr', 'tpr', 'sep', 'ctd', 'epaTgt'],
+  LT: ['pbw', 'prsA', 'sackA', 'rbw'], RT: ['pbw', 'prsA', 'sackA', 'rbw'], LG: ['rbw', 'pbw', 'prsA', 'sackA'], C: ['rbw', 'pbw', 'prsA', 'sackA'], RG: ['rbw', 'pbw', 'prsA', 'sackA'],
+  DE: ['prw', 'prsR', 'stop', 'dbl', 'rsw'], EDGE: ['prw', 'prsR', 'stop', 'dbl', 'rsw'], NT: ['stop', 'dbl', 'rsw', 'prw'], DT: ['stop', 'dbl', 'prw', 'rsw'],
+  MLB: ['stop', 'mt', 'ypcs', 'rsw', 'rtgA'], WLB: ['ypcs', 'rtgA', 'cmpA', 'mt', 'stop'], CB: ['ypcs', 'rtgA', 'cmpA', 'tgtd'], NCB: ['ypcs', 'mt', 'tgtd', 'rtgA'], FS: ['rtgA', 'ypcs', 'cmpA', 'mt'], SS: ['stop', 'mt', 'ypcs', 'rtgA'],
+  K: ['fgp', 'fgl', 'xpp'], P: ['pavg', 'pi20', 'ptb'] };
+function cardBox(p, season, cur) { return cur ? p.stats : (p.career || []).find(r => r.season === season) || null; }
+// the overview reads this season once he has played enough of it, and last season until then
+function cardSrc(p) {
+  const cur = p.advS && Object.keys(p.advS).length > 1 ? p.advS : null, prev = p.advPrev || null;
+  if (cur && ((p.stats && p.stats.snp) || 0) >= 100) return { a: cur, season: state.season, cur: true };
+  if (prev) return { a: prev, season: prev.season, cur: false };
+  if (cur) return { a: cur, season: state.season, cur: true };
+  if (p.pos === 'K' || p.pos === 'P') { if (p.stats && p.stats.gp) return { a: {}, season: state.season, cur: true }; const r = (p.career || [])[p.career.length - 1]; return r ? { a: {}, season: r.season, cur: false } : null; }
+  return null;
+}
+function cardFourHTML(p, src) {
+  const ids = JOB_MET[p.spot];
+  if (!ids || !src) return `<div class="muted small">Nothing on tape yet.</div>`;
+  const gk = Object.keys(ADV_GROUPS).find(k => ADV_GROUPS[k].spots.includes(p.spot)), G = gk ? ADV_GROUPS[gk] : null;
+  const qualK = src.cur ? clamp((state.week - 1) / 17, 1 / 17, 1) : 1, mineS = cardBox(p, src.season, src.cur), qual = G ? G.min(src.a, qualK) : true;
+  const pool = [];
+  for (const id in state.players) { const q = state.players[id]; if (q.pos !== p.pos || q.id === p.id) continue; const a = p.pos === 'K' || p.pos === 'P' ? {} : src.cur ? q.advS : q.advPrev && q.advPrev.season === src.season ? q.advPrev : null; if (!a) continue;
+    const s = cardBox(q, src.season, src.cur); if (G ? G.min(a, qualK) : s && s.gp) pool.push([a, s]); }
+  const tiles = [];
+  for (const id of ids) {
+    if (tiles.length === 4) break;
+    const [label, fn, dec, dir, unit, isGrade] = CARD_MET[id], v = fn(src.a, mineS);
+    if (v === null || v === undefined || isNaN(v)) continue;
+    const vals = pool.map(([a, s]) => fn(a, s)).filter(x => x !== null && x !== undefined && !isNaN(x)), below = vals.filter(x => x < v).length;
+    const raw = vals.length ? below / vals.length : 0.5, pct = dir < 0 ? 1 - raw : raw, col = !dir ? 'var(--accent)' : pct >= 0.7 ? 'var(--good)' : pct >= 0.35 ? 'var(--mid)' : pct >= 0.15 ? 'var(--warn)' : 'var(--bad)';
+    const txt = (dec === 2 && v < 0 ? '−' + Math.abs(v).toFixed(2) : v.toFixed(dec).replace('-', '−')) + (unit || '');
+    tiles.push(`<div class="ds-m" title="${qual ? `${ordinal(Math.round(100 * raw))} percentile among qualified ${p.pos}s${dir < 0 ? ' (lower is better)' : !dir ? ' (a style, not a grade)' : ''}` : 'Too few snaps to rank'}"><div class="ds-ml">${label}${isGrade ? ' <span class="muted">grade</span>' : ''}</div><div class="ds-mv">${txt}</div><div class="ds-bar"><i style="width:${qual ? Math.round(clamp(pct, 0.03, 1) * 100) : 0}%;background:${col}"></i></div></div>`);
+  }
+  return tiles.length ? `<div class="ds-four">${tiles.join('')}</div>` : `<div class="muted small">Not enough snaps on tape yet.</div>`;
+}
+// the five drills as a web, each spoke his percentile against his own position
+const SPIDER = [['forty', '40 yard', -1, v => v.toFixed(2)], ['bench', 'Bench', 1, v => v], ['shut', 'Shuttle', -1, v => v.toFixed(2)], ['cone', '3-cone', -1, v => v.toFixed(2)], ['vert', 'Vertical', 1, v => v + '"']];
+function spiderHTML(p, peers) {
+  if (!p.m) return '';
+  ensureJumps(p); peers = peers || Object.values(state.players).filter(q => q.m && q.pos === p.pos); peers.forEach(ensureJumps);
+  const cx = 115, cy = 94, R = 64, ang = i => (-90 + 72 * i) * Math.PI / 180, pt = (i, r) => `${(cx + Math.cos(ang(i)) * r).toFixed(1)},${(cy + Math.sin(ang(i)) * r).toFixed(1)}`;
+  const pcts = SPIDER.map(([k, , dir]) => { const v = p.m[k]; if (v === undefined || v === null) return null; const vals = peers.map(q => q.m[k]).filter(x => x !== undefined && x !== null), below = vals.filter(x => x < v).length, raw = vals.length > 1 ? below / (vals.length - 1) : 0.5; return clamp(dir > 0 ? raw : 1 - raw, 0, 1); });
+  const ring = f => `<polygon points="${SPIDER.map((_, i) => pt(i, R * f)).join(' ')}" class="sp-ring"/>`;
+  const LBL = [[115, 12, 'middle'], [181, 66, 'start'], [158, 160, 'middle'], [72, 160, 'middle'], [49, 66, 'end']];
+  const yr = p.draft ? p.draft.year : p.tid === -2 ? p.draftYear : state.season - (p.exp || 0);
+  return `<div class="ds-lb" style="text-align:center">Measurables · against ${esc(p.pos)}s</div>
+    <svg viewBox="0 0 230 178" class="spider" role="img" aria-label="Combine results as percentiles at his position">${ring(1)}${ring(0.5)}
+    ${SPIDER.map((_, i) => `<line x1="${cx}" y1="${cy}" x2="${pt(i, R).split(',')[0]}" y2="${pt(i, R).split(',')[1]}" class="sp-ax"/>`).join('')}
+    <polygon points="${pcts.map((q, i) => pt(i, R * (q === null ? 0 : 0.08 + 0.92 * q))).join(' ')}" class="sp-me"/>
+    ${SPIDER.map(([k, l, , f], i) => `<text x="${LBL[i][0]}" y="${LBL[i][1]}" text-anchor="${LBL[i][2]}" class="sp-l">${l}</text><text x="${LBL[i][0]}" y="${LBL[i][1] + 13}" text-anchor="${LBL[i][2]}" class="sp-v">${p.m[k] === undefined || p.m[k] === null ? '—' : f(p.m[k])}${pcts[i] !== null ? `<title>${ordinal(Math.round(100 * pcts[i]))} percentile</title>` : ''}</text>`).join('')}</svg>
+    <div class="small muted" style="text-align:center">${p.tid === -2 ? 'This year’s workouts' : 'As measured in ' + yr}</div>`;
+}
+// has he topped out, or is there more to come
+function devStatement(p) {
+  if (!p.a || !p.grow) return null;
+  const own = p.tid === state.userTid || (p.tid === -3 && p.psTid === state.userTid), hedge = !own && p.tid !== -2 && confLabel(p) === 'Low';
+  let k, cls = '', line;
+  if (isDeveloping(p)) {
+    const near = p.tid !== -2 && upsideOf(p) === tierOf(p) && uCeil(p) - uOvr(p) <= 3, r = finishedRemark(p);
+    k = near ? 'Near his ceiling' : 'Still improving'; cls = near ? '' : 'good';
+    line = r.line ? `The finished product: ${r.line.charAt(0).toLowerCase() + r.line.slice(1)}.` : 'Too little to go on yet.';
+  } else {
+    const t = trackOf(p);
+    if (t === 'fall' || t === 'slip') { k = 'Declining'; cls = 'bad'; line = t === 'fall' ? 'The decline is real and it is moving fast.' : 'He has lost a step from his best.'; }
+    else { k = 'Topped out'; line = 'He is what he is: the finished article.'; }
+  }
+  return { k: hedge ? 'Looks ' + k.charAt(0).toLowerCase() + k.slice(1) : k, cls, line: hedge ? line + ' Your staff has seen very little of him.' : line };
+}
+function cardBoxLine(p) {
+  const cur = p.stats && p.stats.gp, s = cur ? p.stats : (p.career || [])[(p.career || []).length - 1];
+  if (!s || !s.gp) return '';
+  const g = p.pos, n = k => s[k] || 0;
+  const t = g === 'QB' ? `${n('passC')}/${n('passA')} · ${n('passY').toLocaleString('en-US')} yds · ${n('passTD')} TD · ${n('passInt')} int`
+    : g === 'RB' ? `${n('rushA')} car · ${n('rushY').toLocaleString('en-US')} yds · ${n('rushTD')} TD${n('rec') ? ` · ${n('rec')} rec` : ''}`
+    : g === 'WR' || g === 'TE' ? `${n('rec')} rec · ${n('recY').toLocaleString('en-US')} yds · ${n('recTD')} TD`
+    : g === 'OL' ? `${n('gs')} starts · ${n('snp')} snaps · ${n('pen')} penalties`
+    : g === 'K' ? `${n('fgm')}/${n('fga')} FG · long ${n('fgLng')} · ${n('xpm')}/${n('xpa')} XP`
+    : g === 'P' ? `${n('pnt')} punts · ${n('pnt') ? round1(n('pntY') / n('pnt')) : 0} avg · ${n('pi20')} inside the 20`
+    : `${n('tkl')} tkl · ${n('sck')} sacks · ${n('dint')} int · ${n('pd')} PD`;
+  return t + (cur ? '' : ` <span class="muted">(${s.season})</span>`);
+}
+function cardContractLine(p) {
+  const c = p.contract || {};
+  if (p.tid === -2) return `Draft prospect · ${p.draftYear} class`;
+  if (p.tid === -3) return `Practice squad · ${fmtMoney(c.amt)}`;
+  if (p.tid === -1) return `Free agent · ${faInMarket(p) ? 'expected ' + faExpTxt(p) + ' a year' : 'asking ' + fmtMoney(p.ask) + ' a year'}`;
+  if (!(c.yrs > 0)) return '—';
+  const d = deadIfCut(p), inc = c.inc && c.inc.length ? ` <span class="pill rook">${c.inc.length} incentive${c.inc.length > 1 ? 's' : ''}</span>` : '';
+  return `${p.expiring ? '<b class="warn">Final year</b>' : `<b>${c.yrs} year${c.yrs > 1 ? 's' : ''} left</b>`} · ${fmtMoney(c.amt)} against this year’s cap · ${fmtMoney(d.now)} to cut him${c.next ? ` · then ${c.next.yrs} × ${fmtMoney(c.next.amt)}` : ''}${c.tagged ? ' <span class="pill exp">Tag</span>' : ''}${inc}`;
+}
+function cardHeadHTML(p) {
+  const prospect = p.tid === -2, stars = starsOf(p);
+  const team = p.tid >= 0 ? teamLink(p.tid, true) : p.tid === -3 ? `Practice squad · ${teamLink(p.psTid, true)}` : p.tid === -1 ? 'Free agent' : 'Draft prospect';
+  const yr = prospect ? `${p.draftYear} draft class` : p.exp === 0 ? 'Rookie' : `Year ${p.exp + 1}`;
+  const drafted = p.draft ? `Drafted ${p.draft.year}, round ${p.draft.round} (no. ${p.draft.pick}) by ${T(p.draft.tid).abbr}` : prospect ? '' : 'Undrafted';
+  return `<div class="ds-head"><div>
+      <div class="ds-lb">Player file · no. ${String(p.id).padStart(4, '0')}${p.tid >= 0 ? ' · ' + T(p.tid).abbr : ''}</div>
+      <h2 class="ds-name">${esc(pname(p))}</h2>
+      <div class="ds-bio"><b>${JOB_NAME[p.spot] || esc(p.lbl)}</b> · Age <b>${p.age}</b> · <b>${p.m ? fmtHeight(p.m.ht) : '—'}</b> · <b>${p.m ? p.m.wt : '—'} lb</b> · ${yr} · ${esc(p.college)}</div>
+      <div class="ds-sub">${team}${drafted ? ' · ' + drafted : ''}</div>
+    </div>
+    <div class="ds-pills"><div><span class="pill">${esc(p.lbl)}</span> ${statusPills(p)} ${stars !== null && !prospect ? starHTML(stars) : ''}</div>
+      <div><span title="${prospect ? 'Ready now as' : 'Tier'}">${tierPill(p)}</span> <span title="Upside">${upsidePill(p)}</span>${trueNums(p)} ${rasHTML(p)}</div></div></div>`;
+}
+function cardOverHTML(p) {
+  const prospect = p.tid === -2, src = cardSrc(p), dv = devStatement(p), form = (p.form || []).slice(-5);
+  const sg = src && p.pos !== 'K' && p.pos !== 'P' && src.a && Object.keys(src.a).length ? overallGrade(src.a, p.spot) : null;
+  const rk = src && sg !== null ? (src.cur ? gradeRanks()[p.id] : seasonRank(p, (p.career || []).find(r => r.season === src.season) || {})) : null;
+  const more = (k, l) => `<button class="link ds-more" data-action="cardTab" data-v="${k}" data-pid="${p.id}">${l} →</button>`;
+  let left = `<div class="ds-lb">Scout’s read</div><div class="ds-read">${esc(scoutProfile(p))}.</div>`;
+  if (dv) left += `<div class="ds-dev"><span class="ds-lb">Development</span> <span class="pill ${dv.cls}">${dv.k}</span>${prospect ? '' : ' ' + trackPill(p)}</div><div class="ds-devl">${esc(dv.line)}</div>`;
+  if (p.injury) left += `<div class="ds-note bad">Injured: ${esc(p.injury.name)}, out ${p.injury.weeks} more week${p.injury.weeks > 1 ? 's' : ''}${onIR(p) ? ' (injured reserve)' : ''}.</div>`;
+  if (p.rust) left += `<div class="ds-note warn">Rusty: short of preseason work, a step slow until he has played a game or two.</div>`;
+  if (!prospect) {
+    const box = cardBoxLine(p);
+    left += `<div class="ds-rule"></div><div class="ds-grade"><span class="ds-lb">${src && !src.cur ? src.season + ' grade' : 'Season grade'}</span> <b class="ds-g" style="color:${sg === null ? 'var(--muted)' : gradeColor(sg)}">${sg === null ? '—' : sg}</b>${form.length ? ` <span class="ds-form" title="His last ${form.length} game${form.length > 1 ? 's' : ''}, oldest first">(${form.map(g => Math.round(g)).join(', ')})</span>` : ''}${rk ? ` <span class="pill">${rk[0]}${ordinal(rk[0]).replace(/\d+/, '')} of ${rk[1]}${rk[2] ? ' ' + rk[2] : ''}</span>` : sg !== null ? ' <span class="small muted">below the snap minimum</span>' : ''}</div>
+      ${box ? `<div class="ds-boxl">${box}</div>` : ''}`;
+  }
+  let h = `<div class="ds-top"><div>${left}</div><div class="ds-spider">${spiderHTML(p)}</div></div>`;
+  if (!prospect) h += `<div class="ds-rule"></div><div class="ds-sec"><span class="ds-lb">Advanced · ${(JOB_NAME[p.spot] || p.lbl).replace(/ \(.*/, '')}${src ? ` · ${src.season}${src.cur ? '' : ' (last season)'}` : ''}</span>${more('adv', 'All of them')}</div>${cardFourHTML(p, src)}`;
+  h += `<div class="ds-rule"></div><div class="ds-sec"><span><span class="ds-lb">Contract</span> <span class="ds-con">${cardContractLine(p)}</span></span>${prospect ? '' : more('contract', 'The deal')}</div>`;
+  return h;
+}
+function cardScoutHTML(p) {
+  const u = state.userTid, prospect = p.tid === -2;
+  let left = devPanelHTML(p);
+  left += scoutingHTML(p).replace(/<div class="row small" style="margin-top:6px">[\s\S]*?<\/div>/, '');
   left += `<div class="section-title">Strengths &amp; Weaknesses</div>` + strengthsHTML(p);
   if (!prospect) {
     left += `<div class="section-title">Positional Comfort</div><div class="row small">${comfortHTML(p)}</div>`;
@@ -2776,40 +2908,14 @@ function playerModal(pid, replace) {
     const fitTeams = [...new Set([p.tid >= 0 ? p.tid : null, u].filter(t => t !== null && t >= 0))];
     if (SPOTS[p.spot].side === 'off' || SPOTS[p.spot].side === 'def') left += `<div class="section-title">Scheme Fit</div><div class="row small">${fitTeams.map(t => { const f = schemeFit(p, t), sk = SPOTS[p.spot].side === 'off' ? offArch(T(t)) : defArch(T(t)), lab = sk ? (SPOTS[p.spot].side === 'off' ? OFF_ARCH : DEF_ARCH)[sk].l : '—'; return `<span class="pill">${T(t).abbr} ${esc(lab)}: <b class="${f >= 1 ? 'good' : f <= -1 ? 'bad' : ''}">${fitLabel(f)}</b>${trueOn() ? ` ${f > 0 ? '+' : ''}${f}` : ''}</span>`; }).join(' ')}</div>`;
   }
-  left += contractHTML(p);
-  left += '<div class="row" style="margin-top:12px">';
-  if (p.tid === u && optionDue(p) && state.phase === 'RESIGN') left += `<button class="primary" data-action="option" data-pid="${p.id}" data-v="1">Exercise option (${fmtMoney(optionAmount(p))})</button><button data-action="option" data-pid="${p.id}" data-v="0">Decline option</button>`;
-  if (p.tid === u && canTag(p)) left += `<button data-action="tag" data-pid="${p.id}">Franchise tag (${fmtMoney(tagAmount(p))})</button>`;
-  if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && p.a && workSpots(p).length > 1) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Where he is working <span title="Sets the room he sits in during camp, the drills he takes, what the reports say about him, and where his comfort at a new spot grows.">ⓘ</span></div>${crossTrainSelect(p, true)}</div>`;
-  if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && PRAC_SIDE[p.pos]) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">In the building${p.seenW ? ` · ${p.seenW} week${p.seenW === 1 ? '' : 's'} with your staff` : ''}</div><div class="small" style="margin-bottom:4px">Playbook ${pbBar(pbOf(p))} <span class="muted">${pbLabel(pbOf(p))}</span> · this week ${pracChip(p)}</div><div class="row small" style="gap:6px">${charPill(p, 'work')}${charPill(p, 'disc')}${charPill(p, 'lead')}</div>${p.tid === u && crossTrainSpots(p).length ? `<div class="small" style="margin-top:6px">Cross-train at ${crossTrainSelect(p).replace('data-pid=', 'data-card="1" data-pid=')}${p.xt ? ` <span class="muted">now ${comfortLabel(comfortOf(p, p.xt)).toLowerCase()} (${Math.round(comfortOf(p, p.xt))}/100)</span>` : ''}</div>` : ''}</div>`;
-  if (p.tid === u && extensionDue(p)) left += `<button class="primary" data-action="faOpen" data-pid="${p.id}">Negotiate an extension</button>`;
-  if (p.tid === u && state.phase === 'PRESEASON' && state.prePlan && p.pos !== 'K' && p.pos !== 'P') { const pl = state.prePlan, cur = pl.feat[p.id] ? 'feat' : pl.hold[p.id] ? 'hold' : ''; left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Preseason playing time${p.preS ? ` · ${p.preS.snp} snaps so far` : ''}</div><span class="seg">${[['', 'Normal'], ['feat', 'Feature'], ['hold', 'Hold out']].map(([k, l]) => `<button class="sm ${cur === k ? 'on' : ''}" data-action="preFeat" data-card="1" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span></div>`; }
-  if (p.tid === -3 && p.psTid === u) left += `<button class="primary" data-action="promote" data-pid="${p.id}">Promote to 53</button><button class="danger" data-action="psRelease" data-pid="${p.id}">Release</button>`;
-  if (p.tid === -1 && p.exp <= 6 && psRoom(u, p) && ['REG', 'PRESEASON', 'CUTDOWN', 'DRAFT', 'FA'].includes(state.phase)) left += `<button data-action="signPS" data-pid="${p.id}">Sign to practice squad (${fmtMoney(PS_SALARY)})</button>`;
-  if (p.tid === u) {
-    if (p.expiring && state.phase === 'RESIGN') left += `<button class="primary" data-action="faOpen" data-pid="${p.id}">Negotiate a new contract</button>`;
-    left += `<button class="danger" data-action="release" data-pid="${p.id}">Release</button>`;
-  } else if (p.waiver) { left += '<div class="small muted">On waivers: claim him from the Waiver Wire tab.</div>';
-  } else if (state.phase === 'UDFA' && state.udfa && isUdfa(p)) { const cur = state.udfa.offers[p.id], pl = udfaPathLabel(udfaPath(p, u)); left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Undrafted rookie · market: <b>${udfaInterest(p)}</b> · his view of your roster: <b>${pl}</b>${cur !== undefined ? ` · your offer: <b>${fmtBonus(cur)}</b>` : ''}</div><div class="row" style="gap:6px">${UDFA_BONUS.map(b => `<button class="sm ${cur === b ? 'primary' : ''}" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="${b}">${b ? fmtBonus(b) : 'No bonus'}</button>`).join('')}${cur !== undefined ? `<button class="sm danger" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="">Withdraw</button>` : ''}</div></div>`;
-  } else if (p.tid === -1 && faInMarket(p)) { left += `<button class="primary" data-action="faGo" data-pid="${p.id}">Sit down with his agent</button>`;
-  } else if (p.tid === -1 && state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP') left += `<button class="primary" data-action="sign" data-pid="${p.id}">Sign (${fmtMoney(p.ask)})</button>`;
-  else if (p.tid >= 0) left += `<button data-action="tradeFor" data-pid="${p.id}">Trade for ${esc(p.last)}</button>`;
-  left += '</div>';
-  if (p.rust) left += `<div class="small warn" style="margin-top:8px"><span class="pill warn">Rusty</span> Short of preseason work: a step slow until he has played a game or two.</div>`;
   { const w = typeof stWord === 'function' ? stWord(p) : null, sg = stGrade(p.stats); if (w) left += `<div class="section-title">Special teams</div><div class="small"><span class="pill ${w[1]}">${w[0]}</span>${p.stats && p.stats.sts ? ` <span class="muted">${p.stats.sts} snaps · ${p.stats.stk || 0} tackles this season</span> ${sg !== null ? gradeChip(sg) : ''}` : ''}</div>`; }
   if (p.awards && p.awards.length) left += `<div class="section-title">Awards</div>${p.awards.map(x => `<div class="small">🏅 ${esc(x)}</div>`).join('')}`;
-  // ---- right: at a glance ----
-  let right = '';
-  if (!prospect) {
-    right += `<div class="section-title" style="margin-top:0">At a Glance${src ? ` · ${src.season}${src.cur ? ' season to date' : ''}` : ''}</div>${glanceHTML(p, src)}`;
-    const adv = advRankHTML(p, src);
-    if (adv) right += `<div class="section-title">Tracking <span class="small muted">· rank among qualified ${p.pos}s</span></div>${adv}`;
-  }
-  if (!prospect) right += gameLogHTML(p);
-  right += `<div class="section-title"${prospect ? ' style="margin-top:0"' : ''}>Combine ${rasHTML(p)} <span class="small muted">· shaded by percentile at his position</span></div>${combineHTML(p)}`;
-  html += `<div class="grid card-cols"><div>${left}</div><div>${right}</div></div>`;
-  html += advancedSeasonHTML(p);
-  if (trueOn()) html += attributesHTML(p);
+  left += cardManageHTML(p);
+  const right = `<div class="section-title" style="margin-top:0">Physical ${rasHTML(p)} <span class="small muted">· shaded by percentile at his position</span></div>${combineHTML(p)}`;
+  return `<div class="grid card-cols"><div>${left}</div><div>${right}</div></div>${trueOn() ? attributesHTML(p) : ''}`;
+}
+function cardStatsHTML(p) {
+  let html = gameLogHTML(p);
   // career
   const cc = careerCols(p.pos);
   const scope = ['po', 'pre'].includes(ui.cardScope) ? ui.cardScope : 'reg';
@@ -2845,7 +2951,59 @@ function playerModal(pid, replace) {
     const cols = [{ k: 's', l: 'Season', f: r => r.season }, { k: 't', l: 'Tm', f: r => T(r.tid).abbr }, { k: 'gp', l: 'GP', f: r => r.gp || 0, num: 1 }, ...cc.map(([k, l, fn]) => ({ k, l, num: 1, f: r => fn ? fn(r) : (r[k] || 0) }))];
     html += `<div class="section-title">Playoffs</div>` + table('pcareer', cols, p.pcareer, { nosort: 1 });
   }
-  openModal(html, replace);
+  return html || '<div class="muted small">Nothing on record yet.</div>';
+}
+function cardAdvHTML(p) {
+  const src = cardAdv(p);
+  let left = `<div class="section-title" style="margin-top:0">Grades by facet${src ? ` · ${src.season}${src.cur ? ' season to date' : ''}` : ''}</div>${glanceHTML(p, src)}`;
+  const adv = advRankHTML(p, src);
+  const right = adv ? `<div class="section-title" style="margin-top:0">Tracking <span class="small muted">· rank among qualified ${p.pos}s</span></div>${adv}` : '<div class="muted small">No tracking numbers at his position yet.</div>';
+  return `<div class="grid card-cols"><div>${left}</div><div>${right}</div></div>${advancedSeasonHTML(p)}`;
+}
+function cardContractHTML(p) {
+  const c = p.contract || {};
+  let h = contractHTML(p).replace('<div class="section-title">', '<div class="section-title" style="margin-top:0">');
+  if (p.tid >= 0 && c.yrs > 0) {
+    const rows = []; for (let i = 0; i < c.yrs; i++) rows.push([state.season + i, i === 0 ? c.amt : c.sched && c.sched[i] !== undefined ? c.sched[i] : c.sal !== undefined && !c.sched ? c.amt : c.amt]);
+    if (c.next) for (let i = 0; i < c.next.yrs; i++) rows.push([state.season + c.yrs + i, c.next.sched && c.next.sched[i] !== undefined ? c.next.sched[i] : c.next.amt, 1]);
+    h += `<div class="section-title">Against the cap, by season</div><table class="tbl fa-cap" style="max-width:420px"><thead><tr><th>Season</th><th class="num">Cap hit</th><th></th></tr></thead><tbody>${rows.map(([y, v, nx]) => `<tr><td>${y}</td><td class="num"><b>${fmtMoney(v)}</b></td><td class="small muted">${nx ? (c.opt5 === 'exercised' && c.next.yrs === 1 ? 'option year' : 'extension') : y === state.season ? 'this year' : ''}</td></tr>`).join('')}</tbody></table>`;
+    if (c.inc && c.inc.length) h += `<div class="section-title">Incentives</div>${c.inc.map(x => `<div class="small" style="margin:3px 0"><span class="pill rook">${fmtMoney(x.amt)}</span> if he ${esc(incLabel(x))} <span class="muted">· ${x.likely ? 'likely to be earned: counted against this year’s cap' : 'not likely to be earned: charged next year only if he gets there'}</span></div>`).join('')}`;
+  }
+  return h;
+}
+function cardManageHTML(p) {
+  const u = state.userTid; let left = '';
+  if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && p.a && workSpots(p).length > 1) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Where he is working <span title="Sets the room he sits in during camp, the drills he takes, what the reports say about him, and where his comfort at a new spot grows.">ⓘ</span></div>${crossTrainSelect(p, true)}</div>`;
+  if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && PRAC_SIDE[p.pos]) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">In the building${p.seenW ? ` · ${p.seenW} week${p.seenW === 1 ? '' : 's'} with your staff` : ''}</div><div class="small" style="margin-bottom:4px">Playbook ${pbBar(pbOf(p))} <span class="muted">${pbLabel(pbOf(p))}</span> · this week ${pracChip(p)}</div><div class="row small" style="gap:6px">${charPill(p, 'work')}${charPill(p, 'disc')}${charPill(p, 'lead')}</div>${p.tid === u && crossTrainSpots(p).length ? `<div class="small" style="margin-top:6px">Cross-train at ${crossTrainSelect(p).replace('data-pid=', 'data-card="1" data-pid=')}${p.xt ? ` <span class="muted">now ${comfortLabel(comfortOf(p, p.xt)).toLowerCase()} (${Math.round(comfortOf(p, p.xt))}/100)</span>` : ''}</div>` : ''}</div>`;
+  if (p.tid === u && state.phase === 'PRESEASON' && state.prePlan && p.pos !== 'K' && p.pos !== 'P') { const pl = state.prePlan, cur = pl.feat[p.id] ? 'feat' : pl.hold[p.id] ? 'hold' : ''; left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Preseason playing time${p.preS ? ` · ${p.preS.snp} snaps so far` : ''}</div><span class="seg">${[['', 'Normal'], ['feat', 'Feature'], ['hold', 'Hold out']].map(([k, l]) => `<button class="sm ${cur === k ? 'on' : ''}" data-action="preFeat" data-card="1" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span></div>`; }
+  return left;
+}
+function cardButtonsHTML(p) {
+  const u = state.userTid; let left = '';
+  if (p.tid === u && optionDue(p) && state.phase === 'RESIGN') left += `<button class="primary" data-action="option" data-pid="${p.id}" data-v="1">Exercise option (${fmtMoney(optionAmount(p))})</button><button data-action="option" data-pid="${p.id}" data-v="0">Decline option</button>`;
+  if (p.tid === u && canTag(p)) left += `<button data-action="tag" data-pid="${p.id}">Franchise tag (${fmtMoney(tagAmount(p))})</button>`;
+  if (p.tid === u && extensionDue(p)) left += `<button class="primary" data-action="faOpen" data-pid="${p.id}">Negotiate an extension</button>`;
+  if (p.tid === -3 && p.psTid === u) left += `<button class="primary" data-action="promote" data-pid="${p.id}">Promote to 53</button><button class="danger" data-action="psRelease" data-pid="${p.id}">Release</button>`;
+  if (p.tid === -1 && p.exp <= 6 && psRoom(u, p) && ['REG', 'PRESEASON', 'CUTDOWN', 'DRAFT', 'FA'].includes(state.phase)) left += `<button data-action="signPS" data-pid="${p.id}">Sign to practice squad (${fmtMoney(PS_SALARY)})</button>`;
+  if (p.tid === u) {
+    if (p.expiring && state.phase === 'RESIGN') left += `<button class="primary" data-action="faOpen" data-pid="${p.id}">Negotiate a new contract</button>`;
+    left += `<button class="danger" data-action="release" data-pid="${p.id}">Release</button>`;
+  } else if (p.waiver) { left += '<div class="small muted">On waivers: claim him from the Waiver Wire tab.</div>';
+  } else if (state.phase === 'UDFA' && state.udfa && isUdfa(p)) { const cur = state.udfa.offers[p.id], pl = udfaPathLabel(udfaPath(p, u)); left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Undrafted rookie · market: <b>${udfaInterest(p)}</b> · his view of your roster: <b>${pl}</b>${cur !== undefined ? ` · your offer: <b>${fmtBonus(cur)}</b>` : ''}</div><div class="row" style="gap:6px">${UDFA_BONUS.map(b => `<button class="sm ${cur === b ? 'primary' : ''}" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="${b}">${b ? fmtBonus(b) : 'No bonus'}</button>`).join('')}${cur !== undefined ? `<button class="sm danger" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="">Withdraw</button>` : ''}</div></div>`;
+  } else if (p.tid === -1 && faInMarket(p)) { left += `<button class="primary" data-action="faGo" data-pid="${p.id}">Sit down with his agent</button>`;
+  } else if (p.tid === -1 && state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP') left += `<button class="primary" data-action="sign" data-pid="${p.id}">Sign (${fmtMoney(p.ask)})</button>`;
+  else if (p.tid >= 0) left += `<button data-action="tradeFor" data-pid="${p.id}">Trade for ${esc(p.last)}</button>`;
+  return left;
+}
+function playerModal(pid, replace) {
+  const p = P(pid);
+  if (!p) return;
+  const prospect = p.tid === -2, tabs = CARD_TABS.filter(([k]) => !prospect || k === 'over' || k === 'scout');
+  const tab = tabs.some(([k]) => k === ui.cardTab) ? ui.cardTab : 'over';
+  const body = tab === 'scout' ? cardScoutHTML(p) : tab === 'stats' ? cardStatsHTML(p) : tab === 'adv' ? cardAdvHTML(p) : tab === 'contract' ? cardContractHTML(p) : cardOverHTML(p);
+  const btn = cardButtonsHTML(p);
+  openModal(`<div class="dossier">${cardHeadHTML(p)}<div class="ds-tabs">${tabs.map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="cardTab" data-v="${k}" data-pid="${p.id}">${l}</button>`).join('')}</div>
+    <div class="ds-body">${body}</div>${btn ? `<div class="ds-foot row">${btn}</div>` : ''}</div>`, replace);
 }
 
 // what your scouts say: phrases, confidence, buzz — never numbers
@@ -3306,6 +3464,7 @@ const actions = {
   planOtherClose: () => { ui.planOther = null; render(); },
   schedPart: d => { ui.schedPart = d.part; ui.schedWeekA = 1; render(); },
   cardScope: d => { ui.cardScope = d.v; playerModal(+d.pid, true); },
+  cardTab: d => { ui.cardTab = d.v; playerModal(+d.pid, true); },
   planView: d => { ui.planView = d.v; render(); },
   askYes: () => askDone(true),
   askNo: () => askDone(false),

@@ -6,7 +6,7 @@
 
 // key: [label, short, aging group (E explosive / P power / T technique / M mental), pool]
 const ATTRS = {
-  spd: ['Speed', 'SPD', 'E', 'ath'], bur: ['Burst', 'BUR', 'E', 'ath'], agi: ['Agility', 'AGI', 'E', 'ath'], str: ['Strength', 'STR', 'P', 'ath'],
+  spd: ['Speed', 'SPD', 'E', 'ath'], bur: ['Burst', 'BUR', 'E', 'ath'], agi: ['Agility', 'AGI', 'E', 'ath'], str: ['Strength', 'STR', 'P', 'ath'], jmp: ['Leaping', 'JMP', 'E', 'ath'],
   sacc: ['Short Accuracy', 'SAC', 'T', 'pass'], dacc: ['Deep Accuracy', 'DAC', 'T', 'pass'], arm: ['Arm Strength', 'ARM', 'P', 'pass'],
   proc: ['Processing', 'PRO', 'M', 'pass'], dec: ['Decision-Making', 'DEC', 'M', 'pass'], pkt: ['Pocket Presence', 'PKT', 'M', 'pass'], tor: ['Throw on the Run', 'TOR', 'T', 'pass'],
   vis: ['Vision', 'VIS', 'M', 'carry'], elu: ['Elusiveness', 'ELU', 'T', 'carry'], bal: ['Contact Balance', 'BAL', 'T', 'carry'], bsec: ['Ball Security', 'BSC', 'T', 'carry'],
@@ -133,6 +133,17 @@ function rawSpotValue(a, spot) {
   let s = 0, n = 0;
   for (const k in w) { s += w[k] * attrVal(a, k); n += w[k]; }
   return s / n;
+}
+// how high he gets off the ground: what a starter at each spot brings
+const JMP_T = { QB: 55, RB: 78, FB: 62, WRX: 82, WRZ: 82, SLOT: 78, TEY: 68, TEH: 74, LT: 45, LG: 42, C: 42, RG: 42, RT: 44, NT: 42, DT: 50, DE: 60, EDGE: 68, MLB: 70, WLB: 72, CB: 84, NCB: 82, FS: 82, SS: 78, K: 40, P: 40 };
+for (const s in JMP_T) if (SPOTS[s]) SPOTS[s].t.jmp = JMP_T[s];
+const tMean = t => Array.isArray(t) ? t[0] : t;
+// older players were built before leaping was a rating: read it from the vertical he was measured at, against the rest of his workout
+function ensureLeap(p) {
+  if (!p || !p.a || p.a.jmp !== undefined || !SPOTS[p.spot]) return;
+  const S = SPOTS[p.spot], tb = S.t.bur !== undefined ? tMean(S.t.bur) : p.a.bur;
+  const d = p.m && p.m.vert !== undefined && p.m.ten !== undefined ? clamp(((p.m.vert - 14) / 0.26 - (1.98 - p.m.ten) / 0.0055) * 0.6, -12, 12) : hashGauss(p.id || 0, 93, 1) * 5;
+  p.a.jmp = clamp(Math.round(S.t.jmp + ((p.a.bur || tb) - tb) * 0.75 + d), 15, 99);
 }
 // template (average starter) attribute sets, used to center ratings at 74
 const TEMPLATE_A = {}, TEMPLATE_RAW = {};
@@ -342,7 +353,7 @@ function genAging() {
 function fmtHeight(inches) { return `${Math.floor(inches / 12)}'${inches % 12}"`; }
 function genMeasurables(a, ht, wt, arm) {
   // combine readings: taken around age 22 (≈2 pts below explosive peak) with measurement noise
-  const sp = a.spd - 2, bu = a.bur - 2, ag = a.agi - 2;
+  const sp = a.spd - 2, bu = a.bur - 2, ag = a.agi - 2, jp = (a.jmp !== undefined ? a.jmp * 0.7 + a.bur * 0.3 : a.bur) - 2;
   return {
     ht, wt, arm,
     forty: round2(clamp(5.55 - 0.0125 * sp + gauss(0, 0.035), 4.2, 5.8)),
@@ -350,8 +361,8 @@ function genMeasurables(a, ht, wt, arm) {
     cone: round2(clamp(8.2 - 0.016 * ag + gauss(0, 0.08), 6.4, 8.4)),
     shut: round2(clamp(4.95 - 0.009 * ag + gauss(0, 0.05), 3.9, 5.0)),
     bench: Math.max(0, Math.round((a.str - 20) * 0.45 + gauss(0, 2.5))),
-    vert: round1(clamp(14 + bu * 0.26 + gauss(0, 1.6), 22, 45)),
-    broad: Math.round(clamp(70 + bu * 0.55 + gauss(0, 3), 90, 145)),
+    vert: round1(clamp(14 + jp * 0.26 + gauss(0, 1.6), 22, 45)),
+    broad: Math.round(clamp(70 + (jp * 0.6 + bu * 0.4) * 0.55 + gauss(0, 3), 90, 145)),
   };
 }
 // older players were measured before jumps were recorded: fill them in from their explosiveness
@@ -416,6 +427,7 @@ function genPlayer(spot, q, age, gf, raw) {
     }
     a[k] = v;
   }
+  a.jmp += (a.bur - tMean(S.t.bur !== undefined ? S.t.bur : 30) - q * 3) * 0.45 - dw * 2; // an explosive man jumps; a heavy one less so
   a.spd -= dw * 2; a.agi -= dw * 1.5; a.str += dw * 3;
   for (const k in a) a[k] = clamp(Math.round(a[k]), 15, 99);
   a.siz = sizeScore(ht, wt, arm);
