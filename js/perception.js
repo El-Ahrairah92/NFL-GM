@@ -144,7 +144,8 @@ function recordForm(box) {
     p.form = [...(p.form || []).slice(-5), g];
     // season game log for the "grades by game" chart
     const opp = box.tids[0] === l.tid ? box.tids[1] : box.tids[0];
-    (p.glog = p.glog || []).push({ w: box.playoff ? box.playoff : 'Wk ' + box.week, o: opp, h: box.tids[0] === l.tid, g, s: l.snp });
+    const f = {}; for (const k in FACETS) if (gradeN(box.adv[pid], k) >= 6) { const v = facetGrade(box.adv[pid], k, 0, p.spot); if (v !== null && v !== undefined) f[k] = v; }
+    (p.glog = p.glog || []).push({ w: box.playoff ? box.playoff : 'Wk ' + box.week, o: opp, h: box.tids[0] === l.tid, g, s: l.snp, f });
   }
 }
 // ---------- updates ----------

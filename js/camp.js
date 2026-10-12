@@ -108,13 +108,45 @@ function campEdge(p) { // what he is on a given day: his playbook, his wind, his
   const pb = typeof pbOf === 'function' ? pbOf(p) : 96, h = p.h || {};
   return (pb < 80 ? -(80 - pb) * 0.07 : 0) + ((h.stam || 60) - 60) * 0.03 + campOf(p).form + gauss(0, 2.6);
 }
+// who works with the ones, the twos and the threes: each room in its coach's order, or your reps chart
+function campTiers(tid, ro) {
+  ro = ro || rosterOf(tid).filter(p => p.a && !p.injury); const tier = {};
+  for (const pos of POSITIONS) { const n = REPS_FIRST[pos] || 1; ro.filter(p => cpos(p) === pos).sort((a, b) => coachRead(b, tid) - coachRead(a, tid)).forEach((p, i) => { tier[p.id] = i < n ? 0 : i < n * 2 ? 1 : 2; }); }
+  if (tid === state.userTid && repsOn() && state.reps) for (const p of ro) tier[p.id] = repsString(p.id); // your chart, not the coach's board
+  return tier;
+}
+// ---- team periods, played out: the offense against the defense, the ones against the ones, then the twos, then the threes.
+// It is a real game played by one club against itself, so every snap is graded the way a game is. Nothing leaves the practice field:
+// no stats, no film for the rest of the league, nobody hurt.
+const SCRIM_STRING = (q, clock) => q <= 1 ? 0 : q === 2 ? 1 : q === 3 ? 2 : clock > 450 ? 0 : 1; // the ones and the twos get a period and a half each, the threes one
+function scrimActives(tid, g) {
+  const tier = g.scrim.tier, s = SCRIM_STRING(g.q || 1, g.clock === undefined ? 900 : g.clock), ro = rosterOf(tid).filter(p => !p.injury), out = new Set();
+  for (const pos of POSITIONS) {
+    const l = ro.filter(p => p.pos === pos); if (pos === 'K' || pos === 'P') { l.forEach(p => out.add(p.id)); continue; }
+    const need = (LINEUP_NEED[pos] || 1) + (pos === 'OL' || pos === 'DL' ? 1 : 0), t = p => tier[p.id] === undefined ? 2 : tier[p.id];
+    const mine = l.filter(p => t(p) === s); mine.forEach(p => out.add(p.id));
+    // short of bodies at this string: borrow the nearest men, from the string below first
+    const rest = l.filter(p => t(p) !== s).sort((a, b) => (Math.abs(t(a) - s) - (t(a) > s ? 0.5 : 0)) - (Math.abs(t(b) - s) - (t(b) > s ? 0.5 : 0)) || b.ovr - a.ovr);
+    for (let i = 0; mine.length + i < need && i < rest.length; i++) out.add(rest[i].id);
+  }
+  return out;
+}
+function campScrimmage(tid, tier) {
+  if (globalThis.NOSCRIM) return null;
+  let box = null; try { box = simGame(tid, tid, { scrim: { tier }, neutral: true }); } catch (e) { if (typeof console !== 'undefined') console.warn('scrimmage failed', e); return null; }
+  const out = {};
+  for (const pid in box.stats) { const p = P(pid), l = box.stats[pid], a = box.adv && box.adv[pid]; if (!p || !l || !l.snp || !a) continue;
+    const f = {}; for (const k in FACETS) if (gradeN(a, k) >= 5) { const v = facetGrade(a, k, 0, p.spot); if (v !== null && v !== undefined) f[k] = v; }
+    const g = l.snp >= 8 ? overallGrade(a, p.spot) : null;
+    out[pid] = { g: g === undefined ? null : g, snp: l.snp, f, line: p.pos === 'OL' ? '' : statSummary(l, p.pos), adv: a }; }
+  return out;
+}
 function campPractice(tid, load) {
   load = load || 1;
   const cm = state.camp, ro = rosterOf(tid).filter(p => p.a && !p.injury), blk = cm.blocks;
   // coaches set the reps: each room in the order its coach sees it; men in a battle get a look with the group above them
-  const tier = {}, inBattle = new Set((cm.battles || []).filter(b => !b.closed).flatMap(b => b.cands));
-  for (const pos of POSITIONS) { const n = REPS_FIRST[pos] || 1; ro.filter(p => cpos(p) === pos).sort((a, b) => coachRead(b, tid) - coachRead(a, tid)).forEach((p, i) => { tier[p.id] = i < n ? 0 : i < n * 2 ? 1 : 2; }); }
-  if (tid === state.userTid && repsOn() && state.reps) for (const p of ro) tier[p.id] = repsString(p.id); // your chart, not the coach's board
+  const tier = campTiers(tid, ro), inBattle = new Set((cm.battles || []).filter(b => !b.closed).flatMap(b => b.cands));
+  const scrim = tid === state.userTid && !isAI(tid) ? campScrimmage(tid, tier) : null; // your own club's team periods are played out and graded
   const MIX = [[0.7, 0.25, 0.05], [0.25, 0.55, 0.2], [0.05, 0.3, 0.65]], week = {};
   const W = id => week[id] || (week[id] = { oo: [[0, 0], [0, 0], [0, 0]], plus: 0, minus: 0, vs: {}, sp: {}, ty: {}, line: null });
   const edge = {}; for (const p of ro) edge[p.id] = campEdge(p);
@@ -133,7 +165,9 @@ function campPractice(tid, load) {
   for (const p of ro) {
     const w = W(p.id), h = p.h || {}, pb = typeof pbOf === 'function' ? pbOf(p) : 96, rel = (campOvr(p) + edge[p.id] - roomAvg(cpos(p))) / 9 + (tier[p.id] === 0 ? -0.25 : tier[p.id] === 2 ? 0.2 : 0); // the threes face the threes
     const up = clamp(0.55 * Math.exp(rel * 0.5), 0.1, 2.2), dn = clamp(0.5 * Math.exp(-rel * 0.5) + (pb < 60 ? 0.25 : 0) + ((h.disc || 55) < 40 ? 0.15 : 0), 0.08, 2.2);
-    for (let i = 0; i < 3; i++) { if (rand() < up / 3) w.plus++; if (rand() < dn / 3) w.minus++; }
+    const tp = scrim && scrim[p.id] && scrim[p.id].g !== null ? scrim[p.id] : null; w.tp = scrim ? scrim[p.id] || null : null;
+    if (tp) { w.plus = tp.g >= 73 ? 2 : tp.g >= 67 ? 1 : 0; w.minus = tp.g <= 51 ? 2 : tp.g <= 57 ? 1 : 0; } // what the coaches write down comes from what he did
+    else for (let i = 0; i < 3; i++) { if (rand() < up / 3) w.plus++; if (rand() < dn / 3) w.minus++; }
     if (p.pos === 'QB') { const att = tier[p.id] === 0 ? 22 : tier[p.id] === 1 ? 16 : 10, pc = clamp(0.67 + (p.a.sacc - 70) * 0.004 + (p.a.dec - 70) * 0.002 + edge[p.id] * 0.006, 0.48, 0.84); let c = 0, ints = 0; for (let i = 0; i < att; i++) { if (rand() < pc) c++; else if (rand() < clamp(0.07 + (70 - p.a.dec) * 0.003, 0.02, 0.2)) ints++; } w.line = `${c} of ${att} in seven-on-seven${ints ? `, ${ints} intercepted` : ''}, mostly with ${CAMP_TIER_NAME[tier[p.id]]}`; w.qb = [c, att, ints]; }
     if (p.pos === 'K') { const att = 8; let m = 0; for (let i = 0; i < att; i++) if (rand() < clamp(0.74 + (p.a.kcon - 70) * 0.008 + (p.a.krng - 70) * 0.004, 0.4, 0.97)) m++; w.line = `${m} of ${att} on field goals in team periods`; w.k = [m, att]; }
     if (p.pos === 'P') { const hang = (4.2 + (p.a.phng - 70) * 0.012 + gauss(0, 0.08)).toFixed(1); w.line = `averaged ${hang} seconds of hang time`; w.pn = +hang; }
@@ -145,13 +179,15 @@ function campPractice(tid, load) {
   for (const p of ro) {
     const w = W(p.id), c = campOf(p); let aw = 0, al = 0, n = 0;
     for (let t = 0; t < 3; t++) { aw += w.oo[t][0] * WT[t]; al += w.oo[t][1] * LT[t]; n += w.oo[t][0] + w.oo[t][1]; c.oo[t][0] += w.oo[t][0]; c.oo[t][1] += w.oo[t][1]; }
-    let sc = 60 + (n ? ((aw + (roomRate[cpos(p)] || 0.5) * 2) / (aw + al + 2) - (roomRate[cpos(p)] || 0.5)) * 75 : 0) + (w.plus - w.minus) * 4.5;
-    if (w.qb) sc = 60 + (w.qb[0] / w.qb[1] - 0.66) * 110 - w.qb[2] * 5 + (w.plus - w.minus) * 3;
+    const tpg = w.tp && w.tp.g !== null ? w.tp.g : null, team = tpg !== null ? (tpg - 62) * 0.55 : (w.plus - w.minus) * 4.5;
+    let sc = 60 + (n ? ((aw + (roomRate[cpos(p)] || 0.5) * 2) / (aw + al + 2) - (roomRate[cpos(p)] || 0.5)) * 75 : 0) + team;
+    if (w.qb) sc = 60 + (w.qb[0] / w.qb[1] - 0.66) * 110 - w.qb[2] * 5 + (tpg !== null ? (tpg - 62) * 0.4 : (w.plus - w.minus) * 3);
     if (w.k) sc = 60 + (w.k[0] / w.k[1] - 0.75) * 90;
     if (w.pn) sc = 60 + (w.pn - 4.3) * 45;
     c.sc[blk] = Math.round(clamp(sc, 22, 96));
     c.t = tier[p.id];
-    (c.log = c.log || [])[blk] = { t: tier[p.id], ty: w.ty, v1: w.oo[0].slice(), n, up: w.plus, dn: w.minus, line: w.line || null, lb: state.camp.label || null }; // the week as it happened, for the tracker
+    (c.log = c.log || [])[blk] = { t: tier[p.id], ty: w.ty, v1: w.oo[0].slice(), n, up: w.plus, dn: w.minus, line: w.line || null, lb: state.camp.label || null, tp: w.tp ? { g: w.tp.g, snp: w.tp.snp, f: w.tp.f, line: w.tp.line } : null };
+    if (w.tp) { const T_ = c.tp || (c.tp = { snp: 0, adv: {} }); T_.snp += w.tp.snp; addAdv(T_.adv, w.tp.adv); } // the week as it happened, for the tracker
     for (const k in w.sp) { const t = (c.sp = c.sp || {})[k] || (c.sp[k] = [0, 0]); t[0] += w.sp[k][0]; t[1] += w.sp[k][1]; }
     const note = campNote(p, w, tier[p.id], usedNotes); if (note) c.notes.push([blk, note[0], note[1]]);
     if (c.notes.length > 6) c.notes.shift();
@@ -281,6 +317,8 @@ function campObjections(tid, plan) {
   return out;
 }
 function campLastNote(p) { const c = p.camp && p.camp.s === state.season ? p.camp : null; return c && c.notes.length ? c.notes[c.notes.length - 1] : null; }
+// his team periods over the whole of camp, graded like a season of them
+function campTeamGrade(p) { const c = p.camp && p.camp.s === state.season ? p.camp : null; return c && c.tp && c.tp.snp >= 15 ? overallGrade(c.tp.adv, p.spot) : null; }
 function campRecord(p) { const c = p.camp && p.camp.s === state.season ? p.camp : null; if (!c) return null; const w = c.oo.reduce((s, x) => s + x[0], 0), l = c.oo.reduce((s, x) => s + x[1], 0); return w + l ? { w, l, v1: c.oo[0] } : null; }
 // ---- running camp ----
 function openCamp() {
@@ -302,7 +340,7 @@ function campWeek(label, load) {
 // ---- the squad planner: your own unofficial depth chart ----
 // Groups are yours: name them, fill them with anyone, order them however you like. Nothing here touches the real depth chart or the roster.
 const PLAN_ROOMS = [['QB', 'Quarterbacks', ['QB']], ['RB', 'Running backs', ['RB']], ['WR', 'Receivers', ['WR']], ['TE', 'Tight ends', ['TE']], ['OL', 'Offensive line', ['OL']], ['DL', 'Defensive line', ['DL']], ['LB', 'Linebackers', ['LB']], ['CB', 'Corners', ['CB']], ['S', 'Safeties', ['S']], ['ST', 'Specialists', ['K', 'P']]];
-const PLAN_SEED = { QB: [['Starter', ['QB']]], RB: [['Lead back', ['RB']]], WR: [['X receiver', ['X']], ['Z receiver', ['Z']], ['Slot', ['SLOT']]], TE: [['Tight end (Y)', ['Y']], ['Move tight end (H)', ['H']]],
+const PLAN_SEED = { QB: [['Starter', ['QB']]], RB: [['Lead back', ['RB']]], WR: [['X receiver', ['X']], ['Z receiver', ['Z']], ['Slot', ['SLOT']]], TE: [['In-line tight end (Y)', ['Y']], ['Move tight end (H)', ['H']]],
   OL: [['Left tackle', ['LT']], ['Left guard', ['LG']], ['Center', ['C']], ['Right guard', ['RG']], ['Right tackle', ['RT']]], DL: [['Edge', ['WIDE', 'OLB']], ['Interior', ['T3', 'NOSE', 'END']]], LB: [['Middle linebacker', ['MLB']], ['Weak side', ['WLB']]],
   CB: [['Outside corner', ['CB']], ['Slot corner', ['NCB']]], S: [['Free safety', ['FS']], ['Strong safety', ['SS']]], ST: [['Kicker', ['K']], ['Punter', ['P']], ['Kickoff coverage', ['KO']], ['Punt team', ['PU']]] };
 function planRoomOf(p) { const r = PLAN_ROOMS.find(x => x[2].includes(cpos(p))); return r ? r[0] : null; }

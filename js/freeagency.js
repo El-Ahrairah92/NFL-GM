@@ -86,7 +86,7 @@ function faWinPct(tid) { return state.fa && state.fa.win && state.fa.win[tid] !=
 // ---------- the jobs a club can name ----------
 // Nobody promises a starting place. A club names the job (or two) it has in mind on its own depth chart, and the agent looks at who
 // is already there: an open job, a competition, or a seat behind an established man. Some jobs are only part of the snaps.
-const FA_JOB_SHARE = { RB3D: 0.3, RBSY: 0.15, RUSHE: 0.4, RUSHI: 0.35, WLBP: 0.35, NCBP: 0.35, FB: 0.25, SLOT2: 0.12, Y2: 0.12, OL6: 0.05, DIME: 0.3, SAM: 0.45, H: 0.5, NCB: 0.8 };
+const FA_JOB_SHARE = { Y3D: 0.25, RB3D: 0.3, RBSY: 0.15, RUSHE: 0.4, RUSHI: 0.35, WLBP: 0.35, NCBP: 0.35, FB: 0.25, SLOT2: 0.12, Y2: 0.12, OL6: 0.05, DIME: 0.3, SAM: 0.45, H: 0.5, NCB: 0.8 };
 const FA_JOB_ROWS = CHART_SECTIONS.filter(x => x.unit !== 'st').flatMap(x => x.rows).concat([['K', 'Kicker'], ['P', 'Punter']]);
 function faJobLabel(k) { const r = FA_JOB_ROWS.find(x => x[0] === k); return r ? r[1].replace(/ \(.*\)$/, '') : k; }
 function faJobSay(k) { const l = faJobLabel(k); return /^[A-Z] /.test(l) || /^\d/.test(l) || /^(Mike|Will|Sam) /.test(l) ? l : l[0].toLowerCase() + l.slice(1); } // mid-sentence: 'slot receiver', but 'Z receiver'
@@ -97,7 +97,7 @@ function faJobRate(p, k, base) { const ax = faJobAx(k), sp = faJobSpot(k); retur
 // The jobs this club can name for him: the same jobs, under the same names and in the same order, as its depth chart shows for
 // his part of the team (only the ones its systems use), plus any job elsewhere that he is at least passable at.
 const FA_JOB_GROUPS = [
-  [['QB', 'RB'], ['QB', 'RB', 'FB', 'RB3D', 'RBSY']], [['WR'], ['X', 'Z', 'SLOT', 'SLOT2']], [['TE'], ['Y', 'H', 'Y2']], [['OL'], ['LT', 'LG', 'C', 'RG', 'RT', 'OL6']],
+  [['QB', 'RB'], ['QB', 'RB', 'FB', 'RB3D', 'RBSY']], [['WR'], ['X', 'Z', 'SLOT', 'SLOT2']], [['TE'], ['Y', 'H', 'Y2', 'Y3D']], [['OL'], ['LT', 'LG', 'C', 'RG', 'RT', 'OL6']],
   [['DL'], ['NOSE', 'SHADE', 'T3', 'END', 'WIDE', 'OLB', 'RUSHE', 'RUSHI']], [['LB'], ['MLB', 'WLB', 'SAM', 'OLB', 'WLBP', 'RUSHE']], [['CB', 'S'], ['CB', 'NCB', 'DIME', 'FS', 'SS', 'NCBP']], [['K'], ['K']], [['P'], ['P']],
 ];
 function faJobsFor(tid, p) {

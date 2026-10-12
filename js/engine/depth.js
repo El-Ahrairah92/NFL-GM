@@ -355,7 +355,7 @@ function slotRating(p, spot) {
 function initSide(g, s) {
   const tid = g.tids[s];
   const T_ = g.side[s] || (g.side[s] = { tid, onField: new Set() });
-  if (!T_.active) T_.active = g.pre ? preseasonActives(tid) : gameDayActives(tid); // 48 dress on game day; in preseason the starters sit
+  if (!T_.active) T_.active = g.scrim ? scrimActives(tid, g) : g.pre ? preseasonActives(tid) : gameDayActives(tid); // 48 dress on game day; in preseason the starters sit
   T_.roster = rosterOf(tid).filter(p => !p.injury && T_.active.has(p.id));
   // the emergency quarterback: a third passer who did not dress may come in once the men ahead of him are hurt
   if (!g.pre && !T_.roster.some(p => p.pos === 'QB')) { const em = rosterOf(tid).filter(p => p.pos === 'QB' && !p.injury && !T_.active.has(p.id)).sort((a, b) => b.ovr - a.ovr)[0]; if (em) { T_.active.add(em.id); T_.roster.push(em); if (g.pbp) g.pbp.push({ q: g.q || 1, c: Math.max(0, Math.round(g.clock || 0)), t: tid, dd: '', x: `${T(tid).abbr} are down to the emergency quarterback: ${em.first} ${em.last} comes in` }); } }
@@ -506,10 +506,12 @@ function offUnit(g, s, pers, call) {
   const slots = [['QB', 'QB', 0, backSpot(snap, fm, 'QB')[1]], ...OL_SLOTS.map(o => [o, o, OL_X[o], 0])];
   const order = ['RB', 'X', 'Z', 'SLOT', 'Y', 'H', 'FB', 'Y2', 'SLOT2', 'OL6'].filter(k => skill.includes(k));
   for (const k of order) { const b = k === 'RB' || k === 'FB' ? backSpot(snap, fm, k) : null; slots.push([k, k, (b ? b[0] : formX(pers, fm, k)) * str, b ? b[1] : 1]); }
-  const done = u => { for (const e of u) if (flex.includes(e.name)) e.flex = true; return u; };
+  const done = u => { for (const e of u) if (flex.includes(e.name)) e.flex = true; return u; }, oneTE = skill.includes('Y') && !skill.includes('H');
   // running back usage: committee share, a third-down back on passing downs
   const rbScore = (p, slot) => {
     if ((slot === 'Y' || slot === 'H' || slot === 'Y2') && p.spot === 'FB') return -13; // a fullback is not your tight end
+    // one tight end on the field on a passing down: the man who catches it has a case over the man who blocks
+    if (slot === 'Y' && oneTE && call && call.passDown && p.a && SPOTS[p.spot] && SPOTS[p.spot].g === 'TE') return ((ea0(p, 'rte') + ea0(p, 'hnd') + ea0(p, 'cth')) / 3 - (ea0(p, 'rbk') + ea0(p, 'pbk')) / 2) * 0.3;
     if (slot !== 'RB' || !p.a) return 0;
     if (p.spot !== 'RB') return p.spot === 'FB' ? -14 : -8; // a receiver in the backfield is a gadget, not a feature back
     // the right back for the down: hands and protection on passing downs, strength and balance on short yardage
@@ -528,14 +530,14 @@ function offUnit(g, s, pers, call) {
   const shortYd = g.togo <= 2 && (g.down >= 3 || g.ydl >= 98);
   const rbKey = call && call.passDown && hasList(chart, 'RB3D') ? 'RB3D' : shortYd && hasList(chart, 'RBSY') ? 'RBSY' : 'RB';
   return done(fillSlots(g, s, slots, OFF_SLOT, {
-    score: rbScore, chart, pkgKeys: [], ov: name => chart && chart.ov ? chart.ov[pers + ':' + name] : undefined, keyOf: name => name === 'RB' ? rbKey : name,
+    score: rbScore, chart, pkgKeys: [], ov: name => chart && chart.ov ? chart.ov[pers + ':' + name] : undefined, keyOf: name => name === 'RB' ? rbKey : name === 'Y' && oneTE && call && call.passDown && hasList(chart, 'Y3D') ? 'Y3D' : name,
     rot: key => key === 'RB' ? !!T_.rb2Turn : rand() < rotOf(chart, key),
   }));
 }
 // ---------- user depth charts (t.dch): lists by chart key, #2 rotation share, auto per unit ----------
 const DEF_CHART_KEY = { LE: 'EDGE1', LOLB: 'EDGE1', RE: 'EDGE2', ROLB: 'EDGE2', DT1: 'IDL1', LDE: 'IDL1', LT: 'IDL1', DT2: 'IDL2', RDE: 'IDL2', DT: 'IDL2', RT: 'IDL2',
   NT: 'NT', WLB: 'WLB', MLB: 'MLB', SAM: 'SAM', CB1: 'CB1', CB2: 'CB2', NCB: 'NCB', DIME: 'DIME', FS: 'FS', SS: 'SS' };
-const CHART_SPOT = { QB: 'QB', RB: 'RB', RB3D: 'RB', RBSY: 'RB', FB: 'FB', X: 'WRX', Z: 'WRZ', SLOT: 'SLOT', SLOT2: 'SLOT', Y: 'TEY', H: 'TEH', Y2: 'TEY', OL6: 'RT',
+const CHART_SPOT = { QB: 'QB', RB: 'RB', RB3D: 'RB', RBSY: 'RB', Y3D: 'TEH', FB: 'FB', X: 'WRX', Z: 'WRZ', SLOT: 'SLOT', SLOT2: 'SLOT', Y: 'TEY', H: 'TEH', Y2: 'TEY', OL6: 'RT',
   LT: 'LT', LG: 'LG', C: 'C', RG: 'RG', RT: 'RT', EDGE1: 'EDGE', EDGE2: 'EDGE', IDL1: 'DT', IDL2: 'DT', NT: 'NT', RUSH: 'EDGE', MLB: 'MLB', WLB: 'WLB', SAM: 'WLB',
   CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', NOSE: 'NT', SHADE: 'DT', T3: 'DT', END: 'DE', WIDE: 'EDGE', OLB: 'EDGE', CB: 'CB', WLBP: 'WLB', NCBP: 'NCB', K: 'K', P: 'P', KR: 'RB', PRET: 'RB', KO: 'SS', KRU: 'TEH', PU: 'SS', PRU: 'CB', RUSHE: 'EDGE', RUSHI: 'DT', BIGN: 'SS' };
 // ---- the jobs on a defensive chart ----

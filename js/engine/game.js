@@ -38,7 +38,7 @@ function simGame(hTid, aTid, opts = {}) {
   const g = {
     tids: [hTid, aTid], score: [0, 0], qs: [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]], q: 1, clock: 900,
     poss: 0, ydl: 25, down: 1, togo: 10, stats: {}, ts: [newTS(), newTS()], scoring: [], drives: [], injuries: [],
-    playoff: !!opts.playoff, neutral: !!opts.neutral, pre: opts.pre || 0, over: false, ot: false, otStarted: [0, 0], drive: null,
+    playoff: !!opts.playoff, neutral: !!opts.neutral, pre: opts.pre || 0, scrim: opts.scrim || null, over: false, ot: false, otStarted: [0, 0], drive: null,
     side: [null, null], ps: {}, to: [3, 3], running: false, warned: {}, key: 0, liveFilm: [{}, {}], dSeen: [newSeen(), newSeen()], famStats: [{}, {}],
     runY: [[0, 0], [0, 0]], runCred: [4.2, 4.2], pbp: opts.pbp ? [] : null, adv: {}, tadv: [{}, {}], first: [{}, {}], basePass: [0.57, 0.57], tilt: [0, 0], advEst: [{}, {}],
   };
@@ -67,7 +67,7 @@ function simGame(hTid, aTid, opts = {}) {
     snap(g);
   }
   endDrive(g, 'End of Game');
-  foldFilm(g); // what each side showed goes on its film
+  if (!g.scrim) foldFilm(g); // what each side showed goes on its film
   for (const id in g.ps) if (+id >= 0 && g.ps[id].snp && g.stats[id]) { g.stats[id].snp = g.ps[id].snp; if (g.ps[id].sp) g.stats[id].sp = g.ps[id].sp; if (g.ps[id].sq) g.stats[id].sq = g.ps[id].sq; }
   for (const p of g.dressed) delete p._gs;
   const box = {
@@ -728,7 +728,7 @@ function startPossession(g, side, ydl) {
   g.poss = side; g.ydl = ydl; g.down = 1; g.togo = Math.min(10, 100 - ydl); g.running = false; g.spikeNext = false;
   g.hash = [-1, 0, 0, 1][Math.floor(rand() * 4)]; // where the ball is spotted across the field: the left hash, the middle, the right hash
   // exhibitions: who is in changes drive by drive (starters come out, featured players stay in)
-  if (g.pre && g.side[0] && g.side[1]) for (let s = 0; s < 2; s++) { const a = preseasonActives(g.tids[s], g), cur = g.side[s].active; if (!cur || a.size !== cur.size || [...a].some(id => !cur.has(id))) { g.side[s].active = a; initSide(g, s); } }
+  if ((g.pre || g.scrim) && g.side[0] && g.side[1]) for (let s = 0; s < 2; s++) { const a = g.scrim ? scrimActives(g.tids[s], g) : preseasonActives(g.tids[s], g), cur = g.side[s].active; if (!cur || a.size !== cur.size || [...a].some(id => !cur.has(id))) { g.side[s].active = a; initSide(g, s); } }
   g.drive = { side, q: g.q, clock: g.clock, start: ydl, plays: 0, yds: 0, time: 0 };
   // committee backs: some series go to the No. 2
   const rb1 = g.cx[side].ot.rb1;
@@ -764,7 +764,7 @@ function endPeriod(g) {
     endDrive(g, 'End of Half');
     g.q = 3; g.clock = 900; g.to = [3, 3];
     for (const id in g.ps) g.ps[id].fat = 0; // halftime
-    if (g.pre) for (let s = 0; s < 2; s++) { g.side[s].active = preseasonActives(g.tids[s], g); initSide(g, s); } // exhibition: the threes take over
+    if (g.pre || g.scrim) for (let s = 0; s < 2; s++) { g.side[s].active = g.scrim ? scrimActives(g.tids[s], g) : preseasonActives(g.tids[s], g); initSide(g, s); } // exhibition: the threes take over
     pbpLog(g, 'Halftime', false);
     kickoff(g, g.recvFirst);
     return;
@@ -780,9 +780,11 @@ function endPeriod(g) {
 
 // ---------- injuries ----------
 function injuryCheck(g, players, rate = 0.0042) {
+  if (g.scrim) return; // nobody is lost for the year in a team period: camp injuries are handled on their own
   for (const p of players) if (p && p.id >= 0 && !p.injury && rand() < rate * durMult(p)) injure(g, p);
 }
 function injure(g, p) {
+  if (g.scrim) return; // a team period: nobody is lost in it
   const [name, mn, mx_] = weightedPick(INJURIES, INJURIES.map(x => x[3]));
   const sc = p.tid >= 0 ? C(T(p.tid).sc) : null;
   const weeks = Math.max(1, Math.round(randInt(mn, mx_) * (1.15 - knob(sc, 'recov') / 333)));

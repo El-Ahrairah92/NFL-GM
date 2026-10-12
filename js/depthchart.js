@@ -7,20 +7,20 @@
 // =====================================================================
 const CHART_SECTIONS = [
   { unit: 'off', title: 'Offense', rows: [
-    ['QB', 'Quarterback'], ['RB', 'Running back'], ['X', 'X receiver'], ['Z', 'Z receiver'], ['SLOT', 'Slot receiver'], ['Y', 'Tight end (Y)'], ['H', 'Tight end (H)'],
+    ['QB', 'Quarterback'], ['RB', 'Running back'], ['X', 'X receiver'], ['Z', 'Z receiver'], ['SLOT', 'Slot receiver'], ['Y', 'In-line tight end (Y)'], ['H', 'Move tight end (H)'],
     ['LT', 'Left tackle'], ['LG', 'Left guard'], ['C', 'Center'], ['RG', 'Right guard'], ['RT', 'Right tackle'],
-    ['FB', 'Fullback (21/22)'], ['SLOT2', '4th receiver (10 pers.)'], ['Y2', '3rd tight end (13)'], ['OL6', '6th lineman (jumbo)'],
+    ['FB', 'Fullback (21/22)'], ['SLOT2', '4th receiver (10 pers.)'], ['Y2', 'Extra blocking tight end (13)'], ['OL6', '6th lineman (jumbo)'],
   ] },
   { unit: 'def', title: 'Defense', rows: [
     ['NOSE', 'Nose'], ['SHADE', 'Shade'], ['T3', '3-technique'], ['END', 'End'], ['WIDE', 'Wide end'], ['OLB', 'Edge linebacker'],
     ['MLB', 'Mike linebacker'], ['WLB', 'Will linebacker'], ['SAM', 'Sam linebacker'], ['CB', 'Corner'], ['NCB', 'Nickel'], ['DIME', 'Dime back'], ['FS', 'Free safety'], ['SS', 'Strong safety'],
   ] },
-  { unit: 'off', title: 'Offensive packages', pkg: true, rows: [['RB3D', 'Passing-down back (3rd & long, 2-minute)'], ['RBSY', 'Short-yardage / goal-line back']] },
+  { unit: 'off', title: 'Offensive packages', pkg: true, rows: [['RB3D', 'Passing-down back (3rd & long, 2-minute)'], ['RBSY', 'Short-yardage / goal-line back'], ['Y3D', 'Passing-down tight end (3rd & long, 2-minute)']] },
   { unit: 'def', title: 'Defensive packages', pkg: true, rows: [['RUSHE', 'Edge rusher'], ['RUSHI', 'Inside rusher'], ['WLBP', 'Will on passing downs'], ['NCBP', 'Nickel on passing downs']] },
   { unit: 'st', title: 'Special teams', rows: [['K', 'Kicker'], ['P', 'Punter'], ['KR', 'Kick returner'], ['PRET', 'Punt returner']] },
   { unit: 'st', title: 'Special teams units', pkg: true, rows: [['KO', 'Kickoff coverage'], ['KRU', 'Kick return blockers'], ['PU', 'Punt team (first two are the gunners)'], ['PRU', 'Punt return (first two hold up the gunners)']] },
 ];
-const CHART_DEPTH = { T3: 4, END: 4, WIDE: 4, OLB: 4, CB: 4, WLBP: 2, NCBP: 2, RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, K: 1, P: 1, KR: 2, PRET: 2, KO: 10, KRU: 10, PU: 10, PRU: 10 };
+const CHART_DEPTH = { T3: 4, END: 4, WIDE: 4, OLB: 4, CB: 4, WLBP: 2, NCBP: 2, RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, Y3D: 2, K: 1, P: 1, KR: 2, PRET: 2, KO: 10, KRU: 10, PU: 10, PRU: 10 };
 const ROT_KEYS = new Set(['RB', 'X', 'Z', 'SLOT', 'Y', 'H', 'NOSE', 'SHADE', 'T3', 'END', 'WIDE', 'OLB', 'MLB', 'WLB', 'CB', 'NCB', 'FS', 'SS']);
 // How much of a spot's work goes to the next man up: [least, usual, most]. Your setting moves inside the band and no further:
 // nobody plays every snap on a defensive line, no back carries a whole offense, and a starting corner does not sit a third of the game.
@@ -65,7 +65,7 @@ function defaultChart(tid) {
 }
 function returnScore(p) { if (!['RB', 'WRX', 'WRZ', 'SLOT', 'CB', 'NCB', 'FS', 'SS'].includes(p.spot)) return -1e9; return p.a.spd * 0.3 + p.a.bur * 0.2 + (p.a.elu || 30) * 0.25 + (p.a.vis || 30) * 0.15 + (p.a.bsec || 50) * 0.1 - (p.ovr >= 80 ? 6 : 0); }
 // display names (chart keys stay stable for saves)
-const CHART_NAME = { NCB: 'SLOT CB', DIME: 'SLOT CB2', RUSHE: 'EDGE RUSH', RUSHI: 'INT RUSH', IDL1: 'DT', IDL2: 'DT', EDGE1: 'EDGE', EDGE2: 'EDGE', CB1: 'CB', CB2: 'CB', RB3D: '3RD-DOWN RB', RBSY: 'SHORT-YD RB', KR: 'KR', PRET: 'PR', KO: 'KO COVER', KRU: 'KO RETURN', PU: 'PUNT', PRU: 'PUNT RET', OL6: '6TH OL', SLOT2: 'WR4', Y2: 'TE3' };
+const CHART_NAME = { NCB: 'SLOT CB', DIME: 'SLOT CB2', RUSHE: 'EDGE RUSH', RUSHI: 'INT RUSH', IDL1: 'DT', IDL2: 'DT', EDGE1: 'EDGE', EDGE2: 'EDGE', CB1: 'CB', CB2: 'CB', RB3D: '3RD-DOWN RB', RBSY: 'SHORT-YD RB', Y3D: '3RD-DOWN TE', KR: 'KR', PRET: 'PR', KO: 'KO COVER', KRU: 'KO RETURN', PU: 'PUNT', PRU: 'PUNT RET', OL6: '6TH OL', SLOT2: 'WR4', Y2: 'TE3' };
 const chartName = k => CHART_NAME[baseKey(k)] || baseKey(k);
 // ---- the chart follows the scheme: which position a slot really is depends on the front you run ----
 function teamFront(tid) { const t = T(tid); return t && typeof defTend === 'function' ? defTend(t).front : '4-3'; }
@@ -110,7 +110,10 @@ function homeView(tab, key) { return tab === 'off' ? OFF_HOME[key] || '11' : DEF
 // where everyone lines up in a view: [{ key, name, spot, col, row, label }]
 const JOB_SHORT = { NOSE: 'NOSE', SHADE: 'SHADE', T3: '3-TECH', END: 'END', WIDE: 'WIDE', OLB: 'EDGE', MLB: 'MIKE', WLB: 'WILL', SAM: 'SAM', CB: 'CB', NCB: 'NICKEL', DIME: 'DIME', FS: 'FS', SS: 'SS', RUSHE: 'RUSH', RUSHI: 'RUSH', WLBP: 'WILL', NCBP: 'NICKEL' };
 function dcLayout(t, tab, vid, pass) {
-  if (tab === 'off') return ['QB', ...OL_SLOTS, ...PERSONNEL[vid]].map(s => ({ key: s, name: s, spot: OFF_SLOT[s][0], type: s, col: OFF_BOX[s][0], row: OFF_BOX[s][1], label: chartName(s) }));
+  if (tab === 'off') { const c = t.dch, own = c && !c.auto.off, oneTE = PERSONNEL[vid].includes('Y') && !PERSONNEL[vid].includes('H');
+    // on a passing down or in short yardage the package job has the spot, if you have named one
+    const jobOf = s => !own ? s : s === 'RB' ? (pass === 'pass' && hasList(c, 'RB3D') ? 'RB3D' : pass === 'short' && hasList(c, 'RBSY') ? 'RBSY' : s) : s === 'Y' && pass === 'pass' && oneTE && hasList(c, 'Y3D') ? 'Y3D' : s;
+    return ['QB', ...OL_SLOTS, ...PERSONNEL[vid]].map(s => ({ key: jobOf(s), name: s, spot: OFF_SLOT[s][0], type: s, col: OFF_BOX[s][0], row: OFF_BOX[s][1], label: chartName(jobOf(s)) })); }
   const L = defLookOf(t, vid), c = t.dch;
   const rows = packageLayout(L.front, L.pkg, lookTOf(L)).map(([name, type, x, depth]) => {
     let key = defRoleKey(name, type, x, depth, L.front, L.pkg); const pk = pass ? defPassKey(name, type, x, depth) : null;
@@ -127,9 +130,9 @@ function dcLineup(tid, tab, vid, pass, without) {
   try { return dcLineup0(tid, tab, vid, pass); } finally { if (gone) { if (keepInj) gone.injury = keepInj; else delete gone.injury; } }
 }
 function dcLineup0(tid, tab, vid, pass) {
-  const g = { tids: [tid, tid], side: [null, null], ps: {}, famPen: [0, 0], down: 1, togo: 10, ydl: 30, preview: true }; initSide(g, 0);
+  const short = tab === 'off' && pass === 'short', g = { tids: [tid, tid], side: [null, null], ps: {}, famPen: [0, 0], down: short ? 3 : 1, togo: short ? 1 : 10, ydl: 30, preview: true }; initSide(g, 0);
   const t = T(tid), L = tab === 'off' ? null : defLookOf(t, vid);
-  const u = tab === 'off' ? offUnit(g, 0, vid, null) : defUnit(g, 0, L.front, L.pkg, !!pass && (L.pkg === 'NICKEL' || L.pkg === 'DIME'), false, lookTOf(L));
+  const u = tab === 'off' ? offUnit(g, 0, vid, pass === 'pass' ? { passDown: true } : null) : defUnit(g, 0, L.front, L.pkg, !!pass && (L.pkg === 'NICKEL' || L.pkg === 'DIME'), false, lookTOf(L));
   const m = {}, why = {}; for (const e of u) { m[e.name] = e.p; if (e.why) why[e.name] = e.why; } Object.defineProperty(m, '_why', { value: why }); return m;
 }
 // everyone your chart starts somewhere (as many per job as it has spots, plus the next man), and anyone pinned to a spot in a look
@@ -174,7 +177,7 @@ function ensureChart(tid) {
     delete c.vl; c.jv = 3;
   }
   // a chart converted before that fix can have a job left empty: the staff's order fills it once
-  if (c.jv === 2) { const def = defaultChart(tid), here = new Set(rosterOf(tid).map(p => p.id)); for (const k in def) if (CHART_UNIT(k) !== 'st' && !['WLBP', 'NCBP', 'RUSHE', 'RUSHI', 'RB3D', 'RBSY'].includes(k) && !(c.lists[k] || []).some(id => here.has(id))) c.lists[k] = def[k]; c.jv = 3; }
+  if (c.jv === 2) { const def = defaultChart(tid), here = new Set(rosterOf(tid).map(p => p.id)); for (const k in def) if (CHART_UNIT(k) !== 'st' && !['WLBP', 'NCBP', 'RUSHE', 'RUSHI', 'RB3D', 'RBSY', 'Y3D'].includes(k) && !(c.lists[k] || []).some(id => here.has(id))) c.lists[k] = def[k]; c.jv = 3; }
   if (!c.ov) c.ov = {};
   return c;
 }

@@ -152,3 +152,13 @@ What the audit found: clubs leave 10 to 17% of the cap unspent in week 1 (the re
 - Fold the cutdown into the Preseason page, and retire or rebuild the roster planner once this covers what it does.
 - The chart for special teams units (who covers kicks) as well as kicker and punter.
 
+
+## Punt outcome mix (engine)
+
+Audit over 1,632 games: kickoffs, punt distance, return averages, blocks and return touchdowns are all at real NFL levels. The one miss is what happens to a punt:
+
+- Fair catches are about 50% of punts (real: about 27%); returns are about 28% (real: about 40%); there are no out-of-bounds punts at all (real: about 10%); inside the 20 is about 45% (real: 38-40%).
+- Fix is in `punt()` in `js/engine/game.js` (the `fair` chance and the missing out-of-bounds outcome). Net punting (42.8) and the return average (9.1) must stay where they are.
+- Look up exact league punt figures before tuning: the targets above are from memory.
+- Optional: pull the unit-matchup strength (`ST_K.ko`, `ST_K.pu`) down 15-20%. Return and coverage units swing a club by about +/-18 points a season, the wide end of realistic.
+- Do this before building special teams grades, the camp special teams period and units on the reps chart, so they are graded against settled numbers.

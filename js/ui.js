@@ -200,7 +200,7 @@ function render() {
   if (state.phase === 'PRESEASON' && !state.pre && !state.settings.autoUser && ui.prepSeen !== state.season) { ui.prepSeen = state.season; ui.staffTid = null; ui.staffSel = T(state.userTid).hc; view = 'coaches'; } // rookie free agency is over: meet with the staff before camp
   let page;
   try { page = pageHTML(); } catch (e) { showError(e, `drawing the ${view} page`); page = `<div class="callout bad">This page hit an error (details at the bottom of the screen).</div>`; }
-  const SC = '.tbl-wrap, .scroll, .dc-cands, .dc-side, nav.tabs, .subnav, .subtabs, .msheet-card', keep = [...app.querySelectorAll(SC)].map(e => [e.scrollLeft, e.scrollTop]), wy = window.scrollY, same = app.dataset.view === view;
+  const SC = '.tbl-wrap, .scroll, .dc-cands, .dc-side, nav.tabs, .subnav, .subtabs, .msheet-card, .fa-list, .fa-left', keep = [...app.querySelectorAll(SC)].map(e => [e.scrollLeft, e.scrollTop]), wy = window.scrollY, same = app.dataset.view === view;
   app.innerHTML = topbarHTML() + `<main>${page}</main>` + mobileNavHTML(); { const cc = app.querySelector('.cal-st.cur'), ct = app.querySelector('.cal-track'); if (cc && ct) ct.scrollLeft = cc.offsetLeft - ct.offsetLeft - ct.clientWidth / 2 + cc.offsetWidth / 2; } // keep where we are in the year in view
   app.dataset.view = view;
   if (same) { [...app.querySelectorAll(SC)].forEach((e, i) => { if (keep[i]) { e.scrollLeft = keep[i][0]; e.scrollTop = keep[i][1]; } }); if (Math.abs(window.scrollY - wy) > 2) window.scrollTo(0, wy); }
@@ -608,7 +608,7 @@ function preRepsHTML() {
   if (pickP) { const x = campPlayerBits(pickP), js = repsJobsOf(pickP.id), cat = bub[pickP.id] ? CAMP_CAT[bub[pickP.id].cat] : null, note = campLastNote(pickP), here = js.find(q => q.k === job);
     big = `<div class="card rp-big"><div class="row" style="gap:8px"><button class="link rp-nm" data-action="player" data-pid="${pickP.id}" title="Open his card">${esc(pname(pickP))}</button><span class="muted">${esc(pickP.lbl)} · ${pickP.age}${pickP.exp === 0 ? ' · rookie' : ''}</span><span class="spacer"></span>${cat ? `<span class="pill ${cat[1]}">${cat[0]}</span>` : ''}</div>
       <div class="rp-kv"><span>On your chart</span><b>${js.map(q => `${esc(REP_JOB[q.k][1])}, ${REP_STRING[q.s].toLowerCase()}`).join(' · ') || 'nowhere'}</b></div>
-      <div class="rp-kv"><span>Camp grade</span><b>${x.grade}${x.weeks ? ' ' + x.weeks : ''}</b></div><div class="rp-kv"><span>One-on-ones</span><b>${x.drills} <span class="muted small">(${x.vs1} against the ones)</span></b></div>
+      <div class="rp-kv"><span>Camp grade</span><b>${x.grade}${x.weeks ? ' ' + x.weeks : ''}</b></div><div class="rp-kv"><span>One-on-ones</span><b>${x.drills} <span class="muted small">(${x.vs1} against the ones)</span></b></div>${campTeamGrade(pickP) !== null ? `<div class="rp-kv"><span>Team periods</span><b>${gradeChip(campTeamGrade(pickP))} <span class="muted small">(${pickP.camp.tp.snp} snaps)</span></b></div>` : ''}
       ${note ? `<div class="ph-note" style="margin-top:6px">“${esc(note[2])}”</div>` : ''}
       <div class="row" style="gap:8px;margin-top:10px">${here || repsCanWork(pickP, job) ? `<span class="seg">${[0, 1, 2].map(st => `<button class="sm ${here && here.s === st ? 'on' : ''}" data-action="repsDo" data-k="${job}" data-pid="${pickP.id}" data-s="${st}" title="${esc(J[1])}: with the ${REP_STRING[st].toLowerCase()}">${REP_STRING[st]}</button>`).join('')}</span><span class="small muted">at ${esc(J[1].toLowerCase())}</span>` : `<span class="small muted">He cannot work at ${esc(J[1].toLowerCase())}.</span>`}<span class="spacer"></span><button class="sm" data-action="player" data-pid="${pickP.id}">His file</button></div></div>`; }
   const benchCard = `<div class="dc2-side rp-side"><div class="card dc2-bench"><div class="dc2-bh"><div><div class="dc2-bk">Who could work at</div><h3 style="margin:0">${esc(J[1])}</h3></div><span class="small muted">${can.length} men</span></div>
@@ -625,12 +625,14 @@ function preTrackRow(p, bub, open) {
     <div>${cat ? `<span class="pill ${cat[1]}">${cat[0]}</span>` : ''}</div>
     <div class="ph-num">${x.grade}${x.weeks ? `<span class="ph-wks">${x.weeks}</span>` : ''}</div>
     <div class="ph-num">${x.drills}<span class="muted small"> · ${x.vs1} v ones</span></div>
+    <div class="ph-num">${(() => { const g = campTeamGrade(p); return g === null ? '<span class="muted">—</span>' : gradeChip(g) + `<span class="muted small"> · ${p.camp.tp.snp} snaps</span>`; })()}</div>
     <div class="ph-num">${pre && pre.snp ? `${pre.snp} snaps ${gradeChip(preGrade(p))}` : '<span class="muted">—</span>'}</div><span class="ph-chev">▾</span></div>`;
   if (!open) return h;
   const log = (c && c.log) || [], wk = log.map((w, b) => { if (!w) return ''; const ty = Object.keys(w.ty || {}).map(k => `<div class="ph-kv"><span>${REP_DRILL[k] || k}</span><b>${w.ty[k][0]}–${w.ty[k][1]}</b></div>`).join(''), note = (c.notes || []).find(n => n[0] === b);
     return `<div class="ph-wk"><div class="ph-wh"><b>${esc(w.lb || 'Week ' + (b + 1))}</b><span class="ph-js s${w.t}">${REP_STRING[w.t]}</span>${gradeChip(c.sc[b])}</div>
       ${ty || '<div class="muted small">No one-on-one work.</div>'}${w.v1 && w.v1[0] + w.v1[1] ? `<div class="ph-kv"><span>Against the ones</span><b>${w.v1[0]}–${w.v1[1]}</b></div>` : ''}
-      ${w.up || w.dn ? `<div class="ph-kv"><span>Team periods</span><b>${w.up ? `<span class="good">${w.up} that stood out</span>` : ''}${w.up && w.dn ? ', ' : ''}${w.dn ? `<span class="bad">${w.dn} bad</span>` : ''}</b></div>` : ''}
+      ${w.tp ? `<div class="ph-tp"><div class="ph-kv"><span>Team periods · ${w.tp.snp} snaps</span><b>${w.tp.g === null ? '<span class="muted">too few to grade</span>' : gradeChip(w.tp.g)}</b></div>${Object.keys(w.tp.f || {}).map(k => `<div class="ph-kv sub"><span>${FACETS[k]}</span><b>${w.tp.f[k]}</b></div>`).join('')}${w.tp.line ? `<div class="small muted">${esc(w.tp.line)}</div>` : ''}</div>`
+        : w.up || w.dn ? `<div class="ph-kv"><span>Team periods</span><b>${w.up ? `<span class="good">${w.up} that stood out</span>` : ''}${w.up && w.dn ? ', ' : ''}${w.dn ? `<span class="bad">${w.dn} bad</span>` : ''}</b></div>` : ''}
       ${w.line ? `<div class="small muted">${esc(w.line)}</div>` : ''}${note ? `<div class="ph-note">“${esc(note[2])}”</div>` : ''}</div>`; }).join('');
   const games = ((pre && pre.log) || []).map(g => `<div class="ph-wk game"><div class="ph-wh"><b>Exhibition ${g.wk}</b>${gradeChip(g.g)}</div><div class="ph-kv"><span>Snaps</span><b>${g.snp || 0}</b></div>${g.line ? `<div class="small muted">${esc(g.line)}</div>` : ''}</div>`).join('');
   return h + `<div class="ph-detail">${wk || games ? wk + games : '<div class="muted small">Nothing on him yet: camp has not started.</div>'}
@@ -643,7 +645,7 @@ function preTrackHTML() {
   let h = `<div class="ph-bar"><span class="seg">${PRE_ROOMS.map(([k, l]) => `<button class="sm ${k === room ? 'on' : ''}" data-action="trkRoom" data-v="${k}">${l}</button>`).join('')}</span>
     <label class="small muted">Order by</label><select data-change="trkSort">${[['chart', 'The chart'], ['grade', 'Camp grade'], ['move', 'Rising'], ['fall', 'Falling'], ['bubble', 'On the bubble first']].map(([k, l]) => `<option value="${k}" ${k === sort ? 'selected' : ''}>${l}</option>`).join('')}</select>
     <span class="small muted">Click a man for his week-by-week.</span></div>
-    <div class="ph-thead"><span>Player</span><span>Job · string</span><span>Staff has him</span><span class="ph-num">Camp grade</span><span class="ph-num">One-on-ones</span><span class="ph-num">Exhibitions</span><span></span></div>`;
+    <div class="ph-thead"><span>Player</span><span>Job · string</span><span>Staff has him</span><span class="ph-num">Camp grade</span><span class="ph-num">One-on-ones</span><span class="ph-num">Team periods</span><span class="ph-num">Exhibitions</span><span></span></div>`;
   for (const [rk, rl] of PRE_ROOMS.slice(1)) { if (room !== 'ALL' && room !== rk) continue;
     const l = rosterOf(u).filter(p => preRoomOf(p) === rk).sort((a, b) => key(a) - key(b)); if (!l.length) continue;
     h += `<div class="ph-group"><span>${rl}</span><span class="muted">${l.length} men</span></div>` + l.map(p => preTrackRow(p, bub, !!open[p.id])).join(''); }
@@ -910,7 +912,7 @@ const CF_CLS = { Natural: 'good', Comfortable: '', Decent: 'warn', Raw: 'bad', U
 const THIN_TIERS = new Set(['Depth', 'Project', 'Fringe', 'Washed']), OK_TIERS = new Set(['Rotation', 'Backup']);
 const DC_GROUPS = {
   def: [['Defensive line', ['NOSE', 'SHADE', 'T3', 'END', 'WIDE', 'OLB']], ['Linebackers', ['MLB', 'WLB', 'SAM']], ['Secondary', ['CB', 'NCB', 'DIME', 'FS', 'SS']], ['Passing downs', ['RUSHE', 'RUSHI', 'WLBP', 'NCBP']]],
-  off: [['Backfield', ['QB', 'RB', 'FB', 'RB3D', 'RBSY']], ['Receivers', ['X', 'Z', 'SLOT', 'SLOT2']], ['Tight ends', ['Y', 'H', 'Y2']], ['Offensive line', ['LT', 'LG', 'C', 'RG', 'RT', 'OL6']]],
+  off: [['Backfield', ['QB', 'RB', 'FB', 'RB3D', 'RBSY']], ['Receivers', ['X', 'Z', 'SLOT', 'SLOT2']], ['Tight ends', ['Y', 'H', 'Y2', 'Y3D']], ['Offensive line', ['LT', 'LG', 'C', 'RG', 'RT', 'OL6']]],
   st: [['Kicking game', ['K', 'P', 'KR', 'PRET']], ['Coverage and return units', ['KO', 'KRU', 'PU', 'PRU']]],
 };
 const JOB_HELP = {
@@ -922,7 +924,7 @@ const JOB_HELP = {
   DIME: 'The sixth defensive back.', FS: 'The deep safety: range and ball skills.', SS: 'The safety who comes down into the box.',
   RUSHE: 'Take the edge spots on passing downs in nickel and dime. Leave empty and your regular ends stay in.', RUSHI: 'Take the inside spots on passing downs in nickel and dime. Leave empty and your regular tackles stay in.',
   WLBP: 'Takes the Will job on passing downs. Leave empty and your Will stays in.', NCBP: 'Takes the nickel job on passing downs. Leave empty and your nickel stays in.',
-  RB3D: 'Third and long and the two-minute drill. Leave empty and your lead back stays in.', RBSY: 'Short yardage and the goal line. Leave empty and your lead back stays in.',
+  RB3D: 'Third and long and the two-minute drill. Leave empty and your lead back stays in.', RBSY: 'Short yardage and the goal line. Leave empty and your lead back stays in.', Y3D: 'Takes the tight end spot on third and long and in the two-minute drill when only one tight end is on the field. Leave empty and your in-line man stays in.',
   KR: 'Kick returner.', PRET: 'Punt returner.', KO: 'Ten men: the kickoff coverage team.', KRU: 'Ten men: blockers on kick returns.', PU: 'Ten men: the punt team. The first two are the gunners.', PRU: 'Ten men: punt return. The first two hold up the gunners.',
 };
 function jobLabel(k) { const r = CHART_SECTIONS.map(s => s.rows.find(x => x[0] === k)).find(Boolean); return r ? r[1].replace(/ \(.*\)$/, '') : k; }
@@ -1001,7 +1003,7 @@ function depthChartHTML() {
   if (tab !== 'st') {
     const views = dcViews(t, tab); ui.dchView = ui.dchView || {};
     const vid = views.some(v => v.id === ui.dchView[tab]) ? ui.dchView[tab] : views[0].id, view = views.find(v => v.id === vid);
-    const sub = tab === 'def' && (view.pkg === 'NICKEL' || view.pkg === 'DIME'), pass = sub && ui.dcPass === '1';
+    const sub = tab === 'def' && (view.pkg === 'NICKEL' || view.pkg === 'DIME'), pass = tab === 'off' ? (ui.dcSit === 'pass' || ui.dcSit === 'short' ? ui.dcSit : false) : sub && ui.dcPass === '1';
     const outP = ui.dcOut && ro.some(p => p.id === ui.dcOut) ? P(ui.dcOut) : null;
     const lay = dcLayout(t, tab, vid, pass), normal = dcLineup(u, tab, vid, pass), lineup = outP ? dcLineup(u, tab, vid, pass, outP.id) : normal, ok = ovKeyFor(t, tab, vid, pass);
     // why a spot is not being played by the first man on its list
@@ -1014,7 +1016,8 @@ function depthChartHTML() {
     const pills = tab === 'def'
       ? [...new Set(views.map(v => v.group))].map(gr => `<div class="dc2-lk"><span>${esc(gr)}</span>${views.filter(v => v.group === gr).map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.label)}${v.share && v.group !== 'Other' ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div>`).join('') + greenDotHTML(t)
       : `<div class="dc2-lk"><span>Personnel</span>${views.map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.id === 'JUMBO' ? 'Jumbo' : v.id)}${v.share ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div><div class="dc2-lk"><span>Formation</span>${formShares(t, vid).map(([k, s2]) => `<button class="${k === (FORMS[vid][ui.dcFm] ? ui.dcFm : FORM_HOME[vid]) ? 'on' : ''}" data-action="dcFm" data-k="${esc(k)}">${esc(k)} <i>${Math.round(s2 * 100)}%</i></button>`).join('')}</div>${emergencyQBHTML(t)}`;
-    const scen = sub ? `<div class="dc2-scen"><button class="${pass ? '' : 'on'}" data-action="dcPass" data-v="0">Run downs</button><button class="${pass ? 'on' : ''}" data-action="dcPass" data-v="1">Passing downs</button></div>` : '';
+    const scen = tab === 'off' ? `<div class="dc2-scen" title="Who is on the field changes with the down: your passing-down back and tight end, your short-yardage back">${[['', 'Early downs'], ['pass', 'Passing downs'], ['short', 'Short yardage']].map(([k, l]) => `<button class="${(pass || '') === k ? 'on' : ''}" data-action="dcSit" data-v="${k}">${l}</button>`).join('')}</div>`
+      : sub ? `<div class="dc2-scen"><button class="${pass ? '' : 'on'}" data-action="dcPass" data-v="0">Run downs</button><button class="${pass ? 'on' : ''}" data-action="dcPass" data-v="1">Passing downs</button></div>` : '';
     // where each man really stands: across the formation by his alignment, up the field by his depth. Nobody is snapped to a grid;
     // two men who would sit on top of each other are eased apart just enough to read both.
     const fmD = tab === 'off' ? (FORMS[vid] && FORMS[vid][ui.dcFm] ? ui.dcFm : FORM_HOME[vid]) : null, flexD = fmD && FORMS[vid][fmD]._flex || [];
@@ -1064,20 +1067,20 @@ function dcBigCard(p, job, jobs, c) {
   const listed = jobs.map(k => [k, (c.lists[k] || []).indexOf(p.id)]).filter(x => x[1] >= 0);
   const ord = i => ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'][i] || (i + 1) + 'th';
   const pb = PRAC_SIDE[p.pos] ? pbOf(p) : null;
-  return `<div class="card dc2-card"><div class="row"><b style="font-size:19px">${playerLink(p)}</b><span class="pill">${esc(p.lbl)}</span>${statusPills(p)}${tierPill(p)}${upsidePill(p)}${starHTML(starsOf(p))}<span class="spacer"></span><button class="sm ${ui.dcOut === p.id ? 'primary' : ''}" data-action="dcOut" data-pid="${ui.dcOut === p.id ? 0 : p.id}" title="Show the field as it would line up without him">${ui.dcOut === p.id ? 'Showing without him' : 'If he goes down'}</button><button class="sm" data-action="player" data-pid="${p.id}">Full card</button></div>
-    <div class="small muted" style="margin:4px 0 8px">Age ${p.age} · ${fmtHeight(p.m.ht)}, ${p.m.wt} lb · ${p.exp} yr${p.exp === 1 ? '' : 's'} · ${fmtContract(p)}${p.injury ? ` · <span class="bad">out ${p.injury.weeks} wk</span>` : ''}</div>
+  return `<div class="card dc2-card paper"><div class="ds-lb">${esc(JOB_NAME[p.spot] || p.lbl)}</div><div class="row"><b class="pp-name">${playerLink(p)}</b>${statusPills(p)}${tierPill(p)}${upsidePill(p)}${starHTML(starsOf(p))}<span class="spacer"></span><button class="sm ${ui.dcOut === p.id ? 'primary' : ''}" data-action="dcOut" data-pid="${ui.dcOut === p.id ? 0 : p.id}" title="Show the field as it would line up without him">${ui.dcOut === p.id ? 'Showing without him' : 'If he goes down'}</button><button class="sm" data-action="player" data-pid="${p.id}">His file</button></div>
+    <div class="pp-bio">Age ${p.age} · ${fmtHeight(p.m.ht)}, ${p.m.wt} lb · ${p.exp} yr${p.exp === 1 ? '' : 's'} · ${fmtContract(p)}${p.injury ? ` · <span class="bad">out ${p.injury.weeks} wk</span>` : ''}</div>
     <div class="dc2-fit"><div class="dc2-bk">At ${esc(jobLabel(job).toLowerCase())}</div><div class="row small" style="margin-top:4px">${tr ? `<span class="pill ${TIER_CLS[tr]}">${tr} here</span>` : ''}${jobSide(job) === 'st' ? '' : `<span class="pill ${CF_CLS[cf]}">${cf}</span>`}${m <= -1.5 ? '<span class="pill warn">light for the spot</span>' : m >= 1.5 ? '<span class="pill warn">heavy for the spot</span>' : ''}${listed.some(x => x[0] === job) ? `<span class="pill">${ord(listed.find(x => x[0] === job)[1])} on the card</span>` : `<button class="sm primary" data-action="dcAdd" data-key="${job}" data-pid="${p.id}">Add to this job</button>`}</div></div>
-    <div style="margin:10px 0">${esc(scoutProfile(p))}</div>
+    <div class="ds-read pp-read" style="margin:10px 0">${esc(scoutProfile(p))}.</div>
     <div class="row small" style="margin-bottom:10px">${rowGrades(p)}${stWord(p) ? `<span class="pill ${stWord(p)[1]}">${stWord(p)[0]}</span>` : ''}${pb !== null ? `<span class="pill" title="How much of the playbook he knows">${pbLabel(pb)}</span>` : ''}</div>
     ${strengthsHTML(p)}
-    <div class="section-title" style="margin-top:12px">Where he can play</div><div class="row small">${comfortHTML(p)}</div>
+    <div class="section-title" style="margin-top:12px">Where he can play</div>${comfortHTML(p)}
     ${listed.length ? `<div class="section-title" style="margin-top:12px">Listed at</div><div class="row small">${listed.map(([k, i]) => `<button class="pill dc2-at" data-action="dcJob" data-key="${k}">${esc(jobLabel(k))} · ${ord(i)}</button>`).join('')}</div>` : ''}
-    <div class="section-title" style="margin-top:12px">Measurables</div>${combineHTML(p)}</div>`;
+    <div class="section-title" style="margin-top:12px">Physical <span class="sc-lbr">${rasOf(p) === null ? '' : 'athletic score ' + rasOf(p).toFixed(2)}</span></div>${combineHTML(p)}</div>`;
 }
 // a small card for the man you have selected on the depth chart, so you can judge him without leaving the page
 function dcMiniCard(p, key, spot) {
   const stw = typeof stWord === 'function' ? stWord(p, ST_UNIT[key] ? key : null) : null, cf = Object.keys(p.cf || {}).filter(sp => sp !== p.spot && comfortOf(p, sp) >= 30).sort((a, b) => comfortOf(p, b) - comfortOf(p, a)).slice(0, 4);
-  return `<div class="dc-mini"><div class="row"><b style="font-size:16px">${playerLink(p)}</b><span class="pill">${esc(p.lbl)}</span>${statusPills(p)}${tierPill(p)}${upsidePill(p)}${starHTML(starsOf(p))}<span class="spacer"></span><button class="sm" data-action="player" data-pid="${p.id}">Full card</button></div>
+  return `<div class="dc-mini paper"><div class="row"><b class="pp-name sm">${playerLink(p)}</b><span class="pill">${esc(p.lbl)}</span>${statusPills(p)}${tierPill(p)}${upsidePill(p)}${starHTML(starsOf(p))}<span class="spacer"></span><button class="sm" data-action="player" data-pid="${p.id}">Full card</button></div>
     <div class="small muted" style="margin:4px 0">Age ${p.age} · ${fmtHeight(p.m.ht)}, ${p.m.wt} lb · ${p.exp} yr${p.exp === 1 ? '' : 's'} · ${fmtContract(p)}${p.injury ? ` · <span class="bad">out ${p.injury.weeks} wk</span>` : ''}</div>
     <div class="small">${esc(scoutProfile(p, true))}</div>
     <div class="row small" style="margin-top:6px">${rowGrades(p)}${stw ? `<span class="pill ${stw[1]}">${stw[0]}</span>` : ''}${cf.map(sp => `<span class="pill muted" title="${comfortLabel(comfortOf(p, sp))}">${SPOTS[sp].l}</span>`).join('')}</div></div>`;
@@ -2036,8 +2039,8 @@ function faFitHTML(p) {
 function faCardHTML(p) {
   const u = state.userTid, mk = faInMarket(p), last = p.career[p.career.length - 1], st = faStatus(p), src = cardAdv(p);
   const canSign = state.phase !== 'PLAYOFFS' && state.phase !== 'RECAP';
-  let h = `<div class="row"><h2 style="margin:0">${playerLink(p)}</h2><span class="pill">${esc(p.lbl)}</span> ${statusPills(p)} ${rasHTML(p)}<span class="spacer"></span><button class="sm" data-action="player" data-pid="${p.id}">Full card</button></div>
-    <div class="muted small" style="margin:3px 0 10px">Age ${p.age} · ${p.exp} yr${p.exp === 1 ? '' : 's'} · ${fmtHeight(p.m.ht)}, ${p.m.wt} · ${p.lastTid != null && p.lastTid >= 0 ? 'last with ' + teamLink(p.lastTid) : 'no club last year'}${p.lastAmt ? ` at ${fmtMoney(p.lastAmt)}/yr` : ''}${mk ? ` · agent ${agentLink(agentOf(p))}` : ''}</div>
+  let h = `<div class="ds-lb">Free agent · ${esc(JOB_NAME[p.spot] || p.lbl)}</div><div class="row"><h2 class="pp-name">${playerLink(p)}</h2> ${statusPills(p)}<span class="spacer"></span><button class="sm" data-action="player" data-pid="${p.id}">His file</button></div>
+    <div class="pp-bio">Age ${p.age} · ${p.exp} yr${p.exp === 1 ? '' : 's'} · ${fmtHeight(p.m.ht)}, ${p.m.wt} · ${p.lastTid != null && p.lastTid >= 0 ? 'last with ' + teamLink(p.lastTid) : 'no club last year'}${p.lastAmt ? ` at ${fmtMoney(p.lastAmt)}/yr` : ''}${mk ? ` · agent ${agentLink(agentOf(p))}` : ''}</div>
     <div class="stat-tiles" style="margin-bottom:10px">
       <div class="tile"><div class="v ${TIER_CLS[tierOf(p)]}" style="font-size:15px">${tierOf(p)}</div><div class="l">Tier</div></div>
       <div class="tile"><div class="v ${UP_CLS[upsideOf(p)]}" style="font-size:14px">${upsideOf(p)}${upMark(p)}</div><div class="l">Upside</div></div>
@@ -2047,8 +2050,8 @@ function faCardHTML(p) {
     </div>
     <div class="fa-cols"><div>
       <div class="section-title" style="margin-top:0">Where he fits</div>${faFitHTML(p)}
-      <div class="section-title">Scouting</div><div class="small">${traitsTxt(p)}</div>${strengthsHTML(p)}
-      <div class="section-title">Positions</div><div class="row small">${comfortHTML(p)}</div>
+      <div class="section-title">The report</div><div class="ds-read pp-read">${esc(scoutProfile(p))}.</div>${strengthsHTML(p)}
+      <div class="section-title">Where he can play</div>${comfortHTML(p)}
       ${devPanelHTML(p) ? `<div class="section-title">Upside</div>${devPanelHTML(p)}` : ''}
     </div><div>`;
   if (mk) h += `<div class="section-title" style="margin-top:0">The sit-down</div>${faSitHTML(p)}`;
@@ -2057,28 +2060,66 @@ function faCardHTML(p) {
     ${p.exp <= 6 && psRoom(u, p) && ['REG', 'PRESEASON', 'CUTDOWN', 'DRAFT', 'FA'].includes(state.phase) ? `<button data-action="signPS" data-pid="${p.id}">Practice squad (${fmtMoney(PS_SALARY)})</button>` : ''}</div>`;
   h += `<div class="section-title">Production${src ? ` · ${src.season}${src.cur ? ' to date' : ''}` : ''}</div>${last && last.gp ? `<div class="small" style="margin-bottom:6px">${statSummary(last, p.pos)}</div>` : ''}${glanceHTML(p, src)}
     ${p.career.length > 1 ? `<div class="small muted" style="margin-top:6px">${p.career.slice(-4, -1).reverse().map(r => `${r.season}: ${r.gs || 0} starts${r.gp ? ', ' + statSummary(r, p.pos) : ''}`).join('<br>')}</div>` : ''}
-    <div class="section-title">Physicals <span class="small muted">· shaded by percentile at his position</span></div>${combineHTML(p)}`;
+    <div class="section-title">Physical <span class="sc-lbr">${rasOf(p) === null ? '' : 'athletic score ' + rasOf(p).toFixed(2)}</span></div>${combineHTML(p)}`;
   return h + '</div></div>';
 }
-const FA_LVIEWS = [['market', 'Market'], ['scout', 'Scouting'], ['stats', 'Last season'], ['phys', 'Physical']];
-function faRowCells(p, lv) {
-  const last = p.career[p.career.length - 1];
-  if (lv === 'scout') return `${tierPill(p)}${upsidePill(p)}<span class="fa-txt small muted">${traitsTxt(p)}</span>`;
-  if (lv === 'stats') return `<span class="fa-num">${last && last.gp ? (last.gs || 0) : '—'}</span><span class="fa-num">${gradeChip(last && last.adv ? last.adv.g : null)}</span><span class="fa-txt small">${last && last.gp ? statSummary(last, p.pos) : '<span class="muted">Did not play</span>'}</span>`;
-  if (lv === 'phys') return `<span class="fa-num">${fmtHeight(p.m.ht)}</span><span class="fa-num">${p.m.wt}</span><span class="fa-num">${p.m.forty ? p.m.forty.toFixed(2) : '—'}</span><span class="fa-txt">${rasHTML(p)}</span>`;
-  const s = faStatus(p); return `${tierPill(p)}<span class="fa-exp">${faExpTxt(p)}</span><span class="fa-st ${s[1]}">${s[0]}</span>`;
-}
-const FA_LHEAD = { market: ['Tier', 'Expected', 'Status'], scout: ['Tier', 'Upside', 'Scouting'], stats: ['GS', 'Grade', 'Line'], phys: ['Ht', 'Wt', '40', 'Athlete'] };
+const faLast = p => p.career[p.career.length - 1] || {}, faM = (k, dec) => [p => p.m[k], p => p.m[k] === undefined ? '<span class="muted">—</span>' : dec ? p.m[k].toFixed(dec) : p.m[k]];
+const FA_COLS = {
+  tier: ['Tier', '74px', p => tierSort(p), p => tierPill(p), 1, 'What he is today, as your scouts see him'],
+  up: ['Upside', '104px', p => upSort(p), p => upsidePill(p), 1, 'What he could become'],
+  ask: ['Expected', '80px', p => faSortVal(p), p => `<span class="fa-exp">${faExpTxt(p)}</span>`, 1, 'What he is expected to cost a year'],
+  status: ['Status', '104px', p => faStatus(p)[0], p => { const x = faStatus(p); return `<span class="fa-st ${x[1]}">${x[0]}</span>`; }, -1, 'Where his market stands'],
+  report: ['Report', 'minmax(0, 1.5fr)', null, p => `<span class="fa-txt small muted">${traitsTxt(p)}</span>`],
+  gs: ['GS', '30px', p => faLast(p).gs || 0, p => faLast(p).gp ? faLast(p).gs || 0 : '—', 1, 'Starts last season'],
+  snp: ['Snaps', '46px', p => faLast(p).snp || 0, p => faLast(p).snp || '—', 1, 'Snaps last season'],
+  grade: ['Grade', '44px', p => (faLast(p).adv && faLast(p).adv.g) || 0, p => gradeChip(faLast(p).adv ? faLast(p).adv.g : null), 1, 'Season grade last year'],
+  line: ['Last season', 'minmax(0, 1.5fr)', null, p => `<span class="fa-txt small">${faLast(p).gp ? statSummary(faLast(p), p.pos) : '<span class="muted">Did not play</span>'}</span>`],
+  ht: ['Ht', '42px', p => p.m.ht, p => fmtHeight(p.m.ht), 1], wt: ['Wt', '38px', p => p.m.wt, p => p.m.wt, 1],
+  forty: ['40', '40px', ...faM('forty', 2), -1], ten: ['10', '40px', ...faM('ten', 2), -1], vert: ['Vert', '40px', ...faM('vert'), 1], broad: ['Broad', '44px', ...faM('broad'), 1],
+  cone: ['Cone', '40px', ...faM('cone', 2), -1], shut: ['Shut', '40px', ...faM('shut', 2), -1], bench: ['Bench', '44px', ...faM('bench'), 1],
+  ras: ['Athlete', '56px', p => rasOf(p), p => rasOf(p) === null ? '<span class="muted">—</span>' : rasOf(p).toFixed(2), 1, 'Athletic score out of 10 against his position'],
+  mine: ['Your staff', '82px', p => viewOvr(p, state.userTid), p => tierPill(p, viewOvr(p, state.userTid)), 1, 'What your own coaches make of him'],
+  rank: ['Would be', '70px', p => -faRankFor(p)[0], p => { const r = faRankFor(p); return `<span class="${r[0] <= STARTERS[p.pos] ? 'good' : ''}">#${r[0]}</span> <span class="muted small">of ${r[1]}</span>`; }, 1, 'Where he would stand at his position on your roster'],
+  fit: ['Scheme', '86px', p => schemeFit(p, state.userTid), p => { const f = schemeFit(p, state.userTid), sd = SPOTS[p.spot].side; return sd === 'off' || sd === 'def' ? `<span class="small ${f >= 1 ? 'good' : f <= -1 ? 'bad' : 'muted'}">${fitLabel(f)}</span>` : '<span class="muted">—</span>'; }, 1, 'How he fits what you run'],
+  st: ['Kicking game', 'minmax(0, 1fr)', p => (stWord(p) ? stCover(p) : 0), p => { const w = stWord(p); return w ? `<span class="fa-txt small ${w[1]}">${w[0]}</span>` : '<span class="muted">—</span>'; }, 1, 'His value on special teams'],
+  lastTm: ['Last club', '62px', p => (p.lastTid != null && p.lastTid >= 0 ? T(p.lastTid).abbr : 'zz'), p => p.lastTid != null && p.lastTid >= 0 ? T(p.lastTid).abbr : '<span class="muted">—</span>', -1],
+  lastPay: ['Was paid', '70px', p => p.lastAmt || 0, p => p.lastAmt ? fmtMoney(p.lastAmt) : '<span class="muted">—</span>', 1, 'His salary last season'],
+  yrs: ['Wants', '50px', p => faYears(p), p => faYears(p) + ' yr', 1, 'The length of deal he is after'],
+  xp: ['Exp', '34px', p => p.exp, p => p.exp || 'R', 1, 'Seasons in the league'],
+  cgs: ['Starts', '46px', p => p.career.reduce((n, r) => n + (r.gs || 0), 0), p => p.career.reduce((n, r) => n + (r.gs || 0), 0), 1, 'Career starts'],
+  best: ['Best', '44px', p => Math.max(0, ...p.career.map(r => (r.adv && r.adv.g) || 0)), p => gradeChip(Math.max(0, ...p.career.map(r => (r.adv && r.adv.g) || 0)) || null), 1, 'His best season grade'],
+};
+['gs', 'snp', 'ht', 'wt', 'forty', 'ten', 'vert', 'broad', 'cone', 'shut', 'bench', 'ras', 'lastPay', 'yrs', 'xp', 'cgs', 'ask'].forEach(k => FA_COLS[k].num = 1);
+const FA_LVIEWS = [['market', 'The market', ['tier', 'ask', 'status']], ['scout', 'Scouting report', ['tier', 'up', 'report']], ['fit', 'Fit for your club', ['mine', 'rank', 'fit', 'st']], ['stats', 'Last season', ['gs', 'snp', 'grade', 'line']],
+  ['career', 'Career', ['xp', 'cgs', 'best', 'lastTm']], ['money', 'Contract', ['ask', 'yrs', 'lastPay', 'lastTm']], ['phys', 'Size and speed', ['ht', 'wt', 'forty', 'ras']], ['test', 'Workout numbers', ['forty', 'ten', 'vert', 'broad', 'cone', 'shut', 'bench']]];
+const FA_BASE = { pos: [null, null, p => FAM_INDEX[p.spot] * 1000 - uOvr(p), null, -1], name: [null, null, p => p.last + ' ' + p.first, null, -1], age: [null, null, p => p.age, null, -1] };
+function faYears(p) { try { return faInMarket(p) ? prefYears(p) : state.phase === 'REG' ? 1 : contractYears(p); } catch (e) { return 1; } }
+let faRankMemo = null;
+function faRankFor(p) { const u = state.userTid; if (!faRankMemo || faRankMemo.at !== ui._tick) { faRankMemo = { at: ui._tick, by: {} }; for (const q of rosterOf(u)) if (!q.expiring) (faRankMemo.by[q.pos] = faRankMemo.by[q.pos] || []).push(viewOvr(q, u)); }
+  const l = faRankMemo.by[p.pos] || [], v = viewOvr(p, u); return [l.filter(x => x > v).length + 1, l.length + 1]; }
+const FA_FILTERS = ['tier', 'up', 'ageMax', 'exp', 'maxAsk', 'afford', 'mine', 'played', 'start', 'fits', 'ps'];
 function faMarketHTML() {
   const u = state.userTid, on = faMarketOn(), udfa = state.phase === 'UDFA' && state.udfa;
   let fas = Object.values(state.players).filter(p => p.tid === -1 && !p.waiver && !(udfa && isUdfa(p)) && inFamily(p, ui.faPos));
-  const f = ui.faF || (ui.faF = Object.assign({}, FA_DEF)), tIdx = x => TIER_ORDER.indexOf(x), com = on ? faCommitted(u) : { amt: 0, n: 0 };
+  const f = ui.faF || (ui.faF = Object.assign({}, FA_DEF)), tIdx = x => TIER_ORDER.indexOf(x), uIdx = x => UPSIDE_ORDER.indexOf(x), com = on ? faCommitted(u) : { amt: 0, n: 0 };
+  ui._tick = (ui._tick || 0) + 1;
   if (f.q) { const q = f.q.toLowerCase(); fas = fas.filter(p => (p.first + ' ' + p.last).toLowerCase().includes(q)); }
   if (f.tier) fas = fas.filter(p => tIdx(tierOf(p)) <= tIdx(f.tier) || (f.tier === 'Rotation' && tierOf(p) === 'Backup'));
+  if (f.up) fas = fas.filter(p => uIdx(upsideOf(p)) >= 0 && uIdx(upsideOf(p)) <= uIdx(f.up));
+  if (f.ageMax) fas = fas.filter(p => f.ageMax === '31+' ? p.age >= 31 : p.age <= +f.ageMax);
+  if (f.exp) fas = fas.filter(p => f.exp === 'young' ? p.exp <= 2 : f.exp === 'prime' ? p.exp >= 3 && p.exp <= 7 : p.exp >= 8);
+  if (f.maxAsk) fas = fas.filter(p => faSortVal(p) <= +f.maxAsk);
   if (f.afford) fas = fas.filter(p => faSortVal(p) <= capRoom(u) - com.amt);
   if (f.mine && on) fas = fas.filter(p => state.fa.talks[p.id] || state.fa.orders[p.id] || faOffers(p).some(o => o.tid === u));
-  const sort = ui.faSort || 'exp', total = fas.length, lv = FA_LVIEWS.some(x => x[0] === ui.faLV) ? ui.faLV : 'market';
-  fas.sort(sort === 'age' ? (a, b) => a.age - b.age : sort === 'tier' ? (a, b) => uOvr(b) - uOvr(a) : sort === 'pos' ? (a, b) => famOrder(a, b) : (a, b) => faSortVal(b) - faSortVal(a) || uOvr(b) - uOvr(a));
+  if (f.played) fas = fas.filter(p => (faLast(p).gp || 0) > 0);
+  if (f.start) fas = fas.filter(p => faRankFor(p)[0] <= (STARTERS[p.pos] || 1));
+  if (f.fits) fas = fas.filter(p => schemeFit(p, u) >= 1);
+  if (f.ps) fas = fas.filter(p => p.exp <= 6 && psRoom(u, p));
+  const total = fas.length, LV = FA_LVIEWS.find(x => x[0] === ui.faLV) || FA_LVIEWS[0], lv = LV[0];
+  // any column sorts: click its name; click again to turn it round
+  const so = ui.faSort && typeof ui.faSort === 'object' && (FA_COLS[ui.faSort.k] || FA_BASE[ui.faSort.k]) && (FA_BASE[ui.faSort.k] || LV[2].includes(ui.faSort.k)) ? ui.faSort : { k: 'ask', d: 1 };
+  { const C = FA_COLS[so.k] || FA_BASE[so.k], val = C[2], none = v => v === undefined || v === null || (typeof v === 'number' && isNaN(v));
+    fas.sort((a, b) => { const x = val(a), y = val(b); if (none(x) || none(y)) return none(x) ? (none(y) ? 0 : 1) : -1; return (typeof x === 'string' ? y.localeCompare(x) * -1 : y - x) * (typeof x === 'string' ? -so.d : so.d) || uOvr(b) - uOvr(a); }); }
   fas = fas.slice(0, 150);
   let sel = ui.faSel !== undefined ? P(ui.faSel) : null; if (!sel || sel.tid !== -1 || sel.waiver) sel = fas[0] || null;
   const live = on ? Object.keys(state.fa.off).map(id => P(+id)).filter(p => p && faOffers(p).some(o => o.tid === u)) : [];
@@ -2089,21 +2130,27 @@ function faMarketHTML() {
     <div><div class="big">${rosterCount(u)}<span class="muted small">/${rosterLimit()}</span></div><div class="small muted">Roster</div></div>
     <div class="fa-live">${live.map(p => { const o = faOffers(p).find(x => x.tid === u); return `<button class="sm" data-action="faPick" data-pid="${p.id}">${esc(pshort(p))} · ${fmtMoney(o.aav)} × ${o.yrs}${o.night ? ' · answer tomorrow' : o.dl ? ' · tonight' : ''}</button>`; }).join('')}</div></div>
     ${on && state.fa.inbox.length ? `<div class="fa-inbox">${state.fa.inbox.slice(-5).map(x => `<div class="small">• ${esc(x)}</div>`).join('')}<button class="sm" data-action="faInboxX">Clear</button></div>` : ''}</div>`;
-  const sortBtn = (k, l) => `<button class="sm ${sort === k ? 'on' : ''}" data-action="faSortA" data-v="${k}">${l}</button>`;
+  const hd = (k, l, cls, title) => `<span class="fa-h ${cls || ''} ${so.k === k ? 'on' : ''}" data-action="faSortA" data-v="${k}" title="${esc(title || '')}${title ? ' · ' : ''}click to sort">${l}${so.k === k ? `<i>${so.d > 0 ? '▼' : '▲'}</i>` : ''}</span>`;
+  const sel1 = (key, opts) => `<select data-change="faF" data-f="${key}" class="${f[key] ? 'set' : ''}">${opts.map(([v, l]) => `<option value="${v}" ${String(f[key] || '') === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  const chk = (key, l, title) => `<label class="small fa-chk ${f[key] ? 'set' : ''}" title="${esc(title || '')}"><input type="checkbox" data-change="faChk" data-f="${key}" ${f[key] ? 'checked' : ''}> ${l}</label>`;
+  const nF = FA_FILTERS.filter(k => f[k]).length;
   html += `<div class="fa-wrap"><div class="card fa-left">
     <div class="subtabs" style="margin:0 0 8px">${famTabs(ui.faPos, 'faPos')}</div>
-    <div class="row" style="gap:8px;margin-bottom:8px">
-      <input type="text" data-change="faF" data-f="q" value="${esc(f.q)}" placeholder="Name…" style="width:110px">
-      <select data-change="faF" data-f="tier">${[['', 'Any tier'], ...['Elite', 'All-Pro', 'Starter', 'Rotation', 'Depth'].map(t => [t, t + ' or better'])].map(([v, l]) => `<option value="${v}" ${f.tier === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      <label class="small"><input type="checkbox" data-change="faChk" data-f="afford" ${f.afford ? 'checked' : ''}> Can afford</label>
-      ${on ? `<label class="small"><input type="checkbox" data-change="faChk" data-f="mine" ${f.mine ? 'checked' : ''}> Mine</label>` : ''}</div>
-    <div class="row" style="gap:8px;margin-bottom:8px"><span class="small muted">View</span><span class="seg">${FA_LVIEWS.map(([k, l]) => `<button class="sm ${lv === k ? 'on' : ''}" data-action="faLV" data-v="${k}">${l}</button>`).join('')}</span>
-      <span class="spacer"></span><span class="small muted">Sort</span><span class="seg">${sortBtn('exp', '$')}${sortBtn('tier', 'Tier')}${sortBtn('age', 'Age')}${sortBtn('pos', 'Pos')}</span></div>
-    <div class="fa-row fa-head lv-${lv}"><span>Pos</span><span>Name</span><span>Age</span>${FA_LHEAD[lv].map(x => `<span>${x}</span>`).join('')}</div>
-    <div class="fa-list">${fas.map(p => `<div class="fa-row lv-${lv} ${sel && sel.id === p.id ? 'on' : ''}" data-action="faPick" data-pid="${p.id}">
-      <span class="fa-pos">${esc(p.lbl)}</span><span class="fa-name">${playerLink(p)}</span><span class="fa-age muted">${p.age}</span>${faRowCells(p, lv)}</div>`).join('') || '<div class="muted small" style="padding:10px">Nobody matches.</div>'}</div>
-    <div class="small muted" style="margin-top:6px">${fas.length} of ${total} shown · click a row to select, a name for the full card</div></div>
-    <div class="card fa-right">${sel ? faCardHTML(sel) : '<div class="muted">No free agents.</div>'}</div></div>`;
+    <div class="fa-bar"><input type="text" data-change="faF" data-f="q" value="${esc(f.q)}" placeholder="Name…" style="width:110px">
+      <label class="small muted">View</label><select data-change="faLV">${FA_LVIEWS.map(([k, l]) => `<option value="${k}" ${lv === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <span class="spacer"></span><button class="sm ${ui.faMore || nF ? 'on' : ''}" data-action="faMore">Filters${nF ? ` · ${nF}` : ''} ${ui.faMore ? '▴' : '▾'}</button>${nF ? `<button class="sm" data-action="faClear" title="Remove every filter">Clear</button>` : ''}</div>
+    ${ui.faMore ? `<div class="fa-filters">
+      ${sel1('tier', [['', 'Any tier'], ...['Elite', 'All-Pro', 'Starter', 'Rotation', 'Depth'].map(t => [t, t + ' or better'])])}
+      ${sel1('up', [['', 'Any upside'], ...UPSIDE_ORDER.slice(0, 4).map(t => [t, t + ' or better'])])}
+      ${sel1('ageMax', [['', 'Any age'], ['24', '24 and under'], ['27', '27 and under'], ['30', '30 and under'], ['31+', '31 and over']])}
+      ${sel1('exp', [['', 'Any experience'], ['young', 'First three seasons'], ['prime', 'Four to eight seasons'], ['vet', 'Nine seasons or more']])}
+      ${sel1('maxAsk', [['', 'Any price'], ['1', 'Up to $1M'], ['3', 'Up to $3M'], ['8', 'Up to $8M'], ['15', 'Up to $15M']])}
+      ${chk('afford', 'I can afford', 'Fits under your cap with your live offers counted')}${chk('start', 'Would start for me', 'Your staff rates him above a man who starts for you now')}${chk('fits', 'Fits my scheme')}${chk('played', 'Played last season')}${chk('ps', 'Practice-squad eligible')}${on ? chk('mine', 'I am in on him', 'You have talked, made an offer or sent your front office') : ''}</div>` : ''}
+    <div class="fa-row fa-head" style="--fa-cols:${LV[2].map(k => FA_COLS[k][1]).join(' ')}">${hd('pos', 'Pos')}${hd('name', 'Name')}${hd('age', 'Age')}${LV[2].map(k => FA_COLS[k][2] ? hd(k, FA_COLS[k][0], FA_COLS[k].num ? 'fa-num' : '', FA_COLS[k][5]) : `<span>${FA_COLS[k][0]}</span>`).join('')}</div>
+    <div class="fa-list" style="--fa-cols:${LV[2].map(k => FA_COLS[k][1]).join(' ')}">${fas.map(p => `<div class="fa-row ${sel && sel.id === p.id ? 'on' : ''}" data-action="faPick" data-pid="${p.id}">
+      <span class="fa-pos">${esc(p.lbl)}</span><span class="fa-name">${playerLink(p)}</span><span class="fa-age muted">${p.age}</span>${LV[2].map(k => `<span class="${FA_COLS[k].num ? 'fa-num' : 'fa-c'}">${FA_COLS[k][3](p)}</span>`).join('')}</div>`).join('') || '<div class="muted small" style="padding:10px">Nobody matches.</div>'}</div>
+    <div class="small muted" style="margin-top:6px">${fas.length} of ${total} shown · click a row to select, a name for his file, a column heading to sort</div></div>
+    <div class="card fa-right paper">${sel ? faCardHTML(sel) : '<div class="muted">No free agents.</div>'}</div></div>`;
   return html;
 }
 // ---- agents: a name, an age, the people he represents, and what has passed between you ----
@@ -2836,7 +2883,7 @@ function glanceHTML(p, src) {
   const a = src.a, first = Object.keys(gradeFacets(p.spot)), cats = first.concat(Object.keys(FACETS).filter(f => !first.includes(f))).filter(f => gradeN(a, f) >= 15);
   if (!cats.length) return `<div class="muted small">${Object.keys(a).some(k => /^g[a-z]/.test(k)) && !Object.keys(a).some(k => /^G[a-z]/.test(k)) ? 'Graded under the old system: the new grades start with his next game.' : 'Not enough plays on tape yet.'}</div>`;
   return cats.map(f => { const v = facetGrade(a, f, 0, p.spot), n = gradeN(a, f), b = GRADE_BAND(v);
-    return `<div class="adv-r" title="${n} plays where he had a job in it"><span class="adv-l">${FACETS[f]}</span><span class="adv-v" style="color:${gradeColor(v)};font-size:15px">${v}</span><span class="adv-tag ${b[1]}">${b[0]}</span><span class="adv-rk">${n}</span></div>`; }).join('');
+    return `<div class="adv-r" title="${n} plays where he had a job in it"><span class="adv-l">${FACETS[f]}</span><span class="adv-v ${v >= 70 ? 'good' : v < 50 ? 'bad' : ''}" style="font-size:15px">${v}</span><span class="adv-tag ${b[1]}">${b[0]}</span><span class="adv-rk">${n}</span></div>`; }).join('');
 }
 const ADV_DIR = { 'EPA/db': 1, CPOE: 1, TTT: 0, aDOT: 0, 'Pressured%': -1, Routes: 0, 'Sep (yds)': 1, 'Tgt/Route%': 1, 'EPA/Tgt': 1, 'YBC/att': 1, 'YACo/att': 1, 'MTF/att%': 1, 'Stuff%': -1, 'EPA/rush': 1,
   'PB win%': 1, 'Pressure% allowed': -1, 'Sack% allowed': -1, 'RB win%': 1, 'PR win%': 1, 'Double%': 1, 'RS win%': 1, 'Stop%': 1, 'Targeted%': 0, 'Comp%': -1, 'Yds/snap': -1, 'Rtg allowed': -1, 'MT%': -1 };
@@ -2880,29 +2927,37 @@ function rasHTML(p, peers) {
   if (r === null) return '';
   return `<span class="ras" style="background:${rasColor(r)}" title="Relative Athletic Score: combine results as 0–10 percentiles against every ${p.pos} in the league, averaged">RAS ${r.toFixed(2)}</span>`;
 }
-// grades by game (PFF-style bars)
+// grades by game: one row for each job he did, one column for each game
+const gcBand = v => v >= 80 ? 'e' : v >= 70 ? 'g' : v >= 60 ? '' : v >= 50 ? 'w' : 'b';
 function gameLogHTML(p) {
   const src = p.glog && p.glog.length ? { season: state.season, log: p.glog } : p.glogPrev;
   if (!src || !src.log.length) return '';
-  return `<div class="section-title">Grades by Game · ${src.season}</div>` + src.log.slice(-17).map(x => `<div class="glance gl-game" title="${x.s} snaps"><span class="gl-l small">${esc(x.w)} ${x.h ? 'vs' : '@'} ${T(x.o).abbr}</span><span class="gl-bar"><i style="width:${x.g}%;background:${gradeColor(x.g)}"></i></span><span class="gl-v">${Math.round(x.g)}</span></div>`).join('');
+  const log = src.log.slice(-21), first = Object.keys(gradeFacets(p.spot)), cats = first.concat(Object.keys(FACETS).filter(f => !first.includes(f))).filter(f => log.some(x => x.f && x.f[f] !== undefined));
+  const cell = v => v === undefined || v === null ? '<td class="gc-n">·</td>' : `<td class="gc-c ${gcBand(v)}">${Math.round(v)}</td>`;
+  const avg = l => { const v = l.filter(x => x !== undefined && x !== null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const row = (label, vals, cls) => `<tr class="${cls || ''}"><th>${label}</th>${vals.map(cell).join('')}${cell(avg(vals)).replace('class="', 'class="gc-avg ')}</tr>`;
+  return `<div class="ds-lb">Grade by job, game by game · ${src.season}</div><div class="gc-wrap"><table class="gc"><thead><tr><th></th>${log.map(x => `<th><b>${esc(String(x.w).replace('Wk ', ''))}</b><span>${x.h ? '' : '@'}${T(x.o).abbr}</span></th>`).join('')}<th><b>Avg</b><span>${log.length} gm</span></th></tr></thead>
+    <tbody>${row('Overall', log.map(x => x.g), 'gc-all')}${cats.map(f => row(FACETS[f], log.map(x => x.f ? x.f[f] : undefined))).join('')}
+    <tr class="gc-sn"><th>Snaps</th>${log.map(x => `<td>${x.s || 0}</td>`).join('')}<td>${Math.round(avg(log.map(x => x.s || 0)) || 0)}</td></tr></tbody></table></div>
+    <div class="sc-fine">80 elite · 70 good starter · 60 decent starter · 50 rotation · below that a liability. A dot is a game where he did too little of that job to grade.${cats.length ? '' : ' Grades by job are charted from his next game on.'}</div>`;
 }
 // combine numbers shaded by percentile against everyone at his position group
-function combineHTML(p) {
+function physRowsHTML(p) {
   const peers = Object.values(state.players).filter(q => q.m && q.pos === p.pos);
   ensureJumps(p); peers.forEach(ensureJumps); ensureHand(p);
   const x = p.m.x || {}, pw = p.pw || {};
-  return `<div class="stat-tiles">${COMBINE.map(([k, l, f, dir]) => {
-    const v = p.m[k], mine = pw[k];
-    if (v === undefined) { const w = DRILL_WHY[x[k]] || ['—', '']; return `<div class="tile ${mine !== undefined ? 'tile-pw' : 'tile-dnp'}" title="${w[1]}${mine !== undefined ? ' · the number is from your private workout' : ''}"><div class="v" style="font-size:${mine !== undefined ? 15 : 12}px">${mine !== undefined ? f(mine) : w[0]}</div><div class="l">${l}</div>${mine !== undefined ? '<div class="rk">your workout</div>' : ''}</div>`; }
-    let style = '', title = '';
-    if (dir) { const vals = peers.map(q => q.m[k]).filter(z => z !== undefined && z !== null).sort((a, b) => a - b), below = vals.filter(z => z < v).length, pct = vals.length > 1 ? below / (vals.length - 1) : 0.5; style = pctStyle(pct, dir); title = `${Math.round(100 * (dir > 0 ? pct : 1 - pct))}th percentile among ${p.pos}s`; }
-    return `<div class="tile" style="${style}" title="${title}${x[k] === 'p' ? ' · pro day' : ''}"><div class="v" style="font-size:15px">${f(v)}${x[k] === 'p' ? '<span class="small muted">*</span>' : ''}</div><div class="l">${l}</div>${mine !== undefined ? `<div class="rk" title="Your private workout">yours ${f(mine)}</div>` : ''}</div>`;
-  }).join('')}</div>${workoutNoteHTML(p)}`;
+  return COMBINE.map(([k, l, f, dir], i) => { const v = p.m[k], mine = pw[k];
+    if (v === undefined) { const w = DRILL_WHY[x[k]] || ['—', '']; return `<div class="ph-r" ${w[1] ? `data-tip="${esc(w[1])}"` : ''}><span>${l}</span><b class="${mine !== undefined ? '' : 'muted'}">${mine !== undefined ? f(mine) + '†' : w[0]}</b></div>`; }
+    const vals = peers.map(q => q.m[k]).filter(z => z !== undefined && z !== null), below = vals.filter(z => z < v).length, raw = vals.length > 1 ? below / (vals.length - 1) : 0.5, pct = Math.round(100 * (dir > 0 ? raw : 1 - raw));
+    const size = k === 'ht' || k === 'wt' || k === 'arm' || k === 'hand';
+    return `<div class="ph-r ${size ? '' : 'hi hi' + (i % 4)}" ${size ? '' : `style="${hiStyle(pct)}"`} data-tip="${ordinal(pct)} percentile among ${esc(p.pos)}s${x[k] === 'p' ? ' · pro day' : ''}${mine !== undefined ? ' · your workout: ' + f(mine) : ''}"><span>${l}</span><b>${f(v)}${x[k] === 'p' ? '*' : ''}${mine !== undefined ? `<em>${f(mine)}†</em>` : ''}</b></div>`; }).join('');
 }
+// the physical sheet for a panel: the same highlighted rows as the player file, in two columns
+function combineHTML(p) { return `<div class="ph-rows two">${physRowsHTML(p)}</div>${workoutNoteHTML(p)}`; }
 function strengthsHTML(p) {
   const { str, weak, best } = scoutTraits(p);
-  return `<div class="grid g2" style="gap:10px"><div><div class="sw-h good">Strengths</div>${str.map(t => `<div class="sw good">+ ${esc(t)}</div>`).join('')}${str.length < 2 ? best.map(t => `<div class="sw" title="Relative to the rest of his game, not to a starter">◦ ${esc(t)}</div>`).join('') : ''}${!str.length && !best.length ? '<div class="muted small">Nothing that stands out.</div>' : ''}</div>
-    <div><div class="sw-h bad">Weaknesses</div>${weak.length ? weak.map(t => `<div class="sw bad">− ${esc(t)}</div>`).join('') : '<div class="muted small">No glaring holes.</div>'}</div></div>`;
+  return `<div class="pp-sw"><div><div class="ds-lb">Strengths</div>${str.map(t => `<div class="sw-t good">${esc(t)}</div>`).join('')}${str.length < 2 ? best.map(t => `<div class="sw-t rel" title="Relative to the rest of his game, not to a starter">${esc(t)}</div>`).join('') : ''}${!str.length && !best.length ? '<div class="sc-note">Nothing that stands out.</div>' : ''}</div>
+    <div><div class="ds-lb">Weaknesses</div>${weak.length ? weak.map(t => `<div class="sw-t bad">${esc(t)}</div>`).join('') : '<div class="sc-note">No glaring holes.</div>'}</div></div>`;
 }
 // where along the defensive line he can play: each spot against his own best one, with how at home he is there
 const LINE_POINTS = [['Nose', 0.1], ['Shade', 0.6], ['3-tech', 1.35], ['4i', 1.65], ['5-tech', 2.3], ['Wide', 3.3]];
@@ -2913,9 +2968,9 @@ function lineStripHTML(p) {
     return `<div class="ls-c ls-${lv}" title="${esc(comfortLabel(x.c))} there${x.m <= -1.5 ? ' · light for the spot' : x.m >= 1.5 ? ' · heavy for the spot' : ''}"><b>${x.l}</b><span>${d >= -1 ? 'best' : d}</span></div>`; }).join('')}</div>`;
 }
 function comfortHTML(p) {
-  const cf = Object.entries(p.cf || {}).sort((a, b) => b[1] - a[1]);
-  return lineStripHTML(p) + cf.map(([s, c]) => `<span class="pill ${CF_CLS[comfortLabel(c)]}" title="${trueOn() ? Math.round(c) : ''}">${SPOTS[s].l} · ${comfortLabel(c)}</span>`).join(' ') +
-    ` <span class="small muted">· learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an average pace'}</span>`;
+  const cf = Object.entries(p.cf || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  return `<div class="pp-kv">${lineWordsHTML(p)}${cf.map(([s, c]) => { const l = comfortLabel(c); return `<div class="sc-kv" title="${trueOn() ? Math.round(c) : ''}"><span>${esc(JOB_NAME[s] || SPOTS[s].l)}</span><b class="cf-${CF_PIPS[l]}">${l}</b></div>`; }).join('')}
+    <div class="sc-fine">Learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an ordinary pace'}.</div></div>`;
 }
 // ---------- the player file: a bio header that never moves, and tabs under it ----------
 const CARD_TABS = [['over', 'Overview'], ['scout', 'Scouting'], ['stats', 'Stats'], ['adv', 'Advanced'], ['contract', 'Contract']];
@@ -3110,39 +3165,40 @@ function scReportHTML(p) {
   return h;
 }
 function scTraitsHTML(p) {
-  const { str, weak, best } = scoutTraits(p), li = (t, c, m) => `<div class="sw-i ${c}"><b>${m}</b><span>${esc(t)}</span></div>`;
-  return `<div class="ds-lb">Strengths</div>${str.map(t => li(t, 'good', '+')).join('') || (best.length ? '' : '<div class="sc-note">Nothing that stands out.</div>')}${str.length < 2 ? best.map(t => li(t, 'rel', '·')).join('') : ''}
-    <div class="ds-lb" style="margin-top:10px">Weaknesses</div>${weak.map(t => li(t, 'bad', '−')).join('') || '<div class="sc-note">No glaring holes.</div>'}`;
+  const { str, weak, best } = scoutTraits(p), li = (t, c) => `<div class="sw-t ${c}">${esc(t)}</div>`;
+  return `<div class="ds-lb">Strengths</div>${str.map(t => li(t, 'good')).join('') || (best.length ? '' : '<div class="sc-note">Nothing that stands out.</div>')}${str.length < 2 ? best.map(t => `<div class="sw-t rel" title="Relative to the rest of his game, not to a starter">${esc(t)}</div>`).join('') : ''}
+    <div class="ds-lb" style="margin-top:14px">Weaknesses</div>${weak.map(t => li(t, 'bad')).join('') || '<div class="sc-note">No glaring holes.</div>'}`;
+}
+// along the defensive line, in a sentence
+function lineWordsHTML(p) {
+  if (!p.a || !SPOTS[p.spot] || SPOTS[p.spot].g !== 'DL') return '';
+  const v = LINE_POINTS.map(([l, ax]) => ({ l, r: lineSlotRating(p, ax) })), top = Math.max(...v.map(x => x.r)), best = v.filter(x => x.r >= top - 1).map(x => x.l), also = v.filter(x => x.r < top - 1 && x.r >= top - 5).map(x => x.l);
+  return `<div class="sc-note sc-line">Along the line he is best at <b>${best.join(' and ')}</b>${also.length ? `, and can play ${also.join(', ')}` : ''}.</div>`;
 }
 function scWhereHTML(p) {
   if (p.tid === -2) return '';
   const u = state.userTid, cf = Object.entries(p.cf || {}).sort((a, b) => b[1] - a[1]).slice(0, 5); let h = '';
-  if (cf.length) h += `<div class="ds-rule"></div><div class="ds-lb">Where he can play <span class="sc-lbr">learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an ordinary pace'}</span></div>${lineStripHTML(p)}
-    <div class="sc-spots">${cf.map(([s, c]) => { const l = comfortLabel(c); return `<div class="sc-spot" title="${trueOn() ? Math.round(c) : ''}"><b>${esc(SPOTS[s].l)}</b>${pipsHTML(CF_PIPS[l], CF_CLS[l])}<span>${l}</span></div>`; }).join('')}</div>`;
+  if (cf.length) h += `<div class="ds-rule"></div><div class="ds-lb">Where he can play <span class="sc-lbr">learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an ordinary pace'}</span></div>${lineWordsHTML(p)}
+    ${cf.map(([s, c]) => { const l = comfortLabel(c); return `<div class="sc-kv" title="${trueOn() ? Math.round(c) : ''}"><span>${esc(JOB_NAME[s] || SPOTS[s].l)}</span><b class="cf-${CF_PIPS[l]}">${l}</b></div>`; }).join('')}`;
   const side = SPOTS[p.spot].side, fitTeams = [...new Set([p.tid >= 0 ? p.tid : null, u].filter(t => t !== null && t >= 0))];
   const rows = [];
   if (side === 'off' || side === 'def') for (const t of fitTeams) { const f = schemeFit(p, t), sk = side === 'off' ? offArch(T(t)) : defArch(T(t)), lab = sk ? (side === 'off' ? OFF_ARCH : DEF_ARCH)[sk].l : '—';
     rows.push(`<div class="sc-kv"><span>${T(t).abbr} · ${esc(lab)}</span><b class="${f >= 1 ? 'good' : f <= -1 ? 'bad' : ''}">${fitLabel(f)}${trueOn() ? ` ${f > 0 ? '+' : ''}${f}` : ''}</b></div>`); }
   if (p.tid >= 0 && (CH_UNIT[p.pos] || ['RB', 'WR', 'TE'].includes(p.pos))) { ensureChem(); const qb = repsOrder(p.tid, 'QB')[0], v = CH_UNIT[p.pos] ? chemOf(p) : chemPair(p, qb);
-    rows.push(`<div class="sc-kv"><span>Chemistry ${CH_UNIT[p.pos] ? 'with the ' + CH_NAME[CH_UNIT[p.pos]].toLowerCase() : qb ? 'with ' + esc(pshort(qb)) : 'with his quarterback'}</span><b style="color:${gradeColor(v)}">${chemWord(v)}</b></div>`); }
+    rows.push(`<div class="sc-kv"><span>Chemistry ${CH_UNIT[p.pos] ? 'with the ' + CH_NAME[CH_UNIT[p.pos]].toLowerCase() : qb ? 'with ' + esc(pshort(qb)) : 'with his quarterback'}</span><b class="${v >= 70 ? 'cf-4' : v < 50 ? 'cf-1' : ''}">${chemWord(v)}</b></div>`); }
   { const w = typeof stWord === 'function' ? stWord(p) : null, sg = stGrade(p.stats); if (w) rows.push(`<div class="sc-kv"><span>Special teams${p.stats && p.stats.sts ? ` · ${p.stats.sts} snaps` : ''}</span><b class="${w[1]}">${w[0]}${sg !== null && p.stats && p.stats.sts ? ' · ' + sg : ''}</b></div>`); }
   if (rows.length) h += `<div class="ds-rule"></div><div class="ds-lb">Fit</div>${rows.join('')}`;
   if (p.awards && p.awards.length) h += `<div class="ds-rule"></div><div class="ds-lb">Honours</div><div class="sc-note">${p.awards.slice(-4).map(esc).join(' · ')}${p.awards.length > 4 ? ` · and ${p.awards.length - 4} more` : ''}</div>`;
   return h;
 }
+// a stroke of highlighter: green for the top of his position, red for the bottom, yellow between
+function hiStyle(pct) { const h = Math.round(clamp(pct, 0, 100) * 1.18), a = 0.3 + Math.abs(pct - 50) / 50 * 0.4; return `--hi:hsla(${h},62%,${h > 45 && h < 75 ? 62 : 68}%,${a.toFixed(2)});--hi2:hsla(${h},62%,70%,${(a * 0.55).toFixed(2)})`; }
 function scPhysicalHTML(p) {
-  const peers = Object.values(state.players).filter(q => q.m && q.pos === p.pos);
-  ensureJumps(p); peers.forEach(ensureJumps); ensureHand(p);
-  const x = p.m.x || {}, pw = p.pw || {}, r = rasOf(p);
-  const rows = COMBINE.map(([k, l, f, dir]) => { const v = p.m[k], mine = pw[k];
-    if (v === undefined) { const w = DRILL_WHY[x[k]] || ['—', '']; return `<div class="ph-r" title="${w[1]}"><span>${l}</span><b class="${mine !== undefined ? '' : 'muted'}">${mine !== undefined ? f(mine) + '†' : w[0]}</b><i></i></div>`; }
-    const vals = peers.map(q => q.m[k]).filter(z => z !== undefined && z !== null), below = vals.filter(z => z < v).length, raw = vals.length > 1 ? below / (vals.length - 1) : 0.5, pct = Math.round(100 * (dir > 0 ? raw : 1 - raw));
-    const size = k === 'ht' || k === 'wt' || k === 'arm' || k === 'hand', tone = size ? 'note' : pct >= 75 ? 'good' : pct <= 25 ? 'bad' : 'mid';
-    return `<div class="ph-r" title="${ordinal(pct)} percentile among ${p.pos}s${x[k] === 'p' ? ' · pro day' : ''}${mine !== undefined ? ' · your workout: ' + f(mine) : ''}"><span>${l}</span><b>${f(v)}${x[k] === 'p' ? '*' : ''}${mine !== undefined ? `<em>${f(mine)}†</em>` : ''}</b><i class="adv-tag ${tone}">${ordinal(pct)}</i></div>`; }).join('');
+  const rows = physRowsHTML(p), r = rasOf(p);
   const yr = p.draft ? p.draft.year : p.tid === -2 ? p.draftYear : state.season - (p.exp || 0);
   return `<div class="ds-lb">Physical <span class="sc-lbr">${p.tid === -2 ? (p.m.pd ? 'pro day' : 'this year’s combine') : 'measured ' + yr}</span></div>
-    <div class="sc-ras">${r === null ? '<span class="sc-note">Too little of a workout for an athletic score.</span>' : `<span class="fig-v" style="font-size:24px;color:${rasColor(r)}">${r.toFixed(2)}</span><span class="sc-note">athletic score out of 10, against ${esc(p.pos)}s</span>`}</div>
-    ${rows}${workoutNoteHTML(p)}${p.tid === -2 && p.m.med && p.m.med !== 'clean' ? `<div class="sc-note ${p.m.med === 'flag' ? 'bad' : 'warn'}" style="margin-top:6px">${p.m.med === 'flag' ? 'The doctors flagged him.' : 'The doctors noted a minor concern.'} They are not always right.</div>` : ''}`;
+    <div class="sc-ras">${r === null ? '<span class="sc-note">Too little of a workout for an athletic score.</span>' : `<span class="fig-v ph-r hi hi1" style="${hiStyle(r * 10)}" data-tip="Relative athletic score: his drills as percentiles against every ${esc(p.pos)}, averaged">${r.toFixed(2)}</span><span class="sc-note">athletic score out of 10</span>`}</div>
+    <div class="ph-rows">${rows}</div>${workoutNoteHTML(p)}${p.tid === -2 && p.m.med && p.m.med !== 'clean' ? `<div class="sc-note ${p.m.med === 'flag' ? 'bad' : 'warn'}" style="margin-top:6px">${p.m.med === 'flag' ? 'The doctors flagged him.' : 'The doctors noted a minor concern.'} They are not always right.</div>` : ''}`;
 }
 function cardScoutHTML(p) {
   const manage = cardManageHTML(p);
@@ -3199,6 +3255,28 @@ function cardAdvHTML(p) {
       return `<div class="adv-r ${outs.has(m.id) ? 'out' : ''}" title="${m.dir < 0 ? 'Lower is better' : m.dir === 0 ? 'A description, not a grade' : 'Higher is better'}${has && m.pct !== null ? ' · ' + advTag(m) : m.v !== null ? ' · too small a sample to rank' : ''}"><span class="adv-l">${esc(m.label)}</span><span class="adv-v ${tone} ${has ? '' : 'muted'}">${advFmt(m.id, m.v)}</span><span class="adv-tag ${has && m.pct !== null ? tone || (m.dir === 0 ? 'note' : 'mid') : 'none'}">${has && m.pct !== null ? advTag(m).replace(' percentile', '').replace('Among the highest', 'High').replace('Among the lowest', 'Low') : m.v !== null ? 'few snaps' : ''}</span><span class="adv-rk">${has && m.rank ? m.rank + '/' + m.n : ''}</span></div>`; }).join('')}</div>`; }).join('');
   return `<div class="small muted" style="margin-bottom:8px">Against ${S.n} ${esc(S.grp)} who have played enough to qualify${S.qual ? '' : ' (he has not)'} · the tag is where he stands among them · <b class="adv-key">marked</b> rows are the four on his overview</div><div class="adv-grid">${facets}${secs}</div>${advancedSeasonHTML(p)}`;
 }
+// the deal he is playing under, written out like the one you negotiate
+function cardDealDocHTML(p) {
+  const c = p.contract; if (!c || p.tid < 0 || !(c.yrs > 0)) return '';
+  const t = T(p.tid), club = `${esc(t.region)} ${esc(t.name)}`, y0 = state.season, M = v => `<b>${fmtMoney(v)}</b>`, words = n => ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven'][n] || n;
+  const art = (n, title, body) => `<div class="fd-art"><div class="fd-h">ARTICLE ${n} — ${title}</div>${body}</div>`, sub = (n, body) => `<p><span class="fd-n">${n}</span>${body}</p>`;
+  const hits = []; for (let i = 0; i < c.yrs; i++) hits.push(i === 0 ? c.amt : c.sched && c.sched[i] !== undefined ? c.sched[i] : c.amt);
+  const dead = deadIfCut(p); let a = null; try { a = agentOf(p); } catch (e) { a = null; }
+  let d = `<div class="fd-top">STANDARD PLAYER CONTRACT</div><div class="fd-mid">between<br><b>${club} Football Club</b> ("Club")<br>and<br><b>${esc(pname(p))}</b> ("Player")</div>`;
+  d += art('I', 'TERM', sub('1.1', `${words(c.yrs)[0].toUpperCase() + String(words(c.yrs)).slice(1)} (${c.yrs}) football season${c.yrs === 1 ? ' remains' : 's remain'} under this Agreement, concluding at the end of the ${y0 + c.yrs - 1} League Year, unless sooner terminated in accordance with Article VI.`)
+    + (c.next ? sub('1.2', `By ${c.opt5 === 'exercised' && c.next.yrs === 1 ? 'option exercised by Club' : 'extension executed during the Term'}, Player is further bound for ${words(c.next.yrs)} (${c.next.yrs}) League Year${c.next.yrs === 1 ? '' : 's'} thereafter at ${M(c.next.amt)} per League Year, of which ${M(c.next.gtd || 0)} is guaranteed.`) : '')
+    + (c.rookie ? sub(c.next ? '1.3' : '1.2', `This Agreement is a rookie contract under the League wage scale${c.opt5 ? `; fifth-year option: ${esc(String(c.opt5))}` : ''}.`) : '')
+    + (c.tagged ? sub('1.2', 'This Agreement is a one-year franchise tender.') : ''));
+  d += art('II', 'SIGNING BONUS AND GUARANTEE', (c.bonus ? sub('2.1', `Club paid Player a signing bonus of ${M(c.bonus)} upon execution, allocated in equal instalments to each League Year of the original Term.`) : sub('2.1', 'No signing bonus remains to be allocated under this Agreement.'))
+    + sub('2.2', `Of the sums still payable hereunder, ${M(c.gtd || 0)} is guaranteed. Should Club terminate this Agreement today, ${M(dead.now)} would be charged to the present League Year${dead.next ? ` and ${M(dead.next)} to the next` : ''}.`));
+  d += art('III', 'COMPENSATION', sub('3.1', 'The following amounts shall be charged to Club under the League salary cap in respect of Player:') + `<div class="fd-sched">${hits.map((b, k) => `<span>${y0 + k} League Year</span><span>${fmtMoney(b)}</span>`).join('')}</div>`
+    + sub('3.2', `The aggregate remaining under this Agreement, exclusive of incentives, is ${M(hits.reduce((x, y) => x + y, 0))}.`));
+  d += art('IV', 'INCENTIVES', c.inc && c.inc.length ? c.inc.map((x, k) => sub('4.' + (k + 1), `Should Player, in any League Year of the Term, ${incLabel(x, true)}, Club shall pay Player an additional ${M(x.amt)}. <i>(${x.likely ? 'Likely to be earned' : 'Not likely to be earned'}.)</i>`)).join('') : sub('4.1', 'This Agreement contains no performance incentives.'));
+  if (a) d += art('V', 'REPRESENTATION', sub('5.1', `Player is represented by ${esc(agentName(a))}, a certified contract advisor.`));
+  d += art(a ? 'VI' : 'V', 'TERMINATION', sub(a ? '6.1' : '5.1', 'Club may terminate this Agreement upon written notice if, in the sole judgment of Club, Player\'s skill or performance has been unsatisfactory as compared with that of other players competing for positions on Club\'s roster.'));
+  d += `<div class="fd-sig"><div><span><i class="fd-ink">${esc(pname(p))}</i></span>Player</div><div><span><i class="fd-ink">${esc(t.abbr)} Football Club</i></span>For the Club</div></div>`;
+  return d;
+}
 function cardContractHTML(p) {
   const c = p.contract || {};
   let h = contractHTML(p).replace('<div class="section-title">', '<div class="section-title" style="margin-top:0">');
@@ -3208,7 +3286,9 @@ function cardContractHTML(p) {
     h += `<div class="section-title">Against the cap, by season</div><table class="tbl fa-cap" style="max-width:420px"><thead><tr><th>Season</th><th class="num">Cap hit</th><th></th></tr></thead><tbody>${rows.map(([y, v, nx]) => `<tr><td>${y}</td><td class="num"><b>${fmtMoney(v)}</b></td><td class="small muted">${nx ? (c.opt5 === 'exercised' && c.next.yrs === 1 ? 'option year' : 'extension') : y === state.season ? 'this year' : ''}</td></tr>`).join('')}</tbody></table>`;
     if (c.inc && c.inc.length) h += `<div class="section-title">Incentives</div>${c.inc.map(x => `<div class="small" style="margin:3px 0"><span class="pill rook">${fmtMoney(x.amt)}</span> if he ${esc(incLabel(x))} <span class="muted">· ${x.likely ? 'likely to be earned: counted against this year’s cap' : 'not likely to be earned: charged next year only if he gets there'}</span></div>`).join('')}`;
   }
-  return h;
+  const doc = cardDealDocHTML(p), btn = cardButtonsHTML(p);
+  if (btn) h += `<div class="ds-acts">${btn}</div>`;
+  return doc ? `<div class="ds-deal"><div>${h}</div><div class="fa-doc ds-doc">${doc}</div></div>` : h;
 }
 function cardManageHTML(p) {
   const u = state.userTid; let left = '';
@@ -3241,7 +3321,7 @@ function playerModal(pid, replace) {
   const prospect = p.tid === -2, tabs = CARD_TABS.filter(([k]) => !prospect || k === 'over' || k === 'scout');
   const tab = tabs.some(([k]) => k === ui.cardTab) ? ui.cardTab : 'over';
   const body = tab === 'scout' ? cardScoutHTML(p) : tab === 'stats' ? cardStatsHTML(p) : tab === 'adv' ? cardAdvHTML(p) : tab === 'contract' ? cardContractHTML(p) : cardOverHTML(p);
-  const btn = cardButtonsHTML(p);
+  const btn = prospect ? cardButtonsHTML(p) : '';
   openModal(`<div class="dossier">${cardHeadHTML(p)}<div class="ds-tabs">${tabs.map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="cardTab" data-v="${k}" data-pid="${p.id}">${l}</button>`).join('')}</div>
     <div class="ds-body">${body}</div>${btn ? `<div class="ds-foot row">${btn}</div>` : ''}</div>`, replace);
 }
@@ -3597,8 +3677,10 @@ const faAct = fn => d => { const pid = +d.pid, was = negMode(P(pid)), err = fn(p
 const actions = {
   faPick: d => { ui.faSel = +d.pid; render(); const lg = document.getElementById('faLog'); if (lg) lg.scrollTop = lg.scrollHeight; },
   faGo: d => { ui.faSel = +d.pid; ui.faView = 'now'; ui.faPos = 'ALL'; ui.faF = null; view = 'fa'; closeModal(); render(); },
-  faSortA: d => { ui.faSort = d.v; render(); },
+  faSortA: d => { const c = FA_COLS[d.v] || FA_BASE[d.v], cur = ui.faSort && typeof ui.faSort === 'object' ? ui.faSort : { k: 'ask', d: 1 }; if (!c) return; ui.faSort = cur.k === d.v ? { k: d.v, d: -cur.d } : { k: d.v, d: c[4] || 1 }; render(); },
   faLV: d => { ui.faLV = d.v; render(); },
+  faMore: () => { ui.faMore = !ui.faMore; render(); },
+  faClear: () => { const q = (ui.faF || {}).q || ''; ui.faF = Object.assign({}, FA_DEF, { q }); render(); },
   agent: d => agentModal(+d.aid),
   faInboxX: () => { state.fa.inbox = []; save(); render(); },
   faSeg: d => { const p = P(+d.pid); faIn(p)[d.f] = d.f === 'yrs' ? +d.v : d.v; if (ui.faNeg === p.id) faNegotiate(p.id, true); else render(); },
@@ -3767,6 +3849,7 @@ const actions = {
   dcGrp: d => { const tab = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def'; (ui.dcGrp = ui.dcGrp || {})[tab] = d.v; ui.dcJob = null; ui.dchPid = null; render(); },
   dcLook: d => { (ui.dchView = ui.dchView || {})[['def', 'off'].includes(ui.dchTab) ? ui.dchTab : 'def'] = d.v; render(); },
   dcPass: d => { ui.dcPass = d.v; render(); },
+  dcSit: d => { ui.dcSit = d.v; render(); },
   dcFm: d => { ui.dcFm = d.k; render(); },
   dcOut: d => { const keep = ui.dchPid; ui.dcOut = +d.pid || null; ui.dchPid = keep || +d.pid || null; render(); },
   dcRemove: d => { setChart(state.userTid, d.key, +d.i, 0); save(); render(); },
@@ -3882,6 +3965,7 @@ const changes = {
   workSet: (v, el) => { setWork(+el.dataset.pid, el.dataset.part, v); save(); if (el.dataset.card) playerModal(+el.dataset.pid, true); },
   xtSet: (v, el) => { setCrossTrain(+el.dataset.pid, v || null); save(); if (el.dataset.card) playerModal(+el.dataset.pid, true); render(); },
   udfaOffer: (v, el) => { const err = udfaOffer(+el.dataset.pid, v === '' ? null : +v); if (err) toast(err); save(); render(); },
+  faLV: v => { ui.faLV = v; },
   faF: (v, el) => { (ui.faF || (ui.faF = Object.assign({}, FA_DEF)))[el.dataset.f] = v; },
   faChk: (v, el) => { (ui.faF || (ui.faF = Object.assign({}, FA_DEF)))[el.dataset.f] = el.checked; },
   srch: (v, el) => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF)))[el.dataset.f] = v; },
