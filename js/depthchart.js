@@ -192,14 +192,15 @@ function refreshChart(tid) {
   for (const k in c.ov) if (!mine.has(c.ov[k])) delete c.ov[k];
 }
 // how many men a job's order can hold: five for any position, ten for a special teams unit
-function chartMax(key) { const k = baseKey(key); return Math.max(CHART_DEPTH[k] || 5, 5); }
+// room for three full units at every job: a job with two men on the field holds six
+function chartMax(key, tid) { const k = baseKey(key), base = Math.max(CHART_DEPTH[k] || 5, 5); if (tid === undefined || CHART_UNIT(k) !== 'def' || ST_UNIT[k]) return base; let n = 1; try { n = defJobs(T(tid)).n[k] || (k === 'RUSHE' || k === 'RUSHI' ? 2 : 1); } catch (e) { n = 1; } return Math.max(base, 3 * n); }
 function setChart(tid, key, i, pid) {
   const c = ensureChart(tid), unit = CHART_UNIT(key);
   if (c.auto[unit]) setChartAuto(tid, unit, false); // taking control starts from the staff's chart as it stands
   const list = (c.lists[key] || []).slice();
   if (pid) { const j = list.indexOf(pid); if (j >= 0) list.splice(j, 1); list.splice(Math.min(i, list.length), 0, pid); }
   else list.splice(i, 1);
-  c.lists[key] = list.slice(0, chartMax(key));
+  c.lists[key] = list.slice(0, chartMax(key, tid));
 }
 // a position only a specialist can play: nobody lands there by accident
 function chartBlocked(tid, key, pid) {

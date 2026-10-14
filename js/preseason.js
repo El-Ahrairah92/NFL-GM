@@ -180,7 +180,8 @@ const PRE_GROUPS = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S'];
 function prePlanFor(tid) {
   const pl = tid === state.userTid && !state.settings.autoUser && state.prePlan ? state.prePlan : null;
   const auto = PRE_SHARE_AUTO[state.pre ? Math.min(state.pre.wk, 2) : 0], sh = (pl && pl.share) || {};
-  return { share: pos => sh[pos] !== undefined && sh[pos] >= 0 ? sh[pos] : auto, auto, feat: pl ? pl.feat : {}, hold: pl ? pl.hold : {} };
+  const js = (pl && pl.jobShare) || {};
+  return { share: (pos, key) => key && js[key] !== undefined && js[key] >= 0 ? js[key] : sh[pos] !== undefined && sh[pos] >= 0 ? sh[pos] : auto, auto, js, feat: pl ? pl.feat : {}, hold: pl ? pl.hold : {} };
 }
 function preStarters(tid, g) {
   if (g && g.preStart && g.preStart[tid]) return g.preStart[tid];
@@ -193,9 +194,17 @@ function preStarters(tid, g) {
 // how far into the game we are (0 to 1), and which string that puts on the field for a position group:
 // the ones for their share, the twos to halftime (or halfway through what is left), then the threes
 function preElapsed(g) { const q = g && g.q ? g.q : 1; return !g ? 0 : q > 4 ? 1 : ((q - 1) * 900 + (900 - Math.max(0, Math.min(900, g.clock === undefined ? 900 : g.clock)))) / 3600; }
-function preString(tid, g, pos) { const s = Math.max(0, prePlanFor(tid).share(pos)), e = preElapsed(g); return e < s ? 0 : e < Math.max(0.5, s + (1 - s) / 2) ? 1 : 2; }
+function preString(tid, g, pos, key) { const s = Math.max(0, prePlanFor(tid).share(pos, key)), e = preElapsed(g); return e < s ? 0 : e < Math.max(0.5, s + (1 - s) / 2) ? 1 : 2; }
 // a unit you run yourself plays the exhibitions straight off your depth chart: first, second and third at every spot
 function preByChart(tid, p) { const t = T(tid), u = SPOTS[p.spot] ? SPOTS[p.spot].side : null; return (u === 'off' || u === 'def') && !!t.dch && !t.dch.auto[u] && !(state.settings.autoUser && tid === state.userTid); }
+// the share you set for the jobs a man starts at (the first unit of each), if any
+function preJobShare(tid, p, g, plan) {
+  const keys = Object.keys(plan.js).filter(k => plan.js[k] >= 0); if (!keys.length) return undefined;
+  const c = T(tid).dch; if (!c) return undefined;
+  const jn = g ? ((g.preJt = g.preJt || {})[tid] || (g.preJt[tid] = (() => { try { return defJobs(T(tid)).n; } catch (e) { return {}; } })())) : (() => { try { return defJobs(T(tid)).n; } catch (e) { return {}; } })();
+  let best; for (const k of keys) { const n = CHART_UNIT(k) === 'def' ? jn[k] || (k === 'RUSHE' || k === 'RUSHI' ? 2 : 1) : 1; if ((c.lists[k] || []).slice(0, n).includes(p.id)) best = Math.max(best === undefined ? -1 : best, plan.js[k]); }
+  return best;
+}
 function preseasonActives(tid, g) {
   const plan = prePlanFor(tid), starters = preStarters(tid, g), sit = new Set(), chartMen = new Set();
   const q = g && g.q ? g.q : 1, snp = id => (g && g.ps[id] ? g.ps[id].snp : 0);
@@ -203,9 +212,9 @@ function preseasonActives(tid, g) {
   const elapsed = !g ? 0 : q > 4 ? 1 : ((q - 1) * 900 + (900 - Math.max(0, Math.min(900, g.clock === undefined ? 900 : g.clock)))) / 3600; // share of the game played so far
   for (const p of ro) {
     if (plan.hold[p.id]) sit.add(p.id);
-    else if (tid === state.userTid && repsOn() && state.reps && !plan.feat[p.id] && p.pos !== 'K' && p.pos !== 'P' && repsString(p.id) >= 2 && elapsed < 0.5) sit.add(p.id); // the threes get the second half
-    else if (preByChart(tid, p)) chartMen.add(p.id); // everyone dresses: the chart decides who is in, string by string
-    else if (starters.has(p.id) && !plan.feat[p.id]) { const s = plan.share(p.pos); if (!(s > 0 && (elapsed < s || (s <= 0.12 && snp(p.id) < 8 && q <= 1)))) sit.add(p.id); } // each group plays its share; a "series" is at least a handful of snaps
+    else if (preByChart(tid, p)) chartMen.add(p.id); // a unit you run: everyone dresses and your depth chart decides who is in, string by string
+    else if (tid === state.userTid && repsOn() && state.reps && !plan.feat[p.id] && p.pos !== 'K' && p.pos !== 'P' && repsString(p.id) >= 2 && elapsed < 0.5 && preJobShare(tid, p, g, plan) === undefined) sit.add(p.id); // the threes get the second half
+    else if ((starters.has(p.id) || preJobShare(tid, p, g, plan) !== undefined) && !plan.feat[p.id]) { const jsh = preJobShare(tid, p, g, plan), s = jsh !== undefined ? jsh : plan.share(p.pos); /* a man who starts at a job you set is a starter, whatever the reps chart says */ if (!(s > 0 && (elapsed < s || (s <= 0.12 && snp(p.id) < 8 && q <= 1)))) sit.add(p.id); } // each group plays its share; a "series" is at least a handful of snaps
   }
   // the twos give way to the threes after halftime, unless you want more film on someone
   const played = new Set(ro.filter(p => !sit.has(p.id) && !chartMen.has(p.id) && !plan.feat[p.id] && p.pos !== 'K' && p.pos !== 'P' && ((q >= 3 && snp(p.id) >= 22) || snp(p.id) >= 45)).map(p => p.id));

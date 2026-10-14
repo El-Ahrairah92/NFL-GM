@@ -162,3 +162,13 @@ Audit over 1,632 games: kickoffs, punt distance, return averages, blocks and ret
 - Look up exact league punt figures before tuning: the targets above are from memory.
 - Optional: pull the unit-matchup strength (`ST_K.ko`, `ST_K.pu`) down 15-20%. Return and coverage units swing a club by about +/-18 points a season, the wide end of realistic.
 - Do this before building special teams grades, the camp special teams period and units on the reps chart, so they are graded against settled numbers.
+
+## Busts, made specific (talked through, not built)
+
+Today a bust is one thing: a man whose playbook knowledge is below what the call asks for may blow his assignment, and for that snap every attribute he uses is 18 lower. The plan:
+
+- **Causes:** keep the knowledge gap; add Football IQ (against disguise, motion, late shifts), Composure (third and long, red zone, two-minute, loud road games, playoffs), fatigue, playing an unfamiliar spot, and low chemistry beside him. The communicator (quarterback, green dot) catches some before the snap; losing him raises the unit's rate. Discipline, room leadership and the caller trimming the call stay.
+- **What a bust is:** a specific mistake by job with its own consequence: wrong route or depth, misread coverage, missed protection (free rusher), wrong man on a run, wrong hole, lost rush lane, wrong gap, blown coverage (a man uncovered), lined up wrong (pre-snap penalty or a burned timeout).
+- **Where you see it:** play-by-play lines, the worst mark on that snap in the grades (charged to the right man; the man left open is credited only for what an ordinary man would do), mental errors per 100 snaps on the card, coaches' notes, a scouting trait ("assignment-sound" / "freelances").
+- **Tuning:** keep the total near today's rate; severe ones (blown coverage) add big plays, so their rate is set low. Being beaten physically is never a bust.
+- **Order:** causes and the communicator; then blown coverage, free rusher, wrong gap; then visibility; then the offensive skill busts and pre-snap ones. Ties in with the hidden-attribute rework (Football IQ, Composure).

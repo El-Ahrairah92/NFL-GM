@@ -607,7 +607,7 @@ function preRepsHTML() {
   let big = '';
   if (pickP) { const x = campPlayerBits(pickP), js = repsJobsOf(pickP.id), cat = bub[pickP.id] ? CAMP_CAT[bub[pickP.id].cat] : null, note = campLastNote(pickP), here = js.find(q => q.k === job);
     big = `<div class="card rp-big"><div class="row" style="gap:8px"><button class="link rp-nm" data-action="player" data-pid="${pickP.id}" title="Open his card">${esc(pname(pickP))}</button><span class="muted">${esc(pickP.lbl)} · ${pickP.age}${pickP.exp === 0 ? ' · rookie' : ''}</span><span class="spacer"></span>${cat ? `<span class="pill ${cat[1]}">${cat[0]}</span>` : ''}</div>
-      <div class="rp-kv"><span>On your chart</span><b>${js.map(q => `${esc(REP_JOB[q.k][1])}, ${REP_STRING[q.s].toLowerCase()}`).join(' · ') || 'nowhere'}</b></div>
+      <div class="rp-kv"><span>On your chart</span><b>${js.map(q => `${esc(REP_JOB[q.k][1])}, ${REP_STRING[q.s].toLowerCase()}`).join(' · ') || `<span class="muted">off it: the coaches have him with the ${REP_STRING[repsString(pickP.id)].toLowerCase()}</span>`}</b></div>
       <div class="rp-kv"><span>Camp grade</span><b>${x.grade}${x.weeks ? ' ' + x.weeks : ''}</b></div><div class="rp-kv"><span>One-on-ones</span><b>${x.drills} <span class="muted small">(${x.vs1} against the ones)</span></b></div>${campTeamGrade(pickP) !== null ? `<div class="rp-kv"><span>Team periods</span><b>${gradeChip(campTeamGrade(pickP))} <span class="muted small">(${pickP.camp.tp.snp} snaps)</span></b></div>` : ''}
       ${note ? `<div class="ph-note" style="margin-top:6px">“${esc(note[2])}”</div>` : ''}
       <div class="row" style="gap:8px;margin-top:10px">${here || repsCanWork(pickP, job) ? `<span class="seg">${[0, 1, 2].map(st => `<button class="sm ${here && here.s === st ? 'on' : ''}" data-action="repsDo" data-k="${job}" data-pid="${pickP.id}" data-s="${st}" title="${esc(J[1])}: with the ${REP_STRING[st].toLowerCase()}">${REP_STRING[st]}</button>`).join('')}</span><span class="small muted">at ${esc(J[1].toLowerCase())}</span>` : `<span class="small muted">He cannot work at ${esc(J[1].toLowerCase())}.</span>`}<span class="spacer"></span><button class="sm" data-action="player" data-pid="${pickP.id}">His file</button></div></div>`; }
@@ -615,7 +615,7 @@ function preRepsHTML() {
     <div class="dc2-bl">${can.map(benchRow).join('') || '<div class="muted small">Nobody on the roster can work here.</div>'}</div></div>${big}</div>`;
   return `<div class="dc2"><div class="dc2-top">${tabs}${ctl}</div>
     <div class="dc2-main"><div class="dc2-left"><div class="dc2-jobs">${grpSel}${cards}</div>
-      <div class="small muted" style="margin-top:8px"><b>Drag a man</b> to a place in a job’s order, from the list on the right or from another card. <b>+</b> gives him a look at the job you have selected; <b>×</b> takes him off; his name opens his card. The ones face the ones in practice and start the exhibitions; the threes get the second half.</div></div>${benchCard}</div></div>`;
+      <div class="small muted" style="margin-top:8px"><b>Drag a man</b> to a place in a job’s order, from the list on the right or from another card. <b>+</b> gives him a look at the job you have selected; <b>×</b> takes him off (take him off everything and the coaches put him wherever they see fit); his name opens his card. The ones face the ones in practice and start the exhibitions; the threes get the second half.</div></div>${benchCard}</div></div>`;
 }
 // ---- the roster, man by man ----
 function preTrackRow(p, bub, open) {
@@ -639,15 +639,21 @@ function preTrackRow(p, bub, open) {
     <div class="ph-dact"><button class="sm" data-action="player" data-pid="${p.id}">Open his file</button>${jobs[0] ? `<button class="sm" data-action="repsGo" data-k="${jobs[0].k}" data-pid="${p.id}">Find him on the chart</button>` : ''}</div></div>`;
 }
 function preTrackHTML() {
-  const u = state.userTid, bub = campBubble(u), room = PRE_ROOMS.some(r => r[0] === ui.trkRoom) ? ui.trkRoom : 'ALL', sort = ui.trkSort || 'chart', open = ui.trkOpen || {};
+  const u = state.userTid, bub = campBubble(u), room = PRE_ROOMS.some(r => r[0] === ui.trkRoom) ? ui.trkRoom : 'ALL', open = ui.trkOpen || {};
+  const so = ui.trkSort && typeof ui.trkSort === 'object' ? ui.trkSort : { k: typeof ui.trkSort === 'string' ? ui.trkSort : 'chart', d: 1 }, sort = so.k;
   const move = p => { const c = p.camp && p.camp.s === state.season ? p.camp : null, sc = c ? c.sc.filter(v => v !== undefined && v !== null) : []; return sc.length >= 2 ? sc[sc.length - 1] - sc[sc.length - 2] : 0; };
-  const key = { chart: p => repsString(p.id) * 100 + (bub[p.id] ? bub[p.id].i : 50), grade: p => -(campGrade(p) || 0), move: p => -move(p), fall: p => move(p), bubble: p => ({ bubble: 0, ps: 1, likely: 2, long: 3, lock: 4, ir: 5 }[bub[p.id] ? bub[p.id].cat : 'long']) }[sort] || (p => 0);
+  const oo = p => { const r = campRecord(p); return r && r.w + r.l ? r.w / (r.w + r.l) : null; }, nul = v => v === null || v === undefined ? null : v;
+  const K = { name: p => p.last + ' ' + p.first, chart: p => repsString(p.id) * 100 + (bub[p.id] ? bub[p.id].i : 50), bubble: p => ({ bubble: 0, ps: 1, likely: 2, long: 3, lock: 4, ir: 5 }[bub[p.id] ? bub[p.id].cat : 'long']),
+    grade: p => nul(campGrade(p)), oo, team: p => nul(campTeamGrade(p)), exh: p => nul(preGrade(p)), move: p => move(p), fall: p => -move(p) };
+  const DIR = { name: -1, chart: -1, bubble: -1, grade: 1, oo: 1, team: 1, exh: 1, move: 1, fall: 1 }, kf = K[sort] || K.chart, dd = so.d * (DIR[sort] || 1);
+  const cmp = (a, b) => { const x = kf(a), y = kf(b); if (x === null || y === null) return x === null ? (y === null ? 0 : 1) : -1; return (typeof x === 'string' ? x.localeCompare(y) * -1 : y - x) * dd; };
+  const th = (k, l, num) => `<span class="ph-th ${num ? 'ph-num' : ''} ${sort === k ? 'on' : ''}" data-action="trkSortH" data-v="${k}" title="Click to sort">${l}${sort === k ? `<i>${so.d > 0 ? '▼' : '▲'}</i>` : ''}</span>`;
   let h = `<div class="ph-bar"><span class="seg">${PRE_ROOMS.map(([k, l]) => `<button class="sm ${k === room ? 'on' : ''}" data-action="trkRoom" data-v="${k}">${l}</button>`).join('')}</span>
-    <label class="small muted">Order by</label><select data-change="trkSort">${[['chart', 'The chart'], ['grade', 'Camp grade'], ['move', 'Rising'], ['fall', 'Falling'], ['bubble', 'On the bubble first']].map(([k, l]) => `<option value="${k}" ${k === sort ? 'selected' : ''}>${l}</option>`).join('')}</select>
-    <span class="small muted">Click a man for his week-by-week.</span></div>
-    <div class="ph-thead"><span>Player</span><span>Job · string</span><span>Staff has him</span><span class="ph-num">Camp grade</span><span class="ph-num">One-on-ones</span><span class="ph-num">Team periods</span><span class="ph-num">Exhibitions</span><span></span></div>`;
+    <label class="small muted">Also</label><select data-change="trkSort"><option value="">—</option>${[['move', 'Rising this week'], ['fall', 'Falling this week']].map(([k, l]) => `<option value="${k}" ${k === sort ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <span class="small muted">Click a heading to sort, a man for his week-by-week.</span></div>
+    <div class="ph-thead">${th('name', 'Player')}${th('chart', 'Job · string')}${th('bubble', 'Staff has him')}${th('grade', 'Camp grade', 1)}${th('oo', 'One-on-ones', 1)}${th('team', 'Team periods', 1)}${th('exh', 'Exhibitions', 1)}<span></span></div>`;
   for (const [rk, rl] of PRE_ROOMS.slice(1)) { if (room !== 'ALL' && room !== rk) continue;
-    const l = rosterOf(u).filter(p => preRoomOf(p) === rk).sort((a, b) => key(a) - key(b)); if (!l.length) continue;
+    const l = rosterOf(u).filter(p => preRoomOf(p) === rk).sort((a, b) => cmp(a, b) || (bub[a.id] ? bub[a.id].i : 50) - (bub[b.id] ? bub[b.id].i : 50)); if (!l.length) continue;
     h += `<div class="ph-group"><span>${rl}</span><span class="muted">${l.length} men</span></div>` + l.map(p => preTrackRow(p, bub, !!open[p.id])).join(''); }
   return `<div class="card ph-track">${h}</div>`;
 }
@@ -787,7 +793,6 @@ function rosterHTML() {
     <div class="muted small" style="margin-bottom:8px">Cap ${fmtMoney(state.cap)} · Payroll ${fmtMoney(payroll(tid))} · Cap space <b>${fmtMoney(capRoom(tid))}</b>${T(tid).dead ? ` · Dead money ${fmtMoney(T(tid).dead)}` : ''} · Next year committed ${fmtMoney(payrollNext(tid))} · ${rosterCount(tid)}/${rosterLimit()} players${state.phase === 'REG' ? ' (IR excluded)' : ''} · PS ${psOf(tid).length}/${PS_MAX}</div>
     <div class="subtabs">${famTabs(ui.rosterPos || 'ALL', 'rosterPos')}</div>`;
   if (mine && state.phase === 'RESIGN') html += decisionsHTML(tid);
-  if (mine && state.phase === 'PRESEASON' && state.prePlan) html += prePlanHTML();
   const dv = depthView(tid), starters = new Set();
   for (const e of [...dv.off, ...dv.nickel, ...dv.base, dv.k, dv.p]) starters.add(e.p.id);
   const base = [
@@ -940,18 +945,19 @@ function jobComfort(p, k) { if (jobSide(k) === 'st') return 100; const ax = jobA
 function jobTier(p, k) { return jobSide(k) === 'st' ? null : tierOf(p, jobValue(p, k)); }
 function dcDot(p, k) { const cf = comfortLabel(jobComfort(p, k)); return (cf !== 'Natural' && cf !== 'Comfortable' ? `<i class="dcd ${CF_CLS[cf]}" title="${cf} at this job"></i>` : '') + (p.injury ? `<i class="dcd inj" title="Out ${p.injury.weeks} week${p.injury.weeks === 1 ? '' : 's'}">✚</i>` : ''); }
 // one man on a job card
+function dcSat(p) { const u = state.userTid, c = T(u).dch; return state.phase === 'PRESEASON' && state.prePlan ? !!state.prePlan.hold[p.id] : !!(c && c.sit && c.sit[p.id]); }
 function dcChip(p, k, i, starts) {
-  const tr = jobTier(p, k);
-  return `<div class="dcc ${tr ? TIER_CLS[tr] : ''} ${i < starts ? 'st' : ''} ${ui.dchPid === p.id ? 'pk' : ''}" draggable="true" data-dcp="${p.id}" data-dci="${i}" data-dcjob="${k}" data-action="dchMan" data-pid="${p.id}" title="${esc(pname(p))}${tr ? ' · ' + tr + ' at this job' : ''}">
-    <span class="dcc-n">${i + 1}</span><button class="link dcc-nm" data-action="player" data-pid="${p.id}" title="${esc(pname(p))} · ${esc(p.lbl)}${tr ? ' · ' + tr + ' at this job' : ''} — open his card">${esc(p.last)}</button>${dcDot(p, k)}<span class="dcc-sp"></span><button class="dcc-x" data-action="dcRemove" data-key="${k}" data-i="${i}" title="Take him off this job" aria-label="Remove ${esc(p.last)}">×</button></div>`;
+  const tr = jobTier(p, k), sat = dcSat(p);
+  return `<div class="dcc ${tr ? TIER_CLS[tr] : ''} ${i < starts ? 'st' : ''} ${ui.dchPid === p.id ? 'pk' : ''} ${sat ? 'sat' : ''}" draggable="true" data-dcp="${p.id}" data-dci="${i}" data-dcjob="${k}" data-action="dchMan" data-pid="${p.id}" title="${esc(pname(p))}${tr ? ' · ' + tr + ' at this job' : ''}">
+    <span class="dcc-n">${i + 1}</span><button class="link dcc-nm" data-action="player" data-pid="${p.id}" title="${esc(pname(p))} · ${esc(p.lbl)}${tr ? ' · ' + tr + ' at this job' : ''} — open his card">${esc(p.last)}</button>${dcDot(p, k)}<span class="dcc-sp"></span><button class="dcc-sit ${sat ? 'on' : ''}" data-action="dcSit" data-pid="${p.id}" title="${sat ? 'Sitting: he does not dress and takes no snaps anywhere. Click to play him.' : 'Sit him: he does not dress and takes no snaps anywhere, not even on special teams'}">Sit</button><button class="dcc-x" data-action="dcRemove" data-key="${k}" data-i="${i}" title="Take him off this job" aria-label="Remove ${esc(p.last)}">×</button></div>`;
 }
 function dcJobCard(t, c, k, need, where, prob) {
-  const u = t.id, list = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === u), n = chartMax(k), on = ui.dcJob === k;
+  const u = t.id, list = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === u), n = chartMax(k, u), on = ui.dcJob === k;
   const rotNow = rotOf(c, k), rotList = rotOpts(k), rotPick = rotList.length ? rotList.reduce((a, o) => Math.abs(o[0] - rotNow) < Math.abs(a[0] - rotNow) ? o : a)[0] : 0;
   const rot = ROT_KEYS.has(k) && rotList.length > 1 ? `<div class="dcj-rot"><span>Next man's snaps</span><select data-change="dchRot" data-key="${k}">${rotList.map(([v, l]) => `<option value="${v}" ${v === rotPick ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : '';
   return `<div class="dcj ${on ? 'on' : ''} ${prob ? 'bad' : ''}" data-action="dcJob" data-key="${k}">
-    <div class="dcj-h"><b>${esc(jobLabel(k))}</b>${need > 1 && !ST_UNIT[k] ? `<span class="dcj-tag two" title="This job has ${need} spots on the field at once: the first ${need} listed both start">top ${need} start</span>` : ''}${prob ? '<span class="dcj-tag bad">needs a man</span>' : ''}</div>
-    <div class="dcj-list">${list.map((p, i) => (i === need && !ST_UNIT[k] ? '<div class="dcj-div"><span>next in line</span></div>' : '') + dcChip(p, k, i, need)).join('')}${list.length < n ? `<div class="dcj-drop ${list.length ? 'more' : ''}" data-dcjob="${k}" data-dci="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div>` : ''}</div>
+    <div class="dcj-h"><b>${esc(jobLabel(k))}</b>${need > 1 && !ST_UNIT[k] ? `<span class="dcj-tag two" title="This job has ${need} spots on the field at once: the first ${need} listed both start">top ${need} start</span>` : ''}${prob ? '<span class="dcj-tag bad">needs a man</span>' : ''}</div>${preJobSel(k)}
+    <div class="dcj-list">${list.map((p, i) => (i === need && !ST_UNIT[k] ? '<div class="dcj-div"><span>next in line · 2nd unit</span></div>' : i === 2 * need && !ST_UNIT[k] ? '<div class="dcj-div"><span>3rd unit</span></div>' : '') + dcChip(p, k, i, need)).join('')}${list.length < n ? `<div class="dcj-drop ${list.length ? 'more' : ''}" data-dcjob="${k}" data-dci="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div>` : ''}</div>
     <details class="dcj-more" ${foldAttr('dcj' + k)}><summary>about this job</summary><div class="small muted">${esc(JOB_HELP[k] || '')}${where && where.length ? `<br><b>Plays in:</b> ${esc([...new Set(where)].join(', '))}` : ''}</div>${rot}</details></div>`;
 }
 // the green dot: the defender who gets the call and makes the checks
@@ -982,7 +988,7 @@ function depthChartHTML() {
   const probs = chartProblems(u), auto = c.auto[tab], side = { def: 'defense', off: 'offense', st: 'special teams' }[tab];
   const tabs = `<div class="dc2-tabs">${[['def', 'Defense'], ['off', 'Offense'], ['st', 'Special teams']].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="dchTab" data-tab="${k}">${l}${probs.some(p => p.tab === k) ? ' <i class="dcd bad"></i>' : ''}</button>`).join('')}</div>`;
   const ctl = `<div class="dc2-ctl"><span class="small muted">${auto ? `The staff is setting the ${side}.` : `You are setting the ${side}.`}</span><button class="sm ${auto ? 'primary' : ''}" data-action="dchAuto" data-unit="${tab}" data-on="${auto ? 0 : 1}">${auto ? 'Take control' : 'Hand to the staff'}</button></div>`;
-  let html = `<div class="dc2"><div class="dc2-top">${tabs}${ctl}</div>${state.settings.autoUser ? '<div class="callout"><b>Auto-manage is on</b>: the staff sets the depth chart until you turn it off in Settings.</div>' : ''}`;
+  let html = `<div class="dc2"><div class="dc2-top">${tabs}${ctl}</div>${state.settings.autoUser ? '<div class="callout"><b>Auto-manage is on</b>: the staff sets the depth chart until you turn it off in Settings.</div>' : ''}${preTimeOn() && tab !== 'st' ? prePlanHTML() : ''}`;
   const mine = probs.filter(p => p.tab === tab);
   if (mine.length) html += `<div class="callout small"><b class="bad">This chart is not complete.</b> ${mine.map(p => esc(p.text)).join(' · ')}. If you play a game like this, the staff fills the gap for that game only.</div>`;
   // ---- the jobs on this tab ----
@@ -1772,17 +1778,24 @@ function waiverResultModal(r) {
   openModal(h);
 }
 // ---------- preseason playing-time plan ----------
+function preTimeOn() { return !!(state && state.phase === 'PRESEASON' && state.prePlan && !state.settings.autoUser); }
+// on the depth chart in preseason: what the coach plans, who is short of snaps, and a way back to his plan
 function prePlanHTML() {
-  const pl = state.prePlan || { feat: {}, hold: {} }, u = state.userTid, sh = pl.share || {};
+  const pl = state.prePlan || { feat: {}, hold: {} }, u = state.userTid, js = pl.jobShare || {}, nSet = Object.keys(js).length + Object.keys(pl.share || {}).length;
   const names = o => Object.keys(o).map(id => P(+id)).filter(p => p && p.tid === u).map(p => playerLink(p, true)).join(', ') || '<span class="muted">none</span>';
   const wk = state.pre ? state.pre.wk : 0, auto = prePlanFor(u).auto, word = v => (PRE_SHARE_OPTS.find(o => o[0] === v) || [0, Math.round(v * 100) + '%'])[1].toLowerCase();
   const starters = preStarters(u), short = rosterOf(u).filter(p => starters.has(p.id) && p.pos !== 'K' && p.pos !== 'P' && (p.preS ? p.preS.snp : 0) < SHARP_SNAPS);
-  return `<div class="card" style="margin-bottom:14px"><div class="row"><h3 style="margin:0">Preseason playing time · game ${Math.min(wk + 1, PRESEASON_GAMES)} of ${PRESEASON_GAMES}</h3><span class="spacer"></span><span class="small muted">Coach's plan this game: first team plays ${word(auto)}</span></div>
-    <p class="small muted" style="margin:8px 0 8px">How long each group's first team plays. The backups take over from there and give way to the third string after halftime. More snaps is better film and more risk of injury. <b>A unit you set yourself plays straight off your depth chart:</b> the first man listed at each spot for the share you choose here, the second man until halftime, the third after it. A player listed second at one spot and third at another plays both. Starters you sit do not fill in elsewhere.</p>
-    <div class="pre-shares">${PRE_GROUPS.map(g => `<label><span>${g}</span><select data-change="preShare" data-pos="${g}">${PRE_SHARE_OPTS.map(([v, l]) => `<option value="${v}" ${(sh[g] === undefined ? -1 : sh[g]) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`).join('')}</div>
-    ${short.length ? `<div class="small ${wk >= PRESEASON_GAMES - 1 ? 'warn' : 'muted'}" style="margin-top:8px"><b>${short.length} starter${short.length === 1 ? '' : 's'}</b> ${short.length === 1 ? 'has' : 'have'} fewer than ${SHARP_SNAPS} preseason snaps and would open the season a step slow: ${short.slice(0, 10).map(p => playerLink(p, true) + ' <span class="muted">(' + (p.preS ? p.preS.snp : 0) + ')</span>').join(', ')}${short.length > 10 ? ' and more' : ''}.</div>` : '<div class="small good" style="margin-top:8px">Every starter has enough preseason work to open the season sharp.</div>'}
-    <div class="small" style="margin-top:8px"><b>Featured</b> (stay in for extra snaps): ${names(pl.feat)}</div><div class="small" style="margin-top:3px"><b>Held out</b>: ${names(pl.hold)}</div>
-    <div class="small muted" style="margin-top:6px">Set these per player in the <b>Preseason</b> roster view or on his card.</div></div>`;
+  return `<div class="card pre-time"><div class="row"><div><div class="ds-lb">Preseason playing time · game ${Math.min(wk + 1, PRESEASON_GAMES)} of ${PRESEASON_GAMES}</div>
+      <div class="small">Set how long the <b>first unit</b> plays at each job on its card below. The second unit takes over from there until halftime, the third unit after it. Left on <b>Coach's plan</b>, his first unit plays ${word(auto)} this game.</div></div><span class="spacer"></span>
+      ${nSet ? `<button class="sm" data-action="preShareReset" title="Every job back to the coach's plan">Coach's plan everywhere</button>` : ''}</div>
+    ${short.length ? `<div class="small ${wk >= PRESEASON_GAMES - 1 ? 'warn' : 'muted'}" style="margin-top:6px"><b>${short.length} starter${short.length === 1 ? '' : 's'}</b> ${short.length === 1 ? 'has' : 'have'} fewer than ${SHARP_SNAPS} preseason snaps and would open the season a step slow: ${short.slice(0, 8).map(p => playerLink(p, true) + ' <span class="muted">(' + (p.preS ? p.preS.snp : 0) + ')</span>').join(', ')}${short.length > 8 ? ' and more' : ''}.</div>` : '<div class="small good" style="margin-top:6px">Every starter has enough preseason work to open the season sharp.</div>'}
+    <div class="small" style="margin-top:4px"><b>Featured</b> (stay in for extra snaps): ${names(pl.feat)} · <b>Held out</b>: ${names(pl.hold)} <span class="muted">· set these on a player's card</span></div></div>`;
+}
+// the share control on a job card
+function preJobSel(k) {
+  if (!preTimeOn() || ST_UNIT[k] || k === 'K' || k === 'P' || k === 'KR' || k === 'PRET') return '';
+  const js = state.prePlan.jobShare || {}, cur = js[k] === undefined ? -1 : js[k];
+  return `<div class="dcj-pre ${cur >= 0 ? 'set' : ''}" title="How long this job's first unit plays in the next exhibition"><span>1st unit plays</span><select data-change="preJob" data-key="${k}">${PRE_SHARE_OPTS.map(([v, l]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
 }
 function preSnapReport(b) {
   const u = state.userTid;
@@ -3740,7 +3753,7 @@ const actions = {
     }
     if (state.phase === 'REG' || state.phase === 'PLAYOFFS' || state.phase === 'PRESEASON') {
       if (state.phase === 'PRESEASON' && !state.pre) { if (!await ask({ title: 'Open training camp?', body: 'Camp opens with a staff meeting and the reps chart: who works where, and with which string. Nothing is practiced until you say so. Other clubs fill their camp rosters now.', yes: 'Open camp', no: 'Not yet' })) return; startPreseason(); ui.preTab = 'meet'; view = 'pre'; save(); render(); window.scrollTo(0, 0); return; }
-      if (state.phase === 'PRESEASON' && state.pre && !preCamped() && !state.settings.autoUser) { campRun(); ui.preTab = 'track'; ui.trkSort = 'grade'; view = 'pre'; save(); render(); window.scrollTo(0, 0); return; } // two weeks of camp, then stop and look
+      if (state.phase === 'PRESEASON' && state.pre && !preCamped() && !state.settings.autoUser) { campRun(); ui.preTab = 'track'; ui.trkSort = { k: 'grade', d: 1 }; view = 'pre'; save(); render(); window.scrollTo(0, 0); return; } // two weeks of camp, then stop and look
       if (state.settings.gamePopups !== false && userMatchup()) { pregameModal(); return; }
       playWeek(false);
     } else { stepContinue(); save(); render(); if (ui.udfaResult) { const r = ui.udfaResult; ui.udfaResult = null; udfaResultModal(r); } if (ui.wvResult) { const r = ui.wvResult; ui.wvResult = null; waiverResultModal(r); } }
@@ -3794,6 +3807,8 @@ const actions = {
   preTab: d => { ui.preTab = d.v; render(); },
   meetRole: d => { ui.meetRole = d.v; render(); },
   meetAll: d => { const u = state.userTid, room = d.v; for (const a of repsAdvice(u)) { const p = P(a.pid); if (!p) continue; const rk = preRoomOf(p); if (rk === room) repsToString(a.k, a.pid, a.cs); } save(); render(); },
+  preShareReset: () => { const pl = state.prePlan; if (pl) { pl.jobShare = {}; pl.share = {}; } save(); render(); },
+  trkSortH: d => { const cur = ui.trkSort && typeof ui.trkSort === 'object' ? ui.trkSort : { k: 'chart', d: 1 }; ui.trkSort = cur.k === d.v ? { k: d.v, d: -cur.d } : { k: d.v, d: 1 }; render(); },
   repsUnit: d => { ui.repsUnit = d.v; ui.repsJob = null; ui.repsPid = null; render(); },
   repsGrp: d => { const un = ['off', 'def', 'st'].includes(ui.repsUnit) ? ui.repsUnit : 'off'; (ui.repsGrp = ui.repsGrp || {})[un] = d.v; ui.repsJob = null; render(); },
   repsJob: d => { ui.repsJob = d.k; render(); },
@@ -3849,7 +3864,10 @@ const actions = {
   dcGrp: d => { const tab = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def'; (ui.dcGrp = ui.dcGrp || {})[tab] = d.v; ui.dcJob = null; ui.dchPid = null; render(); },
   dcLook: d => { (ui.dchView = ui.dchView || {})[['def', 'off'].includes(ui.dchTab) ? ui.dchTab : 'def'] = d.v; render(); },
   dcPass: d => { ui.dcPass = d.v; render(); },
-  dcSit: d => { ui.dcSit = d.v; render(); },
+  dcSit: d => { if (d.pid === undefined) { ui.dcSit = d.v; render(); return; } const id = +d.pid, u = state.userTid;
+    if (state.phase === 'PRESEASON' && state.prePlan) { const pl = state.prePlan; if (pl.hold[id]) delete pl.hold[id]; else { pl.hold[id] = 1; delete pl.feat[id]; } }
+    else { const c = ensureChart(u); c.sit = c.sit || {}; if (c.sit[id]) delete c.sit[id]; else c.sit[id] = 1; }
+    T(u).stu = null; save(); render(); },
   dcFm: d => { ui.dcFm = d.k; render(); },
   dcOut: d => { const keep = ui.dchPid; ui.dcOut = +d.pid || null; ui.dchPid = keep || +d.pid || null; render(); },
   dcRemove: d => { setChart(state.userTid, d.key, +d.i, 0); save(); render(); },
@@ -3961,6 +3979,7 @@ const changes = {
   negYrs: v => { ui.neg.yrs = +v; ui.neg.gtd = Math.min(ui.neg.gtd, ui.neg.yrs); negModal(); },
   negGtd: v => { ui.neg.gtd = +v; negModal(); },
   preStarters: v => { state.prePlan.starters = v; save(); },
+  preJob: (v, el) => { const pl = state.prePlan; if (!pl) return; pl.jobShare = pl.jobShare || {}; if (+v < 0) delete pl.jobShare[el.dataset.key]; else pl.jobShare[el.dataset.key] = +v; save(); },
   preShare: (v, el) => { const pl = state.prePlan; pl.share = pl.share || {}; if (+v < 0) delete pl.share[el.dataset.pos]; else pl.share[el.dataset.pos] = +v; save(); },
   workSet: (v, el) => { setWork(+el.dataset.pid, el.dataset.part, v); save(); if (el.dataset.card) playerModal(+el.dataset.pid, true); },
   xtSet: (v, el) => { setCrossTrain(+el.dataset.pid, v || null); save(); if (el.dataset.card) playerModal(+el.dataset.pid, true); render(); },
@@ -3984,7 +4003,7 @@ const changes = {
   planName: (v, el) => { const g = planGroup(+el.dataset.gid), n = String(v || '').trim().slice(0, 40); if (g && n) g.name = n; save(); },
   repsAdd: (v, el) => { if (!v) return; const e = repsAdd(el.dataset.k, +v); if (e) toast(e); else ui.repsHi = +v; save(); render(); },
   repsAlso: (v, el) => { if (!v) return; const e = repsAdd(v, +el.dataset.pid); if (e) toast(e); save(); render(); },
-  trkSort: v => { ui.trkSort = v; render(); },
+  trkSort: v => { ui.trkSort = { k: v || 'chart', d: 1 }; render(); },
   planAdd: (v, el) => { if (v === 'other') { ui.planOther = +el.dataset.gid; return; } if (v) planAdd(+el.dataset.gid, +v); save(); },
   autoUser: (v, el) => { state.settings.autoUser = el.checked; save(); toast(el.checked ? 'Auto-manage on.' : 'Auto-manage off.'); },
   showTrue: (v, el) => { state.settings.showTrue = el.checked; save(); },
@@ -4043,6 +4062,7 @@ document.addEventListener('click', e => {
   navPressed = null;
   const el = e.target.closest('[data-action]');
   if (!el) return;
+  { const f = e.target.closest('select, input, textarea, option'); if (f && !f.dataset.action && el.contains(f)) return; }
   const fn = actions[el.dataset.action];
   if (fn) { e.preventDefault(); fn(el.dataset, el); }
 });

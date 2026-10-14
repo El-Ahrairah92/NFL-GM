@@ -357,8 +357,15 @@ function irActivations() {
 
 // ---------- game day: 48 of the 53 dress ----------
 const GAMEDAY_MIN = { QB: 2, RB: 2, WR: 4, TE: 2, OL: 7, DL: 8, LB: 5, CB: 5, S: 3, K: 1, P: 1 };
+// men you have told to sit: they do not dress, so they take no snaps anywhere (preseason: held out)
+function satSet(tid) {
+  if (!state || tid !== state.userTid || state.settings.autoUser) return null;
+  const s = new Set(), c = T(tid).dch; if (c && c.sit) for (const id in c.sit) s.add(+id);
+  if (state.phase === 'PRESEASON' && state.prePlan) for (const id in state.prePlan.hold) s.add(+id);
+  return s.size ? s : null;
+}
 function gameDayActives(tid) {
-  const ro = rosterOf(tid).filter(p => !p.injury && !onIR(p)); // a man still on injured reserve does not dress, healthy or not
+  const sat = satSet(tid), ro = rosterOf(tid).filter(p => !p.injury && !onIR(p) && !(sat && sat.has(p.id))); // a man still on injured reserve does not dress, healthy or not
   if (ro.length <= GAMEDAY_ACTIVE) return new Set(ro.map(p => p.id));
   const counts = {}; ro.forEach(p => counts[p.pos] = (counts[p.pos] || 0) + 1);
   const out = new Set(), keep = typeof chartDress === 'function' ? chartDress(tid) : null; // a man you start does not sit because he grades out low

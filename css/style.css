@@ -1325,3 +1325,12 @@ button.ghost { background: none; border: none; box-shadow: none; padding: 0 4px;
 .fa-row .fa-c { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; } .fa-row .fa-c .fa-exp, .fa-row .fa-c .fa-st { display: block; }
 .fa-wrap { grid-template-columns: minmax(460px, 0.95fr) minmax(0, 1.05fr); }
 @media (max-width: 900px) { .fa-wrap { grid-template-columns: minmax(0, 1fr); } }
+.ph-th { cursor: pointer; user-select: none; white-space: nowrap; } .ph-th:hover, .ph-th.on { color: var(--text); } .ph-th i { font-style: normal; font-size: 8px; margin-left: 3px; vertical-align: 1px; }
+/* preseason playing time, job by job on the depth chart */
+.pre-time { margin-bottom: 10px; padding: 10px 14px; } .pre-time .row { gap: 12px; align-items: flex-start; }
+.dcj-pre { display: flex; align-items: center; gap: 6px; margin: 2px 0 6px; font-size: 11.5px; color: var(--muted); } .dcj-pre select { flex: 1; min-width: 0; font-size: 12px; padding: 2px 4px; }
+.dcj-pre.set span { color: var(--accent); font-weight: 700; } .dcj-pre.set select { border-color: var(--accent); }
+/* the sit box on a depth chart chip */
+.dcc-sit { border: 1px solid var(--line); background: none; box-shadow: none; border-radius: 3px; font-size: 9.5px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; padding: 0 4px; line-height: 15px; color: var(--muted); margin-right: 2px; cursor: pointer; }
+.dcc-sit:hover { color: var(--text); border-color: var(--text); } .dcc-sit.on { background: var(--bad); border-color: var(--bad); color: #fff; }
+.dcc.sat { opacity: .55; } .dcc.sat .dcc-nm { text-decoration: line-through; }
