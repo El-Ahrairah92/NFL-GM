@@ -2893,7 +2893,7 @@ function cardAdv(p) { // the season the card reads from
 const GRADE_BAND = v => v >= 80 ? ['Elite', 'good'] : v >= 70 ? ['Good starter', 'good'] : v >= 60 ? ['Decent starter', ''] : v >= 50 ? ['Rotation', 'mid'] : ['Liability', 'bad'];
 function glanceHTML(p, src) {
   if (!src) return `<div class="muted small">No snaps on tape yet.</div>`;
-  const a = src.a, first = Object.keys(gradeFacets(p.spot)), cats = first.concat(Object.keys(FACETS).filter(f => !first.includes(f))).filter(f => gradeN(a, f) >= 15);
+  const a = src.a, first = Object.keys(gradeFacets(p.spot)), cats = first.concat(Object.keys(FACETS).filter(f => !first.includes(f))).filter(f => gradeN(a, f) >= (src.pre ? 8 : 15)); // a preseason is short: fewer plays make a grade
   if (!cats.length) return `<div class="muted small">${Object.keys(a).some(k => /^g[a-z]/.test(k)) && !Object.keys(a).some(k => /^G[a-z]/.test(k)) ? 'Graded under the old system: the new grades start with his next game.' : 'Not enough plays on tape yet.'}</div>`;
   return cats.map(f => { const v = facetGrade(a, f, 0, p.spot), n = gradeN(a, f), b = GRADE_BAND(v);
     return `<div class="adv-r" title="${n} plays where he had a job in it"><span class="adv-l">${FACETS[f]}</span><span class="adv-v ${v >= 70 ? 'good' : v < 50 ? 'bad' : ''}" style="font-size:15px">${v}</span><span class="adv-tag ${b[1]}">${b[0]}</span><span class="adv-rk">${n}</span></div>`; }).join('');
@@ -3029,14 +3029,20 @@ function cardSrc(p) {
 let ADV_POOL = { key: '', by: {} };
 function advPoolFor(p, src) {
   const grp = advGroupOf(p); if (!grp || !ADV_POS[grp] || !src) return null;
-  const k = src.cur ? clamp((state.week - 1) / 17, 1 / 17, 1) : 1, key = state.season + ':' + state.week + ':' + state.phase + ':' + src.season + ':' + src.cur;
+  const k = src.pre ? advPreK() : src.cur ? clamp((state.week - 1) / 17, 1 / 17, 1) : 1, key = state.season + ':' + state.week + ':' + state.phase + ':' + src.season + ':' + src.cur + ':' + (src.pre ? 'pre' + (state.pre ? state.pre.wk : '') : '');
   if (ADV_POOL.key !== key) ADV_POOL = { key, by: {} };
   if (!ADV_POOL.by[grp]) { const pool = [];
-    for (const id in state.players) { const q = state.players[id]; if (advGroupOf(q) !== grp) continue; const a = src.cur ? q.advS : q.advPrev && q.advPrev.season === src.season ? q.advPrev : null; if (a && advQualified(grp, a, k)) pool.push([a, cardBox(q, src.season, src.cur) || {}]); }
+    for (const id in state.players) { const q = state.players[id]; if (advGroupOf(q) !== grp) continue;
+      if (src.pre) { if (q.preS && q.preS.season === src.season && q.preS.adv && advQualified(grp, q.preS.adv, k)) pool.push([q.preS.adv, q.preS.st || {}]); continue; }
+      const a = src.cur ? q.advS : q.advPrev && q.advPrev.season === src.season ? q.advPrev : null; if (a && advQualified(grp, a, k)) pool.push([a, cardBox(q, src.season, src.cur) || {}]); }
     ADV_POOL.by[grp] = pool; }
   return { grp, k, pool: ADV_POOL.by[grp] };
 }
-function advSheetOf(p, src) { const P_ = advPoolFor(p, src); return P_ ? { grp: P_.grp, n: P_.pool.length, qual: advQualified(P_.grp, src.a, P_.k), sheet: advSheet(P_.grp, src.a, cardBox(p, src.season, src.cur) || {}, P_.pool, P_.k) } : null; }
+function advSheetOf(p, src) { const P_ = advPoolFor(p, src); return P_ ? { grp: P_.grp, n: P_.pool.length, qual: advQualified(P_.grp, src.a, P_.k), sheet: advSheet(P_.grp, src.a, src.pre ? p.preS.st || {} : cardBox(p, src.season, src.cur) || {}, P_.pool, P_.k) } : null; }
+// a preseason is a few games, and most men play part of each: the bar to qualify is set to match
+function advPreK() { const gms = state.phase === 'PRESEASON' && state.pre ? Math.max(1, state.pre.wk) : PRESEASON_GAMES; return gms * 0.5 / 17; }
+// which numbers the Advanced tab reads: the season (or last season), or this preseason
+function cardAdvSrc(p) { if (ui.advScope === 'pre' && p.preS && p.preS.adv && p.preS.snp) return { a: p.preS.adv, season: p.preS.season || state.season, cur: false, pre: true }; return cardAdv(p); }
 function advTag(m) { const q = Math.round(100 * m.pct); return m.dir === 0 ? (q >= 85 ? 'Among the highest' : q <= 15 ? 'Among the lowest' : ordinal(q) + ' percentile') : q >= 90 ? `Top ${Math.max(1, 100 - q)}%` : q <= 10 ? `Bottom ${Math.max(1, q)}%` : ordinal(q) + ' percentile'; }
 function advTone(m) { return m.dir === 0 || m.z === null ? '' : m.z >= 0.8 ? 'good' : m.z <= -0.8 ? 'bad' : ''; }
 function cardOutliersHTML(p, src) {
@@ -3259,14 +3265,15 @@ function cardStatsHTML(p) {
   return html || '<div class="muted small">Nothing on record yet.</div>';
 }
 function cardAdvHTML(p) {
-  const src = cardAdv(p), S = src ? advSheetOf(p, src) : null;
-  const facets = `<div class="adv-sec"><div class="ds-lb">Grades${src ? ` · ${src.season}${src.cur ? ' to date' : ''}` : ''} <span style="float:right">plays</span></div>${glanceHTML(p, src)}</div>`;
-  if (!S) { const adv = advRankHTML(p, src); return `<div class="grid card-cols"><div>${facets}</div><div>${adv ? `<div class="ds-lb">Tracking</div>${adv}` : '<div class="muted small">No tracking numbers at his position.</div>'}</div></div>${advancedSeasonHTML(p)}`; }
+  const hasPre = !!(p.preS && p.preS.adv && p.preS.snp), src = cardAdvSrc(p), S = src ? advSheetOf(p, src) : null, reg = cardAdv(p);
+  const scope = hasPre || ui.advScope === 'pre' ? `<div class="subtabs" style="margin:0 0 10px">${[['reg', reg ? (reg.cur ? `${reg.season} season` : `${reg.season} season`) : 'Season'], ['pre', `${(p.preS && p.preS.season) || state.season} preseason`]].map(([k, l]) => `<button class="${(src && src.pre ? 'pre' : 'reg') === k ? 'on' : ''}" data-action="advScope" data-v="${k}" data-pid="${p.id}" ${k === 'pre' && !hasPre ? 'disabled' : ''}>${l}</button>`).join('')}${src && src.pre ? `<span class="small muted" style="margin-left:8px">${p.preS.gp} game${p.preS.gp === 1 ? '' : 's'}, ${p.preS.snp} snaps · against everyone who has played enough this preseason</span>` : ''}</div>` : '';
+  const facets = `<div class="adv-sec"><div class="ds-lb">Grades${src ? ` · ${src.season}${src.pre ? ' preseason' : src.cur ? ' to date' : ''}` : ''} <span style="float:right">plays</span></div>${glanceHTML(p, src)}</div>`;
+  if (!S) { const adv = src && src.pre ? '' : advRankHTML(p, src); return scope + `<div class="grid card-cols"><div>${facets}</div><div>${adv ? `<div class="ds-lb">Tracking</div>${adv}` : '<div class="muted small">No tracking numbers at his position.</div>'}</div></div>${advancedSeasonHTML(p)}`; }
   const outs = new Set(advOutliers(S.sheet, 4, S.grp).map(m => m.id));
   const secs = Object.keys(ADV_SEC).map(k => { const ms = S.sheet.filter(m => m.sec === k); if (!ms.length) return '';
     return `<div class="adv-sec"><div class="ds-lb">${ADV_SEC[k]}</div>${ms.map(m => { const has = m.v !== null && m.ok, tone = has ? advTone(m) : '', col = tone === 'good' ? 'var(--good)' : tone === 'bad' ? 'var(--bad)' : m.dir === 0 ? 'var(--accent)' : 'var(--mid)';
       return `<div class="adv-r ${outs.has(m.id) ? 'out' : ''}" title="${m.dir < 0 ? 'Lower is better' : m.dir === 0 ? 'A description, not a grade' : 'Higher is better'}${has && m.pct !== null ? ' · ' + advTag(m) : m.v !== null ? ' · too small a sample to rank' : ''}"><span class="adv-l">${esc(m.label)}</span><span class="adv-v ${tone} ${has ? '' : 'muted'}">${advFmt(m.id, m.v)}</span><span class="adv-tag ${has && m.pct !== null ? tone || (m.dir === 0 ? 'note' : 'mid') : 'none'}">${has && m.pct !== null ? advTag(m).replace(' percentile', '').replace('Among the highest', 'High').replace('Among the lowest', 'Low') : m.v !== null ? 'few snaps' : ''}</span><span class="adv-rk">${has && m.rank ? m.rank + '/' + m.n : ''}</span></div>`; }).join('')}</div>`; }).join('');
-  return `<div class="small muted" style="margin-bottom:8px">Against ${S.n} ${esc(S.grp)} who have played enough to qualify${S.qual ? '' : ' (he has not)'} · the tag is where he stands among them · <b class="adv-key">marked</b> rows are the four on his overview</div><div class="adv-grid">${facets}${secs}</div>${advancedSeasonHTML(p)}`;
+  return scope + `<div class="small muted" style="margin-bottom:8px">Against ${S.n} ${esc(S.grp)} who have played enough to qualify${S.qual ? '' : ' (he has not)'} · the tag is where he stands among them · <b class="adv-key">marked</b> rows are the four on his overview</div><div class="adv-grid">${facets}${secs}</div>${advancedSeasonHTML(p)}`;
 }
 // the deal he is playing under, written out like the one you negotiate
 function cardDealDocHTML(p) {
@@ -3864,6 +3871,7 @@ const actions = {
   dcGrp: d => { const tab = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def'; (ui.dcGrp = ui.dcGrp || {})[tab] = d.v; ui.dcJob = null; ui.dchPid = null; render(); },
   dcLook: d => { (ui.dchView = ui.dchView || {})[['def', 'off'].includes(ui.dchTab) ? ui.dchTab : 'def'] = d.v; render(); },
   dcPass: d => { ui.dcPass = d.v; render(); },
+  advScope: d => { ui.advScope = d.v; playerModal(+d.pid, true); },
   dcSit: d => { if (d.pid === undefined) { ui.dcSit = d.v; render(); return; } const id = +d.pid, u = state.userTid;
     if (state.phase === 'PRESEASON' && state.prePlan) { const pl = state.prePlan; if (pl.hold[id]) delete pl.hold[id]; else { pl.hold[id] = 1; delete pl.feat[id]; } }
     else { const c = ensureChart(u); c.sit = c.sit || {}; if (c.sit[id]) delete c.sit[id]; else c.sit[id] = 1; }
