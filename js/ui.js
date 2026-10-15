@@ -4070,7 +4070,7 @@ document.addEventListener('click', e => {
   navPressed = null;
   const el = e.target.closest('[data-action]');
   if (!el) return;
-  { const f = e.target.closest('select, input, textarea, option'); if (f && !f.dataset.action && el.contains(f)) return; }
+  { const f = e.target.closest('select, textarea, option, input:not([type="checkbox"]):not([type="radio"])'); if (f && !f.dataset.action && el.contains(f)) return; } // a dropdown or text box inside a clickable row is for typing and choosing; a tick box is the row
   const fn = actions[el.dataset.action];
   if (fn) { e.preventDefault(); fn(el.dataset, el); }
 });
