@@ -363,7 +363,7 @@ function initSide(g, s) {
     let i = 0;
     while (T_.roster.length < 30) T_.roster.push({ id: -100 - s * 50 - (i++), first: 'Emergency', last: 'Sub' + i, spot: 'WRZ', pos: 'WR', lbl: '—', ovr: 40, tid, a: null, h: null });
   }
-  T_.depth = {};
+  T_.depth = {}; T_.lc = null; // the line's candidates by alignment are rebuilt too: a man hurt on the last play is not on that list any more
   for (const spot of SPOT_KEYS) {
     // only men from that side of the ball: when a club runs out of tight ends the next body is a lineman, not a defensive tackle
     const sd = SPOTS[spot].side;
