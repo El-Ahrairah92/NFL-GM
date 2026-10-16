@@ -427,13 +427,16 @@ function fillSlots(g, s, slots, table, opts = {}) {
   const preOn = !!(g.pre && chart && !g.preview), prePos = (slot, grp) => grp === 'DB' ? (['FS', 'SS', 'BIGN'].includes(slot) ? 'S' : 'CB') : slot === 'FB' ? 'RB' : grp, preFeat = preOn ? prePlanFor(g.tids[s]).feat : {}, resv = new Map();
   const jn = preOn ? (g.preJn || (g.preJn = {}))[s] || (g.preJn[s] = (() => { try { return defJobs(T(g.tids[s])).n; } catch (e) { return {}; } })()) : null, kc = {}, ki = {};
   if (preOn) for (const [name, slot, x0, d0] of slots) { const k = opts.keyOf(name, slot, x0, d0); kc[k] = (kc[k] || 0) + 1; }
+  // a unit you run plays its relay: each job's men in the order and for the time you set
+  const relayS = preOn && typeof relaySide === 'function' ? relaySide(g, s) : null;
+  if (relayS) { const kj = {}; for (const [name, slot, x0, d0] of slots) { const k = opts.keyOf(name, slot, x0, d0), J = relayJob(g, s, k); if (!J) continue; const i = kj[k] = kj[k] === undefined ? 0 : kj[k] + 1, m = J.cur[i]; if (m && !resv.has(m.id) && T_.roster.some(p => p.id === m.id)) resv.set(m.id, name); } }
   // a man who starts at any job whose first unit is off the field right now sits: he does not play a deeper listing or fill in anywhere else
   const satStart = new Set();
-  if (preOn) { const side = SPOTS[table[slots[0][1]][0]] ? SPOTS[table[slots[0][1]][0]].side : null;
+  if (preOn && !relayS) { const side = SPOTS[table[slots[0][1]][0]] ? SPOTS[table[slots[0][1]][0]].side : null;
     for (const k in chart.lists) { if (k.includes(':') || CHART_UNIT(k) !== side) continue; const sp = CHART_SPOT[k], grp = sp && SPOTS[sp] ? SPOTS[sp].g : null; if (!grp) continue;
       const pos = grp === 'DB' ? (sp === 'FS' || sp === 'SS' ? 'S' : 'CB') : grp, per = side === 'def' ? jn[k] || (k === 'RUSHE' || k === 'RUSHI' ? 2 : 1) : 1;
       if (preString(g.tids[s], g, pos, k) > 0) (chart.lists[k] || []).slice(0, per).forEach(id => { if (!preFeat[id]) satStart.add(id); }); } }
-  if (preOn) for (const [name, slot, x0, d0] of slots) { const k = opts.keyOf(name, slot, x0, d0), l = listFor(k); if (!l) continue; const i = ki[k] = ki[k] === undefined ? 0 : ki[k] + 1, per = Math.max(kc[k], (CHART_UNIT(k) === 'def' && jn[k]) || 1);
+  if (preOn && !relayS) for (const [name, slot, x0, d0] of slots) { const k = opts.keyOf(name, slot, x0, d0), l = listFor(k); if (!l) continue; const i = ki[k] = ki[k] === undefined ? 0 : ki[k] + 1, per = Math.max(kc[k], (CHART_UNIT(k) === 'def' && jn[k]) || 1);
     const str = preString(g.tids[s], g, prePos(slot, table[slot][1]), k), id = l[str * per + Math.min(i, per - 1)]; if (id !== undefined && !resv.has(id) && (str === 0 || (!firsts.has(id) && !satStart.has(id))) && T_.roster.some(p => p.id === id)) resv.set(id, name); }
   const ovIds = new Set(); if (chart && opts.ov) for (const [name] of slots) { const id = opts.ov(name); if (id !== undefined && id !== null) ovIds.add(id); }
   // your chart is worked out for the whole look first (exhibitions keep their own strings); anything it could not fill is left to the staff
@@ -460,7 +463,7 @@ function fillSlots(g, s, slots, table, opts = {}) {
     const list = listFor(key);
     let rotHit = false, rotId = null;
     // exhibitions: this job's own playing time decides the string on the field; a job with two men out there has two names per string
-    const preStr = preOn && list ? preString(g.tids[s], g, prePos(slot, grp), key) : null, prePer = preStr !== null ? Math.max(kc[key] || 1, (CHART_UNIT(key) === 'def' && jn[key]) || 1) : 1;
+    const preStr = preOn && list && !relayS ? preString(g.tids[s], g, prePos(slot, grp), key) : null, prePer = preStr !== null ? Math.max(kc[key] || 1, (CHART_UNIT(key) === 'def' && jn[key]) || 1) : 1;
     if (list) {
       const listed = list.map(id => T_.roster.find(p => p.id === id)).filter(Boolean).filter(p => !cands.some(c => c.p === p)).map(p => ({ p, r: slotRating(p, spot) }));
       if (listed.length) cands = [...listed, ...cands];
@@ -472,7 +475,12 @@ function fillSlots(g, s, slots, table, opts = {}) {
     else for (const c of cands) {
       if (used.has(c.p.id)) continue;
       let sc = c.r * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp);
-      if (list) { const i = list.indexOf(c.p.id);
+      if (relayS) { const J = list ? relayJob(g, s, key) : null, i = list ? list.indexOf(c.p.id) : -1, on = J && J.cur.findIndex(m => m.id === c.p.id);
+        if (J && on >= 0) sc = 300 - on - fatPenalty(g, c.p, grp); // his turn
+        else if (relayGone(g, s, c.p.id) || (J && J.sat.has(c.p.id))) sc = -500; // his time is over, or you sat him: not even to fill a hole
+        else if (i >= 0) sc = 15 - i; // waiting for his turn: only if nobody else can line up
+        if (resv.has(c.p.id) && resv.get(c.p.id) !== name) sc -= 400; }
+      else if (list) { const i = list.indexOf(c.p.id);
         if (i >= 0 && preStr !== null) { const j = preFeat[c.p.id] ? Math.max(i, preStr * prePer) : i, sits = Math.floor(j / prePer) < preStr || (preStr > 0 && (firsts.has(c.p.id) || satStart.has(c.p.id)) && !preFeat[c.p.id]) || (satStart.has(c.p.id) && Math.floor(j / prePer) !== 0); sc = (sits ? 15 - j : 300 - (j - preStr * prePer) * 20) - fatPenalty(g, c.p, grp); } // exhibitions: the man listed for this string, then deeper; men above it only if nobody else can line up
         else if (i >= 0) sc = 300 - i * 14 * (ROT_GAP[grp] || 1) - fatPenalty(g, c.p, grp) + (c.p.id === rotId ? 30 + i * 14 * (ROT_GAP[grp] || 1) : 0);
         else if (preStr !== null && (preStr > 0 && firsts.has(c.p.id) || satStart.has(c.p.id))) sc -= 200;

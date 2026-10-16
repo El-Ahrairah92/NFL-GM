@@ -205,6 +205,45 @@ function preJobShare(tid, p, g, plan) {
   let best; for (const k of keys) { const n = CHART_UNIT(k) === 'def' ? jn[k] || (k === 'RUSHE' || k === 'RUSHI' ? 2 : 1) : 1; if ((c.lists[k] || []).slice(0, n).includes(p.id)) best = Math.max(best === undefined ? -1 : best, plan.js[k]); }
   return best;
 }
+// ---------- exhibitions you run: a relay down each job's list ----------
+// Each man on a job's list has a length of time: the first man (or the first two at a two-man job) starts, and when his time is up the
+// next man on the list comes in. Changes happen between drives, never in the middle of one; a man who is hurt is replaced at once.
+// If the list runs out, the last man stays on. A series counts for his side of the ball (a defender's series is the other side's drive).
+const RELAY_OPTS = [['s1', 'One series'], ['s2', 'Two series'], ['q1', 'A quarter'], ['q2', 'Two quarters'], ['half', 'To halftime'], ['q3', 'Three quarters'], ['rest', 'Rest of game'], ['sit', 'Sit']];
+function relayPer(tid, k) { if (CHART_UNIT(k) !== 'def') return 1; if (k === 'RUSHE' || k === 'RUSHI') return 2; try { return defJobs(T(tid)).n[k] || 1; } catch (e) { return 1; } }
+// what a man plays if you have not chosen: the first unit the coach's plan for this game, the second to halftime, the third the rest
+function relayDefault(k, i, per) { const pl = state.prePlan, u = Math.floor(i / Math.max(1, per)); if (u >= 2) return 'rest'; if (u === 1) return 'half';
+  const a = pl && pl.jobShare && pl.jobShare[k] !== undefined && pl.jobShare[k] >= 0 ? pl.jobShare[k] : PRE_SHARE_AUTO[state.pre ? Math.min(state.pre.wk, 2) : 0];
+  return a <= 0 ? 'sit' : a <= 0.12 ? 's1' : a <= 0.3 ? 'q1' : a <= 0.55 ? 'q2' : 'q3'; }
+function relayCode(k, pid, i, per) { const d = state.prePlan && state.prePlan.dur && state.prePlan.dur[k]; return d && d[pid] ? d[pid] : relayDefault(k, i, per); }
+function relaySide(g, s) {
+  if (!g || !g.pre || g.preview || g.scrim) return null; const tid = g.tids[s], c = T(tid).dch;
+  if (!c || isAI(tid)) return null;
+  g.relay = g.relay || [null, null]; return g.relay[s] || (g.relay[s] = { jobs: {}, drives: { off: 0, def: 0 } });
+}
+function relayLive(g, s, id) { const T_ = g.side[s]; return !!(T_ && T_.roster && T_.roster.some(p => p.id === id)); }
+function relayOver(g, s, unit, m) { const R = g.relay[s], n = R.drives[unit] - m.d0, el = preElapsed(g) * 3600 - m.t0;
+  switch (m.code) { case 's1': return n >= 1; case 's2': return n >= 2; case 'q1': return el >= 900; case 'q2': return el >= 1800; case 'q3': return el >= 2700; case 'half': return (g.q || 1) >= 3; default: return false; } }
+function relayFill(g, s, k, J, hurtOnly) {
+  const R = g.relay[s], unit = CHART_UNIT(k), el = preElapsed(g) * 3600;
+  // a man can have his turn at two jobs at once (his corner job and the nickel, his back job and the third-down one); on any one snap he lines up at one of them
+  const take = () => { while (J.next < J.q.length) { const x = J.q[J.next++]; if (!relayLive(g, s, x.id) || J.done.has(x.id)) continue; return x; } return null; };
+  for (let i = 0; i < J.cur.length; i++) { const m = J.cur[i], hurt = !relayLive(g, s, m.id);
+    if (hurt || (!hurtOnly && relayOver(g, s, unit, m))) { const x = take(); if (x) { J.done.add(m.id); J.cur[i] = { id: x.id, code: x.code, d0: R.drives[unit], t0: el }; } else if (hurt) { J.done.add(m.id); J.cur.splice(i--, 1); } } } // nobody left to come in: he stays on
+  while (J.cur.length < J.per) { const x = take(); if (!x) break; J.cur.push({ id: x.id, code: x.code, d0: R.drives[unit], t0: el }); }
+}
+function relayJob(g, s, k) {
+  const R = relaySide(g, s); if (!R || !k) return null; const unit = CHART_UNIT(k); if (unit === 'st') return null;
+  const c = T(g.tids[s]).dch; if (c.auto[unit]) return null;
+  let J = R.jobs[k]; if (J) { relayFill(g, s, k, J, true); return J; }
+  const per = relayPer(g.tids[s], k), list = c.lists[k] || [];
+  J = R.jobs[k] = { per, q: list.map((id, i) => ({ id, code: relayCode(k, id, i, per) })).filter(x => x.code !== 'sit'), sat: new Set(list.filter((id, i) => relayCode(k, id, i, per) === 'sit')), cur: [], next: 0, done: new Set() };
+  relayFill(g, s, k, J); return J;
+}
+// a man whose time is over, or who you sat at a job, is not used to fill a hole elsewhere
+function relayGone(g, s, pid) { const R = g.relay && g.relay[s]; if (!R) return false; let gone = false; for (const k in R.jobs) { const J = R.jobs[k]; if (J.cur.some(m => m.id === pid)) return false; if (J.done.has(pid) || J.sat.has(pid)) gone = true; } return gone; }
+// a new drive: the side with the ball counts an offensive series, the other a defensive one, and every job of theirs checks its clock
+function relayTick(g) { if (!g.relay) return; for (let s = 0; s < 2; s++) { const R = g.relay[s]; if (!R) continue; const unit = s === g.poss ? 'off' : 'def'; R.drives[unit]++; for (const k in R.jobs) if (CHART_UNIT(k) === unit) relayFill(g, s, k, R.jobs[k]); } }
 function preseasonActives(tid, g) {
   const plan = prePlanFor(tid), starters = preStarters(tid, g), sit = new Set(), chartMen = new Set();
   const q = g && g.q ? g.q : 1, snp = id => (g && g.ps[id] ? g.ps[id].snp : 0);

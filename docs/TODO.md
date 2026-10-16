@@ -170,3 +170,7 @@ The lineup audit (see DESIGN.md, "Lineup audit") traced most of the remaining ou
 - In season, injury fill-ins (receivers at tight end, linebackers on the edge) happen when a room is two deep where real clubs carry three.
 - Look at: how AI clubs fill the 90 (draft, UDFA, camp signings by position), the 53 they keep at cutdown (ROSTER_TEMPLATE, GAMEDAY_MIN), in-season replacement signings after injuries, and whether 3-4 clubs carry true outside linebackers.
 - Measure with the lineup audit harness (scratchpad aubody.js: season and `pre` modes): out-of-position snaps per 1000, by position and cause.
+
+## Camp page (agreed design, Snap counts is done)
+
+One list of every player by position group (replaces Staff meeting, Man by man, The 53, Compare and The cuts): each group opens with its coach's strip (his take, his chart suggestions with Take buttons) and the staff's cut line; each row has the coach's rank, practice string, staff verdict, camp grade and trend, one-on-ones, team periods, exhibitions; every column sorts; click a row for the week-by-week, games, notes and quick actions (Sit, Feature, watch list, and on cutdown day Keep / Cut / Practice squad). A watch-list star replaces Compare. Links both ways with Snap counts.

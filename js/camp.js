@@ -497,16 +497,21 @@ function setSharpness() { for (const p of Object.values(state.players)) { if (p.
 //  want, and a job you have touched stays yours. It decides who a man faces in practice and how many reps he gets (the ones against
 //  the ones), where he is working (it takes over that setting through camp), and who plays which part of the next exhibition.
 // =====================================================================
-// [key, label, spot, men in a string, unit]
-const REP_JOBS = [['QB', 'Quarterback', 'QB', 1, 'off'], ['RB', 'Running back', 'RB', 1, 'off'], ['FB', 'Fullback', 'FB', 1, 'off'], ['X', 'X receiver', 'WRX', 1, 'off'], ['Z', 'Z receiver', 'WRZ', 1, 'off'], ['SLOT', 'Slot receiver', 'SLOT', 1, 'off'],
-  ['Y', 'In-line tight end', 'TEY', 1, 'off'], ['H', 'Move tight end', 'TEH', 1, 'off'], ['LT', 'Left tackle', 'LT', 1, 'off'], ['LG', 'Left guard', 'LG', 1, 'off'], ['C', 'Center', 'C', 1, 'off'], ['RG', 'Right guard', 'RG', 1, 'off'], ['RT', 'Right tackle', 'RT', 1, 'off'],
-  ['EDGE', 'Edge', 'EDGE', 2, 'def'], ['DE', 'Defensive end', 'DE', 2, 'def'], ['DT', 'Defensive tackle', 'DT', 2, 'def'], ['NT', 'Nose tackle', 'NT', 1, 'def'], ['MLB', 'Middle linebacker', 'MLB', 1, 'def'], ['WLB', 'Weak-side linebacker', 'WLB', 1, 'def'],
-  ['CB', 'Outside corner', 'CB', 2, 'def'], ['NCB', 'Slot corner', 'NCB', 1, 'def'], ['FS', 'Free safety', 'FS', 1, 'def'], ['SS', 'Strong safety', 'SS', 1, 'def'], ['K', 'Kicker', 'K', 1, 'st'], ['P', 'Punter', 'P', 1, 'st']];
-const REP_JOB = {}, REP_BY_SPOT = {}; REP_JOBS.forEach(j => { REP_JOB[j[0]] = j; REP_BY_SPOT[j[2]] = j[0]; });
+// [key, label, spot, men in a string, unit]: the depth chart's own jobs, rebuilt with the chart (a job's spot and how many men it puts
+// on the field follow the scheme), plus the kicker and punter
+const REP_JOBS = [], REP_JOB = {}, REP_BY_SPOT = {};
+function repJobsBuild(tid) {
+  tid = tid === undefined ? state.userTid : tid; let jn = {}; try { jn = defJobs(T(tid)).n; } catch (e) { jn = {}; }
+  REP_JOBS.length = 0; for (const k in REP_JOB) delete REP_JOB[k]; for (const k in REP_BY_SPOT) delete REP_BY_SPOT[k];
+  for (const sec of CHART_SECTIONS) { if (sec.pkg || sec.unit === 'st') continue;
+    for (const [k, l] of sec.rows) { const j = [k, l.replace(/ \(.*\)$/, ''), chartSpotFor(tid, k), sec.unit === 'def' ? Math.max(1, jn[k] || 1) : 1, sec.unit]; REP_JOBS.push(j); REP_JOB[k] = j; if (!REP_BY_SPOT[j[2]]) REP_BY_SPOT[j[2]] = k; } }
+  for (const [k, l] of [['K', 'Kicker'], ['P', 'Punter']]) { const j = [k, l, k, 1, 'st']; REP_JOBS.push(j); REP_JOB[k] = j; REP_BY_SPOT[k] = k; }
+}
 const REP_STRING = ['Ones', 'Twos', 'Threes'];
 function repsOn() { return !!state && !isAI(state.userTid) && !!state.camp && state.camp.season === state.season && ['PRESEASON', 'CUTDOWN'].includes(state.phase); }
 // the chart as the coaches would draw it: every man at the job he is working, best first by his coach's read of him there
 function repsCoachChart(tid) {
+  if (!REP_JOBS.length) repJobsBuild(tid);
   const jobs = {}; for (const j of REP_JOBS) jobs[j[0]] = [];
   for (const p of rosterOf(tid)) { if (!p.a && p.pos !== 'K' && p.pos !== 'P') continue; const w = SPOTS[p.spot] && p.pos !== 'K' && p.pos !== 'P' ? workOf(p) : { a: p.spot, b: null };
     for (const s of [w.a, w.b]) { const k = s && REP_BY_SPOT[s]; if (k && !jobs[k].includes(p.id)) jobs[k].push(p.id); } }
@@ -514,32 +519,52 @@ function repsCoachChart(tid) {
   for (const k in jobs) jobs[k].sort((a, b) => rd(b, k) - rd(a, k));
   return jobs;
 }
-// keep the chart true to the roster: jobs you have not touched follow the coaches; a man who is on no list goes to the bottom of his own job; a man who is gone comes off
+// Practice reps: for every job on the depth chart, who takes the first, second and third string reps. A job you have not touched
+// follows your game order (the depth chart), with everyone else who works that spot behind, in the coach's order. It runs all year:
+// in camp it sets the strings; in the season it sets who gets the first-team practice reps in each room.
+function repsDefault(tid) {
+  const c = ensureChart(tid), coach = repsCoachChart(tid), on = new Set(rosterOf(tid).map(p => p.id)), out = {};
+  for (const j of REP_JOBS) { const k = j[0], g = (c.lists[k] || []).filter(id => on.has(id)); out[k] = [...g, ...(coach[k] || []).filter(id => !g.includes(id))]; }
+  return out;
+}
 function ensureReps() {
-  const u = state.userTid, coach = repsCoachChart(u);
-  if (!state.reps || state.reps.season !== state.season) state.reps = { season: state.season, jobs: coach, own: {} };
-  const R = state.reps, on = new Set(rosterOf(u).map(p => p.id));
-  for (const j of REP_JOBS) { const k = j[0]; if (!R.own[k]) R.jobs[k] = coach[k]; else R.jobs[k] = (R.jobs[k] || []).filter(id => on.has(id)); }
+  const u = state.userTid; repJobsBuild(u);
+  if (!state.reps) state.reps = { jobs: {}, own: {} };
+  const R = state.reps; delete R.season;
+  for (const k in R.own) if (!REP_JOB[k]) delete R.own[k]; // jobs from the old reps chart that are not depth chart jobs
+  for (const k in R.jobs) if (!REP_JOB[k]) delete R.jobs[k];
+  const def = repsDefault(u), on = new Set(rosterOf(u).map(p => p.id));
+  for (const j of REP_JOBS) { const k = j[0]; R.jobs[k] = !R.own[k] ? def[k].slice() : (R.jobs[k] || []).filter(id => on.has(id)); }
   R.off = R.off || {}; for (const id in R.off) if (!on.has(+id)) delete R.off[id];
   const listed = new Set(); for (const k in R.jobs) R.jobs[k].forEach(id => listed.add(id));
-  for (const k in coach) for (const id of coach[k]) if (!listed.has(id) && !R.off[id]) { R.jobs[k].push(id); listed.add(id); } // a new man goes to the bottom of his job; one you took off stays off
+  for (const k in def) for (const id of def[k]) if (!listed.has(id) && !R.off[id]) { R.jobs[k].push(id); listed.add(id); } // a new man goes to the bottom of his job; one you took off stays off
   // where the coaches would put a man you have left off the chart: his string at his own job on their board
-  R.coachS = {}; for (const j of REP_JOBS) (coach[j[0]] || []).forEach((id, i) => { if (R.coachS[id] === undefined) R.coachS[id] = Math.min(2, Math.floor(i / j[3])); });
+  const coach = repsCoachChart(u); R.coachS = {}; for (const j of REP_JOBS) (coach[j[0]] || []).forEach((id, i) => { if (R.coachS[id] === undefined) R.coachS[id] = Math.min(2, Math.floor(i / j[3])); });
   return R;
 }
-function repsJobsOf(pid) { const R = state.reps, out = []; if (!R) return out; for (const j of REP_JOBS) { const i = (R.jobs[j[0]] || []).indexOf(pid); if (i >= 0) out.push({ k: j[0], i, s: Math.min(2, Math.floor(i / j[3])) }); } return out.sort((a, b) => a.s - b.s || a.i - b.i); }
+function repsJobsOf(pid) { const R = state.reps, out = []; if (!R) return out; if (!REP_JOBS.length) repJobsBuild(); for (const j of REP_JOBS) { const i = (R.jobs[j[0]] || []).indexOf(pid); if (i >= 0) out.push({ k: j[0], i, s: Math.min(2, Math.floor(i / j[3])) }); } return out.sort((a, b) => a.s - b.s || a.i - b.i); }
 function repsString(pid) { const l = repsJobsOf(pid); if (l.length) return l[0].s; const c = state.reps && state.reps.coachS ? state.reps.coachS[pid] : undefined; return c === undefined ? 2 : c; } // off the chart: wherever the coaches put him
 // where the chart has him working: his best job first, a second job for a share of his reps
 function repsSyncWork() {
   if (!state.reps) return;
-  for (const p of rosterOf(state.userTid)) { if (!p.a || p.pos === 'K' || p.pos === 'P' || !SPOTS[p.spot]) continue;
+  if (repsOn()) for (const p of rosterOf(state.userTid)) { if (!p.a || p.pos === 'K' || p.pos === 'P' || !SPOTS[p.spot]) continue;
     const l = repsJobsOf(p.id).map(x => REP_JOB[x.k][2]).filter(s => workSpots(p).includes(s)), w = workOf(p), a = l[0] || p.spot, b = l[1] || null;
     if (w.a !== a) setWork(p.id, 'a', a); if ((workOf(p).b || null) !== b) setWork(p.id, 'b', b); }
+  // each room's first-team practice reps, in the season as in camp, follow the order
+  const t = T(state.userTid), by = {}; t.reps = t.reps || {};
+  for (const p of rosterOf(state.userTid)) { const l = repsJobsOf(p.id), key = l.length ? l[0].s * 1000 + l[0].i : 9999; (by[p.pos] = by[p.pos] || []).push([p.id, key]); }
+  for (const pos in by) t.reps[pos] = by[pos].sort((a, b) => a[1] - b[1]).map(x => x[0]);
 }
+// copy one order onto the other, for one side of the ball (or all of it)
+function repsFromGame(unit) { const R = ensureReps(), def = repsDefault(state.userTid); for (const j of REP_JOBS) { if (unit && j[4] !== unit) continue; R.jobs[j[0]] = def[j[0]].slice(); R.own[j[0]] = 1; } repsSyncWork(); }
+function gameFromReps(unit) { const R = ensureReps(), u = state.userTid, c = ensureChart(u);
+  for (const un of ['off', 'def']) { if (unit && un !== unit) continue; if (c.auto[un]) setChartAuto(u, un, false);
+    for (const j of REP_JOBS) { if (j[4] !== un) continue; c.lists[j[0]] = (R.jobs[j[0]] || []).filter(id => { const p = P(id); return p && p.tid === u; }).slice(0, chartMax(j[0], u)); } }
+  if (typeof refreshChart === 'function') refreshChart(u); }
 function repsTouch(k) { const R = ensureReps(); R.own[k] = 1; return R; }
 function repsMove(k, pid, dir) { const R = repsTouch(k), l = R.jobs[k], i = l.indexOf(pid), j = i + dir; if (i < 0 || j < 0 || j >= l.length) return; l.splice(i, 1); l.splice(j, 0, pid); repsSyncWork(); }
 function repsToString(k, pid, s) { const R = repsTouch(k), l = R.jobs[k], n = REP_JOB[k][3], i = l.indexOf(pid); if (i >= 0) l.splice(i, 1); l.splice(Math.min(l.length, s * n + (i >= 0 && i < s * n ? n - 1 : 0)), 0, pid); repsSyncWork(); }
-function repsCanWork(p, k) { const s = REP_JOB[k][2]; return p.pos === 'K' || p.pos === 'P' ? s === p.spot : !!SPOTS[p.spot] && workSpots(p).includes(s); }
+function repsCanWork(p, k) { if (!REP_JOB[k]) repJobsBuild(); const J = REP_JOB[k]; if (!J) return false; const s = J[2]; return p.pos === 'K' || p.pos === 'P' ? s === p.spot : !!SPOTS[p.spot] && !!SPOTS[s] && SPOTS[p.spot].side === SPOTS[s].side; }
 function repsAdd(k, pid) { const p = P(pid); if (!p || p.tid !== state.userTid || !repsCanWork(p, k)) return 'He cannot work there'; const R = repsTouch(k); if (R.off) delete R.off[pid]; if (!R.jobs[k].includes(pid)) R.jobs[k].push(pid);
   const mine = repsJobsOf(pid); if (mine.length > 2) { const drop = mine[mine.length - 1].k === k ? mine[mine.length - 2] : mine[mine.length - 1]; repsTouch(drop.k).jobs[drop.k] = R.jobs[drop.k].filter(x => x !== pid); } // two jobs at most
   repsSyncWork(); return null; }

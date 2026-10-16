@@ -1365,3 +1365,9 @@ button.ghost { background: none; border: none; box-shadow: none; padding: 0 4px;
 .cal-quick { background: rgba(255, 255, 255, .07) !important; }
 @media (max-width: 760px) { .wf-zoom { height: 300px; } .wf-dot { width: 22px; height: 22px; margin: -11px 0 0 -11px; } .wf-dot span { font-size: 7.5px; } .wl-r { grid-template-columns: 60px minmax(0, 1fr); } .wl-r span:nth-child(2) { display: none; } .wsb-s { font-size: 24px; } .wctl button { min-width: 0; flex: 1; } }
 @media (max-width: 760px) { .wctl { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .wctl > span.small { grid-column: 1 / -1; order: -1; text-align: center; } .wctl .spacer { display: none; } .wctl button { font-size: 12.5px; padding: 8px 6px; } }
+/* ---- Snap counts: game snaps and practice reps on one page ---- */
+.sc-mode { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.sc-seg button { padding: 7px 16px; font-weight: 700; } .sc-seg button.on { background: var(--ink, #121a2c); color: #fff; border-color: var(--ink, #121a2c); }
+.dcj-list.has-dur .dcc { flex-wrap: wrap; row-gap: 3px; } .dcc-dur { order: 9; flex-basis: 100%; font-size: 11px; padding: 1px 3px; margin-top: 1px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); }
+.dcc-dur.set { border-color: var(--accent); color: var(--text); font-weight: 600; } .dcc-dur.d-sit { color: var(--bad); }
+.dcj-list.has-dur .dcc .dcc-nm { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; } .dcj-list.has-dur .dcc .dcc-sp { display: none; } .dcj-list.has-dur .dcc .dcc-sit, .dcj-list.has-dur .dcc .dcc-x { flex: none; }

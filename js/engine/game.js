@@ -743,6 +743,7 @@ function startPossession(g, side, ydl) {
   g.hash = [-1, 0, 0, 1][Math.floor(rand() * 4)]; // where the ball is spotted across the field: the left hash, the middle, the right hash
   // exhibitions: who is in changes drive by drive (starters come out, featured players stay in)
   if ((g.pre || g.scrim) && g.side[0] && g.side[1]) for (let s = 0; s < 2; s++) { const a = g.scrim ? scrimActives(g.tids[s], g) : preseasonActives(g.tids[s], g), cur = g.side[s].active; if (!cur || a.size !== cur.size || [...a].some(id => !cur.has(id))) { g.side[s].active = a; initSide(g, s); } }
+  if (g.pre && g.relay) relayTick(g); // exhibitions you run: whose turn it is changes between drives
   g.drive = { side, q: g.q, clock: g.clock, start: ydl, plays: 0, yds: 0, time: 0 };
   // committee backs: some series go to the No. 2
   const rb1 = g.cx[side].ot.rb1;

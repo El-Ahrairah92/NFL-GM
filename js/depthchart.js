@@ -381,7 +381,7 @@ function practiceTeam(tid) {
   }
   ensureChem(); chemCamp(tid); chemWeek(tid); // a week together
 }
-function practiceWeekAll() { for (const t of state.teams) practiceTeam(t.id); }
+function practiceWeekAll() { if (state.userTid >= 0 && !isAI(state.userTid) && typeof ensureReps === 'function') { ensureReps(); repsSyncWork(); } for (const t of state.teams) practiceTeam(t.id); }
 // game day: the week of practice shows up as a small edge or drag; taking snaps without the reps costs a little
 function pracBump(p) { return p.prac && p.prac.g !== null && p.prac.g !== undefined ? clamp((p.prac.g - 50) * 0.09, -3, 3) : 0; }
 function repPenalty(p) { const t = p.prac ? p.prac.t : 0; return !t ? 0 : (p.pos === 'QB' ? 1.2 : p.pos === 'OL' ? 0.8 : 0.4) * (t >= 2 ? 1 : 0.6); }

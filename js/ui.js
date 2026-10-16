@@ -295,7 +295,7 @@ function navTree() {
   const hist = state.history && state.history.length;
   return [
     ['home', 'Home', [['home', 'Overview'], ['news', 'News']]],
-    ['team', 'Team', [['roster', 'Roster'], ...(preOpen() ? [['pre', preCampOn() ? 'Preseason' : 'Roster Planner']] : []), ['depth', 'Depth Chart'], ['practice', 'Practice']]],
+    ['team', 'Team', [['roster', 'Roster'], ...(preOpen() ? [['pre', preCampOn() ? 'Preseason' : 'Roster Planner']] : []), ['depth', 'Snap counts'], ['practice', 'Practice report']]],
     ['staff', 'Staff', [['coaches', 'Coaches'], ['playbook', 'Playbook']]],
     ['league', 'League', [['schedule', 'Schedule'], ['standings', 'Standings'], ['stats', 'League Stats'], ['history', 'History'], ...(hist ? [['season', 'Season Review']] : [])]],
     ['players', 'Players', [['fa', 'Free Agents'], ['trade', 'Trade'], ['search', 'Player Search'], ['draft', 'Draft'], ...(state.phase === 'WAIVERS' ? [['waivers', 'Waiver Wire']] : [])]],
@@ -531,7 +531,7 @@ function preNextLabel() { return !state.pre ? 'camp opens' : !preCamped() ? 'two
 function preCampOn() { return !!(state && state.pre && state.camp && ['PRESEASON', 'CUTDOWN'].includes(state.phase)); }
 function preOpen() { return !!state && (planOn() || preCampOn()); }
 function preTabs() { const cut = state.phase === 'CUTDOWN' && !!state.cut;
-  return [...(preCampOn() ? [['meet', 'Staff meeting'], ['reps', 'Reps chart'], ['track', 'Man by man']] : []), ...(cut ? [['cut', 'The cuts']] : []), ['bubble', `The ${ROSTER_MAX}`], ['plan', 'Compare']]; }
+  return [...(preCampOn() ? [['meet', 'Staff meeting'], ['track', 'Man by man']] : []), ...(cut ? [['cut', 'The cuts']] : []), ['bubble', `The ${ROSTER_MAX}`], ['plan', 'Compare']]; }
 function preTabNow() { const t = preTabs(); return t.some(x => x[0] === ui.preTab) ? ui.preTab : t[0][0]; }
 function preHubHTML() {
   if (!preOpen()) return '<div class="pagehead"><div><h1>Roster planner</h1></div></div><div class="card"><p class="muted">This page opens when the season ends and stays through the coaching search, free agency, the draft and camp, until your cuts are final.</p></div>';
@@ -586,16 +586,17 @@ function repJobCard(k, R) {
     <div class="dcj-h"><b>${esc(J[1])}</b>${n > 1 ? `<span class="dcj-tag two" title="Two men work with each string at this job">${n} a string</span>` : ''}${own ? `<span class="dcj-tag rp-own" title="You have changed this job. It stays as you set it until you hand it back.">yours</span><button class="rp-back" data-action="repsRs" data-k="${k}" title="Hand this job back to its coach">↺</button>` : `<span class="dcj-tag" title="In the order its coach sees it. It follows his board until you change it.">coach</span>`}</div>
     <div class="dcj-list">${list.length ? '<div class="dcj-div first"><span>the ones</span></div>' : ''}${list.map((p, i) => (i === n ? '<div class="dcj-div"><span>the twos</span></div>' : i === 2 * n ? '<div class="dcj-div"><span>the threes</span></div>' : '') + repChip(p, k, i, n)).join('')}<div class="dcj-drop ${list.length ? 'more' : ''}" data-rpjob="${k}" data-rpi="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div></div></div>`;
 }
-function preRepsHTML() {
-  const u = state.userTid, R = state.reps, unit = ['off', 'def', 'st'].includes(ui.repsUnit) ? ui.repsUnit : 'off', ro = rosterOf(u), bub = campBubble(u);
-  const groups = REP_GROUPS[unit]; ui.repsGrp = ui.repsGrp || {};
+function preRepsHTML(unitArg, tabsArg) {
+  const u = state.userTid, R = ensureReps(), unit = unitArg || (['off', 'def', 'st'].includes(ui.repsUnit) ? ui.repsUnit : 'off'), ro = rosterOf(u), bub = campBubble(u);
+  const groups = (unit === 'st' ? [['Kicking game', ['K', 'P']]] : DC_GROUPS[unit].map(([t, ks]) => [t, ks.filter(k => REP_JOB[k])]).filter(g => g[1].length)); ui.repsGrp = ui.repsGrp || {};
   let grp = groups.find(g => g[0] === ui.repsGrp[unit]) || groups[0];
   if (ui.repsJob && REP_JOB[ui.repsJob] && REP_JOB[ui.repsJob][4] === unit && !grp[1].includes(ui.repsJob)) grp = groups.find(g => g[1].includes(ui.repsJob)) || grp;
+  if (!grp) return '<div class="callout">No practice jobs here.</div>';
   ui.repsGrp[unit] = grp[0];
   const job = grp[1].includes(ui.repsJob) ? ui.repsJob : grp[1][0]; ui.repsJob = job;
   const J = REP_JOB[job], list = R.jobs[job] || [];
-  const tabs = `<div class="dc2-tabs">${[['off', 'Offense'], ['def', 'Defense'], ['st', 'Kicking']].map(([k, l]) => `<button class="${k === unit ? 'on' : ''}" data-action="repsUnit" data-v="${k}">${l}</button>`).join('')}</div>`;
-  const nOwn = Object.keys(R.own).length, ctl = `<div class="dc2-ctl"><span class="small muted">${nOwn ? `You have set ${nOwn} job${nOwn === 1 ? '' : 's'}; the coaches set the rest.` : 'The coaches have set every job.'}</span>${nOwn ? `<button class="sm" data-action="repsRs" data-k="">Hand it all back</button>` : ''}</div>`;
+  const tabs = tabsArg || `<div class="dc2-tabs">${[['off', 'Offense'], ['def', 'Defense'], ['st', 'Kicking']].map(([k, l]) => `<button class="${k === unit ? 'on' : ''}" data-action="repsUnit" data-v="${k}">${l}</button>`).join('')}</div>`;
+  const nOwn = Object.keys(R.own).length, ctl = `<div class="dc2-ctl"><span class="small muted">${nOwn ? `You have set ${nOwn} job${nOwn === 1 ? '' : 's'}; the rest follow your game order.` : 'Every job follows your game order.'}</span>${nOwn ? `<button class="sm" data-action="repsRs" data-k="">Hand it all back</button>` : ''}</div>`;
   const grpSel = `<div class="dc2-gsel">${groups.map(([title]) => `<button class="${title === grp[0] ? 'on' : ''}" data-action="repsGrp" data-v="${esc(title)}">${esc(title)}</button>`).join('')}</div>`;
   const cards = `<div class="dc2-cards one" style="--n:${grp[1].length}">${grp[1].map(k => repJobCard(k, R)).join('')}</div>`;
   // the bench: everyone who could work the selected job, best first by the coach's read of him there
@@ -616,7 +617,7 @@ function preRepsHTML() {
     <div class="dc2-bl">${can.map(benchRow).join('') || '<div class="muted small">Nobody on the roster can work here.</div>'}</div></div>${big}</div>`;
   return `<div class="dc2"><div class="dc2-top">${tabs}${ctl}</div>
     <div class="dc2-main"><div class="dc2-left"><div class="dc2-jobs">${grpSel}${cards}</div>
-      <div class="small muted" style="margin-top:8px"><b>Drag a man</b> to a place in a job’s order, from the list on the right or from another card. <b>+</b> gives him a look at the job you have selected; <b>×</b> takes him off (take him off everything and the coaches put him wherever they see fit); his name opens his card. The ones face the ones in practice and start the exhibitions; the threes get the second half.</div></div>${benchCard}</div></div>`;
+      <div class="small muted" style="margin-top:8px"><b>Drag a man</b> to a place in a job’s order, from the list on the right or from another card. <b>+</b> gives him practice reps at the job you have selected; <b>×</b> takes him off (take him off everything and the coaches put him wherever they see fit); his name opens his card. A job you have not changed follows your game order. In camp the ones practice against the ones; in the season the order sets each room's first-team reps.</div></div>${benchCard}</div></div>`;
 }
 // ---- the roster, man by man ----
 function preTrackRow(p, bub, open) {
@@ -946,19 +947,25 @@ function jobComfort(p, k) { if (jobSide(k) === 'st') return 100; const ax = jobA
 function jobTier(p, k) { return jobSide(k) === 'st' ? null : tierOf(p, jobValue(p, k)); }
 function dcDot(p, k) { const cf = comfortLabel(jobComfort(p, k)); return (cf !== 'Natural' && cf !== 'Comfortable' ? `<i class="dcd ${CF_CLS[cf]}" title="${cf} at this job"></i>` : '') + (p.injury ? `<i class="dcd inj" title="Out ${p.injury.weeks} week${p.injury.weeks === 1 ? '' : 's'}">✚</i>` : ''); }
 // one man on a job card
+// in preseason, how long each man plays: his turn in the relay down this job's list
+function dcDurSel(p, k, i) {
+  if (!preTimeOn() || typeof RELAY_OPTS === 'undefined' || ST_UNIT[k] || k === 'K' || k === 'P' || k === 'KR' || k === 'PRET') return '';
+  const u = state.userTid, per = relayPer(u, k), cur = relayCode(k, p.id, i, per), set = !!(state.prePlan.dur && state.prePlan.dur[k] && state.prePlan.dur[k][p.id]);
+  return `<select class="dcc-dur ${set ? 'set' : ''} d-${cur}" data-change="dcDur" data-key="${k}" data-pid="${p.id}" title="How long he plays in the next exhibition, in his turn down this list">${RELAY_OPTS.map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+}
 function dcSat(p) { const u = state.userTid, c = T(u).dch; return state.phase === 'PRESEASON' && state.prePlan ? !!state.prePlan.hold[p.id] : !!(c && c.sit && c.sit[p.id]); }
 function dcChip(p, k, i, starts) {
   const tr = jobTier(p, k), sat = dcSat(p);
   return `<div class="dcc ${tr ? TIER_CLS[tr] : ''} ${i < starts ? 'st' : ''} ${ui.dchPid === p.id ? 'pk' : ''} ${sat ? 'sat' : ''}" draggable="true" data-dcp="${p.id}" data-dci="${i}" data-dcjob="${k}" data-action="dchMan" data-pid="${p.id}" title="${esc(pname(p))}${tr ? ' · ' + tr + ' at this job' : ''}">
-    <span class="dcc-n">${i + 1}</span><button class="link dcc-nm" data-action="player" data-pid="${p.id}" title="${esc(pname(p))} · ${esc(p.lbl)}${tr ? ' · ' + tr + ' at this job' : ''} — open his card">${esc(p.last)}</button>${dcDot(p, k)}<span class="dcc-sp"></span><button class="dcc-sit ${sat ? 'on' : ''}" data-action="dcSit" data-pid="${p.id}" title="${sat ? 'Sitting: he does not dress and takes no snaps anywhere. Click to play him.' : 'Sit him: he does not dress and takes no snaps anywhere, not even on special teams'}">Sit</button><button class="dcc-x" data-action="dcRemove" data-key="${k}" data-i="${i}" title="Take him off this job" aria-label="Remove ${esc(p.last)}">×</button></div>`;
+    <span class="dcc-n">${i + 1}</span><button class="link dcc-nm" data-action="player" data-pid="${p.id}" title="${esc(pname(p))} · ${esc(p.lbl)}${tr ? ' · ' + tr + ' at this job' : ''} — open his card">${esc(p.last)}</button>${dcDot(p, k)}<span class="dcc-sp"></span>${dcDurSel(p, k, i)}<button class="dcc-sit ${sat ? 'on' : ''}" data-action="dcSit" data-pid="${p.id}" title="${sat ? 'Sitting: he does not dress and takes no snaps anywhere. Click to play him.' : 'Sit him: he does not dress and takes no snaps anywhere, not even on special teams'}">Sit</button><button class="dcc-x" data-action="dcRemove" data-key="${k}" data-i="${i}" title="Take him off this job" aria-label="Remove ${esc(p.last)}">×</button></div>`;
 }
 function dcJobCard(t, c, k, need, where, prob) {
   const u = t.id, list = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === u), n = chartMax(k, u), on = ui.dcJob === k;
   const rotNow = rotOf(c, k), rotList = rotOpts(k), rotPick = rotList.length ? rotList.reduce((a, o) => Math.abs(o[0] - rotNow) < Math.abs(a[0] - rotNow) ? o : a)[0] : 0;
   const rot = ROT_KEYS.has(k) && rotList.length > 1 ? `<div class="dcj-rot"><span>Next man's snaps</span><select data-change="dchRot" data-key="${k}">${rotList.map(([v, l]) => `<option value="${v}" ${v === rotPick ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : '';
   return `<div class="dcj ${on ? 'on' : ''} ${prob ? 'bad' : ''}" data-action="dcJob" data-key="${k}">
-    <div class="dcj-h"><b>${esc(jobLabel(k))}</b>${need > 1 && !ST_UNIT[k] ? `<span class="dcj-tag two" title="This job has ${need} spots on the field at once: the first ${need} listed both start">top ${need} start</span>` : ''}${prob ? '<span class="dcj-tag bad">needs a man</span>' : ''}</div>${preJobSel(k)}
-    <div class="dcj-list">${list.map((p, i) => (i === need && !ST_UNIT[k] ? '<div class="dcj-div"><span>next in line · 2nd unit</span></div>' : i === 2 * need && !ST_UNIT[k] ? '<div class="dcj-div"><span>3rd unit</span></div>' : '') + dcChip(p, k, i, need)).join('')}${list.length < n ? `<div class="dcj-drop ${list.length ? 'more' : ''}" data-dcjob="${k}" data-dci="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div>` : ''}</div>
+    <div class="dcj-h"><b>${esc(jobLabel(k))}</b>${need > 1 && !ST_UNIT[k] ? `<span class="dcj-tag two" title="This job has ${need} spots on the field at once: the first ${need} listed both start">top ${need} start</span>` : ''}${prob ? '<span class="dcj-tag bad">needs a man</span>' : ''}</div>
+    <div class="dcj-list ${preTimeOn() && !ST_UNIT[k] ? 'has-dur' : ''}">${list.map((p, i) => (i === need && !ST_UNIT[k] ? '<div class="dcj-div"><span>next in line · 2nd unit</span></div>' : i === 2 * need && !ST_UNIT[k] ? '<div class="dcj-div"><span>3rd unit</span></div>' : '') + dcChip(p, k, i, need)).join('')}${list.length < n ? `<div class="dcj-drop ${list.length ? 'more' : ''}" data-dcjob="${k}" data-dci="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div>` : ''}</div>
     <details class="dcj-more" ${foldAttr('dcj' + k)}><summary>about this job</summary><div class="small muted">${esc(JOB_HELP[k] || '')}${where && where.length ? `<br><b>Plays in:</b> ${esc([...new Set(where)].join(', '))}` : ''}</div>${rot}</details></div>`;
 }
 // the green dot: the defender who gets the call and makes the checks
@@ -984,12 +991,18 @@ function emergencyQBHTML(t) {
 function depthChartHTML() {
   const u = state.userTid, t = T(u), c = ensureChart(u);
   refreshChart(u);
+  const mode = ui.scMode === 'prac' ? 'prac' : 'game', tab0 = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def';
+  const modeBar = `<div class="sc-mode"><span class="seg sc-seg"><button class="${mode === 'game' ? 'on' : ''}" data-action="scMode" data-v="game">Game snaps</button><button class="${mode === 'prac' ? 'on' : ''}" data-action="scMode" data-v="prac">Practice reps</button></span>
+    <span class="small muted">${mode === 'game' ? 'Who plays, in what order' + (preTimeOn() ? ', and for how long in the exhibition' : '') : 'Who takes the first, second and third string reps in practice' + (state.phase === 'PRESEASON' || state.phase === 'CUTDOWN' ? ' (the camp strings)' : ' (the first-team reps each week)')}</span><span class="spacer"></span>
+    ${tab0 === 'st' ? '' : mode === 'game' ? `<button class="sm" data-action="scCopy" data-v="p2g" title="Make the ${tab0 === 'off' ? 'offense' : 'defense'}'s game order the same as its practice order">Copy from practice reps</button>` : `<button class="sm" data-action="scCopy" data-v="g2p" title="Make the ${tab0 === 'off' ? 'offense' : 'defense'}'s practice order the same as its game order">Copy from game snaps</button>`}</div>`;
+  if (mode === 'prac') { ensureReps(); const tabsP = `<div class="dc2-tabs">${[['def', 'Defense'], ['off', 'Offense'], ['st', 'Kicking']].map(([k, l]) => `<button class="${k === tab0 ? 'on' : ''}" data-action="dchTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
+    return `${modeBar}${preRepsHTML(tab0, tabsP)}`; }
   const ro = rosterOf(u).filter(p => p.a);
   const tab = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def';
   const probs = chartProblems(u), auto = c.auto[tab], side = { def: 'defense', off: 'offense', st: 'special teams' }[tab];
   const tabs = `<div class="dc2-tabs">${[['def', 'Defense'], ['off', 'Offense'], ['st', 'Special teams']].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="dchTab" data-tab="${k}">${l}${probs.some(p => p.tab === k) ? ' <i class="dcd bad"></i>' : ''}</button>`).join('')}</div>`;
   const ctl = `<div class="dc2-ctl"><span class="small muted">${auto ? `The staff is setting the ${side}.` : `You are setting the ${side}.`}</span><button class="sm ${auto ? 'primary' : ''}" data-action="dchAuto" data-unit="${tab}" data-on="${auto ? 0 : 1}">${auto ? 'Take control' : 'Hand to the staff'}</button></div>`;
-  let html = `<div class="dc2"><div class="dc2-top">${tabs}${ctl}</div>${state.settings.autoUser ? '<div class="callout"><b>Auto-manage is on</b>: the staff sets the depth chart until you turn it off in Settings.</div>' : ''}${preTimeOn() && tab !== 'st' ? prePlanHTML() : ''}`;
+  let html = `${modeBar}<div class="dc2"><div class="dc2-top">${tabs}${ctl}</div>${state.settings.autoUser ? '<div class="callout"><b>Auto-manage is on</b>: the staff sets the depth chart until you turn it off in Settings.</div>' : ''}${preTimeOn() && tab !== 'st' ? prePlanHTML() : ''}`;
   const mine = probs.filter(p => p.tab === tab);
   if (mine.length) html += `<div class="callout small"><b class="bad">This chart is not complete.</b> ${mine.map(p => esc(p.text)).join(' · ')}. If you play a game like this, the staff fills the gap for that game only.</div>`;
   // ---- the jobs on this tab ----
@@ -1707,7 +1720,7 @@ function practiceHTML() {
     <div class="small muted" style="margin-bottom:10px">${sel.coach ? `Coach: ${coachNameLink(sel.coach)} · ${esc(sel.coach.style)} · develops ${wordPill(asstWord(sel.coach, 'dev'))} discipline ${wordPill(asstWord(sel.coach, 'disc'))}` : 'No position coach'}
       · ${lead && known(lead) ? `Sets the tone: ${playerLink(lead.p, true)}${lead.a < -0.15 ? ' <span class="bad">(not a good example)</span>' : ''}` : sel.rs.voices.length ? 'Your staff is still learning who runs this room' : 'No veteran voice in this room'}${drag && lead && drag.p !== lead.p && known(drag) ? ` · dragging it down: ${playerLink(drag.p, true)}` : ''}</div>` +
     table('prac' + pos, [
-      { k: 'ord', l: 'Reps', f: p => p.tid === -3 ? '<span class="muted small">Practice squad</span>' : `<span class="seg"><button class="sm" data-action="repMove" data-pid="${p.id}" data-d="-1" title="More reps">▲</button><button class="sm" data-action="repMove" data-pid="${p.id}" data-d="1" title="Fewer reps">▼</button></span> <span class="small ${repsTier(order.indexOf(p), pos) === 0 ? '' : 'muted'}">${REPS_NAME[repsTier(order.indexOf(p), pos)]}</span>` },
+      { k: 'ord', l: 'Reps', f: p => p.tid === -3 ? '<span class="muted small">Practice squad</span>' : `<span class="small">#${repsOrder(state.userTid, p.pos).indexOf(p) + 1}</span> <button class="link small" data-action="repsGo" data-k="${(typeof repsJobsOf === 'function' && repsJobsOf(p.id)[0] || {}).k || ''}" data-pid="${p.id}" title="Practice order is set on Snap counts">set</button>` },
       { k: 'n', l: 'Name', f: p => playerLink(p) + ' ' + statusPills(p) },
       { k: 'pos', l: 'Pos', f: p => esc(p.lbl) },
       { k: 'exp', l: 'Yrs', f: p => p.exp === 0 ? 'R' : p.exp, num: 1 },
@@ -1787,8 +1800,8 @@ function prePlanHTML() {
   const wk = state.pre ? state.pre.wk : 0, auto = prePlanFor(u).auto, word = v => (PRE_SHARE_OPTS.find(o => o[0] === v) || [0, Math.round(v * 100) + '%'])[1].toLowerCase();
   const starters = preStarters(u), short = rosterOf(u).filter(p => starters.has(p.id) && p.pos !== 'K' && p.pos !== 'P' && (p.preS ? p.preS.snp : 0) < SHARP_SNAPS);
   return `<div class="card pre-time"><div class="row"><div><div class="ds-lb">Preseason playing time · game ${Math.min(wk + 1, PRESEASON_GAMES)} of ${PRESEASON_GAMES}</div>
-      <div class="small">Set how long the <b>first unit</b> plays at each job on its card below. The second unit takes over from there until halftime, the third unit after it. Left on <b>Coach's plan</b>, his first unit plays ${word(auto)} this game.</div></div><span class="spacer"></span>
-      ${nSet ? `<button class="sm" data-action="preShareReset" title="Every job back to the coach's plan">Coach's plan everywhere</button>` : ''}</div>
+      <div class="small">Each job plays its list in order: the first man (the first two at a two-man job) starts, and when his time is up the next man comes in, changing between drives. Set each man's time with the menu by his name. Left alone, the first unit plays ${word(auto)} this game, the second to halftime, the third the rest; the last man on a list stays on if it runs out.</div></div><span class="spacer"></span>
+      ${nSet || Object.keys(pl.dur || {}).length ? `<button class="sm" data-action="preShareReset" title="Every man back to the coach's plan">Coach's plan everywhere</button>` : ''}</div>
     ${short.length ? `<div class="small ${wk >= PRESEASON_GAMES - 1 ? 'warn' : 'muted'}" style="margin-top:6px"><b>${short.length} starter${short.length === 1 ? '' : 's'}</b> ${short.length === 1 ? 'has' : 'have'} fewer than ${SHARP_SNAPS} preseason snaps and would open the season a step slow: ${short.slice(0, 8).map(p => playerLink(p, true) + ' <span class="muted">(' + (p.preS ? p.preS.snp : 0) + ')</span>').join(', ')}${short.length > 8 ? ' and more' : ''}.</div>` : '<div class="small good" style="margin-top:6px">Every starter has enough preseason work to open the season sharp.</div>'}
     <div class="small" style="margin-top:4px"><b>Featured</b> (stay in for extra snaps): ${names(pl.feat)} · <b>Held out</b>: ${names(pl.hold)} <span class="muted">· set these on a player's card</span></div></div>`;
 }
@@ -3885,7 +3898,7 @@ const actions = {
   preTab: d => { ui.preTab = d.v; render(); },
   meetRole: d => { ui.meetRole = d.v; render(); },
   meetAll: d => { const u = state.userTid, room = d.v; for (const a of repsAdvice(u)) { const p = P(a.pid); if (!p) continue; const rk = preRoomOf(p); if (rk === room) repsToString(a.k, a.pid, a.cs); } save(); render(); },
-  preShareReset: () => { const pl = state.prePlan; if (pl) { pl.jobShare = {}; pl.share = {}; } save(); render(); },
+  preShareReset: () => { const pl = state.prePlan; if (pl) { pl.jobShare = {}; pl.share = {}; pl.dur = {}; } save(); render(); },
   trkSortH: d => { const cur = ui.trkSort && typeof ui.trkSort === 'object' ? ui.trkSort : { k: 'chart', d: 1 }; ui.trkSort = cur.k === d.v ? { k: d.v, d: -cur.d } : { k: d.v, d: 1 }; render(); },
   repsUnit: d => { ui.repsUnit = d.v; ui.repsJob = null; ui.repsPid = null; render(); },
   repsGrp: d => { const un = ['off', 'def', 'st'].includes(ui.repsUnit) ? ui.repsUnit : 'off'; (ui.repsGrp = ui.repsGrp || {})[un] = d.v; ui.repsJob = null; render(); },
@@ -3897,7 +3910,11 @@ const actions = {
   repsDo: d => { repsToString(d.k, +d.pid, +d.s); save(); render(); },
   repsRm: d => { const e = repsRemove(d.k, +d.pid); if (e) toast(e); else ui.repsSel = null; save(); render(); },
   repsRs: d => { repsReset(d.k || null); ui.repsSel = null; save(); render(); },
-  repsGo: d => { const j = REP_JOB[d.k]; ui.preTab = 'reps'; ui.repsUnit = j ? j[4] : 'off'; ui.repsJob = d.k; ui.repsPid = +d.pid; render(); },
+  repsGo: d => { ensureReps(); const j = REP_JOB[d.k]; view = 'depth'; ui.scMode = 'prac'; ui.dchTab = j ? j[4] : 'off'; ui.repsJob = d.k; ui.repsPid = +d.pid; render(); window.scrollTo(0, 0); },
+  scMode: d => { ui.scMode = d.v; render(); },
+  scCopy: async d => { const unit = ['off', 'def'].includes(ui.dchTab) ? ui.dchTab : 'def', side = unit === 'off' ? 'offense' : 'defense';
+    if (!await ask(d.v === 'g2p' ? `Replace the ${side}'s practice order with its game order?` : `Replace the ${side}'s game order with its practice order? You will be setting the ${side} yourself.`)) return;
+    if (d.v === 'g2p') repsFromGame(unit); else gameFromReps(unit); save(); render(); toast('Copied.'); },
   trk: d => { const o = ui.trkOpen || (ui.trkOpen = {}); if (o[d.pid]) delete o[d.pid]; else o[d.pid] = 1; render(); },
   trkRoom: d => { ui.trkRoom = d.v; render(); },
   privateWorkout: d => { const err = privateWorkout(+d.pid); if (err) toast(err); else { ui.cardTab = 'scout'; save(); } playerModal(+d.pid, true); },
@@ -4058,6 +4075,7 @@ const changes = {
   negYrs: v => { ui.neg.yrs = +v; ui.neg.gtd = Math.min(ui.neg.gtd, ui.neg.yrs); negModal(); },
   negGtd: v => { ui.neg.gtd = +v; negModal(); },
   preStarters: v => { state.prePlan.starters = v; save(); },
+  dcDur: (v, el) => { const pl = state.prePlan; if (!pl) return; const k = el.dataset.key, u = state.userTid, c = ensureChart(u), un = CHART_UNIT(k); if (c.auto[un]) setChartAuto(u, un, false); (pl.dur = pl.dur || {})[k] = pl.dur[k] || {}; pl.dur[k][+el.dataset.pid] = v; save(); },
   preJob: (v, el) => { const pl = state.prePlan; if (!pl) return; pl.jobShare = pl.jobShare || {}; if (+v < 0) delete pl.jobShare[el.dataset.key]; else pl.jobShare[el.dataset.key] = +v; save(); },
   preShare: (v, el) => { const pl = state.prePlan; pl.share = pl.share || {}; if (+v < 0) delete pl.share[el.dataset.pos]; else pl.share[el.dataset.pos] = +v; save(); },
   workSet: (v, el) => { setWork(+el.dataset.pid, el.dataset.part, v); save(); if (el.dataset.card) playerModal(+el.dataset.pid, true); },
