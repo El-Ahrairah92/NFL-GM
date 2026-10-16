@@ -101,6 +101,9 @@ function offenseCall(g) {
   if (!T_.depth.FB.length || T_.depth.FB[0].r < 55) { pw[21] = (pw[21] || 0) * 0.3; pw[22] = (pw[22] || 0) * 0.3; }
   if (sit.short || sit.gl) { pw[13] = (pw[13] || 0) + 8; pw[22] = (pw[22] || 0) + 6; if (isRun && g.togo <= 1) pw.JUMBO = 7; }
   if (sit.hurry || sit.b === 'D3L') { for (const k of ['12', '13', '21', '22', 'JUMBO']) pw[k] = (pw[k] || 0) * 0.15; pw[10] = (pw[10] || 0) + 6; pw[11] = (pw[11] || 0) + 12; }
+  { const nTE = T_.roster.filter(p => p.pos === 'TE' && !p.injury).length; // a grouping needs the men to fill it: no three-tight-end set with two tight ends dressed
+    if (nTE < 3) { pw[13] = (pw[13] || 0) * 0.08; }
+    if (nTE < 2) { for (const k of ['12', '22']) pw[k] = (pw[k] || 0) * 0.12; } }
   call.pers = wpick(pw) || '11';
   // --- formation
   let uc = ot.uc + (isRun ? 0.15 : -0.12) + (PERSONNEL[call.pers].includes('FB') ? 0.3 : call.pers === '13' ? 0.2 : 0); // two backs and heavy sets belong under center

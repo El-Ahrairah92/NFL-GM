@@ -172,3 +172,11 @@ Today a bust is one thing: a man whose playbook knowledge is below what the call
 - **Where you see it:** play-by-play lines, the worst mark on that snap in the grades (charged to the right man; the man left open is credited only for what an ordinary man would do), mental errors per 100 snaps on the card, coaches' notes, a scouting trait ("assignment-sound" / "freelances").
 - **Tuning:** keep the total near today's rate; severe ones (blown coverage) add big plays, so their rate is set low. Being beaten physically is never a bust.
 - **Order:** causes and the communicator; then blown coverage, free rusher, wrong gap; then visibility; then the offensive skill busts and pre-snap ones. Ties in with the hidden-attribute rework (Football IQ, Composure).
+
+## AI roster construction: position groups too thin
+
+The lineup audit (see DESIGN.md, "Lineup audit") traced most of the remaining out-of-position snaps to clubs that do not carry enough men at a position, not to the lineup logic:
+- In exhibitions, staff-run clubs run out of late-game bodies: a linebacker as the sixth defensive back (~2.5% of snaps), backs in the slot and at Z, receivers at tight end. A 90-man camp roster should carry 10-12 defensive backs, 4-5 tight ends, 4-5 backs.
+- In season, injury fill-ins (receivers at tight end, linebackers on the edge) happen when a room is two deep where real clubs carry three.
+- Look at: how AI clubs fill the 90 (draft, UDFA, camp signings by position), the 53 they keep at cutdown (ROSTER_TEMPLATE, GAMEDAY_MIN), in-season replacement signings after injuries, and whether 3-4 clubs carry true outside linebackers.
+- Measure with the lineup audit harness (scratchpad aubody.js: season and `pre` modes): out-of-position snaps per 1000, by position and cause.

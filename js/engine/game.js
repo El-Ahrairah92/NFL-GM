@@ -531,7 +531,12 @@ function hailPlay(g) {
   const off = offUnit(g, o, '10', null), def = defUnit(g, d, g.cx[d].dt.front, 'DIME', false);
   if (g.pbp) g.pendingDD = `${ordinal(g.down)} & ${g.ydl + g.togo >= 100 ? 'Goal' : g.togo} at ${spotTxt(g)}`;
   g.ts[o].plays++; if (g.down === 3) g.ts[o].d3a++; else if (g.down === 4) g.ts[o].d4a++;
-  applyResult(g, hailMary(g, off, def), { tags: new Set(), type: 'HAIL', isRun: false, pers: '10', form: 'SG' }, { pkg: 'DIME', cov: 'C3', pres: 'THREE' }, off, def, { downB: g.down, togoB: g.togo, ydlB: g.ydl });
+  const before = { down: g.down, togo: g.togo, ydl: g.ydl, poss: o, score: [g.score[0], g.score[1]], q: g.q, clock: g.clock }, downB = g.down, togoB = g.togo, ydlB = g.ydl;
+  const oc = { tags: new Set(), type: 'HAIL', isRun: false, pers: '10', form: 'SG' }, dc = { pkg: 'DIME', cov: 'C3', pres: 'THREE' }, res = hailMary(g, off, def);
+  if (typeof res.yds === 'number' && res.yds > 100 - g.ydl) res.yds = 100 - g.ydl;
+  tickFatigue(g, [...off, ...def]); // it is a snap like any other: it counts, and it is charted
+  applyResult(g, res, oc, dc, off, def, { downB, togoB, ydlB });
+  chartPlay(g, oc, dc, res, before, off, def);
 }
 
 // ---------- 4th down: rulebook, then gray-zone judgment ----------
@@ -743,7 +748,7 @@ function startPossession(g, side, ydl) {
     T_.rest = rest;
     // the defense spells its linebackers by series too: the second one most, the man in the middle rarely (your own chart sets this for your club)
     const dS = 1 - side, D_ = g.side[dS];
-    if (D_ && !userChart(g, dS, 'def')) { const dr = new Set(); for (const e of defUnit(g, dS, g.cx[dS].dt.front, 'NICKEL', false)) { const pr = e.slot === 'WLB' ? TUNE.lbRest : e.slot === 'MLB' ? TUNE.lbRest * 0.3 : 0; if (pr && e.p.id >= 0 && rand() < pr) dr.add(e.p.id); } D_.rest = dr; }
+    if (D_ && !userChart(g, dS, 'def')) { const dr = new Set(); for (const e of defUnit(g, dS, g.cx[dS].dt.front, 'NICKEL', false)) { const pr = e.slot === 'WLB' ? TUNE.lbRest : e.slot === 'MLB' ? TUNE.lbRest * 0.15 : 0; if (pr && e.p.id >= 0 && rand() < pr) dr.add(e.p.id); } D_.rest = dr; }
   }
 }
 function changePoss(g, newYdl, result) { endDrive(g, result); startPossession(g, 1 - g.poss, newYdl); }

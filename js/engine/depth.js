@@ -26,7 +26,7 @@ const TUNE = {
   lockOn: 0.02,       // chance per point below average that he stares down a covered first read and loses a beat
   placeYac: 0.028,     // ball placement: an accurate throw hits the receiver in stride, an off-target one makes him stop for it
   slipCap: 0.3,          // the most a carrier's elusiveness, burst, agility and vision can add up to on one tackle attempt (logit)
-  lbRest: 0.34,           // how often the second linebacker sits out a series for the next man
+  lbRest: 0.18,           // how often the second linebacker sits out a series for the next man (the Mike far less: real starters rarely come off)
   assistRate: 0.21,    // how often a second man is credited on a tackle that had no assist yet
   spill: 0.6,         // how often a run stopped by a lineman past the line is really finished by the second level
   dimeLong: 0.8, dimeMid: 0.45, // how often a defense goes to six defensive backs on third and long, and third and medium
@@ -340,7 +340,7 @@ const FAT_SLOPE = { QB: 1, OL: 1, RB: 1.6, WR: 1.8, TE: 2.6, DL: 4.0, LB: 1, DB:
 const REST_P = { X: 0.075, Z: 0.075, SLOT: 0.04, Y: 0.14 };
 const ROT_GAP = { DL: 0.5, WR: 0.55, TE: 0.5 }; // receivers and tight ends get series off too
 
-const GROUP_GUARD = { OL: 40, QB: 60 };
+const GROUP_GUARD = { OL: 40, QB: 60, LB: 18, RB: 8, TE: 24 }; // (a tight end's rating counts half in the choice, so his guard is doubled) // a real one first: a safety, receiver or back takes the job only when he is clearly better at it
 // The deep ball. How often it is called and how readily it is thrown follow the quarterback's arm: a coordinator with a big,
 // accurate deep thrower calls more shots, and that quarterback lets it go to a man who is only a step open.
 const DEEP = { base: 0.12, perPt: 0.03, lo: -0.5, hi: 0.6, mid: 0.3, shot: 0.45, shotArm: 0.8, call: 0.02, callLo: 0.45, callHi: 1.5, ref: 70 };
@@ -478,6 +478,7 @@ function fillSlots(g, s, slots, table, opts = {}) {
         else if (preStr !== null && (preStr > 0 && firsts.has(c.p.id) || satStart.has(c.p.id))) sc -= 200;
         if (preStr !== null && resv.has(c.p.id) && resv.get(c.p.id) !== name) sc -= 400; } // a starter does not fill in somewhere else while he is supposed to be sitting
       if (T_.rest && T_.rest.has(c.p.id)) sc -= 40; // a planned series off
+      if (slot !== 'QB' && c.p.pos === 'QB') sc -= 80; // a quarterback is not your third tight end
       if (g.pbNeed && slot !== 'QB' && c.p.a) { const k = pbOf(c.p), need = g.pbNeed[s]; if (k < need) sc -= (need - k) * 0.3; } // he does not know this call
       if (g.ps[c.p.id] && g.ps[c.p.id].last === name) sc += 1.5; // continuity: no needless shuffling
       if (opts.score && !list) sc += opts.score(c.p, slot);
@@ -523,17 +524,18 @@ function offUnit(g, s, pers, call) {
     // one tight end on the field on a passing down: the man who catches it has a case over the man who blocks
     if (slot === 'Y' && oneTE && call && call.passDown && p.a && SPOTS[p.spot] && SPOTS[p.spot].g === 'TE') return ((ea0(p, 'rte') + ea0(p, 'hnd') + ea0(p, 'cth')) / 3 - (ea0(p, 'rbk') + ea0(p, 'pbk')) / 2) * 0.3;
     if (slot !== 'RB' || !p.a) return 0;
-    if (p.spot !== 'RB') return p.spot === 'FB' ? -14 : -8; // a receiver in the backfield is a gadget, not a feature back
     // the right back for the down: hands and protection on passing downs, strength and balance on short yardage
     // How readily he is swapped out follows the playbook: a system built around one back keeps him in unless the other man is far better at it; a committee system swaps freely.
     const lean = rbLean(g, s);
     const sit = call && call.passDown ? ((ea0(p, 'hnd') + ea0(p, 'pbk') + ea0(p, 'rte')) / 3 - 60) * (0.45 + lean * 0.9) : g.togo <= 2 && (g.down >= 3 || g.ydl >= 98) ? ((ea0(p, 'str') + ea0(p, 'bal')) / 2 - 70) * (0.5 + lean * 2.0) : 0;
-    if (!T_.rb2Turn) return sit;
+    if (p.spot !== 'RB') return (p.spot === 'FB' ? -14 : -16) + Math.min(0, sit); // a receiver in the backfield is a gadget, not a feature back: judged on the same down as the backs, never helped by it
+    const sitR = Math.max(-12, sit); // a real back is marked down for the wrong down, but never below a man who is not a back at all
+    if (!T_.rb2Turn) return sitR;
     // committee series: the No. 2 back gets his drive unless he's hopelessly outclassed
     const backs = T_.depth.RB.filter(x => x.p.spot === 'RB');
     const rb2 = backs[T_.rb3Turn && backs[2] && backs[1].r - backs[2].r <= 14 ? 2 : 1]; // the third back gets the odd series
     // even a star gets spelled, and the series that belongs to the next man stays his on passing downs too: a workhorse does not come back in for every third and long
-    return sit + (rb2 && p.id === rb2.p.id && backs[0].r - rb2.r <= 45 ? backs[0].r - rb2.r + 2 : 0);
+    return sitR + (rb2 && p.id === rb2.p.id && backs[0].r - rb2.r <= 45 ? backs[0].r - rb2.r + 2 : 0);
   };
   const chart = userChart(g, s, 'off');
   if (!chart) return done(fillSlots(g, s, slots, OFF_SLOT, { score: rbScore }));
