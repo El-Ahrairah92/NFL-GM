@@ -387,13 +387,15 @@ function fatPenalty(g, p, grp) {
 //  5. If he is a starter at both (or next up at both), he plays where the drop to the man behind him is bigger.
 //  6. A man who comes off for a rotation is replaced by the next one on that job's list who is not already on the field.
 // A spot whose list has run out of available men is left for the staff to fill, and says so.
+// team periods: a man brought into another string's period for a package plays only that package's downs, never its base downs
+function pkgOnlyBlock(g, id, key) { const o = g.scrim && g.scrim.only; if (!o || !o.has(id)) return false; const pk = g.scrim.pkKeys; return !(key && pk && pk[key] && pk[key].has(id)); }
 function resolveChart(g, s, T_, slots, table, opts, chart, listFor) {
   const avail = id => T_.roster.find(p => p.id === id), out = {}, taken = new Set();
   if (opts.ov) for (const [name] of slots) { const id = opts.ov(name), p = id !== undefined && id !== null ? avail(id) : null; if (p && !taken.has(p.id)) { out[name] = { p, why: 'ov' }; taken.add(p.id); } }
   const need = {}, all = slots.map(([name, slot, x, depth]) => { const key = opts.keyOf(name, slot, x, depth); need[key] = (need[key] || 0) + 1; return { name, slot, x, depth, key, list: listFor(key) || [], grp: table[slot][1], spot: table[slot][0] }; });
   const rate = (q, p) => q.grp === 'DL' && !(q.depth > 0) && q.x !== undefined ? lineSlotRating(p, Math.abs(q.x)) : slotRating(p, q.spot);
   // the lineup itself follows the lists and who is available; who is tired or due a series off is settled afterwards
-  const ranked = (q, skip) => { const r = []; q.list.forEach((id, i) => { if (taken.has(id) || id === skip) return; const p = avail(id); if (p) r.push({ p, i }); }); return r; };
+  const ranked = (q, skip) => { const r = []; q.list.forEach((id, i) => { if (taken.has(id) || id === skip || pkgOnlyBlock(g, id, q.key)) return; const p = avail(id); if (p) r.push({ p, i }); }); return r; };
   let open = all.filter(q => !out[q.name]);
   for (let guard = 0; open.length && guard < 30; guard++) {
     const want = open.map(q => ({ q, t: ranked(q)[0] })).filter(w => w.t);
@@ -486,6 +488,7 @@ function fillSlots(g, s, slots, table, opts = {}) {
         else if (preStr !== null && (preStr > 0 && firsts.has(c.p.id) || satStart.has(c.p.id))) sc -= 200;
         if (preStr !== null && resv.has(c.p.id) && resv.get(c.p.id) !== name) sc -= 400; } // a starter does not fill in somewhere else while he is supposed to be sitting
       if (T_.rest && T_.rest.has(c.p.id)) sc -= 40; // a planned series off
+      if (pkgOnlyBlock(g, c.p.id, key)) sc -= 600; // here only for a package's downs
       if (slot !== 'QB' && c.p.pos === 'QB') sc -= 80; // a quarterback is not your third tight end
       if (g.pbNeed && slot !== 'QB' && c.p.a) { const k = pbOf(c.p), need = g.pbNeed[s]; if (k < need) sc -= (need - k) * 0.3; } // he does not know this call
       if (g.ps[c.p.id] && g.ps[c.p.id].last === name) sc += 1.5; // continuity: no needless shuffling
@@ -507,7 +510,7 @@ function fillSlots(g, s, slots, table, opts = {}) {
   if (plan && !g.preview) { const onF = new Set(out.map(e => e.p.id));
     const eff = (q, p, i) => -i * 14 * (ROT_GAP[q.grp] || 1) - fatPenalty(g, p, q.grp) - (T_.rest && T_.rest.has(p.id) ? 40 : 0);
     for (const e of out) { const a = plan[e.name]; if (!a || a.why === 'ov') continue; const q = plan._slots.find(x => x.name === e.name);
-      const later = q.list.map((id, i) => ({ id, i, p: T_.roster.find(p => p.id === id) })).filter(x => x.i > a.i && x.p && !onF.has(x.id) && !plan._taken.has(x.id)); if (!later.length) continue;
+      const later = q.list.map((id, i) => ({ id, i, p: T_.roster.find(p => p.id === id) })).filter(x => x.i > a.i && x.p && !onF.has(x.id) && !plan._taken.has(x.id) && !pkgOnlyBlock(g, x.id, q.key)); if (!later.length) continue;
       const hit = g.pre ? false : opts.rot ? opts.rot(q.key) : rand() < rotOf(chart, ROT_BAND[q.key] || !opts.rotKeyOf ? q.key : opts.rotKeyOf(q.name));
       let sub = null, why = 'rot';
       if (hit) sub = later[0];
@@ -582,7 +585,7 @@ function starterQB(g, s) {
   return e ? e.p : null;
 }
 function hasList(chart, k) { return chart.lists[k] && chart.lists[k].length; }
-function userChart(g, s, unit) { const t = T(g.tids[s]); if (state.settings.autoUser && t.id === state.userTid) return null; return t.dch && !t.dch.auto[unit] ? t.dch : null; }
+function userChart(g, s, unit) { if (g.scrim && g.scrim.chart) return g.scrim.chart[unit === 'st' ? 'none' : 'lists'] ? g.scrim.chart : null; const t = T(g.tids[s]); if (state.settings.autoUser && t.id === state.userTid) return null; return t.dch && !t.dch.auto[unit] ? t.dch : null; }
 function chartFirst(g, s, key) {
   const chart = userChart(g, s, CHART_UNIT(key));
   if (!chart || !hasList(chart, key)) return null;

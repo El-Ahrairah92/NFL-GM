@@ -103,7 +103,7 @@ const CAMP_SK = {
 };
 // offense group, its skill, defense groups, their skill, and what the drill is called
 const CAMP_DRILLS = [[['WR'], 'rec', ['CB'], 'cov', 'one-on-ones'], [['TE'], 'rec', ['S', 'LB'], 'cov', 'one-on-ones'], [['RB'], 'rec', ['LB'], 'cov', 'one-on-ones'],
-  [['OL'], 'pro', ['DL'], 'rush', 'pass-rush one-on-ones'], [['OL'], 'rblk', ['DL'], 'fit', 'run-fit drills'], [['RB'], 'run', ['LB', 'S'], 'tkl', 'open-field drills']];
+  [['OL'], 'pro', ['DL'], 'rush', 'pass-rush one-on-ones'], [['RB'], 'pro', ['LB'], 'rush', 'blitz pickup'], [['OL'], 'rblk', ['DL'], 'fit', 'run-fit drills'], [['RB'], 'run', ['LB', 'S'], 'tkl', 'open-field drills']];
 function campEdge(p) { // what he is on a given day: his playbook, his wind, his week
   const pb = typeof pbOf === 'function' ? pbOf(p) : 96, h = p.h || {};
   return (pb < 80 ? -(80 - pb) * 0.07 : 0) + ((h.stam || 60) - 60) * 0.03 + campOf(p).form + gauss(0, 2.6);
@@ -121,19 +121,26 @@ function campTiers(tid, ro) {
 const SCRIM_STRING = (q, clock) => q <= 1 ? 0 : q === 2 ? 1 : q === 3 ? 2 : clock > 450 ? 0 : 1; // the ones and the twos get a period and a half each, the threes one
 function scrimActives(tid, g) {
   const tier = g.scrim.tier, s = SCRIM_STRING(g.q || 1, g.clock === undefined ? 900 : g.clock), ro = rosterOf(tid).filter(p => !p.injury), out = new Set();
+  g.scrim.only = new Set(); // in this period only for a package: listed there with this string, practicing with another
+  if (g.scrim.pkgS && g.scrim.pkgS[s]) for (const id of g.scrim.pkgS[s]) if (ro.some(p => p.id === id)) { if ((tier[id] === undefined ? 2 : tier[id]) !== s) g.scrim.only.add(id); out.add(id); }
   for (const pos of POSITIONS) {
     const l = ro.filter(p => p.pos === pos); if (pos === 'K' || pos === 'P') { l.forEach(p => out.add(p.id)); continue; }
     const need = (LINEUP_NEED[pos] || 1) + (pos === 'OL' || pos === 'DL' ? 1 : 0), t = p => tier[p.id] === undefined ? 2 : tier[p.id];
     const mine = l.filter(p => t(p) === s); mine.forEach(p => out.add(p.id));
     // short of bodies at this string: borrow the nearest men, from the string below first
-    const rest = l.filter(p => t(p) !== s).sort((a, b) => (Math.abs(t(a) - s) - (t(a) > s ? 0.5 : 0)) - (Math.abs(t(b) - s) - (t(b) > s ? 0.5 : 0)) || b.ovr - a.ovr);
+    const done = p => (g.ps && g.ps[p.id] ? g.ps[p.id].snp : 0); // the man who has played least in this session is borrowed first, so no one man carries every string
+    const rest = l.filter(p => t(p) !== s).sort((a, b) => (Math.abs(t(a) - s) - (t(a) > s ? 0.5 : 0)) - (Math.abs(t(b) - s) - (t(b) > s ? 0.5 : 0)) || done(a) - done(b) || b.ovr - a.ovr);
     for (let i = 0; mine.length + i < need && i < rest.length; i++) out.add(rest[i].id);
   }
   return out;
 }
 function campScrimmage(tid, tier) {
   if (globalThis.NOSCRIM) return null;
-  let box = null; try { box = simGame(tid, tid, { scrim: { tier }, neutral: true }); } catch (e) { if (typeof console !== 'undefined') console.warn('scrimmage failed', e); return null; }
+  let chart = null, pkgS = null;
+  if (tid === state.userTid && !isAI(tid) && state.reps) { const R2 = ensureReps(); chart = { lists: R2.jobs, auto: { off: false, def: false, st: true }, ov: {}, rot: {}, prac: true }; pkgS = [new Set(), new Set(), new Set()];
+    for (const j of REP_JOBS) if (j[5]) (R2.jobs[j[0]] || []).forEach((id, i) => { const st = Math.floor(i / j[3]); if (st <= 2) pkgS[st].add(id); }); }
+  const pkKeys = {}; if (chart) for (const j of REP_JOBS) if (j[5]) pkKeys[j[0]] = new Set(chart.lists[j[0]] || []);
+  let box = null; try { box = simGame(tid, tid, { scrim: { tier, chart, pkgS, pkKeys }, neutral: true }); } catch (e) { if (typeof console !== 'undefined') console.warn('scrimmage failed', e); return null; }
   const out = {};
   for (const pid in box.stats) { const p = P(pid), l = box.stats[pid], a = box.adv && box.adv[pid]; if (!p || !l || !l.snp || !a) continue;
     const f = {}; for (const k in FACETS) if (gradeN(a, k) >= 5) { const v = facetGrade(a, k, 0, p.spot); if (v !== null && v !== undefined) f[k] = v; }
@@ -147,14 +154,14 @@ function campPractice(tid, load) {
   // coaches set the reps: each room in the order its coach sees it; men in a battle get a look with the group above them
   const tier = campTiers(tid, ro), inBattle = new Set((cm.battles || []).filter(b => !b.closed).flatMap(b => b.cands));
   const scrim = tid === state.userTid && !isAI(tid) ? campScrimmage(tid, tier) : null; // your own club's team periods are played out and graded
-  const MIX = [[0.7, 0.25, 0.05], [0.25, 0.55, 0.2], [0.05, 0.3, 0.65]], week = {};
+  const MIX = [[0.7, 0.25, 0.05], [0.25, 0.55, 0.2], [0.05, 0.3, 0.65]], week = {}, spec = pracSpecial(tid), SPEC_X = 1.6;
   const W = id => week[id] || (week[id] = { oo: [[0, 0], [0, 0], [0, 0]], plus: 0, minus: 0, vs: {}, sp: {}, ty: {}, line: null });
   const edge = {}; for (const p of ro) edge[p.id] = campEdge(p);
   const pickTier = (p) => { let m = MIX[tier[p.id]]; if (inBattle.has(p.id) && tier[p.id] > 0) m = MIX[tier[p.id] - 1].map((v, i) => (v + m[i]) / 2); const r = rand(); return r < m[0] ? 0 : r < m[0] + m[1] ? 1 : 2; };
   for (const [og, osk, dg, dsk] of CAMP_DRILLS) {
     const O = ro.filter(p => wsh(p, og) > 0), D = ro.filter(p => wsh(p, dg) > 0); if (!O.length || !D.length) continue;
-    for (const a of O) { const reps = Math.round(((tier[a.id] === 1 ? 7 : 5) + (inBattle.has(a.id) ? 2 : 0)) * load * wsh(a, og));
-      for (let i = 0; i < reps; i++) { const tt = pickTier(a), pool = D.filter(d => tier[d.id] === tt), b = pick(pool.length ? pool : D);
+    for (const a of O) { const reps = Math.round(((tier[a.id] === 1 ? 7 : 5) + (inBattle.has(a.id) ? 2 : 0)) * load * wsh(a, og) * (spec[a.id] && spec[a.id].has(osk) ? SPEC_X : 1));
+      for (let i = 0; i < reps; i++) { const tt = pickTier(a), pool = D.filter(d => tier[d.id] === tt), P2 = pool.length ? pool : D, b = P2.length > 1 && P2.some(d => spec[d.id] && spec[d.id].has(dsk)) ? weightedPick(P2, P2.map(d => spec[d.id] && spec[d.id].has(dsk) ? SPEC_X : 1)) : pick(P2);
         const sa = wspot(a, og), sd = wspot(b, dg);
         const win = rand() < lgt((CAMP_SK[osk](a) + edge[a.id] - comfortPen(a, sa) - CAMP_SK[dsk](b) - edge[b.id] + comfortPen(b, sd)) / 7.5 + (osk === 'pro' ? 0.25 : osk === 'rec' ? -0.1 : 0)); // blockers win a few more pass-rush reps than they lose
         (W(a.id).ty[osk] = W(a.id).ty[osk] || [0, 0])[win ? 0 : 1]++; (W(b.id).ty[dsk] = W(b.id).ty[dsk] || [0, 0])[win ? 1 : 0]++; // by the kind of rep it was
@@ -503,8 +510,8 @@ const REP_JOBS = [], REP_JOB = {}, REP_BY_SPOT = {};
 function repJobsBuild(tid) {
   tid = tid === undefined ? state.userTid : tid; let jn = {}; try { jn = defJobs(T(tid)).n; } catch (e) { jn = {}; }
   REP_JOBS.length = 0; for (const k in REP_JOB) delete REP_JOB[k]; for (const k in REP_BY_SPOT) delete REP_BY_SPOT[k];
-  for (const sec of CHART_SECTIONS) { if (sec.pkg || sec.unit === 'st') continue;
-    for (const [k, l] of sec.rows) { const j = [k, l.replace(/ \(.*\)$/, ''), chartSpotFor(tid, k), sec.unit === 'def' ? Math.max(1, jn[k] || 1) : 1, sec.unit]; REP_JOBS.push(j); REP_JOB[k] = j; if (!REP_BY_SPOT[j[2]]) REP_BY_SPOT[j[2]] = k; } }
+  for (const sec of CHART_SECTIONS) { if (sec.unit === 'st') continue;
+    for (const [k, l] of sec.rows) { const per = k === 'RUSHE' || k === 'RUSHI' ? 2 : sec.unit === 'def' ? Math.max(1, jn[k] || 1) : 1, j = [k, l.replace(/ \(.*\)$/, ''), chartSpotFor(tid, k), per, sec.unit, sec.pkg ? 1 : 0]; REP_JOBS.push(j); REP_JOB[k] = j; if (!sec.pkg && !REP_BY_SPOT[j[2]]) REP_BY_SPOT[j[2]] = k; } }
   for (const [k, l] of [['K', 'Kicker'], ['P', 'Punter']]) { const j = [k, l, k, 1, 'st']; REP_JOBS.push(j); REP_JOB[k] = j; REP_BY_SPOT[k] = k; }
 }
 const REP_STRING = ['Ones', 'Twos', 'Threes'];
@@ -524,7 +531,11 @@ function repsCoachChart(tid) {
 // in camp it sets the strings; in the season it sets who gets the first-team practice reps in each room.
 function repsDefault(tid) {
   const c = ensureChart(tid), coach = repsCoachChart(tid), on = new Set(rosterOf(tid).map(p => p.id)), out = {};
-  for (const j of REP_JOBS) { const k = j[0], g = (c.lists[k] || []).filter(id => on.has(id)); out[k] = [...g, ...(coach[k] || []).filter(id => !g.includes(id))]; }
+  // in practice a man works one job: the one he is listed highest at on your game chart (a backup listed at three jobs does not take
+  // first-string reps at one of them); a man not on the game chart works the job of the spot he is working, in the coach's order
+  const prim = {}; for (const j of REP_JOBS) { if (j[5] || j[4] === 'st') continue; (c.lists[j[0]] || []).forEach((id, i) => { if (!on.has(id)) return; const cur = prim[id]; if (!cur || i < cur.i) prim[id] = { k: j[0], i }; }); }
+  for (const j of REP_JOBS) { const k = j[0], g = (c.lists[k] || []).filter(id => on.has(id));
+    out[k] = j[5] || j[4] === 'st' ? g.slice() : [...g.filter(id => prim[id] && prim[id].k === k), ...(coach[k] || []).filter(id => !prim[id])]; }
   return out;
 }
 function ensureReps() {
@@ -543,16 +554,16 @@ function ensureReps() {
   return R;
 }
 function repsJobsOf(pid) { const R = state.reps, out = []; if (!R) return out; if (!REP_JOBS.length) repJobsBuild(); for (const j of REP_JOBS) { const i = (R.jobs[j[0]] || []).indexOf(pid); if (i >= 0) out.push({ k: j[0], i, s: Math.min(2, Math.floor(i / j[3])) }); } return out.sort((a, b) => a.s - b.s || a.i - b.i); }
-function repsString(pid) { const l = repsJobsOf(pid); if (l.length) return l[0].s; const c = state.reps && state.reps.coachS ? state.reps.coachS[pid] : undefined; return c === undefined ? 2 : c; } // off the chart: wherever the coaches put him
+function repsString(pid) { const l = repsJobsOf(pid).filter(x => !REP_JOB[x.k][5]); if (l.length) return l[0].s; const c = state.reps && state.reps.coachS ? state.reps.coachS[pid] : undefined; return c === undefined ? 2 : c; } // off the chart: wherever the coaches put him
 // where the chart has him working: his best job first, a second job for a share of his reps
 function repsSyncWork() {
   if (!state.reps) return;
   if (repsOn()) for (const p of rosterOf(state.userTid)) { if (!p.a || p.pos === 'K' || p.pos === 'P' || !SPOTS[p.spot]) continue;
-    const l = repsJobsOf(p.id).map(x => REP_JOB[x.k][2]).filter(s => workSpots(p).includes(s)), w = workOf(p), a = l[0] || p.spot, b = l[1] || null;
+    const l = repsJobsOf(p.id).filter(x => !REP_JOB[x.k][5]).map(x => REP_JOB[x.k][2]).filter(s => workSpots(p).includes(s)), w = workOf(p), a = l[0] || p.spot, b = l[1] || null;
     if (w.a !== a) setWork(p.id, 'a', a); if ((workOf(p).b || null) !== b) setWork(p.id, 'b', b); }
   // each room's first-team practice reps, in the season as in camp, follow the order
   const t = T(state.userTid), by = {}; t.reps = t.reps || {};
-  for (const p of rosterOf(state.userTid)) { const l = repsJobsOf(p.id), key = l.length ? l[0].s * 1000 + l[0].i : 9999; (by[p.pos] = by[p.pos] || []).push([p.id, key]); }
+  for (const p of rosterOf(state.userTid)) { const l = repsJobsOf(p.id).filter(x => !REP_JOB[x.k][5]), key = l.length ? l[0].s * 1000 + l[0].i : 9999; (by[p.pos] = by[p.pos] || []).push([p.id, key]); }
   for (const pos in by) t.reps[pos] = by[pos].sort((a, b) => a[1] - b[1]).map(x => x[0]);
 }
 // copy one order onto the other, for one side of the ball (or all of it)
@@ -590,11 +601,19 @@ function repsPlace(fromK, pid, toK, idx) {
   if (moving) { repsTouch(fromK); R.jobs[fromK] = R.jobs[fromK].filter(x => x !== pid); }
   repsSyncWork(); return null;
 }
+function pracSet(k, idx, pid) { const R = repsTouch(k), l = R.jobs[k] || (R.jobs[k] = []); if (R.off) delete R.off[pid]; const j = l.indexOf(pid); if (j >= 0) { l.splice(j, 1); if (j < idx) idx--; } l.splice(clamp(idx, 0, l.length), 0, pid); repsSyncWork(); }
+function pracRemoveAt(k, i) { const R = repsTouch(k), l = R.jobs[k] || []; const pid = l[i]; if (pid === undefined) return; l.splice(i, 1); if (!repsJobsOf(pid).length) (R.off = R.off || {})[pid] = 1; repsSyncWork(); }
+function repsResetUnit(unit) { const R = ensureReps(); for (const j of REP_JOBS) if (!unit || j[4] === unit) delete R.own[j[0]]; ensureReps(); repsSyncWork(); }
+// a man listed at a package job in practice gets that work: the reps in the drill it calls for, and his string's team-period snaps in it
+const PKG_SKILL = { RUSHE: ['rush'], RUSHI: ['rush'], RB3D: ['rec', 'pro'], Y3D: ['rec'], RBSY: ['run'], WLBP: ['cov'], NCBP: ['cov'] };
+function pracSpecial(tid) { const out = {}; if (tid !== state.userTid || isAI(tid) || !state.reps) return out; ensureReps();
+  for (const k in PKG_SKILL) { const J = REP_JOB[k]; if (!J) continue; (state.reps.jobs[k] || []).slice(0, J[3] * 3).forEach(id => { const o = out[id] || (out[id] = new Set()); PKG_SKILL[k].forEach(x => o.add(x)); }); }
+  return out; }
 function repsReset(k) { const R = ensureReps(); if (k) delete R.own[k]; else R.own = {}; ensureReps(); repsSyncWork(); }
 // where your chart and a coach's board part ways: the men he would have a string higher, or lower, than you do
 function repsAdvice(tid) {
   const R = ensureReps(), coach = repsCoachChart(tid), out = [];
-  for (const j of REP_JOBS) { const k = j[0], n = j[3], mine = R.jobs[k] || [], his = coach[k] || [];
+  for (const j of REP_JOBS) { if (j[5]) continue; const k = j[0], n = j[3], mine = R.jobs[k] || [], his = coach[k] || [];
     his.forEach((pid, ci) => { const mi = mine.indexOf(pid); if (mi < 0) return; const cs = Math.min(2, Math.floor(ci / n)), ms = Math.min(2, Math.floor(mi / n)); if (cs !== ms) out.push({ k, pid, cs, ms, room: planRoomOf(P(pid)) }); }); }
   return out.sort((a, b) => Math.min(a.cs, a.ms) - Math.min(b.cs, b.ms));
 }

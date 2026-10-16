@@ -949,23 +949,23 @@ function dcDot(p, k) { const cf = comfortLabel(jobComfort(p, k)); return (cf !==
 // one man on a job card
 // in preseason, how long each man plays: his turn in the relay down this job's list
 function dcDurSel(p, k, i) {
-  if (!preTimeOn() || typeof RELAY_OPTS === 'undefined' || ST_UNIT[k] || k === 'K' || k === 'P' || k === 'KR' || k === 'PRET') return '';
+  if (scPrac() || !preTimeOn() || typeof RELAY_OPTS === 'undefined' || ST_UNIT[k] || k === 'K' || k === 'P' || k === 'KR' || k === 'PRET') return '';
   const u = state.userTid, per = relayPer(u, k), cur = relayCode(k, p.id, i, per), set = !!(state.prePlan.dur && state.prePlan.dur[k] && state.prePlan.dur[k][p.id]);
   return `<select class="dcc-dur ${set ? 'set' : ''} d-${cur}" data-change="dcDur" data-key="${k}" data-pid="${p.id}" title="How long he plays in the next exhibition, in his turn down this list">${RELAY_OPTS.map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
 }
 function dcSat(p) { const u = state.userTid, c = T(u).dch; return state.phase === 'PRESEASON' && state.prePlan ? !!state.prePlan.hold[p.id] : !!(c && c.sit && c.sit[p.id]); }
 function dcChip(p, k, i, starts) {
-  const tr = jobTier(p, k), sat = dcSat(p);
+  const tr = jobTier(p, k), sat = !scPrac() && dcSat(p);
   return `<div class="dcc ${tr ? TIER_CLS[tr] : ''} ${i < starts ? 'st' : ''} ${ui.dchPid === p.id ? 'pk' : ''} ${sat ? 'sat' : ''}" draggable="true" data-dcp="${p.id}" data-dci="${i}" data-dcjob="${k}" data-action="dchMan" data-pid="${p.id}" title="${esc(pname(p))}${tr ? ' · ' + tr + ' at this job' : ''}">
-    <span class="dcc-n">${i + 1}</span><button class="link dcc-nm" data-action="player" data-pid="${p.id}" title="${esc(pname(p))} · ${esc(p.lbl)}${tr ? ' · ' + tr + ' at this job' : ''} — open his card">${esc(p.last)}</button>${dcDot(p, k)}<span class="dcc-sp"></span>${dcDurSel(p, k, i)}<button class="dcc-sit ${sat ? 'on' : ''}" data-action="dcSit" data-pid="${p.id}" title="${sat ? 'Sitting: he does not dress and takes no snaps anywhere. Click to play him.' : 'Sit him: he does not dress and takes no snaps anywhere, not even on special teams'}">Sit</button><button class="dcc-x" data-action="dcRemove" data-key="${k}" data-i="${i}" title="Take him off this job" aria-label="Remove ${esc(p.last)}">×</button></div>`;
+    <span class="dcc-n">${i + 1}</span><button class="link dcc-nm" data-action="player" data-pid="${p.id}" title="${esc(pname(p))} · ${esc(p.lbl)}${tr ? ' · ' + tr + ' at this job' : ''} — open his card">${esc(p.last)}</button>${dcDot(p, k)}<span class="dcc-sp"></span>${dcDurSel(p, k, i)}${scPrac() ? '' : `<button class="dcc-sit ${sat ? 'on' : ''}" data-action="dcSit" data-pid="${p.id}" title="${sat ? 'Sitting: he does not dress and takes no snaps anywhere. Click to play him.' : 'Sit him: he does not dress and takes no snaps anywhere, not even on special teams'}">Sit</button>`}<button class="dcc-x" data-action="dcRemove" data-key="${k}" data-i="${i}" title="Take him off this job" aria-label="Remove ${esc(p.last)}">×</button></div>`;
 }
 function dcJobCard(t, c, k, need, where, prob) {
-  const u = t.id, list = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === u), n = chartMax(k, u), on = ui.dcJob === k;
+  const prac = !!c.prac, u = t.id, list = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === u), n = prac ? 99 : chartMax(k, u), on = ui.dcJob === k;
   const rotNow = rotOf(c, k), rotList = rotOpts(k), rotPick = rotList.length ? rotList.reduce((a, o) => Math.abs(o[0] - rotNow) < Math.abs(a[0] - rotNow) ? o : a)[0] : 0;
-  const rot = ROT_KEYS.has(k) && rotList.length > 1 ? `<div class="dcj-rot"><span>Next man's snaps</span><select data-change="dchRot" data-key="${k}">${rotList.map(([v, l]) => `<option value="${v}" ${v === rotPick ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : '';
+  const rot = !prac && ROT_KEYS.has(k) && rotList.length > 1 ? `<div class="dcj-rot"><span>Next man's snaps</span><select data-change="dchRot" data-key="${k}">${rotList.map(([v, l]) => `<option value="${v}" ${v === rotPick ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : '';
   return `<div class="dcj ${on ? 'on' : ''} ${prob ? 'bad' : ''}" data-action="dcJob" data-key="${k}">
-    <div class="dcj-h"><b>${esc(jobLabel(k))}</b>${need > 1 && !ST_UNIT[k] ? `<span class="dcj-tag two" title="This job has ${need} spots on the field at once: the first ${need} listed both start">top ${need} start</span>` : ''}${prob ? '<span class="dcj-tag bad">needs a man</span>' : ''}</div>
-    <div class="dcj-list ${preTimeOn() && !ST_UNIT[k] ? 'has-dur' : ''}">${list.map((p, i) => (i === need && !ST_UNIT[k] ? '<div class="dcj-div"><span>next in line · 2nd unit</span></div>' : i === 2 * need && !ST_UNIT[k] ? '<div class="dcj-div"><span>3rd unit</span></div>' : '') + dcChip(p, k, i, need)).join('')}${list.length < n ? `<div class="dcj-drop ${list.length ? 'more' : ''}" data-dcjob="${k}" data-dci="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div>` : ''}</div>
+    <div class="dcj-h"><b>${esc(jobLabel(k))}</b>${need > 1 && !ST_UNIT[k] ? `<span class="dcj-tag two" title="This job has ${need} spots on the field at once: the first ${need} listed both start">top ${need} ${prac ? 'a string' : 'start'}</span>` : ''}${prac && c.own && c.own[k] ? `<span class="dcj-tag pr-own" title="You have set this job's practice order; it no longer follows the game order">yours</span>` : ''}${prob ? '<span class="dcj-tag bad">needs a man</span>' : ''}</div>
+    <div class="dcj-list ${preTimeOn() && !prac && !ST_UNIT[k] ? 'has-dur' : ''}">${list.map((p, i) => (i === need && !ST_UNIT[k] ? `<div class="dcj-div"><span>${prac ? 'the twos' : 'next in line · 2nd unit'}</span></div>` : i === 2 * need && !ST_UNIT[k] ? `<div class="dcj-div"><span>${prac ? 'the threes' : '3rd unit'}</span></div>` : '') + dcChip(p, k, i, need)).join('')}${list.length < n ? `<div class="dcj-drop ${list.length ? 'more' : ''}" data-dcjob="${k}" data-dci="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div>` : ''}</div>
     <details class="dcj-more" ${foldAttr('dcj' + k)}><summary>about this job</summary><div class="small muted">${esc(JOB_HELP[k] || '')}${where && where.length ? `<br><b>Plays in:</b> ${esc([...new Set(where)].join(', '))}` : ''}</div>${rot}</details></div>`;
 }
 // the green dot: the defender who gets the call and makes the checks
@@ -988,26 +988,44 @@ function emergencyQBHTML(t) {
   const pool = rosterOf(t.id).filter(p => p.pos !== 'QB' && !['OL', 'DL', 'K', 'P'].includes(p.pos) && p.a).sort((a, b) => emergencyScore(b) - emergencyScore(a)).slice(0, 12), cur = emergencyPasser(t.id);
   return `<div class="dc2-lk" title="If every quarterback is hurt during a game, he takes the snaps."><span>Emergency QB</span><select data-change="eqbSet">${pool.map(p => `<option value="${p.id}" ${cur && cur.id === p.id ? 'selected' : ''}>${esc(pshort(p))} · ${esc(p.lbl)}</option>`).join('')}</select>${t.eqb === undefined ? '<i class="small muted" style="margin-left:6px">staff pick</i>' : ''}</div>`;
 }
+function scPrac() { return view === 'depth' && ui.scMode === 'prac'; }
+// the practice order, shaped like a depth chart so the same page can show it
+function pracChart(u) { const R = ensureReps(); return { lists: R.jobs, auto: { off: false, def: false, st: false }, ov: {}, rot: {}, prac: true, own: R.own }; }
+// who lines up in team periods for one string: each job's men for that string, packages on the downs they are for
+function pracLineup(t, tab, vid, pass, str) {
+  const R = ensureReps(), lay = dcLayout(t, tab, vid, pass), m = {}, used = new Set(), oneTE = tab === 'off' && PERSONNEL[vid].includes('Y') && !PERSONNEL[vid].includes('H'), has = k => (R.jobs[k] || []).length > 0;
+  for (const b of lay) {
+    let k = b.key;
+    if (tab === 'off') k = b.name === 'RB' ? (pass === 'pass' && has('RB3D') ? 'RB3D' : pass === 'short' && has('RBSY') ? 'RBSY' : 'RB') : b.name === 'Y' && pass === 'pass' && oneTE && has('Y3D') ? 'Y3D' : b.name;
+    else k = pass && b.passKey && has(b.passKey) ? b.passKey : (b.baseKey || b.key);
+    b.key = k; b.label = tab === 'off' ? chartName(k) : (JOB_SHORT[k] || k);
+    const J = REP_JOB[k], L = (R.jobs[k] || []).filter(id => { const p = P(id); return p && p.tid === t.id && !p.injury; });
+    // as team periods pick it: a package job takes its men for this string; any other job the first man on its list who practices with this string
+    const pool = J && J[5] ? L.slice(str * J[3], str * J[3] + J[3]) : L.filter(id => repsString(id) === str);
+    let id = pool.find(x => !used.has(x)); if (id === undefined) id = L.filter(x => !used.has(x)).sort((a, b2) => Math.abs(repsString(a) - str) - Math.abs(repsString(b2) - str))[0]; // short at this string: the nearest man, as camp borrows
+    m[b.name] = id !== undefined ? P(id) : null; if (id !== undefined) used.add(id);
+  }
+  Object.defineProperty(m, '_why', { value: {} }); return { lay, m };
+}
 function depthChartHTML() {
-  const u = state.userTid, t = T(u), c = ensureChart(u);
+  const u = state.userTid, t = T(u), cg = ensureChart(u);
   refreshChart(u);
-  const mode = ui.scMode === 'prac' ? 'prac' : 'game', tab0 = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def';
+  const mode = ui.scMode === 'prac' ? 'prac' : 'game', tab0 = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def', prac = mode === 'prac', c = prac ? pracChart(u) : cg;
   const modeBar = `<div class="sc-mode"><span class="seg sc-seg"><button class="${mode === 'game' ? 'on' : ''}" data-action="scMode" data-v="game">Game snaps</button><button class="${mode === 'prac' ? 'on' : ''}" data-action="scMode" data-v="prac">Practice reps</button></span>
     <span class="small muted">${mode === 'game' ? 'Who plays, in what order' + (preTimeOn() ? ', and for how long in the exhibition' : '') : 'Who takes the first, second and third string reps in practice' + (state.phase === 'PRESEASON' || state.phase === 'CUTDOWN' ? ' (the camp strings)' : ' (the first-team reps each week)')}</span><span class="spacer"></span>
     ${tab0 === 'st' ? '' : mode === 'game' ? `<button class="sm" data-action="scCopy" data-v="p2g" title="Make the ${tab0 === 'off' ? 'offense' : 'defense'}'s game order the same as its practice order">Copy from practice reps</button>` : `<button class="sm" data-action="scCopy" data-v="g2p" title="Make the ${tab0 === 'off' ? 'offense' : 'defense'}'s practice order the same as its game order">Copy from game snaps</button>`}</div>`;
-  if (mode === 'prac') { ensureReps(); const tabsP = `<div class="dc2-tabs">${[['def', 'Defense'], ['off', 'Offense'], ['st', 'Kicking']].map(([k, l]) => `<button class="${k === tab0 ? 'on' : ''}" data-action="dchTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
-    return `${modeBar}${preRepsHTML(tab0, tabsP)}`; }
   const ro = rosterOf(u).filter(p => p.a);
   const tab = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def';
-  const probs = chartProblems(u), auto = c.auto[tab], side = { def: 'defense', off: 'offense', st: 'special teams' }[tab];
+  const probs = prac ? [] : chartProblems(u), auto = c.auto[tab], side = { def: 'defense', off: 'offense', st: 'special teams' }[tab], nOwnP = prac ? REP_JOBS.filter(j => j[4] === tab && c.own[j[0]]).length : 0;
   const tabs = `<div class="dc2-tabs">${[['def', 'Defense'], ['off', 'Offense'], ['st', 'Special teams']].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="dchTab" data-tab="${k}">${l}${probs.some(p => p.tab === k) ? ' <i class="dcd bad"></i>' : ''}</button>`).join('')}</div>`;
-  const ctl = `<div class="dc2-ctl"><span class="small muted">${auto ? `The staff is setting the ${side}.` : `You are setting the ${side}.`}</span><button class="sm ${auto ? 'primary' : ''}" data-action="dchAuto" data-unit="${tab}" data-on="${auto ? 0 : 1}">${auto ? 'Take control' : 'Hand to the staff'}</button></div>`;
-  let html = `${modeBar}<div class="dc2"><div class="dc2-top">${tabs}${ctl}</div>${state.settings.autoUser ? '<div class="callout"><b>Auto-manage is on</b>: the staff sets the depth chart until you turn it off in Settings.</div>' : ''}${preTimeOn() && tab !== 'st' ? prePlanHTML() : ''}`;
+  const ctl = prac ? `<div class="dc2-ctl"><span class="small muted">${nOwnP ? `You have set ${nOwnP} practice job${nOwnP === 1 ? '' : 's'} here; the rest follow your game order.` : 'Every practice job here follows your game order.'}</span>${nOwnP ? `<button class="sm" data-action="pracReset" data-unit="${tab}" title="Every practice job on this side back to your game order">Back to the game order</button>` : ''}</div>`
+    : `<div class="dc2-ctl"><span class="small muted">${auto ? `The staff is setting the ${side}.` : `You are setting the ${side}.`}</span><button class="sm ${auto ? 'primary' : ''}" data-action="dchAuto" data-unit="${tab}" data-on="${auto ? 0 : 1}">${auto ? 'Take control' : 'Hand to the staff'}</button></div>`;
+  let html = `${modeBar}<div class="dc2 ${prac ? 'prac' : ''}"><div class="dc2-top">${tabs}${ctl}</div>${state.settings.autoUser ? '<div class="callout"><b>Auto-manage is on</b>: the staff sets the depth chart until you turn it off in Settings.</div>' : ''}${preTimeOn() && tab !== 'st' && !prac ? prePlanHTML() : ''}`;
   const mine = probs.filter(p => p.tab === tab);
   if (mine.length) html += `<div class="callout small"><b class="bad">This chart is not complete.</b> ${mine.map(p => esc(p.text)).join(' · ')}. If you play a game like this, the staff fills the gap for that game only.</div>`;
   // ---- the jobs on this tab ----
   const J = tab === 'def' ? defJobs(t) : null;
-  const groups = DC_GROUPS[tab].map(([title, keys]) => [title, keys.filter(k => tab !== 'def' || J.n[k] || ['RUSHE', 'RUSHI', 'WLBP', 'NCBP'].includes(k))]).filter(g => g[1].length);
+  const groups = DC_GROUPS[tab].map(([title, keys]) => [title, keys.filter(k => (tab !== 'def' || J.n[k] || ['RUSHE', 'RUSHI', 'WLBP', 'NCBP'].includes(k)) && (!prac || REP_JOB[k]))]).filter(g => g[1].length);
   const jobs = groups.flatMap(g => g[1]);
   ui.dcGrp = ui.dcGrp || {};
   // the group on show: the one you picked, unless the job you just clicked on the field lives in another
@@ -1015,7 +1033,7 @@ function depthChartHTML() {
   if (jobs.includes(ui.dcJob) && !grp[1].includes(ui.dcJob)) grp = groups.find(g => g[1].includes(ui.dcJob));
   ui.dcGrp[tab] = grp[0];
   const job = grp[1].includes(ui.dcJob) ? ui.dcJob : grp[1][0]; ui.dcJob = job;
-  const need = k => tab === 'def' ? (J.n[k] || (k === 'RUSHE' || k === 'RUSHI' ? 2 : 1)) : ST_UNIT[k] ? 10 : 1;
+  const need = k => prac && REP_JOB[k] ? REP_JOB[k][3] : tab === 'def' ? (J.n[k] || (k === 'RUSHE' || k === 'RUSHI' ? 2 : 1)) : ST_UNIT[k] ? 10 : 1;
   // who starts where, for the bench
   const startsAt = {}; for (const k of jobs) (c.lists[k] || []).slice(0, need(k)).forEach(id => { if (!startsAt[id]) startsAt[id] = k; });
   // ---- the field ----
@@ -1025,17 +1043,19 @@ function depthChartHTML() {
     const vid = views.some(v => v.id === ui.dchView[tab]) ? ui.dchView[tab] : views[0].id, view = views.find(v => v.id === vid);
     const sub = tab === 'def' && (view.pkg === 'NICKEL' || view.pkg === 'DIME'), pass = tab === 'off' ? (ui.dcSit === 'pass' || ui.dcSit === 'short' ? ui.dcSit : false) : sub && ui.dcPass === '1';
     const outP = ui.dcOut && ro.some(p => p.id === ui.dcOut) ? P(ui.dcOut) : null;
-    const lay = dcLayout(t, tab, vid, pass), normal = dcLineup(u, tab, vid, pass), lineup = outP ? dcLineup(u, tab, vid, pass, outP.id) : normal, ok = ovKeyFor(t, tab, vid, pass);
+    const pstr = [0, 1, 2].includes(ui.pracStr) ? ui.pracStr : 0, pl0 = prac ? pracLineup(t, tab, vid, pass, pstr) : null;
+    const lay = prac ? pl0.lay : dcLayout(t, tab, vid, pass), normal = prac ? pl0.m : dcLineup(u, tab, vid, pass), lineup = outP && !prac ? dcLineup(u, tab, vid, pass, outP.id) : normal, ok = ovKeyFor(t, tab, vid, pass);
     // why a spot is not being played by the first man on its list
-    const whyText = (b, p) => { const w = lineup._why[b.name]; if (!w || w === 'ov' || auto) return null;
+    const whyText = (b, p) => { const w = lineup._why[b.name]; if (prac || !w || w === 'ov' || auto) return null;
       if (w === 'staff') return ['staff', "Nobody left on this job's list: the staff put him here"];
       if (w === 'rot' || w === 'tired') return ['rest', 'In while the man ahead of him takes a breather'];
       const list = c.lists[b.key] || [], above = list.slice(0, Math.max(0, list.indexOf(p.id))).map(id => P(id)).filter(Boolean), at = q => lay.find(x => lineup[x.name] === q);
       const why = above.map(q => (outP && q.id === outP.id) || q.injury ? `${q.last} is out` : at(q) ? `${q.last} is at ${at(q).label.toLowerCase()} in this look` : `${q.last} is not dressed`);
       return ['next up', why.length ? why.join(' · ') : 'Next man up']; };
     const pills = tab === 'def'
-      ? [...new Set(views.map(v => v.group))].map(gr => `<div class="dc2-lk"><span>${esc(gr)}</span>${views.filter(v => v.group === gr).map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.label)}${v.share && v.group !== 'Other' ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div>`).join('') + greenDotHTML(t)
-      : `<div class="dc2-lk"><span>Personnel</span>${views.map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.id === 'JUMBO' ? 'Jumbo' : v.id)}${v.share ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div><div class="dc2-lk"><span>Formation</span>${formShares(t, vid).map(([k, s2]) => `<button class="${k === (FORMS[vid][ui.dcFm] ? ui.dcFm : FORM_HOME[vid]) ? 'on' : ''}" data-action="dcFm" data-k="${esc(k)}">${esc(k)} <i>${Math.round(s2 * 100)}%</i></button>`).join('')}</div>${emergencyQBHTML(t)}`;
+      ? [...new Set(views.map(v => v.group))].map(gr => `<div class="dc2-lk"><span>${esc(gr)}</span>${views.filter(v => v.group === gr).map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.label)}${v.share && v.group !== 'Other' ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div>`).join('') + (prac ? '' : greenDotHTML(t))
+      : `<div class="dc2-lk"><span>Personnel</span>${views.map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.id === 'JUMBO' ? 'Jumbo' : v.id)}${v.share ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div><div class="dc2-lk"><span>Formation</span>${formShares(t, vid).map(([k, s2]) => `<button class="${k === (FORMS[vid][ui.dcFm] ? ui.dcFm : FORM_HOME[vid]) ? 'on' : ''}" data-action="dcFm" data-k="${esc(k)}">${esc(k)} <i>${Math.round(s2 * 100)}%</i></button>`).join('')}</div>${prac ? '' : emergencyQBHTML(t)}`;
+    const strSel = prac ? `<div class="dc2-scen pr-str" title="Which string's team period to show">${['Ones', 'Twos', 'Threes'].map((l, i) => `<button class="${pstr === i ? 'on' : ''}" data-action="pracStr" data-v="${i}">${l}</button>`).join('')}</div>` : '';
     const scen = tab === 'off' ? `<div class="dc2-scen" title="Who is on the field changes with the down: your passing-down back and tight end, your short-yardage back">${[['', 'Early downs'], ['pass', 'Passing downs'], ['short', 'Short yardage']].map(([k, l]) => `<button class="${(pass || '') === k ? 'on' : ''}" data-action="dcSit" data-v="${k}">${l}</button>`).join('')}</div>`
       : sub ? `<div class="dc2-scen"><button class="${pass ? '' : 'on'}" data-action="dcPass" data-v="0">Run downs</button><button class="${pass ? 'on' : ''}" data-action="dcPass" data-v="1">Passing downs</button></div>` : '';
     // where each man really stands: across the formation by his alignment, up the field by his depth. Nobody is snapped to a grid;
@@ -1048,17 +1068,17 @@ function depthChartHTML() {
       for (let pass = 0; pass < 8; pass++) for (const a of pos) for (const q of pos) { if (a === q || Math.abs(a.top - q.top) >= 11) continue; const gap = Math.abs(a.left - q.left); if (gap < W) { const push = (W - gap) / 2, dir = a.left <= q.left ? -1 : 1; a.left += dir * push; q.left -= dir * push; } }
       for (const a of pos) a.left = clamp(a.left, 5.2, 94.8); }
     const yard = tab === 'def' ? [5, 10].map(y => `<div class="dcf-yl" style="top:${86 - y * 5.5 + 6}%"><span>${y}</span></div>`).join('') : '';
-    const spots = pos.map(({ b, left, top }) => { const p = lineup[b.name] && lineup[b.name].a ? lineup[b.name] : null, ov = !auto && c.ov[ok + ':' + b.name] !== undefined, tr = p ? jobTier(p, b.key) : null;
+    const spots = pos.map(({ b, left, top }) => { const p = lineup[b.name] && lineup[b.name].a ? lineup[b.name] : null, ov = !prac && !auto && c.ov[ok + ':' + b.name] !== undefined, tr = p ? jobTier(p, b.key) : null;
       const cls = !p ? 'empty' : THIN_TIERS.has(tr) ? 'thin' : OK_TIERS.has(tr) ? 'soft' : '';
       const wy = p ? whyText(b, p) : null, chg = outP && normal[b.name] !== lineup[b.name];
-      return `<div class="dcs ${cls} ${b.key === job ? 'on' : ''} ${ov ? 'ov' : ''} ${chg ? 'chg' : ''}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%" data-action="dcJob" data-key="${b.key}" data-dcov="${b.name}" ${p ? `draggable="true" data-dcp="${p.id}"` : ''} title="${p ? esc(pname(p)) + ' · ' + esc(p.lbl) + ' · ' + tr + ' at this job' : 'Nobody'}${ov ? ' · set for this look only' : ''}">
+      return `<div class="dcs ${cls} ${b.key === job ? 'on' : ''} ${ov ? 'ov' : ''} ${chg ? 'chg' : ''}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%" data-action="dcJob" data-key="${b.key}" ${prac ? '' : `data-dcov="${b.name}"`} ${p ? `draggable="true" data-dcp="${p.id}"` : ''} title="${p ? esc(pname(p)) + ' · ' + esc(p.lbl) + ' · ' + tr + ' at this job' : 'Nobody'}${ov ? ' · set for this look only' : ''}">
         <div class="dcs-r">${esc(b.label)}${b.tech ? `<i>${b.tech}</i>` : ''}</div><div class="dcs-n">${p ? esc(p.last) : '—'}${p ? dcDot(p, b.key) : ''}</div>${ov ? `<button class="dcs-pin" data-action="dcOvClear" data-name="${b.name}" title="Remove the override: go back to the job order">this look ×</button>` : wy ? `<span class="dcs-why ${wy[0] === 'staff' ? 'bad' : ''}" title="${esc(wy[1])}">${wy[0]}</span>` : ''}</div>`; }).join('');
     const nOv = Object.keys(c.ov).filter(k => k.startsWith(ok + ':')).length;
-    field = `<div class="card dc2-field"><div class="dc2-looks">${pills}</div>${chemStripHTML(t.id, tab)}
-      <div class="row" style="margin:6px 0 8px"><h3 style="margin:0">${tab === 'def' ? esc(view.group === 'Other' ? view.label : view.label + (view.pkg === 'BASE' ? ' · ' + view.group : ' · nickel')) : esc(PERS_LABEL[vid] || vid) + ' · ' + esc(fmD) + ' · ' + (snapD === 'UC' ? 'under center' : 'shotgun')}</h3><span class="spacer"></span>${scen}</div>
+    field = `<div class="card dc2-field"><div class="dc2-looks">${pills}</div>${prac ? '' : chemStripHTML(t.id, tab)}
+      <div class="row" style="margin:6px 0 8px"><h3 style="margin:0">${tab === 'def' ? esc(view.group === 'Other' ? view.label : view.label + (view.pkg === 'BASE' ? ' · ' + view.group : ' · nickel')) : esc(PERS_LABEL[vid] || vid) + ' · ' + esc(fmD) + ' · ' + (snapD === 'UC' ? 'under center' : 'shotgun')}</h3><span class="spacer"></span>${strSel}${scen}</div>
       ${outP ? `<div class="dc2-out">Showing this ${tab === 'def' ? 'look' : 'grouping'} <b>without ${esc(pname(outP))}</b>. Outlined spots change hands. <button class="sm" data-action="dcOut" data-pid="0">Back to the real lineup</button></div>` : ''}
       <div class="dcf ${tab}"><div class="dcf-los"></div>${yard}${spots}</div>
-      <div class="small muted" style="margin-top:6px">${auto ? "The staff's lineup. Drag anything and the unit is yours." : `<b>Drag a player onto a spot</b> to use him there in this ${tab === 'def' ? 'look' : 'grouping'} only${nOv ? ` (${nOv} set here)` : ''}.`} Top edge: green is starter level, amber below it, red well below. <i class="dcd warn"></i> learning the job · <i class="dcd bad"></i> raw.</div></div>`;
+      <div class="small muted" style="margin-top:6px">${prac ? `The ${['ones', 'twos', 'threes'][pstr]} as they line up in team periods: each job's men for that string, with the package men on the downs they are for.` : auto ? "The staff's lineup. Drag anything and the unit is yours." : `<b>Drag a player onto a spot</b> to use him there in this ${tab === 'def' ? 'look' : 'grouping'} only${nOv ? ` (${nOv} set here)` : ''}.`} Top edge: green is starter level, amber below it, red well below. <i class="dcd warn"></i> learning the job · <i class="dcd bad"></i> raw.</div></div>`;
   }
   // ---- the bench: everyone who could do the selected job, best first ----
   const sideOf = tab === 'st' ? null : tab, list = c.lists[job] || [];
@@ -1087,7 +1107,7 @@ function dcBigCard(p, job, jobs, c) {
   const listed = jobs.map(k => [k, (c.lists[k] || []).indexOf(p.id)]).filter(x => x[1] >= 0);
   const ord = i => ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'][i] || (i + 1) + 'th';
   const pb = PRAC_SIDE[p.pos] ? pbOf(p) : null;
-  return `<div class="card dc2-card paper"><div class="ds-lb">${esc(JOB_NAME[p.spot] || p.lbl)}</div><div class="row"><b class="pp-name">${playerLink(p)}</b>${statusPills(p)}${tierPill(p)}${upsidePill(p)}${starHTML(starsOf(p))}<span class="spacer"></span><button class="sm ${ui.dcOut === p.id ? 'primary' : ''}" data-action="dcOut" data-pid="${ui.dcOut === p.id ? 0 : p.id}" title="Show the field as it would line up without him">${ui.dcOut === p.id ? 'Showing without him' : 'If he goes down'}</button><button class="sm" data-action="player" data-pid="${p.id}">His file</button></div>
+  return `<div class="card dc2-card paper"><div class="ds-lb">${esc(JOB_NAME[p.spot] || p.lbl)}</div><div class="row"><b class="pp-name">${playerLink(p)}</b>${statusPills(p)}${tierPill(p)}${upsidePill(p)}${starHTML(starsOf(p))}<span class="spacer"></span>${scPrac() ? '' : `<button class="sm ${ui.dcOut === p.id ? 'primary' : ''}" data-action="dcOut" data-pid="${ui.dcOut === p.id ? 0 : p.id}" title="Show the field as it would line up without him">${ui.dcOut === p.id ? 'Showing without him' : 'If he goes down'}</button>`}<button class="sm" data-action="player" data-pid="${p.id}">His file</button></div>
     <div class="pp-bio">Age ${p.age} · ${fmtHeight(p.m.ht)}, ${p.m.wt} lb · ${p.exp} yr${p.exp === 1 ? '' : 's'} · ${fmtContract(p)}${p.injury ? ` · <span class="bad">out ${p.injury.weeks} wk</span>` : ''}</div>
     <div class="dc2-fit"><div class="dc2-bk">At ${esc(jobLabel(job).toLowerCase())}</div><div class="row small" style="margin-top:4px">${tr ? `<span class="pill ${TIER_CLS[tr]}">${tr} here</span>` : ''}${jobSide(job) === 'st' ? '' : `<span class="pill ${CF_CLS[cf]}">${cf}</span>`}${m <= -1.5 ? '<span class="pill warn">light for the spot</span>' : m >= 1.5 ? '<span class="pill warn">heavy for the spot</span>' : ''}${listed.some(x => x[0] === job) ? `<span class="pill">${ord(listed.find(x => x[0] === job)[1])} on the card</span>` : `<button class="sm primary" data-action="dcAdd" data-key="${job}" data-pid="${p.id}">Add to this job</button>`}</div></div>
     <div class="ds-read pp-read" style="margin:10px 0">${esc(scoutProfile(p))}.</div>
@@ -3966,8 +3986,10 @@ const actions = {
     T(u).stu = null; save(); render(); },
   dcFm: d => { ui.dcFm = d.k; render(); },
   dcOut: d => { const keep = ui.dchPid; ui.dcOut = +d.pid || null; ui.dchPid = keep || +d.pid || null; render(); },
-  dcRemove: d => { setChart(state.userTid, d.key, +d.i, 0); save(); render(); },
-  dcAdd: d => { const blocked = !ui.dchAll && chartBlocked(state.userTid, d.key, +d.pid); if (blocked) { toast(blocked); return; } const cc = ensureChart(state.userTid); setChart(state.userTid, d.key, (cc.lists[d.key] || []).length, +d.pid); save(); render(); },
+  dcRemove: d => { if (scPrac()) pracRemoveAt(d.key, +d.i); else setChart(state.userTid, d.key, +d.i, 0); save(); render(); },
+  pracStr: d => { ui.pracStr = +d.v; render(); },
+  pracReset: d => { repsResetUnit(d.unit); save(); render(); },
+  dcAdd: d => { const blocked = !ui.dchAll && chartBlocked(state.userTid, d.key, +d.pid); if (blocked) { toast(blocked); return; } if (scPrac()) { const R2 = ensureReps(); pracSet(d.key, (R2.jobs[d.key] || []).length, +d.pid); save(); render(); return; } const cc = ensureChart(state.userTid); setChart(state.userTid, d.key, (cc.lists[d.key] || []).length, +d.pid); save(); render(); },
   dcOvClear: d => { const tab = ['def', 'off'].includes(ui.dchTab) ? ui.dchTab : 'def', t = T(state.userTid), views = dcViews(t, tab), vid = views.some(v => v.id === (ui.dchView || {})[tab]) ? ui.dchView[tab] : views[0].id; setOverride(state.userTid, tab, vid, ui.dcPass === '1', d.name, 0); save(); render(); },
   dchPick: d => { ui.dchKey = d.key; render(); },
   dchView: d => { (ui.dchView = ui.dchView || {})[ui.dchTab || 'off'] = d.v; render(); },
@@ -4139,6 +4161,7 @@ document.addEventListener('drop', e => {
   const key = t.dataset.dcjob || t.dataset.key, cc = ensureChart(u);
   if (!key) { render(); return; }
   const blocked = !ui.dchAll && chartBlocked(u, key, d.pid); if (blocked) { toast(blocked); render(); return; }
+  if (scPrac()) { if (!REP_JOB[key]) { render(); return; } const R2 = ensureReps(); pracSet(key, t.dataset.dci !== undefined ? +t.dataset.dci : (R2.jobs[key] || []).length, d.pid); save(); render(); return; } // the practice order
   setChart(u, key, t.dataset.dci !== undefined ? +t.dataset.dci : (cc.lists[key] || []).length, d.pid);
   ui.dcJob = key; save(); render();
 });
