@@ -97,7 +97,7 @@ After the trench work: re-measure attribute values and refit rating weights.
 
 - Two tails are still a little outside the real range after the distribution work: the top deep threat averages 20.5 yards a catch (real 16.5 to 19) and 11.5 defenders a season get 5+ interceptions (real 5 to 10). The most-intercepted quarterback throws 21.7 (real 14 to 18).
 - Rushing leader a bit low (about 1,475, real 1,550 to 1,950) and 300-carry backs rare (0.75 a season, real 1 to 4), even with back usage following the playbook.
-- Kicking looks generous: about half the league's kickers hit from 60+ in a season, and 46% of punts end inside the 20 (real: about 38%). Only 28% of punts are returned (real: about 40%).
+- Kicking looks generous: about half the league's kickers hit from 60+ in a season.
 
 - Quarterback completion percentage: spread between best and worst.
 - Catch percentage for high-volume receivers.
@@ -152,16 +152,6 @@ What the audit found: clubs leave 10 to 17% of the cap unspent in week 1 (the re
 - Fold the cutdown into the Preseason page, and retire or rebuild the roster planner once this covers what it does.
 - The chart for special teams units (who covers kicks) as well as kicker and punter.
 
-
-## Punt outcome mix (engine)
-
-Audit over 1,632 games: kickoffs, punt distance, return averages, blocks and return touchdowns are all at real NFL levels. The one miss is what happens to a punt:
-
-- Fair catches are about 50% of punts (real: about 27%); returns are about 28% (real: about 40%); there are no out-of-bounds punts at all (real: about 10%); inside the 20 is about 45% (real: 38-40%).
-- Fix is in `punt()` in `js/engine/game.js` (the `fair` chance and the missing out-of-bounds outcome). Net punting (42.8) and the return average (9.1) must stay where they are.
-- Look up exact league punt figures before tuning: the targets above are from memory.
-- Optional: pull the unit-matchup strength (`ST_K.ko`, `ST_K.pu`) down 15-20%. Return and coverage units swing a club by about +/-18 points a season, the wide end of realistic.
-- Do this before building special teams grades, the camp special teams period and units on the reps chart, so they are graded against settled numbers.
 
 ## Busts, made specific (talked through, not built)
 

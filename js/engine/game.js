@@ -103,7 +103,9 @@ function isHurry(g) {
 function spotTxt(g) { return g.ydl === 50 ? 'MID 50' : g.ydl < 50 ? T(g.tids[g.poss]).abbr + ' ' + g.ydl : T(g.tids[1 - g.poss]).abbr + ' ' + (100 - g.ydl); }
 function pbpLog(g, text, extra) {
   if (!g.pbp) return;
-  g.pbp.push({ q: g.q, c: Math.max(0, Math.round(g.clock)), t: g.tids[g.poss], dd: extra === false ? '' : `${ordinal(g.down)} & ${g.ydl + g.togo >= 100 ? 'Goal' : g.togo} at ${spotTxt(g)}`, x: text });
+  const e = { q: g.q, c: Math.max(0, Math.round(g.clock)), t: g.tids[g.poss], dd: extra === false ? '' : `${ordinal(g.down)} & ${g.ydl + g.togo >= 100 ? 'Goal' : g.togo} at ${spotTxt(g)}`, x: text, s: [g.score[0], g.score[1]], p: g.poss, y: g.ydl };
+  if (g.snapPre) { e.f = g.snapPre; g.snapPre = null; } // the snap this line describes, as both sides lined up for it
+  g.pbp.push(e);
 }
 
 // ---------- clock ----------
@@ -215,7 +217,7 @@ function shareTackle(res, def) {
 }
 
 function runPlay(g, oc, dc) {
-  const o = g.poss, d = 1 - o;
+  const o = g.poss, d = 1 - o; g.snapPre = null;
   g.pbNeed = [0, 0]; g.pbNeed[o] = offNeed(oc); g.pbNeed[d] = defNeed(dc);
   const off = offUnit(g, o, oc.pers, oc), def = defUnit(g, d, dc.front, dc.pkg, dc.subRush, dc.bign, dc.lookT);
   g.pbNeed = null; // only real snaps are gated
@@ -230,6 +232,9 @@ function runPlay(g, oc, dc) {
   if (dc.travel) { const cbs = def.filter(e => e.slot === 'CB' && e.depth > 0), wrs = off.filter(e => e.slot === 'X' || e.slot === 'Z');
     if (cbs.length === 2 && wrs.length === 2) { const r = e => slotRating(e.p, e.spot), topW = r(wrs[0]) >= r(wrs[1]) ? wrs[0] : wrs[1], topC = r(cbs[0]) >= r(cbs[1]) ? cbs[0] : cbs[1], other = cbs[0] === topC ? cbs[1] : cbs[0];
       if (r(topC) - r(other) >= 3 && Math.sign(topC.x) !== Math.sign(topW.x || 1)) { const x = topC.x; topC.x = other.x; other.x = x; } } }
+  if (g.pbp) { const r2 = v => Math.round((v || 0) * 100) / 100; // the lineup at the snap, for anyone watching
+    g.snapPre = { o, ydl: g.ydl, dn: g.down, tg: g.togo, q: g.q, c: Math.max(0, Math.round(g.clock)), sc: [g.score[0], g.score[1]], pers: oc.pers, form: oc.form, fm: oc.fm || null, tags: [...(oc.tags || [])].filter(k => k === 'MOTION' || k === 'PA').join(','),
+      front: dc.front, pkg: dc.pkg, bign: !!dc.bign, off: off.map(e => [e.p.id, e.name, r2(e.x), r2(e.depth)]), def: def.map(e => [e.p.id, e.name, r2(e.x), r2(e.depth)]) }; }
   sendMotion(off, def, oc, dc, g);
   preSnap(g, oc, dc, off, def); // each side's one move at the line
   // predictability: did the defense's film read match the call?
@@ -296,7 +301,7 @@ function assessPenalty(g, onOffense, yards, name, who, opts = {}) {
   g.ts[side].pen = (g.ts[side].pen || 0) + 1; g.ts[side].penY = (g.ts[side].penY || 0) + y;
   if (who && who.p) inc(g, who.p, 'pen');
   g.running = false;
-  if (g.pbp) g.pbp.push({ q: g.q, c: Math.max(0, Math.round(g.clock)), t: g.tids[o], dd, x: `PENALTY on ${T(g.tids[side]).abbr}${who && who.p ? ' ' + pshort(who.p) : ''}: ${name}, ${y} yard${y === 1 ? '' : 's'}${opts.autoFirst && !onOffense ? ', automatic first down' : ''}${opts.noPlay === false ? '' : ' — no play'}` });
+  if (g.pbp) { const pe = { q: g.q, c: Math.max(0, Math.round(g.clock)), t: g.tids[o], dd, x: `PENALTY on ${T(g.tids[side]).abbr}${who && who.p ? ' ' + pshort(who.p) : ''}: ${name}, ${y} yard${y === 1 ? '' : 's'}${opts.autoFirst && !onOffense ? ', automatic first down' : ''}${opts.noPlay === false ? '' : ' — no play'}` }; pe.s = [g.score[0], g.score[1]]; pe.p = g.poss; pe.y = g.ydl; if (g.snapPre) { pe.f = g.snapPre; g.snapPre = null; } g.pbp.push(pe); }
   return y;
 }
 // before the snap: false starts, delay, illegal formation; offside, encroachment, twelve men
@@ -440,7 +445,7 @@ function applyResult(g, res, oc, dc, off, def, b) {
   resolveYards(g, yds, res, oc);
   timeoutCheck(g);
 }
-function logPlay(g, txt, desc) { if (g.pbp) { const last = { q: g.q, c: Math.max(0, Math.round(g.clock)), t: g.tids[g.poss], dd: g.pendingDD || '', x: txt ? `${txt.pre} ${desc}. ${txt.post}` : desc }; g.pbp.push(last); } }
+function logPlay(g, txt, desc) { if (g.pbp) { const last = { q: g.q, c: Math.max(0, Math.round(g.clock)), t: g.tids[g.poss], dd: g.pendingDD || '', x: txt ? `${txt.pre} ${desc}. ${txt.post}` : desc, s: [g.score[0], g.score[1]], p: g.poss, y: g.ydl }; if (g.snapPre) { last.f = g.snapPre; g.snapPre = null; } g.pbp.push(last); } }
 function trackFamily(g, oc, b, yds) {
   const ok = b.downB === 1 ? yds >= b.togoB * 0.4 : b.downB === 2 ? yds >= b.togoB * 0.6 : yds >= b.togoB;
   const fs = g.famStats[g.poss];
@@ -604,6 +609,8 @@ function fieldGoal(g) {
     changePoss(g, Math.max(20, 107 - g.ydl), 'Missed FG');
   }
 }
+// what happens to a punt: how far it goes, how often it is kicked out of bounds, how often it is fair caught
+const PUNT = { gross: 47.9, sideOut: 0.07, cornerOut: 0.45, fair: 0.16 };
 function punt(g) {
   const o = g.poss, d = 1 - o, Pn = kickUnitPlayer(g, o, 'P');
   const pdis = ea(g, Pn, 'pdis'), phng = ea(g, Pn, 'phng'), pplc = ea(g, Pn, 'pplc'), pspn = ea(g, Pn, 'pspn');
@@ -611,7 +618,7 @@ function punt(g) {
   // the men on the field: coverage against the return's blockers, gunners against the men holding them up, the rush against the protection
   const mCov = stAvg(PRU, stBlock) - stAvg(PU, stCover) - ST0.pu, mGun = stAvg(PU.slice(0, 2), stGun) - stAvg(PRU.slice(0, 2), stJam) - ST0.gun, mRush = stAvg(PRU.slice(2), stRush) - stAvg(PU.slice(2), stBlock) - ST0.rush;
   stSnap(g, [PU, PRU]);
-  let gross = Math.round(gauss(46.8 + (pdis - 70) * 0.28, 5.5));
+  let gross = Math.round(gauss(PUNT.gross + (pdis - 70) * 0.28, 5.5));
   const hang = 4.25 + (phng - 70) * 0.032 + gauss(0, 0.25);
   inc(g, Pn.p, 'pnt'); g.ts[o].punts++;
   if (g.drive) g.drive.plays++;
@@ -619,16 +626,18 @@ function punt(g) {
   if (rand() < clamp(0.003 * Math.exp(mRush / ST_K.rush), 0.0005, 0.014)) { stShare(g, PRU.slice(2), 12); stShare(g, PU.slice(2), -12); pbpLog(g, `${pshort(Pn.p)} punt BLOCKED`); changePoss(g, clamp(100 - g.ydl + randInt(-5, 5), 1, 99), 'Blocked Punt'); return; }
   let land = g.ydl + gross, recv, text;
   // plus-territory punts: directional/coffin-corner aim inside the 10
+  let aimed = false;
   if (g.ydl >= 52 && rand() < lgt((pplc - 58) * 0.06)) {
-    land = clamp(Math.round(gauss(92, 3)), 85, 99); gross = land - g.ydl;
+    land = clamp(Math.round(gauss(92, 3)), 85, 99); gross = land - g.ydl; aimed = true;
   }
   if (land >= 100) {
     // backspin can save it at the goal line
     if (rand() < clamp((pspn - 55) * 0.012, 0, 0.45)) { land = randInt(95, 99); gross = land - g.ydl; recv = 100 - land; text = 'downed'; }
     else { gross = 100 - g.ydl; recv = 20; text = 'touchback'; inc(g, Pn.p, 'ptb'); }
-  } else if (land >= 88) { recv = 100 - land; text = rand() < clamp(0.5 + mGun * 0.02, 0.2, 0.85) ? 'downed' : 'fair catch'; }
+  } else if (land >= 88) { recv = 100 - land; text = aimed && rand() < PUNT.cornerOut ? 'out of bounds' : rand() < clamp(0.5 + mGun * 0.02, 0.2, 0.85) ? 'downed' : 'fair catch'; } // a coffin-corner kick often goes out
+  else if (rand() < clamp(PUNT.sideOut + (pplc - 60) * 0.002, 0.03, 0.14)) { const lost = randInt(1, 6); land -= lost; gross -= lost; recv = 100 - land; text = 'out of bounds'; } // kicked away from the returner, to the sideline: shorter, but nothing coming back
   else {
-    const fair = clamp(0.42 + (hang - 4.25) * 0.5 + mGun * ST_K.gun + (pspn - 60) * 0.009, 0.15, 0.85); // a ball that turns over is hard to field cleanly
+    const fair = clamp(PUNT.fair + (hang - 4.25) * 0.5 + mGun * ST_K.gun + (pspn - 60) * 0.009, 0.1, 0.85); // a ball that turns over is hard to field cleanly
     if (rand() < 0.0075 * (1 + (pspn - 60) / 60) * (1 + (60 - ea(g, ret, 'hnd')) / 60)) {
       // muffed punt
       pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds — MUFFED by ${pshort(ret.p)}`);

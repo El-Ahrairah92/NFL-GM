@@ -268,8 +268,8 @@ function calSubHTML() {
 }
 function calendarHTML() {
   const cur = CAL.findIndex(c => c[0] === state.phase);
-  return `<div class="cal"><div class="cal-track">${CAL.map(([k, l], i) => i === cur ? `<div class="cal-st cur"><span class="cal-l">${l}</span>${calSubHTML()}</div>` : `<div class="cal-st ${i < cur ? 'done' : ''}" title="${i < cur ? 'Done' : 'Still to come'}"><span class="cal-d">${i < cur ? '✓' : ''}</span><span class="cal-l">${l}</span></div>`).join('<i></i>')}</div>
-    <button class="primary cal-go" data-action="continue">${continueLabel()}</button></div>`;
+  return `<div class="cal"><div class="cal-track">${CAL.map(([k, l], i) => i === cur ? `<div class="cal-st cur"><span class="cal-l">${l}</span>${watchOn() ? '' : calSubHTML()}</div>` : `<div class="cal-st ${i < cur ? 'done' : ''}" title="${i < cur ? 'Done' : 'Still to come'}"><span class="cal-d">${i < cur ? '✓' : ''}</span><span class="cal-l">${l}</span></div>`).join('<i></i>')}</div>
+    ${watchable() ? `<button class="primary cal-go" data-action="watchGo" title="Play the game and watch it, play by play">▶ Watch</button><button class="cal-go cal-quick" data-action="continue" title="Play it and go straight to the result">${continueLabel().replace('▶ Play', 'Quick sim')}</button>` : `<button class="primary cal-go" data-action="continue">${continueLabel()}</button>`}</div>`;
 }
 function topbarHTML() {
   const t = T(state.userTid), recs = standings();
@@ -282,7 +282,7 @@ function topbarHTML() {
     <div class="brand">GRIDIRON <span>GM</span></div>
     <div class="phase"><b>${state.season}</b> · ${PHASE_LABEL[state.phase]}${wk}</div>
     <div class="spacer"></div>
-    <div class="teambadge"><span class="dot" style="background:${t.color}"></span>${esc(t.region + ' ' + t.name)} <span class="muted">${recOf(t.id, recs)}</span></div>
+    <div class="teambadge"><span class="dot" style="background:${t.color}"></span>${esc(t.region + ' ' + t.name)} <span class="muted">${watchOn() ? '' : recOf(t.id, recs)}</span></div>
     <span class="muted small">Cap ${fmtMoney(capRoom(t.id))}</span>${rosterOver() && !['CUTDOWN', 'WAIVERS'].includes(state.phase) ? `<button class="sm danger" data-action="nav" data-view="roster" title="You are over the roster limit: make a move before the next game">Roster ${rosterCount(t.id)}/${rosterLimit()}</button>` : ''}
     ${sim2}
     <button data-action="simYear" title="Auto-manages your team through the rest of this season and the offseason">⏭ Sim to Next Season</button>
@@ -321,7 +321,7 @@ function mobileNavHTML() {
   const sims = state.phase === 'REG' ? [['simPlayoffs', '⏩ Sim to the playoffs']] : state.phase === 'PLAYOFFS' ? [['simPlayoffs', '⏩ Finish the playoffs']] : state.phase === 'DRAFT' ? [['simDraft', '⏩ Sim the draft']] : [];
   const menu = !pop ? '' : `<div class="mpop-bg" data-action="mPop" data-h=""></div><div class="mpop"><div class="mpop-h">${pop[1]}</div>${pop[2].map(([k, l]) => `<button class="${k === v ? 'on' : ''}" data-action="nav" data-view="${k}">${l}${k === hot ? '<i class="nav-dot"></i>' : ''}</button>`).join('')}
     ${pop[0] === 'settings' ? [...sims, ['simYear', '⏭ Sim to next season']].map(([a, l]) => `<button class="mpop-x" data-action="${a}">${l}</button>`).join('') : ''}</div>`;
-  return `${menu}<div class="mdock"><div class="mgo"><div class="mgo-w"><b>${state.season} · ${PHASE_LABEL[state.phase]}${state.phase === 'REG' ? ' · Wk ' + state.week : ''}</b><span>${esc(t.abbr)} ${recOf(t.id, standings())} · cap ${fmtMoney(capRoom(t.id))}</span></div><button class="primary" data-action="continue">${continueLabel()}</button></div>
+  return `${menu}<div class="mdock"><div class="mgo"><div class="mgo-w"><b>${state.season} · ${PHASE_LABEL[state.phase]}${state.phase === 'REG' ? ' · Wk ' + state.week : ''}</b><span>${esc(t.abbr)} ${watchOn() ? '' : recOf(t.id, standings())} · cap ${fmtMoney(capRoom(t.id))}</span></div>${watchable() ? `<button class="primary" data-action="watchGo">▶ Watch</button><button data-action="continue">Sim</button>` : `<button class="primary" data-action="continue">${continueLabel()}</button>`}</div>
     <nav class="mnav">${tree.map(([k, l, subs]) => `<button class="${k === cur ? 'on' : ''} ${pop && pop[0] === k ? 'open' : ''}" data-action="navHead" data-h="${k}"><i>${NAV_ICON[k]}</i><span>${l}${hot && k !== cur && subs.some(y => y[0] === hot) ? ' •' : ''}</span></button>`).join('')}</nav></div>`;
 }
 function pageHTML() {
@@ -347,6 +347,7 @@ function pageHTML() {
     case 'season': return seasonHTML();
     case 'camp': return preHubHTML();
     case 'pre': return preHubHTML();
+    case 'watch': return watchHTML();
     case 'settings': return settingsHTML();
   }
   return '';
@@ -3403,7 +3404,7 @@ function boxModal(gid) {
   const [h, a] = b.tids;
   const nq = b.ot ? 5 : 4;
   const qh = ['1', '2', '3', '4', 'OT'].slice(0, nq);
-  let html = `<div class="muted small">${b.season} · ${b.playoff ? b.playoff : 'Week ' + b.week}</div>
+  let html = `<div class="muted small">${b.season} · ${b.playoff ? b.playoff : 'Week ' + b.week}${b.pbp && b.pbp.some(e => e.f) ? ` · <button class="link" data-action="watchReplay" data-gid="${b.id}">watch it play by play</button>` : ''}</div>
     <table class="linescore" style="max-width:520px;margin:8px 0 4px"><thead><tr><th>Team</th>${qh.map(q => `<th>${q}</th>`).join('')}<th>T</th></tr></thead><tbody>
     ${[[1, a], [0, h]].map(([s, tid]) => `<tr><td>${teamLink(tid, true)} <span class="muted small">${s === 0 && !b.playoff ? '(home)' : ''}</span></td>${b.qs[s].slice(0, nq).map(x => `<td>${x}</td>`).join('')}<td class="final ${b.score[s] > b.score[1 - s] ? 'good' : ''}">${b.score[s]}</td></tr>`).join('')}</tbody></table>`;
   // scoring
@@ -3531,6 +3532,67 @@ function advancedSeasonHTML(p) {
   return `<div class="small muted" style="margin-top:12px">Grade by season: ${rows.map(r => `${r.season} ${gradeChip(r.g)}`).join(' · ')}</div>`;
 }
 
+// ---------- watching a game: every play in two clicks, the line-up first, then what happened ----------
+function watchSteps(b) { const out = []; (b.pbp || []).forEach((e, i) => { if (e.f) out.push([i, 0]); out.push([i, 1]); }); return out; }
+function watchable() {
+  const u = state.userTid; if (state.settings.autoUser) return false;
+  if (state.phase === 'REG') return (state.schedule[state.week - 1] || []).some(m => m.h === u || m.a === u);
+  if (state.phase === 'PLAYOFFS') { try { return playoffMatchups().some(m => m.includes(u)); } catch (e) { return false; } }
+  if (state.phase === 'PRESEASON') return !!(state.pre && preCamped() && state.pre.wk < PRESEASON_GAMES);
+  return false;
+}
+// only the game you are about to watch keeps its line-ups: they are large
+function pruneWatch() { pruneWatchFrames(); }
+function newestWatchGid() { const u = state.userTid; let best = -1; for (const id in state.games) { const b = state.games[id]; if (b && b.tids.includes(u) && b.pbp && b.id > best && b.pbp.some(e => e.f)) best = b.id; } return best; }
+function watchOn() { return !!(view === 'watch' && ui.watch && state.games[ui.watch.gid] && !ui.watch.done); }
+const WF_FORM = { SG: 'Shotgun', UC: 'Under center', PI: 'Pistol', EMP: 'Empty' };
+// lateral spots on the engine's scale (a lineman is one apart; receivers out near four) become yards across the field
+function wfLat(x) { const a = Math.abs(x); return Math.sign(x) * (a <= 2.5 ? a * 3.3 : 8.25 + (a - 2.5) * 6); } // the line is drawn wider than life so every man can be read
+// how far behind the ball an offensive man is drawn: linemen and attached ends on the line, flankers and slots a step off it, backs at their depth
+function wfOffDepth(name, d) { if (['LT', 'LG', 'C', 'RG', 'RT', 'OL6'].includes(name)) return 0.6; if (['X', 'Y', 'H', 'Y2'].includes(name)) return 0.75; if (['Z', 'SLOT', 'SLOT2'].includes(name)) return 1.8; return name === 'QB' ? Math.max(1.6, d) : Math.max(1.6, d); }
+function watchFieldHTML(b, f, e, res, nextE) {
+  const u = state.userTid, tid = b.tids[f.o], opp = b.tids[1 - f.o], oc = T(tid).color, dcol = T(opp).color, BACK = 13, AHEAD = 19, SPAN = BACK + AHEAD, HALF = 27;
+  const X = d => (BACK + d) / SPAN * 100, Y = lat => 50 - wfLat(lat) / HALF * 50;
+  const dot = (r, side) => { const p = P(r[0]); if (!p) return ''; const d = side === 'off' ? -wfOffDepth(r[1], r[3] || 0) : Math.max(0.8, r[3] || 0);
+    const left = clamp(X(d), 1.5, 98.5), top = clamp(Y(r[2] || 0), 3, 97), lab = side === 'off' ? r[1] : (JOB_SHORT[r[1]] || r[1]);
+    return `<div class="wf-dot ${side} ${p.tid === u ? 'mine' : ''}" style="left:${left}%;top:${top}%;--c:${side === 'off' ? oc : dcol}" data-tip="${esc(lab)} · ${esc(pname(p))} (${esc(p.lbl)}, ${p.age})" data-action="player" data-pid="${p.id}"><span>${esc(String(lab).slice(0, 4))}</span></div>`; };
+  const first = f.ydl + f.tg >= 100 ? null : f.tg, yl = [-10, -5, 5, 10, 15].filter(d => f.ydl + d > 0 && f.ydl + d < 100);
+  let h = `<div class="wf-zoom ${res ? 'res' : ''}"><div class="wf-los" style="left:${X(0)}%"></div>${first !== null ? `<div class="wf-first" style="left:${X(first)}%"></div>` : ''}${f.ydl + AHEAD >= 100 ? `<div class="wf-ez" style="left:${X(100 - f.ydl)}%;--c:${dcol}"></div>` : ''}
+    ${yl.map(d => `<div class="wf-yl" style="left:${X(d)}%"><span>${(() => { const a = f.ydl + d; return a > 50 ? 100 - a : a; })()}</span></div>`).join('')}
+    ${f.off.map(r => dot(r, 'off')).join('')}${f.def.map(r => dot(r, 'def')).join('')}
+    <div class="wf-tag off" style="--c:${oc}">${esc(T(tid).abbr)} ${esc(f.pers)} · ${esc(WF_FORM[f.form] || f.form || '')}${f.fm ? ' · ' + esc(f.fm) : ''}</div><div class="wf-tag def" style="--c:${dcol}">${esc(T(opp).abbr)} ${esc({ BASE: 'Base', NICKEL: 'Nickel', DIME: 'Dime', GL: 'Goal line', BIGN: 'Big nickel' }[f.pkg] || f.pkg)}${f.bign ? ' (big)' : ''} · ${esc(f.front)} front</div></div>`;
+  return h;
+}
+function watchStripHTML(b, y, poss, firstTo) {
+  const h = b.tids[0], a = b.tids[1], bx = poss === 0 ? y : 100 - y, fx = firstTo === null || firstTo === undefined ? null : poss === 0 ? y + firstTo : 100 - y - firstTo;
+  const P_ = v => 8.33 + v * 0.8333;
+  return `<div class="wf-strip"><div class="wf-ez1" style="--c:${T(h).color}"><span>${esc(T(h).abbr)}</span></div><div class="wf-ez2" style="--c:${T(a).color}"><span>${esc(T(a).abbr)}</span></div>
+    ${[10, 20, 30, 40, 50, 60, 70, 80, 90].map(v => `<i style="left:${P_(v)}%"><b>${v > 50 ? 100 - v : v}</b></i>`).join('')}${fx !== null && fx > 0 && fx < 100 ? `<div class="wf-sfirst" style="left:${P_(fx)}%"></div>` : ''}<div class="wf-ball" style="left:${P_(clamp(bx, 0, 100))}%" title="The ball"></div></div>`;
+}
+function watchHTML() {
+  const W = ui.watch, b = W && state.games[W.gid]; if (!b) return '<div class="callout">Nothing to watch.</div>';
+  const steps = watchSteps(b), k = clamp(W.k || 0, 0, steps.length - 1), [i, st] = steps[k], e = b.pbp[i], last = k >= steps.length - 1;
+  if (last) W.done = true;
+  const prevS = i > 0 ? b.pbp[i - 1].s || [0, 0] : [0, 0], sc = st === 0 ? (e.f ? e.f.sc : prevS) : (e.s || prevS), hT = b.tids[0], a = b.tids[1];
+  const f = e.f || null, q = st === 0 && f ? f.q : e.q, clock = st === 0 && f ? f.c : e.c, poss = f ? f.o : e.p;
+  const big = /TOUCHDOWN|INTERCEPT|FUMBLE|SAFETY|BLOCKED|RETURNS IT|GOOD|sacked|Injury/i.test(e.x || ''), bad = /INTERCEPT|FUMBLE|Injury|BLOCKED|no good|sacked/i.test(e.x || '');
+  const team = (tid, s2, side) => `<div class="wsb-t ${poss === side ? 'pos' : ''}" style="--c:${T(tid).color}"><b>${esc(T(tid).abbr)}</b><span class="wsb-s">${s2}</span>${poss === side ? '<i title="Has the ball">●</i>' : ''}</div>`;
+  const dd = f ? `${ordinal(f.dn)} & ${f.ydl + f.tg >= 100 ? 'Goal' : f.tg}` : '';
+  let h = `<div class="watch"><div class="wsb">${team(a, sc[1], 1)}<div class="wsb-mid"><b>${q > 4 ? 'OT' : 'Q' + q}</b> <span>${fmtClock(clock)}</span>${dd ? `<em>${dd}</em>` : ''}</div>${team(hT, sc[0], 0)}</div>`;
+  const y = f ? f.ydl : e.y, firstTo = f ? (f.ydl + f.tg >= 100 ? null : f.tg) : null;
+  if (y !== undefined) h += watchStripHTML(b, y, poss, firstTo);
+  if (f) h += watchFieldHTML(b, f, e, st === 1);
+  else h += `<div class="wf-zoom wf-none"><div>${esc(e.dd || '')}</div></div>`;
+  // the card under the field: the look before the snap, what happened after it
+  const look = f ? `<b>${esc(T(b.tids[f.o]).abbr)}</b> ${esc(f.pers)} personnel, ${esc(WF_FORM[f.form] || f.form || '')}${f.fm ? ', ' + esc(f.fm) : ''}${f.tags ? ' <span class="muted">(' + esc(f.tags.toLowerCase().replace('pa', 'play-action look').replace('motion', 'motion')) + ')</span>' : ''} <span class="muted">against</span> <b>${esc(T(b.tids[1 - f.o]).abbr)}</b> ${esc({ BASE: 'base', NICKEL: 'nickel', DIME: 'dime', GL: 'goal line' }[f.pkg] || String(f.pkg).toLowerCase())}, ${esc(f.front)} front` : '';
+  h += `<div class="wcard ${st === 1 ? 'res' : 'pre'} ${st === 1 && big ? (bad ? 'bad' : 'big') : ''}">${st === 0 ? `<div class="ds-lb">At the line · ${esc(e.dd || dd)}</div><div class="wc-x">${look}</div><div class="small muted">Hover a player to see who he is. Next to run the play.</div>`
+    : `<div class="ds-lb">${e.dd ? esc(e.dd) : 'The play'}</div><div class="wc-x">${esc(e.x || '')}</div>`}</div>`;
+  h += `<div class="wctl"><button data-action="watchStep" data-d="-1" ${k === 0 ? 'disabled' : ''}>◀ Previous</button><span class="small muted">Play ${b.pbp.slice(0, i + 1).filter(x => x.f).length} · ${st === 0 ? 'before the snap' : 'the result'}${last ? ' · final' : ''}</span>
+    <button class="primary" data-action="watchStep" data-d="1" ${last ? 'disabled' : ''}>Next ▶</button><span class="spacer"></span><button data-action="watchDrive">Skip to the next drive</button><button data-action="watchEnd">Skip to the final</button>${last ? `<button class="primary" data-action="watchDone">Box score</button>` : ''}</div>`;
+  const recent = []; for (let j = i - (st === 0 ? 1 : 0); j >= 0 && recent.length < 6; j--) recent.push(b.pbp[j]);
+  h += `<div class="wlog">${recent.map(x => `<div class="wl-r"><span class="muted">${x.q > 4 ? 'OT' : 'Q' + x.q} ${fmtClock(x.c)}</span><span class="muted">${esc(x.dd || '')}</span><span>${esc(x.x || '')}</span></div>`).join('')}</div>`;
+  return h + '</div>';
+}
 // ---------- game day: preview & wrap ----------
 function userMatchup() {
   const u = state.userTid;
@@ -3568,11 +3630,13 @@ function pregameModal() {
     <h2 style="margin:4px 0">${T(m.a).abbr} @ ${T(m.h).abbr}</h2>
     ${state.phase === 'PRESEASON' ? `<div class="small muted" style="margin-bottom:12px">Exhibition. Playing time by group is set on the Roster tab. The result does not count; the film does.</div>` : `<div class="row small" style="margin-bottom:12px"><span>Line: <b>${T(fav).abbr} −${(Math.round(sp * 2) / 2).toFixed(1)}</b></span><span class="muted">·</span><span>Your win chance ≈ <b>${Math.round(pUser * 100)}%</b></span></div>`}
     <div class="grid g2">${side(u)}${side(opp)}</div>
-    <div class="row" style="margin-top:14px"><button class="primary" data-action="playGame" data-recap="1">▶ Sim game</button><button data-action="playGame" data-recap="0">Sim without recap</button><span class="spacer"></span><button class="sm" data-action="popupsOff">Turn off game popups</button></div>`);
+    <div class="row" style="margin-top:14px"><button class="primary" data-action="playGame" data-recap="watch">▶ Watch the game</button><button data-action="playGame" data-recap="1">Quick sim</button><button data-action="playGame" data-recap="0">Sim without recap</button><span class="spacer"></span><button class="sm" data-action="popupsOff">Turn off game popups</button></div>`);
 }
 function playWeek(recap) { // regular season, playoffs and preseason all go through here
-  const before = new Set(Object.keys(state.games));
+  const before = new Set(Object.keys(state.games)), watch = recap === 'watch' || !!ui.watchIntent; ui.watchIntent = false;
   runSteps(stepContinue, (() => { let n = 0; return () => n++ > 0; })(), phaseLabel).then(() => {
+    const keep = newestWatchGid(); pruneWatch(keep);
+    if (watch) { const box = Object.values(state.games).find(b => !before.has(String(b.id)) && b.tids.includes(state.userTid) && b.pbp && b.pbp.some(e => e.f)); if (box) { ui.watch = { gid: box.id, k: 0, back: view === 'watch' ? 'home' : view }; view = 'watch'; save(); render(); window.scrollTo(0, 0); return; } }
     if (!recap) return;
     const box = Object.values(state.games).find(b => !before.has(String(b.id)) && b.tids.includes(state.userTid));
     if (box) gameWrapModal(box.id);
@@ -3729,6 +3793,13 @@ const actions = {
   importClick: () => $('#importFile').click(),
   export: () => exportSave(),
   newGame: async () => { if (await ask({ title: 'Start a new league?', body: 'Your current league will be overwritten. Export it first if you want to keep it.', yes: 'Start over', no: 'Keep this league', danger: true })) { state = null; deleteSave(); render(); } },
+  watchGo: async () => { ui.watchIntent = true; await actions.continue(); },
+  watchStep: d => { const W = ui.watch, b = W && state.games[W.gid]; if (!b) return; W.k = clamp((W.k || 0) + +d.d, 0, watchSteps(b).length - 1); render(); },
+  watchDrive: () => { const W = ui.watch, b = W && state.games[W.gid]; if (!b) return; const steps = watchSteps(b), cur = b.pbp[steps[W.k || 0][0]], who = cur.f ? cur.f.o : cur.p;
+    let k = (W.k || 0) + 1; while (k < steps.length - 1) { const e = b.pbp[steps[k][0]]; if (steps[k][1] === 0 && e.f && e.f.o !== who) break; k++; } W.k = k; render(); },
+  watchEnd: () => { const W = ui.watch, b = W && state.games[W.gid]; if (!b) return; W.k = watchSteps(b).length - 1; render(); },
+  watchDone: () => { const W = ui.watch; view = (W && W.back) || 'home'; if (W) { W.done = true; boxModal(W.gid); } render(); },
+  watchReplay: d => { closeModal(); ui.watch = { gid: +d.gid, k: 0, back: view }; view = 'watch'; render(); window.scrollTo(0, 0); },
   continue: async () => {
     if (rosterBlock()) return;
     if (state.phase === 'RESIGN' && !state.settings.autoUser) {
@@ -3763,9 +3834,9 @@ const actions = {
       if (state.phase === 'PRESEASON' && state.pre && !preCamped() && !state.settings.autoUser) { campRun(); ui.preTab = 'track'; ui.trkSort = { k: 'grade', d: 1 }; view = 'pre'; save(); render(); window.scrollTo(0, 0); return; } // two weeks of camp, then stop and look
       if (state.settings.gamePopups !== false && userMatchup()) { pregameModal(); return; }
       playWeek(false);
-    } else { stepContinue(); save(); render(); if (ui.udfaResult) { const r = ui.udfaResult; ui.udfaResult = null; udfaResultModal(r); } if (ui.wvResult) { const r = ui.wvResult; ui.wvResult = null; waiverResultModal(r); } }
+    } else { stepContinue(); pruneWatch(newestWatchGid()); save(); render(); if (ui.udfaResult) { const r = ui.udfaResult; ui.udfaResult = null; udfaResultModal(r); } if (ui.wvResult) { const r = ui.wvResult; ui.wvResult = null; waiverResultModal(r); } }
   },
-  playGame: d => { closeModal(); playWeek(d.recap !== '0'); },
+  playGame: d => { closeModal(); ui.watchIntent = false; playWeek(d.recap === 'watch' ? 'watch' : d.recap !== '0'); },
   popupsOff: () => { state.settings.gamePopups = false; save(); closeModal(); playWeek(false); toast('Game popups off. Turn them back on in Settings.'); },
   simPlayoffs: async () => {
     const ph = state.phase;
@@ -4089,6 +4160,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('toggle', e => { const el = e.target; if (el && el.dataset && el.dataset.fold) (ui.fold || (ui.fold = {}))[el.dataset.fold] = el.open; }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (askResolve) askDone(false); else closeModal(); } });
+document.addEventListener('keydown', e => { if (!state || view !== 'watch' || !ui.watch || document.querySelector('.modal-card') || /INPUT|SELECT|TEXTAREA/.test((e.target && e.target.tagName) || '')) return; if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { actions.watchStep({ d: e.key === 'ArrowRight' ? 1 : -1 }); e.preventDefault(); } });
 document.addEventListener('keydown', e => { // ← → walks the rooms of the squad planner
   if (!state || !['pre', 'camp', 'cutdown'].includes(view) || !preOpen() || preTabNow() !== 'plan' || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
   const tg = e.target; if (tg && tg.closest && tg.closest('input, select, textarea')) return;

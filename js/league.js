@@ -249,6 +249,7 @@ function simWeek() {
     state.games[box.id] = box;
     applyBox(box, false);
   }
+  pruneWatchFrames();
   irPlacements();
   injuryTick();
   irActivations();
@@ -340,6 +341,7 @@ function simPlayoffRound() {
   const po = state.playoffs;
   const r = po.round;
   const matchups = playoffMatchups();
+  pruneWatchFrames();
   const results = [];
   for (const [h, a] of matchups) {
     const box = simGame(h, a, { playoff: ROUND_NAMES[r], neutral: r === 3, pbp: true });
@@ -379,4 +381,10 @@ function repsLearning(box) {
     }
     delete l.sp;
   }
+}
+// the line-ups that let you watch a game are large: only your newest game keeps them
+function pruneWatchFrames() {
+  if (!state || !state.games) return; const u = state.userTid; let keep = -1;
+  for (const id in state.games) { const b = state.games[id]; if (b && b.pbp && b.tids.includes(u) && b.id > keep && b.pbp.some(e => e.f)) keep = b.id; }
+  for (const id in state.games) { const b = state.games[id]; if (!b || !b.pbp || b.id === keep) continue; for (const e of b.pbp) if (e.f) delete e.f; }
 }

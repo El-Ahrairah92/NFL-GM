@@ -241,6 +241,7 @@ function simPreseasonWeek() {
     m.score = box.score.slice(); if (mine) m.gid = box.id;
     if (mine) state.games[box.id] = box;
   }
+  pruneWatchFrames();
   injuryTick();
   state.pre.wk++;
   practiceWeekAll();
