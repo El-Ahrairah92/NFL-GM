@@ -30,7 +30,14 @@ const TUNE = {
   assistRate: 0.21,    // how often a second man is credited on a tackle that had no assist yet
   spill: 0.6,         // how often a run stopped by a lineman past the line is really finished by the second level
   dimeLong: 0.8, dimeMid: 0.45, // how often a defense goes to six defensive backs on third and long, and third and medium
-  sackBase: 0.22,     // chance a pressured quarterback goes down, before the matchup
+  sackBase: 0.235,    // chance a pressured quarterback goes down, before the matchup
+  raceCap: 5,         // a speed edge in the open field, in rating points, before it runs into diminishing returns
+  runCap: 11,         // a run defender's edge over his blocker, before diminishing returns (keeps one line from making every back look elite)
+  sepCap: 11,         // a receiver's route edge over an ordinary man, before diminishing returns (coverage keeps its 14)
+  teKeepDeep: 0.35, teKeepDrop: 0.1, // how often the starting tight end stays in to block on a deep call, and on a dropback
+  evCap: 73, evSlope: 0.4, // a ball carrier's elusiveness past this counts for less (keeps the best backs from 7 yards a carry)
+  rushCap: 12,        // a pass rusher's edge over his blocker, in rating points, before diminishing returns (keeps one mismatch from a 30-sack year)
+  edgeK: 0.25, edgeSlope: 0.2, // downfield: a passer and receiver's combined edge (logit) past which it counts for less
   sackShare: 0.4,      // how often two rushers who arrive together split the sack
   slideAt: 12,         // how badly a tackle has to be overmatched before the protection slides a guard out to help him
   doubleBonus: 17,     // pass-block points added by a second blocker
@@ -55,6 +62,7 @@ const TUNE = {
   pocketGap: 0.5,       // the middle is holding if no interior rusher is within this of the edge man
   flush: 0.4,           // flushed out of the middle, how soon after the nearest edge man would have arrived he is on him
   crowdGap: 0.5, crowdAcc: 1.5, // an interior rusher this close at the throw costs this much accuracy downfield
+  meetCarry: 1.5,      // of those, the yards he carries the tackler (the league's backs gain 4.3 a carry)
   meet: 2,              // yards sooner a second-level tackler makes first contact, carried by the runner after it (moves yards from before contact to after)
   scrBuy: 0.45,         // how much an average quarterback creates once he has slipped the rush (his speed and agility move it)
   scrShort: 0.3,        // how much less open the short outlets are once defenders come up at a scrambling quarterback
@@ -118,7 +126,7 @@ const TUNE = {
   covWeight: 1.5,      // a defender's coverage skill counts this much more than the receiver's route skill
   holeBonus: 0.9,
   readTime: 0.34,
-  catchBase: 2.05,
+  catchBase: 2.1,
   shade: 0.4, // how hard defenses roll coverage toward the best receiver
   dropBase: 0.041,
   intBase: 0.0086,
@@ -135,10 +143,14 @@ const TUNE = {
   routeMix: 0.75,       // how often the wide receivers trade routes on a call, so the deep route is not always the same man's
   deepSpeed: 0.27,     // how much of getting open deep is pure speed (the rest is route craft)
   intHelp: 0.45,        // share of interceptions made by a help defender (the safety over the top, the man sitting underneath)
-  primPow: 2.8,        // how strongly the call is designed for the better receivers
-  starLook: 0.24,      // how much the quarterback favours his best receiver, covered or not
-  redZone: 1.25,        // how much tighter the windows get inside the 20
-  goalStand: 1,        // how much harder a run is to finish with no field behind the defense
+  primPow: 3.3,        // how strongly the call is designed for the better receivers
+  starLook: 0.3,      // how much the quarterback favours his best receiver, covered or not
+  redZone: 0.7,         // how much tighter the windows get inside the 20
+  screenW: 0.8,         // screens per unit of a scheme's screen rate (each of back and receiver screens)
+  rzRun: 0.1, glRun: 0.16, // how much more a play caller runs in the red zone, and inside the 5
+  goalStand: 1.0,      // how much harder a run is to finish with no field behind the defense
+  glSqueeze: 0.85,     // inside the ten, how deep the linebackers and safeties meet a run, as a share of the yards to the goal line
+  glOne: 0.35,         // at the one: how often they fill a step deep, in the end zone, rather than at the line
   safetyRun: -1.6,     // a safety coming down on a back who has cleared the second level: negative makes the tackle harder
   deepCatch: 2.3,     // how much harder a ball thrown 20+ yards is to put on a receiver
   shortCatch: 0.45,      // how much easier a ball thrown 3 to 9 yards is to complete
@@ -332,15 +344,15 @@ function packageLayout0(front, pkg) {
 }
 
 // fatigue: [per-snap load, threshold before rotation pressure]
-const FAT = { QB: [0.25, 99], OL: [0.45, 14], RB: [0.9, 5.5], WR: [0.7, 4.3], TE: [0.7, 4.0], DL: [1.3, 2.0], LB: [0.6, 16], DB: [0.5, 18] };
+const FAT = { QB: [0.25, 99], OL: [0.45, 14], RB: [0.9, 5.5], WR: [0.7, 4.3], TE: [0.7, 4.0], DL: [1.6, 1.6], LB: [0.6, 16], DB: [0.5, 18] }; // starters' snap shares as the league's: DL about two thirds, backs a little less
 // how hard fatigue pushes a player to the sideline (DL rotate by design)
 const FAT_SLOPE = { QB: 1, OL: 1, RB: 1.6, WR: 1.8, TE: 2.6, DL: 4.0, LB: 1, DB: 1 };
 // defensive lines play in waves: the gap between a starter and his backup counts for less than fresh legs
 // planned rest: chance a starter at this spot sits out a given drive (coaches spell receivers and tight ends by series)
-const REST_P = { X: 0.075, Z: 0.075, SLOT: 0.04, Y: 0.14 };
+const REST_P = { X: 0.12, Z: 0.12, SLOT: 0.12, Y: 0.1 }; // receivers about 80% of snaps, the starting tight end about three quarters
 const ROT_GAP = { DL: 0.5, WR: 0.55, TE: 0.5 }; // receivers and tight ends get series off too
 
-const GROUP_GUARD = { OL: 40, QB: 60, LB: 18, RB: 8, TE: 24 }; // (a tight end's rating counts half in the choice, so his guard is doubled) // a real one first: a safety, receiver or back takes the job only when he is clearly better at it
+const GROUP_GUARD = { OL: 40, QB: 60, LB: 18, RB: 20, TE: 24 }; // (a tight end's rating counts half in the choice, so his guard is doubled) // a real one first: a safety, receiver or back takes the job only when he is clearly better at it
 // The deep ball. How often it is called and how readily it is thrown follow the quarterback's arm: a coordinator with a big,
 // accurate deep thrower calls more shots, and that quarterback lets it go to a man who is only a step open.
 const DEEP = { base: 0.12, perPt: 0.03, lo: -0.5, hi: 0.6, mid: 0.3, shot: 0.45, shotArm: 0.8, call: 0.02, callLo: 0.45, callHi: 1.5, ref: 70 };

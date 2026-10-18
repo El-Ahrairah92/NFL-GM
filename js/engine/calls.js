@@ -80,7 +80,7 @@ function offenseCall(g) {
   if (g.down === 1) pr -= 0.07;
   else if (g.down === 2) pr += g.togo >= 8 ? 0.1 : g.togo <= 3 ? -0.12 : 0;
   else pr = g.togo >= 7 ? 0.9 : g.togo >= 4 ? 0.74 : g.togo <= 1 ? 0.3 : 0.52;
-  if (sit.gl) pr -= 0.05;
+  if (sit.gl) pr -= TUNE.glRun; else if (sit.red) pr -= TUNE.rzRun; // the league passes 60% between the 20s, about half the time in the red zone, 42% inside the 5
   if (sit.milk) pr -= 0.1 + 0.25 * cx.clock;
   else if (g.q >= 3 && sit.diff <= -14) pr += 0.12;
   else if (g.q >= 3 && sit.diff >= (g.q >= 4 ? 9 : 17)) pr -= 0.12; // sitting on a lead: shorten the game
@@ -144,7 +144,7 @@ function offenseCall(g) {
     const quick = ot.quick, deep = ot.deep;
     const armF = clamp(1 + (deepArm(qb) - DEEP.ref) * DEEP.call, DEEP.callLo, DEEP.callHi); // shots are called for the man who can make them
     const w = { QUICK: quick * tilt('QUICK'), DROP: Math.max(0.1, 1 - quick - deep) * tilt('DROP'), DEEP: deep * tilt('DEEP') * armF,
-      RBSCR: ot.screen * 0.5 * tilt('RBSCR'), WRSCR: ot.screen * 0.5 * tilt('WRSCR'), GADGET: ot.trick * 0.06 };
+      RBSCR: ot.screen * TUNE.screenW * tilt('RBSCR'), WRSCR: ot.screen * TUNE.screenW * tilt('WRSCR'), GADGET: ot.trick * 0.06 }; // the league throws nearly one pass in five behind the line
     if (sit.b === 'D3L') { w.DEEP *= 1.2; w.DROP *= 1.35; w.QUICK *= 0.55; }
     if (sit.b === 'D3S' || sit.b === 'D2S') { w.QUICK *= 1.8; w.DEEP *= 0.7; }
     if (sit.red) { w.DEEP *= 0.45; w.QUICK *= 1.35; w.GADGET *= 0.5; }

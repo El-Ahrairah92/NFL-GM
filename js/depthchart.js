@@ -46,7 +46,7 @@ function staffGuard(p, spot) {
   if (g === p.pos) return 0;
   const db = q => q === 'CB' || q === 'S';
   if (db(p.pos) && db(g)) return 2; // a corner and a safety trade places easily
-  let v = typeof GROUP_GUARD !== 'undefined' && GROUP_GUARD[g] ? GROUP_GUARD[g] : (p.pos === 'LB' && g === 'DL') || (p.pos === 'DL' && g === 'LB') ? 4 : 8;
+  let v = typeof GROUP_GUARD !== 'undefined' && GROUP_GUARD[g] ? GROUP_GUARD[g] : p.pos === 'DL' && g === 'LB' ? 4 : p.pos === 'LB' && g === 'DL' ? (p.spot === 'SAM' ? 4 : 8) : 8; // a Sam backer rushes off the edge in plenty of fronts; a Mike or a Will needs to be clearly the better rusher
   if (g === 'LB' && db(p.pos)) v += 7; // a safety is not a linebacker because he grades out close
   if (db(g) && !db(p.pos)) v += 7;     // nor a linebacker a safety
   if (g === 'RB' && p.pos === 'WR') v += 16; // a receiver is the last resort in the backfield

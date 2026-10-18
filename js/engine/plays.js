@@ -18,7 +18,8 @@ function runToContact(g, carrier, levels, opts = {}) {
     const space = lv.at >= 5 ? 1 : 0; // open-field tackles are harder
     const DB_ = bod(d), CB_ = bod(carrier), zz = TUNE.size;
     const tk = (space ? DB_.w * 0.4 + DB_.len * 0.8 : DB_.w * 1.8 + DB_.len * 0.3) * zz + (space ? ea(g, d, 'tkl') * 0.5 + ea(g, d, 'spd') * 0.2 + ea(g, d, 'agi') * 0.2 + ea(g, d, 'str') * 0.1 : ea(g, d, 'tkl') * 0.6 + ea(g, d, 'spd') * 0.15 + ea(g, d, 'str') * 0.25); // in space he has to mirror the runner first; a bigger man wins at the line and is a step late in the open
-    const ev = 70 + (elu * (0.4 + 0.12 * space) + bal * (0.32 - 0.15 * space) + ea(g, carrier, 'agi') * (0.08 + 0.03 * space) + cs * 0.1 + spd * 0.1 - 70) * TUNE.carrierW + (space ? CB_.w * 0.5 : CB_.w * 1.6 - CB_.h * 0.7) * zz; // a heavy back runs through arm tackles, a short one is hard to find; neither helps him in the open field
+    let ev = 70 + (elu * (0.4 + 0.12 * space) + bal * (0.32 - 0.15 * space) + ea(g, carrier, 'agi') * (0.08 + 0.03 * space) + cs * 0.1 + spd * 0.1 - 70) * TUNE.carrierW + (space ? CB_.w * 0.5 : CB_.w * 1.6 - CB_.h * 0.7) * zz; // a heavy back runs through arm tackles, a short one is hard to find; neither helps him in the open field
+    if (ev > TUNE.evCap) ev = TUNE.evCap + (ev - TUNE.evCap) * TUNE.evSlope; // the very best make men miss more often, with diminishing returns
     if (res.contactAt === undefined) res.contactAt = pos;
     // making a man miss is its own skill: elusiveness in the open field most of all, burst through the hole before the tackler is set
     const slip = (elu - TUNE.eluMid) * TUNE.eluMiss * (space ? 1.4 : 0.8) + ((space ? ea(g, carrier, 'agi') : ea(g, carrier, 'bur')) - 72) * TUNE.burMiss; // agility in the open field, burst at the line
@@ -34,7 +35,7 @@ function runToContact(g, carrier, levels, opts = {}) {
       res.tk[res.tk.length - 1].made = true;
       res.tackler = d;
       // yards after contact: little when hit in the backfield, more when met downhill at the second level
-      const ab = (opts.afterBase || 1.2) * (lv.at <= 0 ? 0.25 : lv.at <= 2 ? 0.7 : 1) + (lv.far ? TUNE.meet : 0); // past the line the tackler meets him sooner and he carries him: same spot, more of it after contact
+      const ab = (opts.afterBase || 1.2) * (lv.at <= 0 ? 0.25 : lv.at <= 2 ? 0.7 : 1) + (lv.far ? TUNE.meetCarry : 0); // past the line the tackler meets him sooner and he carries him: same spot, more of it after contact
       const after = Math.max(0, gauss(ab + (bal - ea(g, d, 'tkl')) * 0.03 + (cs - ea(g, d, 'str')) * 0.015 + (CB_.w - DB_.w) * 0.12 * zz, 0.4 + ab * 0.45));
       res.yds = Math.round(pos + after);
       // gang tackle / assist
@@ -51,8 +52,8 @@ function runToContact(g, carrier, levels, opts = {}) {
   // nobody left in front: race the pursuit
   res.breakaway = true;
   const chase = (opts.pursuit || []).filter(Boolean).map(e => ea(g, e, 'spd'));
-  const fastest = chase.length ? Math.max(...chase) : 70;
-  res.yds = Math.round(pos + 6 + expRand(Math.max(3, 11 + (spd - fastest) * 1.1)) + (rand() < clamp(0.34 + (spd - fastest) * 0.02, 0.08, 0.65) ? expRand(30) : 0));
+  const fastest = chase.length ? Math.max(...chase) : 70, edge = soft(spd - fastest, TUNE.raceCap); // a step on the pursuit is worth a lot; ten steps are not worth ten times as much
+  res.yds = Math.round(pos + 6 + expRand(Math.max(3, 11 + edge * 1.1)) + (rand() < clamp(0.34 + edge * 0.02, 0.08, 0.65) ? expRand(30) : 0));
   res.tackler = (opts.pursuit || []).filter(Boolean).sort((a, b) => ea(g, b, 'spd') - ea(g, a, 'spd'))[0] || null;
   return res;
 }
@@ -182,6 +183,8 @@ function resolveRun(g, off, def, oc, dc) {
   // deep help: safeties
   const deepS = def.filter(e => (e.slot === 'FS' || e.slot === 'SS') && !blk.some(b => b.e === e));
   for (const s of deepS) levels.push({ e: s, at: randInt(7, 12) - TUNE.meet, far: true, bonus: TUNE.safetyRun });
+  // near the goal line the second and third levels play compressed: nobody waits in the end zone for the back to arrive
+  { const yl = 100 - g.ydl, lim = yl === 1 && rand() < TUNE.glOne ? 1 : Math.floor(yl * TUNE.glSqueeze); if (yl <= 10) for (const l of levels) if (l.far && l.at > lim) { l.at = lim; l.far = false; } }
   levels.sort((a, b) => a.at - b.at);
   if (trickHit === 'read') levels.unshift({ e: lineMen(def)[0], at: -randInt(3, 7) });
   const pursuit = def.filter(e => e.slot === 'CB' || e.slot === 'FS' || e.slot === 'SS' || e.slot === 'NCB');
@@ -222,23 +225,23 @@ function runDesc(oc, carrier, res, lane) {
 // route: [slot, depth band, dir, depth yds [min,max], break time, role]
 const ROUTES = {
   QUICK: [['X', 'S', 'IN', [5, 9], 1.2, 2], ['Z', 'S', 'OUT', [5, 8], 1.35, 2], ['SLOT', 'S', 'IN', [4, 7], 1.15, 1], ['SLOT2', 'S', 'OUT', [3, 6], 1.2, 2],
-    ['Y', 'S', 'OUT', [3, 5], 1.3, 2], ['H', 'S', 'IN', [3, 5], 1.3, 3], ['Y2', 'S', 'OUT', [2, 4], 1.35, 3], ['RB', 'S', 'OUT', [-1, 2], 1.5, 3], ['FB', 'S', 'OUT', [-1, 1], 1.6, 3]],
+    ['Y', 'S', 'OUT', [3, 5], 1.3, 2], ['H', 'S', 'IN', [3, 5], 1.3, 3], ['Y2', 'S', 'OUT', [2, 4], 1.35, 3], ['RB', 'S', 'OUT', [-2, 1], 1.5, 3], ['FB', 'S', 'OUT', [-1, 1], 1.6, 3]],
   DROP: [
-    [['X', 'I', 'IN', [10, 14], 2.0, 1], ['Z', 'S', 'OUT', [6, 9], 1.7, 2], ['SLOT', 'S', 'OUT', [4, 7], 1.6, 2], ['SLOT2', 'I', 'VERT', [12, 20], 2.2, 2], ['Y', 'I', 'IN', [8, 12], 1.9, 2], ['H', 'S', 'OUT', [3, 6], 1.7, 3], ['RB', 'S', 'IN', [0, 3], 2.0, 3], ['FB', 'S', 'OUT', [0, 2], 2.0, 3]], // dig-out / curl-flat
-    [['X', 'I', 'VERT', [14, 20], 2.4, 2], ['Z', 'I', 'IN', [10, 14], 2.0, 1], ['SLOT', 'S', 'IN', [5, 7], 1.6, 2], ['SLOT2', 'S', 'OUT', [5, 8], 1.7, 2], ['Y', 'I', 'OUT', [9, 12], 1.9, 2], ['H', 'S', 'IN', [3, 6], 1.8, 3], ['RB', 'S', 'OUT', [0, 3], 2.0, 3], ['FB', 'S', 'OUT', [0, 2], 2.0, 3]], // levels
-    [['X', 'D', 'VERT', [20, 30], 2.6, 2], ['Z', 'D', 'VERT', [20, 30], 2.6, 2], ['SLOT', 'I', 'VERT', [14, 22], 2.3, 1], ['SLOT2', 'I', 'VERT', [14, 22], 2.3, 1], ['Y', 'I', 'VERT', [12, 20], 2.3, 2], ['H', 'S', 'OUT', [3, 6], 1.8, 3], ['RB', 'S', 'IN', [0, 3], 2.0, 3], ['FB', 'S', 'IN', [0, 2], 2.0, 3]], // four verts
-    [['X', 'I', 'IN', [10, 14], 2.0, 2], ['Z', 'I', 'OUT', [12, 18], 2.3, 2], ['SLOT', 'S', 'IN', [4, 6], 1.5, 1], ['SLOT2', 'S', 'IN', [4, 6], 1.5, 1], ['Y', 'S', 'IN', [4, 6], 1.6, 1], ['H', 'S', 'OUT', [3, 5], 1.7, 3], ['RB', 'S', 'OUT', [0, 3], 2.0, 3], ['FB', 'S', 'OUT', [0, 2], 2.0, 3]], // mesh
+    [['X', 'I', 'IN', [10, 14], 2.0, 1], ['Z', 'S', 'OUT', [6, 9], 1.7, 2], ['SLOT', 'S', 'OUT', [4, 7], 1.6, 2], ['SLOT2', 'I', 'VERT', [12, 20], 2.2, 2], ['Y', 'I', 'IN', [8, 12], 1.9, 2], ['H', 'S', 'OUT', [3, 6], 1.7, 3], ['RB', 'S', 'IN', [-1, 2], 2.0, 3], ['FB', 'S', 'OUT', [0, 2], 2.0, 3]], // dig-out / curl-flat
+    [['X', 'I', 'VERT', [14, 20], 2.4, 2], ['Z', 'I', 'IN', [10, 14], 2.0, 1], ['SLOT', 'S', 'IN', [5, 7], 1.6, 2], ['SLOT2', 'S', 'OUT', [5, 8], 1.7, 2], ['Y', 'I', 'OUT', [9, 12], 1.9, 2], ['H', 'S', 'IN', [3, 6], 1.8, 3], ['RB', 'S', 'OUT', [-1, 2], 2.0, 3], ['FB', 'S', 'OUT', [0, 2], 2.0, 3]], // levels
+    [['X', 'D', 'VERT', [20, 30], 2.6, 2], ['Z', 'D', 'VERT', [20, 30], 2.6, 2], ['SLOT', 'I', 'VERT', [14, 22], 2.3, 1], ['SLOT2', 'I', 'VERT', [14, 22], 2.3, 1], ['Y', 'I', 'VERT', [12, 20], 2.3, 2], ['H', 'S', 'OUT', [3, 6], 1.8, 3], ['RB', 'S', 'IN', [-1, 2], 2.0, 3], ['FB', 'S', 'IN', [0, 2], 2.0, 3]], // four verts
+    [['X', 'I', 'IN', [10, 14], 2.0, 2], ['Z', 'I', 'OUT', [12, 18], 2.3, 2], ['SLOT', 'S', 'IN', [4, 6], 1.5, 1], ['SLOT2', 'S', 'IN', [4, 6], 1.5, 1], ['Y', 'S', 'IN', [4, 6], 1.6, 1], ['H', 'S', 'OUT', [3, 5], 1.7, 3], ['RB', 'S', 'OUT', [-1, 2], 2.0, 3], ['FB', 'S', 'OUT', [0, 2], 2.0, 3]], // mesh
   ],
-  DEEP: [['X', 'D', 'VERT', [22, 36], 2.7, 1], ['Z', 'D', 'IN', [20, 30], 2.6, 1], ['SLOT', 'I', 'IN', [12, 16], 2.2, 2], ['SLOT2', 'D', 'VERT', [20, 30], 2.6, 2], ['Y', 'I', 'VERT', [14, 20], 2.4, 2], ['H', 'S', 'OUT', [3, 6], 1.9, 3], ['RB', 'S', 'OUT', [0, 3], 2.3, 3], ['FB', 'S', 'OUT', [0, 2], 2.3, 3]],
-  PA: [['X', 'I', 'IN', [13, 20], 2.5, 1], ['Z', 'D', 'IN', [20, 30], 2.7, 1], ['SLOT', 'I', 'VERT', [12, 18], 2.4, 2], ['SLOT2', 'S', 'OUT', [4, 8], 1.9, 3], ['Y', 'S', 'OUT', [3, 7], 1.9, 2], ['H', 'S', 'IN', [3, 6], 2.0, 3], ['RB', 'S', 'OUT', [-1, 2], 2.4, 3], ['FB', 'S', 'OUT', [0, 2], 2.3, 3]],
-  BOOT: [['X', 'I', 'IN', [14, 20], 2.4, 2], ['Z', 'I', 'OUT', [12, 18], 2.2, 1], ['SLOT', 'S', 'OUT', [4, 8], 1.8, 2], ['SLOT2', 'I', 'IN', [12, 18], 2.3, 2], ['Y', 'S', 'OUT', [2, 5], 1.7, 1], ['H', 'S', 'OUT', [2, 5], 1.8, 2], ['RB', 'S', 'OUT', [0, 2], 2.1, 3], ['FB', 'S', 'OUT', [0, 2], 2.1, 3]],
+  DEEP: [['X', 'D', 'VERT', [22, 36], 2.7, 1], ['Z', 'D', 'IN', [20, 30], 2.6, 1], ['SLOT', 'I', 'IN', [12, 16], 2.2, 2], ['SLOT2', 'D', 'VERT', [20, 30], 2.6, 2], ['Y', 'I', 'VERT', [14, 20], 2.4, 2], ['H', 'S', 'OUT', [3, 6], 1.9, 3], ['RB', 'S', 'OUT', [-1, 2], 2.3, 3], ['FB', 'S', 'OUT', [0, 2], 2.3, 3]],
+  PA: [['X', 'I', 'IN', [13, 20], 2.5, 1], ['Z', 'D', 'IN', [20, 30], 2.7, 1], ['SLOT', 'I', 'VERT', [12, 18], 2.4, 2], ['SLOT2', 'S', 'OUT', [4, 8], 1.9, 3], ['Y', 'I', 'IN', [10, 15], 2.3, 1], ['H', 'S', 'IN', [3, 6], 2.0, 3], ['RB', 'S', 'OUT', [-2, 1], 2.4, 3], ['FB', 'S', 'OUT', [0, 2], 2.3, 3]],
+  BOOT: [['X', 'I', 'IN', [14, 20], 2.4, 2], ['Z', 'I', 'OUT', [12, 18], 2.2, 1], ['SLOT', 'S', 'OUT', [4, 8], 1.8, 2], ['SLOT2', 'I', 'IN', [12, 18], 2.3, 2], ['Y', 'S', 'OUT', [2, 5], 1.7, 1], ['H', 'S', 'OUT', [2, 5], 1.8, 2], ['RB', 'S', 'OUT', [-1, 1], 2.1, 3], ['FB', 'S', 'OUT', [0, 2], 2.1, 3]],
 };
 // ---------- pass concepts ----------
 // A concept is a set of routes built to beat a kind of coverage. f is the kind of pass it is (quick game, dropback, deep shot);
 // w is how common it is across the league; vs is how much more (or less) open its routes come against each coverage. A coach
 // carries some of these and not others. The edges are centred on the league's mix of coverages, so a concept called blind is worth
 // nothing extra: it pays only when it is called into the coverage it was drawn up for.
-const RTE_TAIL = { DROP: [['H', 'S', 'OUT', [3, 6], 1.7, 3], ['RB', 'S', 'OUT', [0, 3], 2.0, 3], ['FB', 'S', 'OUT', [0, 2], 2.0, 3]], QUICK: [['H', 'S', 'IN', [3, 5], 1.3, 3], ['Y2', 'S', 'OUT', [2, 4], 1.35, 3], ['RB', 'S', 'OUT', [-1, 2], 1.5, 3], ['FB', 'S', 'OUT', [-1, 1], 1.6, 3]] };
+const RTE_TAIL = { DROP: [['H', 'S', 'OUT', [3, 6], 1.7, 3], ['RB', 'S', 'OUT', [-1, 2], 2.0, 3], ['FB', 'S', 'OUT', [0, 2], 2.0, 3]], QUICK: [['H', 'S', 'IN', [3, 5], 1.3, 3], ['Y2', 'S', 'OUT', [2, 4], 1.35, 3], ['RB', 'S', 'OUT', [-2, 1], 1.5, 3], ['FB', 'S', 'OUT', [-1, 1], 1.6, 3]] };
 const CONCEPTS = {
   'Stick': { f: 'QUICK', w: 0.45, r: ROUTES.QUICK, vs: { C3: 0.12, C4: 0.1, C6: 0.06, C1: -0.1, C2M: -0.12, C0: -0.1, C2: 0.02, T2: 0.02 }, d: 'A quick out and a sit route on one linebacker. Finds the soft spot in zone.' },
   'Slant-flat': { f: 'QUICK', w: 0.35, r: [['X', 'S', 'IN', [4, 8], 1.15, 1], ['Z', 'S', 'IN', [4, 8], 1.2, 2], ['SLOT', 'S', 'OUT', [2, 5], 1.2, 2], ['SLOT2', 'S', 'OUT', [2, 5], 1.2, 2], ['Y', 'S', 'OUT', [2, 4], 1.3, 2], ...RTE_TAIL.QUICK], vs: { C1: 0.16, C0: 0.14, C2M: 0.08, C3: 0.04, C2: -0.18, T2: -0.16, C4: -0.02, C6: -0.08 }, d: 'Slants inside with a flat route under them. Beats man and off coverage; squatting corners sit on it.' },
@@ -248,10 +251,10 @@ const CONCEPTS = {
   'Four verticals': { f: 'DROP', w: 0.09, r: ROUTES.DROP[2], vs: { C3: 0.2, C1: 0.1, C0: 0.12, C2: 0.06, C4: -0.26, C6: -0.14, T2: -0.12, C2M: -0.1 }, d: 'Four men down the field against three deep defenders. Quarters is the answer to it.' },
   'Mesh': { f: 'DROP', w: 0.18, r: ROUTES.DROP[3], vs: { C1: 0.2, C2M: 0.2, C0: 0.18, C3: -0.1, C4: -0.1, C2: -0.06, T2: -0.08, C6: -0.08 }, d: 'Two shallow crossers rubbing past each other. Man coverage gets picked; zone passes them off.' },
   'Flood': { f: 'DROP', w: 0.14, r: [['X', 'I', 'IN', [8, 12], 2.0, 2], ['Z', 'D', 'VERT', [18, 26], 2.5, 2], ['SLOT', 'I', 'OUT', [10, 14], 2.1, 1], ['SLOT2', 'I', 'OUT', [10, 14], 2.1, 1], ['Y', 'S', 'OUT', [2, 5], 1.7, 2], ...RTE_TAIL.DROP], vs: { C3: 0.22, C1: 0.02, C6: 0.04, C4: -0.06, C2: -0.12, T2: -0.1, C2M: -0.06, C0: 0 }, d: 'Three receivers at three depths on one side. Overloads a three-deep zone.' },
-  'Dagger': { f: 'DROP', w: 0.11, r: [['X', 'I', 'IN', [13, 17], 2.3, 1], ['Z', 'S', 'OUT', [5, 8], 1.7, 2], ['SLOT', 'I', 'VERT', [14, 22], 2.3, 2], ['SLOT2', 'I', 'VERT', [14, 22], 2.3, 2], ['Y', 'S', 'IN', [4, 6], 1.7, 2], ...RTE_TAIL.DROP], vs: { C2: 0.16, C4: 0.1, C6: 0.08, C2M: 0.04, C3: 0.02, T2: -0.12, C1: -0.06, C0: -0.04 }, d: 'A seam route clears the middle and a deep dig comes in behind it. Splits two deep safeties.' },
+  'Dagger': { f: 'DROP', w: 0.11, r: [['X', 'I', 'IN', [13, 17], 2.3, 1], ['Z', 'S', 'OUT', [5, 8], 1.7, 2], ['SLOT', 'I', 'VERT', [14, 22], 2.3, 2], ['SLOT2', 'I', 'VERT', [14, 22], 2.3, 2], ['Y', 'I', 'IN', [8, 12], 2.0, 2], ...RTE_TAIL.DROP], vs: { C2: 0.16, C4: 0.1, C6: 0.08, C2M: 0.04, C3: 0.02, T2: -0.12, C1: -0.06, C0: -0.04 }, d: 'A seam route clears the middle and a deep dig comes in behind it. Splits two deep safeties.' },
   'Smash': { f: 'DROP', w: 0.11, r: [['X', 'S', 'IN', [5, 6], 1.5, 2], ['Z', 'S', 'IN', [5, 6], 1.5, 2], ['SLOT', 'I', 'OUT', [12, 18], 2.2, 1], ['SLOT2', 'I', 'OUT', [12, 18], 2.2, 1], ['Y', 'I', 'OUT', [10, 14], 2.1, 2], ...RTE_TAIL.DROP], vs: { C2: 0.26, T2: 0.14, C6: 0.06, C2M: 0.02, C1: 0, C3: -0.14, C4: -0.2, C0: 0 }, d: 'A hitch underneath and a corner route over it: high-low on a squatting corner. The play for Cover 2.' },
   'Post-dig': { f: 'DEEP', w: 0.6, r: ROUTES.DEEP, vs: { C1: 0.1, C3: 0.06, C0: 0.12, C2: -0.04, C4: -0.14, C6: -0.08, T2: -0.06, C2M: -0.06 }, d: 'A deep post with a dig under it. Takes a shot at a single deep safety.' },
-  'Sail shot': { f: 'DEEP', w: 0.4, r: [['X', 'D', 'VERT', [22, 34], 2.7, 1], ['Z', 'D', 'OUT', [18, 26], 2.6, 1], ['SLOT', 'I', 'OUT', [10, 14], 2.2, 2], ['SLOT2', 'D', 'VERT', [20, 30], 2.6, 2], ['Y', 'I', 'IN', [12, 16], 2.3, 2], ['H', 'S', 'OUT', [3, 6], 1.9, 3], ['RB', 'S', 'OUT', [0, 3], 2.3, 3], ['FB', 'S', 'OUT', [0, 2], 2.3, 3]], vs: { C3: 0.12, C2: 0.1, C6: 0.04, C1: -0.02, C4: -0.1, T2: 0, C2M: -0.1, C0: 0 }, d: 'A go route and a deep out on the same side. Attacks the sideline behind a corner.' },
+  'Sail shot': { f: 'DEEP', w: 0.4, r: [['X', 'D', 'VERT', [22, 34], 2.7, 1], ['Z', 'D', 'OUT', [18, 26], 2.6, 1], ['SLOT', 'I', 'OUT', [10, 14], 2.2, 2], ['SLOT2', 'D', 'VERT', [20, 30], 2.6, 2], ['Y', 'I', 'IN', [12, 16], 2.3, 2], ['H', 'S', 'OUT', [3, 6], 1.9, 3], ['RB', 'S', 'OUT', [-1, 2], 2.3, 3], ['FB', 'S', 'OUT', [0, 2], 2.3, 3]], vs: { C3: 0.12, C2: 0.1, C6: 0.04, C1: -0.02, C4: -0.1, T2: 0, C2M: -0.1, C0: 0 }, d: 'A go route and a deep out on the same side. Attacks the sideline behind a corner.' },
 };
 // centre every concept on what the league actually plays, so the average call into an unknown coverage is worth nothing
 const COV_MIX = { C3: 0.31, C1: 0.2, C4: 0.17, C2: 0.14, C2M: 0.06, C6: 0.05, T2: 0.04, C0: 0.03 };
@@ -359,7 +362,7 @@ function resolvePass(g, off, def, oc, dc) {
   if (oc.form !== 'EMP') {
     if (rb && (oc.type === 'DEEP' || oc.type === 'GADGET' || (oc.type === 'DROP' && (blitzKnown || rand() < 0.35)))) keep.push(rb);
     if (fb && rand() < 0.6) keep.push(fb);
-    if (y && (oc.type === 'DEEP' ? rand() < 0.55 : oc.type === 'DROP' ? rand() < 0.2 : false)) keep.push(y);
+    if (y && (oc.type === 'DEEP' ? rand() < TUNE.teKeepDeep : oc.type === 'DROP' ? rand() < TUNE.teKeepDrop : false)) keep.push(y); // the starting tight end runs a route on most dropbacks
   }
   if (oc.maxp) { if (rb && !keep.includes(rb)) keep.push(rb); if (y && !keep.includes(y)) keep.push(y); } // seven stay in: time for the shot, fewer places to go with it
   for (const e of off) if (e.slot === 'OL6') keep.push(e);
@@ -385,7 +388,7 @@ function resolvePass(g, off, def, oc, dc) {
   const man = dc.cov === 'C1' || dc.cov === 'C0' || dc.cov === 'C2M';
   // the design: one receiver is the primary on this call (weighted toward the better/featured players, but it rotates)
   const featured = receivers.filter(e => e.slot !== 'FB');
-  const prim = featured.length ? weightedPick(featured, featured.map(e => (heirs.has(e.slot) ? 0.6 : { X: 1.0, Z: 0.9, SLOT: 0.85, SLOT2: 0.4, Y: 0.58, H: 0.34, Y2: 0.2, RB: 0.72 }[e.slot] || 0.3) * Math.pow(Math.max(40, slotRating(e.p, e.spot)) / 75, TUNE.primPow))) : null;
+  const prim = featured.length ? weightedPick(featured, featured.map(e => (heirs.has(e.slot) ? 0.6 : { X: 1.0, Z: 0.9, SLOT: 0.85, SLOT2: 0.4, Y: 0.9, H: 0.3, Y2: 0.2, RB: 0.72 }[e.slot] || 0.3) * Math.pow(Math.max(40, slotRating(e.p, e.spot)) / 75, TUNE.primPow))) : null;
   const rlist = routes.filter(rt => receivers.some(e => e.slot === rt[0])).map(rt => {
     const e = receivers.find(x => x.slot === rt[0]);
     const depth = randInt(rt[3][0], rt[3][1]);
@@ -421,10 +424,10 @@ function resolvePass(g, off, def, oc, dc) {
       const defC = defE ? (deep ? ea(g, defE, 'man') * 0.45 + ea(g, defE, 'agi') * 0.1 + ea(g, defE, 'spd') * 0.45 : mid ? ea(g, defE, 'man') * 0.55 + ea(g, defE, 'agi') * 0.1 + ea(g, defE, 'bur') * 0.15 + ea(g, defE, 'spd') * 0.2 : ea(g, defE, 'man') * 0.6 + ea(g, defE, 'agi') * 0.15 + ea(g, defE, 'bur') * 0.25) : 30;
       const lbM = defE && ['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 0.35 : 1;
       const RB_ = bod(e), DF_ = defE ? bod(defE) : NO_BODY, zc = TUNE.size;
-      w = TUNE.openBase + (soft(offC - 70 + ((deep ? RB_.h * 0.6 : -RB_.w * 0.2) + RB_.w * 0.5) * zc, 14) * TUNE.recWeight - soft(defC - 70 + ((deep ? DF_.len * 0.6 : -DF_.w * 0.2) + DF_.w * 0.5 + DF_.len * 0.5) * zc, 14) * TUNE.covWeight * lbM) * TUNE.openScale;
+      w = TUNE.openBase + (soft(offC - 70 + ((deep ? RB_.h * 0.6 : -RB_.w * 0.2) + RB_.w * 0.5) * zc, TUNE.sepCap) * TUNE.recWeight - soft(defC - 70 + ((deep ? DF_.len * 0.6 : -DF_.w * 0.2) + DF_.w * 0.5 + DF_.len * 0.5) * zc, 14) * TUNE.covWeight * lbM) * TUNE.openScale;
       { const ae = avgEnt(g, e), ad = defE ? avgEnt(g, defE) : null;
         if (ae) { const A = k => ea(g, ae, k), aC = deep ? A('rte') * (0.9 - TUNE.deepSpeed) + A('agi') * 0.1 + A('spd') * TUNE.deepSpeed : mid ? A('rte') * 0.45 + A('agi') * 0.15 + A('bur') * 0.2 + A('spd') * 0.2 : A('rte') * 0.5 + A('agi') * 0.2 + A('bur') * 0.3, B = bod(ae);
-          sx = (soft(offC - 70 + ((deep ? RB_.h * 0.6 : -RB_.w * 0.2) + RB_.w * 0.5) * zc, 14) - soft(aC - 70 + ((deep ? B.h * 0.6 : -B.w * 0.2) + B.w * 0.5) * zc, 14)) * TUNE.recWeight * TUNE.openScale + (defE && r.band !== 'D' ? (ea(g, e, 'rel') - A('rel')) * 0.011 : 0); }
+          sx = (soft(offC - 70 + ((deep ? RB_.h * 0.6 : -RB_.w * 0.2) + RB_.w * 0.5) * zc, TUNE.sepCap) - soft(aC - 70 + ((deep ? B.h * 0.6 : -B.w * 0.2) + B.w * 0.5) * zc, TUNE.sepCap)) * TUNE.recWeight * TUNE.openScale + (defE && r.band !== 'D' ? (ea(g, e, 'rel') - A('rel')) * 0.011 : 0); }
         if (ad) { const A = k => ea(g, ad, k), aD = deep ? A('man') * 0.45 + A('agi') * 0.1 + A('spd') * 0.45 : mid ? A('man') * 0.55 + A('agi') * 0.1 + A('bur') * 0.15 + A('spd') * 0.2 : A('man') * 0.6 + A('agi') * 0.15 + A('bur') * 0.25, B = bod(ad);
           dx = (soft(defC - 70 + ((deep ? DF_.len * 0.6 : -DF_.w * 0.2) + DF_.w * 0.5 + DF_.len * 0.5) * zc, 14) - soft(aD - 70 + ((deep ? B.len * 0.6 : -B.w * 0.2) + B.w * 0.5 + B.len * 0.5) * zc, 14)) * TUNE.covWeight * lbM * TUNE.openScale; } }
       if (hole) w += TUNE.holeBonus + 0.6;
@@ -458,10 +461,10 @@ function resolvePass(g, off, def, oc, dc) {
       const own = owners.length ? owners[0][1] : 0.6;
       const defC = defE ? (deep ? ea(g, defE, 'zone') * 0.4 + ea(g, defE, 'prec') * 0.2 + ea(g, defE, 'spd') * 0.4 : ea(g, defE, 'zone') * 0.45 + ea(g, defE, 'prec') * 0.25 + ea(g, defE, 'spd') * 0.15 + ea(g, defE, 'agi') * 0.15) : 30;
       const lbZ = defE && ['MLB', 'WLB', 'SAM'].includes(defE.slot) ? TUNE.lbCover : 1, ZD = defE ? bod(defE) : NO_BODY, ZR = bod(e), zc = TUNE.size;
-      w = TUNE.openBase + (soft(offC - 70 + ((deep ? ZR.h * 0.6 : -ZR.w * 0.2) + ZR.w * 0.5) * zc, 14) * TUNE.recWeight - soft(defC - 70 + (ZD.len * 1.4 + ZD.w * 0.3) * zc, 14) * TUNE.covWeight * own * lbZ) * TUNE.openScale + (1 - own) * 0.5 + (hole ? TUNE.holeBonus * (dc.pres === 'FZ' ? 0.35 : 1) : 0); // fire-zone droppers pattern-read: the voids are smaller than they look
+      w = TUNE.openBase + (soft(offC - 70 + ((deep ? ZR.h * 0.6 : -ZR.w * 0.2) + ZR.w * 0.5) * zc, TUNE.sepCap) * TUNE.recWeight - soft(defC - 70 + (ZD.len * 1.4 + ZD.w * 0.3) * zc, 14) * TUNE.covWeight * own * lbZ) * TUNE.openScale + (1 - own) * 0.5 + (hole ? TUNE.holeBonus * (dc.pres === 'FZ' ? 0.35 : 1) : 0); // fire-zone droppers pattern-read: the voids are smaller than they look
       { const ae = avgEnt(g, e), ad = defE ? avgEnt(g, defE) : null;
         if (ae) { const A = k => ea(g, ae, k), aC = deep ? A('rte') * (0.9 - TUNE.deepSpeed * 0.95) + A('agi') * 0.1 + A('spd') * TUNE.deepSpeed * 0.95 : mid ? A('rte') * 0.5 + A('agi') * 0.1 + A('bur') * 0.2 + A('spd') * 0.2 : A('rte') * 0.55 + A('agi') * 0.15 + A('bur') * 0.3, B = bod(ae);
-          sx = (soft(offC - 70 + ((deep ? ZR.h * 0.6 : -ZR.w * 0.2) + ZR.w * 0.5) * zc, 14) - soft(aC - 70 + ((deep ? B.h * 0.6 : -B.w * 0.2) + B.w * 0.5) * zc, 14)) * TUNE.recWeight * TUNE.openScale; }
+          sx = (soft(offC - 70 + ((deep ? ZR.h * 0.6 : -ZR.w * 0.2) + ZR.w * 0.5) * zc, TUNE.sepCap) - soft(aC - 70 + ((deep ? B.h * 0.6 : -B.w * 0.2) + B.w * 0.5) * zc, TUNE.sepCap)) * TUNE.recWeight * TUNE.openScale; }
         if (ad) { const A = k => ea(g, ad, k), aD = deep ? A('zone') * 0.4 + A('prec') * 0.2 + A('spd') * 0.4 : A('zone') * 0.45 + A('prec') * 0.25 + A('spd') * 0.15 + A('agi') * 0.15, B = bod(ad);
           dx = (soft(defC - 70 + (ZD.len * 1.4 + ZD.w * 0.3) * zc, 14) - soft(aD - 70 + (B.len * 1.4 + B.w * 0.3) * zc, 14)) * TUNE.covWeight * own * lbZ * TUNE.openScale; } }
       if ((dc.cov === 'C2' || dc.cov === 'T2') && (e.slot === 'X' || e.slot === 'Z') && r.band === 'S' && defE && defE.slot === 'CB') w -= 0.35 + (ea(g, defE, 'prs') - ea(g, e, 'rel')) * 0.012; // squat corners jam the release
@@ -598,7 +601,10 @@ function resolvePass(g, off, def, oc, dc) {
     }
     if (rand() < scrambleP) {
       const ql = def.filter(e => !e.blitz && ['MLB', 'WLB', 'SAM', 'NCB', 'SS'].includes(e.slot));
-      const r = runToContact(g, qb, [{ e: rusher.e, at: randInt(-1, 2), bonus: escaped ? -2.8 : -1.7 }, { e: nearestDef(ql, 0), at: randInt(5, 11), bonus: -0.3 }, { e: def.find(e => e.slot === 'FS'), at: randInt(9, 14) }], { pursuit: def.filter(e => e.slot === 'CB' || e.slot === 'FS') });
+      // out of the pocket he is past the rush already: the linebacker and the safety are what is left (one who never escaped has to beat his man first)
+      const lv = escaped ? [] : [{ e: rusher.e, at: randInt(0, 2), bonus: -2.4 }];
+      lv.push({ e: nearestDef(ql, 0), at: randInt(6, 12), bonus: -0.3 }, { e: def.find(e => e.slot === 'FS'), at: randInt(10, 15) });
+      const r = runToContact(g, qb, lv, { pursuit: def.filter(e => e.slot === 'CB' || e.slot === 'FS'), start: escaped ? randInt(1, 4) : 0 });
       Object.assign(res, { kind: 'scramble', carrier: qb, yds: r.yds, tackler: r.tackler, fumble: r.fumble, missed: r.missed, tk: r.tk, ybc: r.contactAt !== undefined ? Math.min(r.contactAt, r.yds) : r.yds, slide: r.yds >= 4 && rand() < 0.6, desc: `${pshort(qb.p)} scrambles` });
       res.involved = [qb.p];
       return res;
@@ -635,7 +641,10 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
   const AQ = accOf(qb), acc = AQ[0], QH = AQ[2];
   const yardsToGoal = 100 - g.ydl;
   const airY = Math.min(air, yardsToGoal);
-  const pcL = TUNE.catchBase + 0.2 + r.w * 0.95 + soft(acc - 72, 16) * TUNE.accScale - (air >= 20 ? TUNE.deepCatch : air >= 10 ? TUNE.midCatch : air <= 2 ? -0.95 : -TUNE.shortCatch) + (air >= 15 ? (arm - 70) * 0.01 : 0) + (r.w < 0.4 && air >= 5 ? (arm - 70) * 0.008 : 0) + (ea(g, e, 'hnd') - 70) * 0.022 + (air >= 5 ? (radius(g, e) - TUNE.radRef) * TUNE.radCatch : 0) + (r.role === 3 && air <= 5 ? 0.55 : 0) + (e.slot === 'RB' ? 0.55 : 0) - (yardsToGoal <= 5 ? 0.3 : yardsToGoal <= 12 ? 0.2 : 0);
+  // what the passer and the receiver add over ordinary men: downfield, an elite pair's edge has diminishing returns (a great deep ball is still a contested catch)
+  const edgeQ = soft(acc - 72, 16) * TUNE.accScale + (air >= 15 ? (arm - 70) * 0.01 : 0) + (r.w < 0.4 && air >= 5 ? (arm - 70) * 0.008 : 0) + (ea(g, e, 'hnd') - 70) * 0.022 + (air >= 5 ? (radius(g, e) - TUNE.radRef) * TUNE.radCatch : 0);
+  const edgeE = air >= 5 && edgeQ > TUNE.edgeK ? TUNE.edgeK + (edgeQ - TUNE.edgeK) * TUNE.edgeSlope : edgeQ;
+  const pcL = TUNE.catchBase + 0.2 + r.w * 0.95 + edgeE - (air >= 20 ? TUNE.deepCatch : air >= 10 ? TUNE.midCatch : air <= 2 ? -0.95 : -TUNE.shortCatch) + (r.role === 3 && air <= 5 ? 0.55 : 0) + (e.slot === 'RB' ? 0.55 : 0) - (yardsToGoal <= 5 ? 0.3 : yardsToGoal <= 12 ? 0.2 : 0);
   const pCatchable = lgt(pcL);
   res.target = e; res.air = airY; res.def = defE; res.hurry = hurry; res.route = r;
   // batted at the line: tall, long linemen with their hands up, and a short quarterback throwing through them

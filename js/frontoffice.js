@@ -17,7 +17,7 @@ const FO = {
   ownMen: 0.5,                // a club's doubt about its own players, against anyone else's
   risk: 2.0,                  // clubs weigh injuries more heavily than the bare odds: a season is long and a hole is costly
   dev: 0.15, st: 0.8, money: 0.3,
-  hurt: { QB: 0.07, RB: 0.15, WR: 0.11, TE: 0.11, OL: 0.10, DL: 0.10, LB: 0.10, CB: 0.11, S: 0.10, K: 0.02, P: 0.02 }, // share of a season a starter misses
+  hurt: { QB: 0.08, RB: 0.18, WR: 0.14, TE: 0.10, OL: 0.11, DL: 0.07, LB: 0.15, CB: 0.15, S: 0.16, K: 0.02, P: 0.02 }, // share of a season a starter misses (as the injuries in the games have it)
   size: { QB: 0.2, RB: 0.8, WR: 0.5, TE: 0.5, OL: 1.2, DL: 1.0, LB: 0.6, CB: 0.8, S: 0.5 },                          // rating points per standard deviation of weight
   floor: { QB: 2, RB: 3, WR: 5, TE: 3, OL: 8, DL: 7, LB: 4, CB: 5, S: 3, K: 1, P: 1 },
   cap: { QB: 3, RB: 5, WR: 8, TE: 5, OL: 11, DL: 11, LB: 8, CB: 8, S: 6, K: 1, P: 1 },                                    // and bodies it will not carry more of, whatever the sums say                                // bodies a club will not go below, whatever the sums say

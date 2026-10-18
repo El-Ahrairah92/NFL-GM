@@ -794,9 +794,13 @@ function endPeriod(g) {
 }
 
 // ---------- injuries ----------
+// how often a man involved in a play is hurt, by position: a lineman is in a collision every snap, a receiver or a defensive back
+// only when the play comes to him, so per play the skill positions run higher. Set so the league's injuries fall by position as
+// its injury reports do (2021-23: OL and CB 16% each, WR 14%, LB 13%, DL 12%, S 10%, RB 8%, TE 7%, QB 3%).
+const INJ_POS = { QB: 1.22, RB: 1.12, WR: 3.8, TE: 4.7, OL: 1.25, DL: 0.64, LB: 2.5, CB: 4.3, S: 3.3, K: 1, P: 1 };
 function injuryCheck(g, players, rate = 0.0042) {
   if (g.scrim) return; // nobody is lost for the year in a team period: camp injuries are handled on their own
-  for (const p of players) if (p && p.id >= 0 && !p.injury && rand() < rate * durMult(p)) injure(g, p);
+  for (const p of players) if (p && p.id >= 0 && !p.injury && rand() < rate * durMult(p) * (INJ_POS[p.pos] || 1)) injure(g, p);
 }
 function injure(g, p) {
   if (g.scrim) return; // a team period: nobody is lost in it

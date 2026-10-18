@@ -250,11 +250,13 @@ function gameDayElevations(tids, playoff) {
     for (const p of list) elevate(p, tid, playoff);
   }
 }
-// a short hole the squad can cover on game day needs no roster move: the injured back within two weeks, a man to elevate meanwhile
+// a short hole the squad can cover on game day needs no roster move: the injured back within two weeks, and enough men to
+// elevate meanwhile to dress the usual number there (within the two a game)
 function elevationCovers(tid, pos) {
-  const hurt = rosterOf(tid).filter(p => p.pos === pos && p.injury && !onIR(p)); if (!hurt.length) return false;
+  const ro = rosterOf(tid), hurt = ro.filter(p => p.pos === pos && p.injury && !onIR(p)); if (!hurt.length) return false;
   const back = Math.min(...hurt.map(p => p.injury.weeks || 0)); if (back > 2) return false;
-  return psOf(tid).some(p => p.pos === pos && !p.injury && elevLeft(p) >= back);
+  const short = Math.max(1, (ELEV_DRESS[pos] || 1) - ro.filter(p => p.pos === pos && !p.injury && !onIR(p)).length); if (short > ELEV_MAX) return false;
+  return psOf(tid).filter(p => p.pos === pos && !p.injury && elevLeft(p) >= back).length >= short;
 }
 function psVet(p) { return p.exp > 2; }
 function psRoom(tid, p) {
@@ -369,12 +371,15 @@ function psPromotions(tid) {
   for (const pos of POSITIONS) {
     const healthy = rosterOf(tid).filter(p => p.pos === pos && !p.injury).length;
     const need = LINEUP_NEED[pos] + (auto && pos === 'QB' ? 1 : 0);
-    if (healthy >= need || elevationCovers(tid, pos)) continue; // a short hole: an elevation on game day covers it
+    // short of what it dresses there and its squad men have used their elevations: the way to dress one now is to sign him
+    const spent = healthy < (ELEV_DRESS[pos] || 1) && psOf(tid).some(p => p.pos === pos && !p.injury) && !psOf(tid).some(p => p.pos === pos && canElevate(p, tid));
+    if ((healthy >= need && !spent) || elevationCovers(tid, pos)) continue; // a short hole: an elevation on game day covers it
     const c = psOf(tid).filter(p => p.pos === pos && !p.injury).sort((a, b) => viewOvr(b, tid) - viewOvr(a, tid))[0];
     if (!c) continue;
     if (activeCount(tid) >= ROSTER_MAX) {
       const counts = {}; rosterOf(tid).forEach(p => { if (!p.injury) counts[p.pos] = (counts[p.pos] || 0) + 1; });
-      const cut = rosterOf(tid).filter(p => !onIR(p) && p.pos !== pos && (counts[p.pos] || 0) > LINEUP_NEED[p.pos] + 1).sort((a, b) => cutValue(a) - cutValue(b))[0];
+      const keep = q => healthy >= need ? Math.max(LINEUP_NEED[q] + 1, ELEV_DRESS[q] || 1) : LINEUP_NEED[q] + 1; // filling a dress hole does not open another
+      const cut = rosterOf(tid).filter(p => !onIR(p) && p.pos !== pos && (counts[p.pos] || 0) > keep(p.pos)).sort((a, b) => cutValue(a) - cutValue(b))[0];
       if (!cut) continue;
       releasePlayer(cut.id);
     }
@@ -448,7 +453,7 @@ function irActivations() {
 }
 
 // ---------- game day: 48 of the 53 dress ----------
-const GAMEDAY_MIN = { QB: 2, RB: 2, WR: 4, TE: 2, OL: 7, DL: 8, LB: 5, CB: 5, S: 3, K: 1, P: 1 };
+const GAMEDAY_MIN = { QB: 2, RB: 3, WR: 4, TE: 2, OL: 7, DL: 8, LB: 5, CB: 5, S: 3, K: 1, P: 1 }; // three backs dress: injuries and a long day at the position need them
 // men you have told to sit: they do not dress, so they take no snaps anywhere (preseason: held out)
 function satSet(tid) {
   if (!state || tid !== state.userTid || state.settings.autoUser) return null;

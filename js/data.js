@@ -26,12 +26,14 @@ const POS_SAL_EXP = { QB: 0.95, RB: 1.6, WR: 1.8, TE: 1.7, OL: 1.8, DL: 1.8, LB:
 const POS_VALUE = { QB: 1.6, RB: 0.7, WR: 1.0, TE: 0.75, OL: 0.9, DL: 1.05, LB: 0.75, CB: 0.95, S: 0.75, K: 0.3, P: 0.25 };
 
 // [name, min weeks, max weeks, weight]
+// [name, fewest weeks, most weeks, how common]. Calibrated to the league's injury reports (2021-23: most injuries cost a game or
+// two, about one in five lands a man on injured reserve) and its counts (about 100 concussions and 25 torn ACLs a regular season).
 const INJURIES = [
-  ['Ankle sprain', 1, 3, 14], ['Hamstring strain', 1, 4, 13], ['Concussion', 1, 3, 9], ['Knee sprain', 1, 4, 8],
-  ['MCL sprain', 3, 7, 5], ['High ankle sprain', 3, 7, 5], ['Shoulder sprain', 1, 4, 6], ['Groin strain', 1, 3, 6],
-  ['Back spasms', 1, 2, 5], ['Rib injury', 1, 3, 5], ['Quad strain', 1, 3, 5], ['Calf strain', 1, 4, 5],
-  ['Hip pointer', 1, 2, 4], ['Broken hand', 3, 6, 3], ['Turf toe', 2, 6, 3], ['Foot fracture', 6, 12, 2],
-  ['Broken arm', 6, 10, 1.5], ['Torn pectoral', 12, 30, 1], ['Torn ACL', 30, 45, 2], ['Torn Achilles', 35, 50, 1],
+  ['Ankle sprain', 1, 2, 14], ['Hamstring strain', 1, 3, 13], ['Concussion', 1, 2, 11], ['Knee sprain', 1, 2, 8],
+  ['MCL sprain', 2, 6, 6], ['High ankle sprain', 3, 6, 6], ['Shoulder sprain', 1, 3, 6], ['Groin strain', 1, 1, 5],
+  ['Back spasms', 1, 1, 4], ['Rib injury', 1, 1, 4], ['Quad strain', 1, 1, 4], ['Calf strain', 1, 3, 5],
+  ['Hip pointer', 1, 1, 3], ['Broken hand', 2, 5, 3], ['Turf toe', 2, 5, 3], ['Torn meniscus', 3, 7, 4], ['PCL sprain', 3, 6, 3],
+  ['Foot fracture', 6, 12, 2], ['Broken arm', 6, 10, 1.5], ['Fractured leg', 10, 30, 1], ['Torn pectoral', 12, 30, 1], ['Torn ACL', 30, 45, 3], ['Torn Achilles', 35, 50, 1.5],
 ];
 
 const TEAMS = [
