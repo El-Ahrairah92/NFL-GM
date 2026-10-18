@@ -268,7 +268,7 @@ function defenseCall(g, oc) {
   if (call.pres === 'FZ') call.cov = 'C3';
   call.stunt = call.pres !== 'BLITZ' && rand() < dt.stunt;
   // obvious passing downs in nickel or dime: the pass-rush line. If you named rush specialists, they come in every time.
-  const uc = userChart(g, d, 'def'), named = uc && (hasList(uc, 'RUSHE') || hasList(uc, 'RUSHI'));
+  const uc = userChart(g, d, 'def'), named = uc && !uc.staff && (hasList(uc, 'RUSHE') || hasList(uc, 'RUSHI'));
   if (lib && lib.travel && MAN_SHELLS.includes(call.cov)) call.travel = true;
   call.subRush = (pkg === 'NICKEL' || pkg === 'DIME') && sit.passDown && (named || rand() < 0.6);
   call.runBlitz = (call.pres === 'BLITZ' || call.pres === 'FZ') && runEst > 0.55;

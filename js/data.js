@@ -21,7 +21,7 @@ const ROSTER_MIN = { QB: 2, RB: 2, WR: 5, TE: 2, OL: 7, DL: 8, LB: 4, CB: 5, S: 
 // healthy bodies a team wants available at each legacy group (in-season signings)
 const LINEUP_NEED = { QB: 1, RB: 2, WR: 4, TE: 2, OL: 5, DL: 4, LB: 2, CB: 3, S: 2, K: 1, P: 1 };
 const STARTERS = { QB: 1, RB: 1, WR: 3, TE: 1, OL: 5, DL: 4, LB: 2, CB: 3, S: 2, K: 1, P: 1 };
-const POS_SAL_EXP = { QB: 1.3, RB: 1.6, WR: 1.8, TE: 1.7, OL: 1.8, DL: 1.8, LB: 1.9, CB: 1.8, S: 1.9, K: 2.0, P: 2.0 };
+const POS_SAL_EXP = { QB: 0.95, RB: 1.6, WR: 1.8, TE: 1.7, OL: 1.8, DL: 1.8, LB: 1.9, CB: 1.8, S: 1.9, K: 2.0, P: 2.0 };
 // legacy-group importance (AI needs/trades); per-spot salary & value live in attributes.js SPOTS
 const POS_VALUE = { QB: 1.6, RB: 0.7, WR: 1.0, TE: 0.75, OL: 0.9, DL: 1.05, LB: 0.75, CB: 0.95, S: 0.75, K: 0.3, P: 0.25 };
 

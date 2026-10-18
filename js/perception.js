@@ -18,14 +18,14 @@ function hashGauss(a, b, c) {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 // growth the scouts expect over the next year (league-average aging; individuals surprise)
-function scoutPeak(p) { return p.pos === 'QB' ? 30.7 : p.pos === 'K' || p.pos === 'P' ? 31.7 : p.pos === 'RB' ? 26.7 : 27.5; }
+function scoutPeak(p) { return p.pos === 'QB' ? 29 : p.pos === 'K' || p.pos === 'P' ? 31 : p.pos === 'RB' ? 25 : 26; }
 function expDelta(p) {
   const pk = scoutPeak(p);
   if (p.age < pk - 0.5) return Math.min(p.per.g, p.per.g / Math.max(1, pk - p.age) * 1.35);
   return -clamp((p.age + 1 - pk) * 0.42, 0, 3);
 }
 
-const FOG = { b: 5.5, g: 7.5, miss: 0.18, missBy: 8.5, gem: 0.03, gemBy: 5 };
+const FOG = { b: 5.5, g: 7.5, miss: 0.11, missBy: 7, gem: 0.08, gemBy: 6 }; // misread too high, and too low: both happen, and either can be big
 const FOG_POS = { QB: 1.3, WR: 1.2, CB: 1.2, TE: 1.05, EDGE: 1.05, IDL: 1.05, S: 1, RB: 0.85, FB: 0.85, OL: 0.85, LB: 0.85, K: 0.7, P: 0.7 };
 function initPerception(p, kind) {
   const prospect = kind === 'prospect';
@@ -42,7 +42,7 @@ function initPerception(p, kind) {
   // some college games do not translate: the whole league reads him as far more ready than he is. A few are better than their tape.
   let tb = 0;
   if (prospect) { const sure = clamp(1 - (((p.qz || 0) - 1.4) / 1.2) * 0.7, 0.3, 1), miss = FOG.miss * sure; // the truly elite are much harder to get wrong
-    const r = rand(); tb = r < miss ? Math.max(3, gauss(FOG.missBy, 2)) * fog : r < miss + FOG.gem ? -Math.max(2, gauss(FOG.gemBy, 1.5)) : 0; }
+    const r = rand(); tb = r < miss ? Math.max(3, gauss(FOG.missBy, 2)) * fog : r < miss + FOG.gem ? -Math.max(2, gauss(FOG.gemBy, 2.5)) * fog : 0; }
   p.per = { b: p.ovr + tb + gauss(0, sdB), g: Math.max(0, (p.pot - p.ovr) / (prospect && p.gf ? p.gf : 1) + gauss(0, sdG)), h0, h: h0, conf };
   if (tb) p.per.tb = round1(tb);
 }

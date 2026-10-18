@@ -20,7 +20,7 @@ const CHART_SECTIONS = [
   { unit: 'st', title: 'Special teams', rows: [['K', 'Kicker'], ['P', 'Punter'], ['KR', 'Kick returner'], ['PRET', 'Punt returner']] },
   { unit: 'st', title: 'Special teams units', pkg: true, rows: [['KO', 'Kickoff coverage'], ['KRU', 'Kick return blockers'], ['PU', 'Punt team (first two are the gunners)'], ['PRU', 'Punt return (first two hold up the gunners)']] },
 ];
-const CHART_DEPTH = { T3: 4, END: 4, WIDE: 4, OLB: 4, CB: 4, WLBP: 2, NCBP: 2, RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, Y3D: 2, K: 1, P: 1, KR: 2, PRET: 2, KO: 10, KRU: 10, PU: 10, PRU: 10 };
+const CHART_DEPTH = { RB: 5, RB3D: 3, RBSY: 3, Y: 4, H: 4, Y2: 4, FB: 3, MLB: 5, WLB: 5, SAM: 5, FS: 4, SS: 4, NCB: 4, DIME: 4, T3: 4, END: 4, WIDE: 4, OLB: 4, CB: 5, WLBP: 2, NCBP: 2, RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, Y3D: 2, K: 1, P: 1, KR: 2, PRET: 2, KO: 10, KRU: 10, PU: 10, PRU: 10 };
 const ROT_KEYS = new Set(['RB', 'X', 'Z', 'SLOT', 'Y', 'H', 'NOSE', 'SHADE', 'T3', 'END', 'WIDE', 'OLB', 'MLB', 'WLB', 'CB', 'NCB', 'FS', 'SS']);
 // How much of a spot's work goes to the next man up: [least, usual, most]. Your setting moves inside the band and no further:
 // nobody plays every snap on a defensive line, no back carries a whole offense, and a starting corner does not sit a third of the game.
@@ -38,18 +38,60 @@ function rotOpts(key) {
   return vals.map(v => [v, v === 0 ? name(v) : `${name(v)} (${Math.round(v * 100)}%)`]);
 }
 
+// ---------- the coaching staff's read: one rule for who plays where ----------
+// The staff keeps players in their own rooms: a man from another room has to be clearly better to take the job (a lineman or a
+// quarterback almost never moves, a tight end rarely; a corner and a safety trade places easily).
+function staffGuard(p, spot) {
+  const g = SPOTS[spot].g; if (p.spot === 'FB' && spot !== 'FB') return 14;
+  if (g === p.pos) return 0;
+  const db = q => q === 'CB' || q === 'S';
+  if (db(p.pos) && db(g)) return 2; // a corner and a safety trade places easily
+  let v = typeof GROUP_GUARD !== 'undefined' && GROUP_GUARD[g] ? GROUP_GUARD[g] : (p.pos === 'LB' && g === 'DL') || (p.pos === 'DL' && g === 'LB') ? 4 : 8;
+  if (g === 'LB' && db(p.pos)) v += 7; // a safety is not a linebacker because he grades out close
+  if (db(g) && !db(p.pos)) v += 7;     // nor a linebacker a safety
+  if (g === 'RB' && p.pos === 'WR') v += 16; // a receiver is the last resort in the backfield
+  if (g === 'RB' && p.pos === 'TE') v += 8;
+  return v;
+}
+function chartAx(key) { return LINE_ROLE_AX[key] !== undefined ? LINE_ROLE_AX[key] : key === 'RUSHI' ? 1.35 : key === 'RUSHE' ? 3 : null; }
+// how the staff grades a man at one of its jobs (L: this week's lean toward the young, if any)
+// a club gives its own high picks rope at a close call: it wants to see what it drafted (a first-rounder most, and less each year)
+const DRAFT_ROPE = { 1: [2, 1], 2: [1, 0.5], 3: [0.5, 0] };
+function draftRope(p, tid) { const d = p.draft; if (!d || d.tid !== tid || p.tid !== tid || p.exp > 1) return 0; const r = DRAFT_ROPE[d.round]; return r ? r[p.exp] || 0 : 0; }
+function staffRead(p, tid, key, L, spot) {
+  if (key === 'KR' || key === 'PRET') return returnScore(p);
+  spot = spot || chartSpotFor(tid, key);
+  const ax = chartAx(key), yb = (L && L.lean ? youthBoost(p, tid, L) : 0) + draftRope(p, tid), a = k => (p.a && p.a[k]) || 40;
+  // the specialists' skills count for the men from that room (a passing-down back is a back who catches, not a receiver)
+  const spec = key === 'RB3D' && p.pos === 'RB' ? ((a('hnd') + a('pbk') + a('rte')) / 3 - 60) * 0.9 : key === 'RBSY' && (p.pos === 'RB' || p.spot === 'FB') ? ((a('str') + a('bal')) / 2 - 70) * 1.6 : key === 'Y3D' && p.pos === 'TE' ? ((a('rte') + a('hnd')) / 2 - 60) * 0.6 : 0;
+  if (ax !== null) return lineSlotRating(p, ax) + (key === 'RUSHI' || key === 'RUSHE' ? ((p.a.prsh || 40) - 60) * 0.35 : 0) - (p.pos === 'DL' ? 0 : p.pos === 'LB' ? 4 : 8) + yb;
+  return slotRating(p, spot) - staffGuard(p, spot) + spec + yb;
+}
+// the staff's chart, as the game uses it for a club the staff runs: rebuilt each week (and whenever the roster changes)
+const STAFF_CHART = { key: null, m: {} };
+function staffChart(tid) {
+  const ro = rosterOf(tid), key = state.season + ':' + state.phase + ':' + (state.week || 0), sig = ro.length + ':' + ro.reduce((s, p) => s + p.id, 0) + ':' + ro.filter(p => onIR(p) || p.injury).map(p => p.id).join(',');
+  if (STAFF_CHART.key !== key) { STAFF_CHART.key = key; STAFF_CHART.m = {}; }
+  const hit = STAFF_CHART.m[tid]; if (hit && hit.sig === sig) return hit.c;
+  const c = { lists: defaultChart(tid, true), auto: { off: false, def: false, st: true }, rot: {}, ov: {}, staff: true };
+  STAFF_CHART.m[tid] = { sig, c }; return c;
+}
+// every job its own step, so the chart and the club's model always seat men in the same order
+const PERS_KEYS = new Set(['FB', 'SLOT2', 'Y2', 'OL6']);
+const CHART_PRI = { QB: 10, LT: 9, RT: 8.5, C: 8, LG: 7.6, RG: 7.5, RB: 7.2, X: 7.1, Z: 7, Y: 6.5, SLOT: 6, H: 5, FB: 4, SLOT2: 3.5, Y2: 3, OL6: 2.9,
+  MLB: 9, WLB: 8.5, CB: 8, FS: 7.6, SS: 7.5, SAM: 6, NCB: 5, DIME: 4 };
 // the staff's recommended chart (they know who's really better)
-function defaultChart(tid) {
-  const ro = rosterOf(tid).filter(p => p.a && !onIR(p));
-  const lists = {}, starters = { off: new Set(), def: new Set(), st: new Set() };
-  for (const sec of CHART_SECTIONS) for (const [key] of sec.rows) {
+function defaultChart(tid, healthy) { // healthy: this week's chart for the game, the injured left off
+  const ro = rosterOf(tid).filter(p => p.a && !onIR(p) && !(healthy && p.injury));
+  const lists = {}, starters = { off: new Set(), def: new Set(), st: new Set() }, L = typeof youthLeanOf === 'function' ? youthLeanOf(tid) : null, YB = p => L && L.lean ? youthBoost(p, tid, L) : 0;
+  // the staff seats its starters where they matter most first (the quarterback and the tackles, the corners and safeties before the
+  // nickel and dime), so a sub-package job does not take a man the base defense needs; lists come out in the usual order
+  for (const [sec, key] of CHART_SECTIONS.flatMap(sec => sec.rows.map(r => [sec, r[0]])).sort((a, b) => (CHART_PRI[b[1]] || 0) - (CHART_PRI[a[1]] || 0))) {
     const spot = chartSpotFor(tid, key), n = CHART_DEPTH[key] || 3;
-    // the staff keeps players in their own rooms, the way it does when it runs the unit itself: a safety is not a linebacker because he grades out close
-    const away = p => p.spot === 'FB' && spot !== 'FB' ? 14 : SPOTS[spot].g === p.pos ? 0 : (p.pos === 'CB' || p.pos === 'S') && (SPOTS[spot].g === 'CB' || SPOTS[spot].g === 'S') ? 2 : 8;
     if (ST_UNIT[key]) { lists[key] = stStaffUnit(ro.filter(p => !p.injury), key, stStarters(ro)).map(p => p.id); continue; } // the staff's ten: the job each man does, less the risk to a starter
     const isRet = key === 'KR' || key === 'PRET';
     const ax = LINE_ROLE_AX[key] !== undefined ? LINE_ROLE_AX[key] : key === 'RUSHI' ? 1.35 : key === 'RUSHE' ? 3 : null, rush = key === 'RUSHI' || key === 'RUSHE';
-    const ranked = ro.filter(p => SPOTS[p.spot].side === SPOTS[spot].side || isRet).map(p => [p, isRet ? returnScore(p) : ax !== null ? lineSlotRating(p, ax) + (rush ? ((p.a.prsh || 40) - 60) * 0.35 : 0) - (p.pos === 'DL' ? 0 : 8) : slotRating(p, spot) - away(p)])
+    const ranked = ro.filter(p => SPOTS[p.spot].side === SPOTS[spot].side || isRet).map(p => [p, staffRead(p, tid, key, L, spot)])
       .sort((a, b) => b[1] - a[1]).map(x => x[0]);
     if (!ranked.length) { lists[key] = []; continue; }
     // starters are unique within a unit (packages may reuse anyone)
@@ -58,7 +100,7 @@ function defaultChart(tid) {
     const need = key === 'CB' ? 2 : 1, firsts = [];
     for (const p of ranked) { if (firsts.length >= need) break; if (sec.pkg || !starters[sec.unit].has(p.id)) firsts.push(p); }
     if (!firsts.length) firsts.push(ranked[0]);
-    if (!sec.pkg) for (const p of firsts) starters[sec.unit].add(p.id);
+    if (!sec.pkg && !PERS_KEYS.has(key)) for (const p of firsts) starters[sec.unit].add(p.id); // the personnel-only jobs (fullback, fourth receiver, third tight end, sixth lineman) never share the field, so they do not block each other
     lists[key] = [...firsts, ...ranked.filter(p => !firsts.includes(p))].slice(0, n).map(p => p.id);
   }
   return lists;

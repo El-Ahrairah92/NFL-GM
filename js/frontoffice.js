@@ -1,14 +1,15 @@
 'use strict';
 // =====================================================================
-//  FRONT OFFICE: how a club values its own roster
-//  One question drives every decision: how much better are this team's lineups with a player than without him?
-//  - Jobs come from what the team runs: its personnel groupings, its front, its sub packages, its situational roles.
-//  - A player is read job by job, through this club's eyes: what the film shows, his size, the scheme, how well he
-//    knows the spot. Clubs know their own men better than anyone else's, and better front offices read more truly.
-//  - A unit is scored healthy, with each starter out, and with each pair out. In every case the best lineup is found
-//    with anyone free to move, so one flexible backup can be the answer to several injuries but only one at a time.
-//  - A player's worth is what the unit loses without him, plus what he may become, what he does on special teams,
-//    and less what he costs.
+//  HOW A CLUB VALUES ITS PLAYERS: one rule, its coaching staff's
+//  One question drives every roster decision: how much better are this club's lineups with a player than without him?
+//  - The jobs are the coaching staff's depth-chart jobs, weighted by how much each is on the field in its scheme.
+//  - A player is graded at each job the way the staff grades him for its chart (staffRead: his rating at the spot, the room
+//    guard, the specialists' skills, this week's lean toward the young). The staff sees its own players as they are; anyone
+//    else is seen through the club's scouting, as well as its coaches' eye for talent allows (coachEval).
+//  - Jobs are filled in the staff's order, so the club's model, its depth chart, the lineups in its games and every
+//    player's role all agree. A unit is scored healthy, with each starter missing and with each pair missing.
+//  - A player's worth is what the lineups lose without him, plus what he may become and what he does on special teams,
+//    less what he costs at the club's price of money (budget.js).
 //  Nothing here is shown to the player and no club is given knowledge it would not have.
 // =====================================================================
 const FO = {
@@ -21,11 +22,18 @@ const FO = {
   floor: { QB: 2, RB: 3, WR: 5, TE: 3, OL: 8, DL: 7, LB: 4, CB: 5, S: 3, K: 1, P: 1 },
   cap: { QB: 3, RB: 5, WR: 8, TE: 5, OL: 11, DL: 11, LB: 8, CB: 8, S: 6, K: 1, P: 1 },                                    // and bodies it will not carry more of, whatever the sums say                                // bodies a club will not go below, whatever the sums say
 };
+// a club gives its own draft picks time: a first-rounder about three years, a second-rounder two, a late pick his rookie summer
+function foDraftHold(p) { if (!p.draft || p.exp > 2) return 0; const r = p.draft.round; return (r === 1 ? [5, 4, 2.5] : r === 2 ? [3.5, 2.5, 1] : r === 3 ? [3, 1.2, 0.4] : [0.8, 0.3, 0])[p.exp]; }
 const FO_UNIT = { QB: 'QB', RB: 'SKILL', WR: 'SKILL', TE: 'SKILL', OL: 'OL', DL: 'FRONT', LB: 'FRONT', CB: 'DB', S: 'DB', K: 'K', P: 'P' };
 // every club has a front office of its own quality: sharp across the league, with a real spread
-function foQuality(t) { if (t.fo === undefined) t.fo = Math.round(clamp(72 + hashGauss(t.id, 771, 3) * 8, 52, 93)); return t.fo; }
+// how well a club reads players it does not coach: its coaching staff's eye for talent (the head coach's most of all). A staff that
+// judges well builds better rosters; one that does not overpays for what it thinks it sees.
+function coachEval(c) { if (!c) return 55; if (c.ev === undefined) c.ev = Math.round(clamp(66 + hashGauss(c.id, 917, 3) * 11, 35, 95)); return c.ev; }
+function foQuality(t) { return Math.round(coachEval(C(t.hc)) * 0.5 + coachEval(C(t.oc)) * 0.25 + coachEval(C(t.dc)) * 0.25); }
 function foVal(v, spot) { return v <= 45 ? 0 : Math.pow((v - 45) / 10, 2.4) * (SPOTS[spot].val || 1); }
 function foSize(p, spot) { const b = SPOTS[spot].body; return b && p.m ? clamp((p.m.wt - b[2]) / b[3], -2.5, 2.5) * (FO.size[SPOTS[spot].g] || 0) : 0; }
+// the club keeps players in their own rooms the way its coaches do: a man from another room has to be clearly better to take the job
+function foGuard(p, spot) { return staffGuard(p, spot); }
 // what this club thinks he is at a given spot
 function foRead(p, tid, spot, fit) {
   const q = foQuality(T(tid)), own = p.tid === tid, same = spot === p.spot;
@@ -33,25 +41,51 @@ function foRead(p, tid, spot, fit) {
   return slotRating(p, spot) + (viewOvr(p, tid) - p.ovr) + foSize(p, spot) + (same ? (fit || 0) * 0.8 : 0) + hashGauss(p.id * 7 + SPOT_KEYS.indexOf(spot), 900 + tid, state.season) * sd;
 }
 // the jobs this club has to fill, weighted by how much it uses them
+// The club's jobs are its coaching staff's: the depth chart's jobs, weighted by how much each is on the field in its scheme. The
+// line's jobs are its base front's (one man each), with a rotation job behind each (the line plays in waves).
+const GROUP_UNIT = { QB: 'QB', RB: 'SKILL', WR: 'SKILL', TE: 'SKILL', OL: 'OL', DL: 'FRONT', LB: 'FRONT', CB: 'DB', S: 'DB', K: 'K', P: 'P' };
+// the line's jobs: how many of each the base front uses, and how much of the game each is on the field across the club's base,
+// nickel and dime looks (a nose tackle may only play in base)
+function foBaseFront(tid) {
+  const t = T(tid), dt = defTend(t), list = defLookList(t), base = dt.base !== undefined ? dt.base : 0.3, dime = 0.13, nick = Math.max(0, 1 - base - dime);
+  const L = list.find(x => x.pkg === 'BASE' && x.front === dt.front) || list[0], rows = packageLayout(L.front, L.pkg, lookTOf(L)), line = {}, use = {};
+  const keysOf = X => { const c = {}; for (const [name, type, x, depth] of packageLayout(X.front, X.pkg, lookTOf(X))) { if (!(DEF_SLOT[type] && DEF_SLOT[type][1] === 'DL' && !(depth > 0))) continue; const k = defRoleKey(name, type, x, depth, X.front, X.pkg); c[k] = (c[k] || 0) + 1; } return c; };
+  Object.assign(line, keysOf(L));
+  for (const [pkg, share] of [['BASE', base], ['NICKEL', nick], ['DIME', dime]]) { const looks = list.filter(x => x.pkg === pkg && x.front === dt.front && x.group !== 'Other' || (pkg === 'DIME' && x.pkg === 'DIME')); const tot = looks.reduce((s, x) => s + (x.share || 1), 0) || 1;
+    for (const X of looks) { const c = keysOf(X); for (const k in c) use[k] = (use[k] || 0) + share * (X.share || 1) / tot * Math.min(1, c[k] / Math.max(1, line[k] || c[k])); } }
+  // a sub-package job is usually the same man shifted (a 3-4 edge is the nickel's wide end, its end the 3-technique): credit the base job nearest in alignment
+  const ax = k => LINE_ROLE_AX[k] !== undefined ? LINE_ROLE_AX[k] : 2;
+  for (const k in use) { if (line[k]) continue; const b = Object.keys(line).sort((x, y) => Math.abs(ax(x) - ax(k)) - Math.abs(ax(y) - ax(k)))[0]; if (b) use[b] = (use[b] || 0) + use[k]; }
+  return { line, use, sam: rows.some(r => r[1] === 'SAM') };
+}
 function foJobs(tid) {
   const t = T(tid), ot = offTend(t) || {}, dt = defTend(t) || {}, pers = ot.pers || { 11: 62, 12: 20, 21: 8 };
   const tot = Object.values(pers).reduce((s, x) => s + x, 0) || 100, sh = k => (pers[k] || 0) / tot;
   const slot = clamp(sh('11') + sh('10'), 0.2, 1), te2 = clamp(sh('12') + sh('13') + sh('22'), 0.08, 0.8), fb = sh('21') + sh('22');
-  const base = dt.base !== undefined ? dt.base : 0.3, odd = dt.front === '3-4' || dt.front === 'Tite', dime = 0.13, sub = clamp(1 - base, 0.3, 0.95);
-  const a = (o, k) => (o.a && o.a[k]) || 40, J = (key, unit, spot, w, extra, free) => ({ key, unit, spot, w, extra: extra || null, free: !!free });
-  return [
-    J('QB', 'QB', 'QB', 1),
-    J('RB', 'SKILL', 'RB', 0.7), J('RB2', 'SKILL', 'RB', 0.3), J('WR4', 'SKILL', 'WRX', 0.26), J('X', 'SKILL', 'WRX', 1), J('Z', 'SKILL', 'WRZ', 0.95), J('SLOT', 'SKILL', 'SLOT', slot), J('Y', 'SKILL', 'TEY', 0.85), J('H', 'SKILL', 'TEH', te2), ...(fb >= 0.06 ? [J('FB', 'SKILL', 'FB', fb * 0.6)] : []),
-    // situational: a man already on the field can hold these too, so only a real specialist earns anything here
-    J('RB3D', 'SKILL', 'RB', 0.28, p => ((a(p, 'hnd') + a(p, 'pbk') + a(p, 'rte')) / 3 - 60) * 0.9, true), J('RBSY', 'SKILL', 'RB', 0.08, p => ((a(p, 'str') + a(p, 'bal')) / 2 - 70) * 1.6, true),
-    J('LT', 'OL', 'LT', 1), J('LG', 'OL', 'LG', 1), J('C', 'OL', 'C', 1), J('RG', 'OL', 'RG', 1), J('RT', 'OL', 'RT', 1),
-    J('EDGE1', 'FRONT', 'EDGE', 1), J('EDGE2', 'FRONT', 'EDGE', 1), J('EDGE3', 'FRONT', 'EDGE', 0.4), J('IDL3', 'FRONT', 'DT', 0.45), J('IDL4', 'FRONT', odd ? 'DE' : 'DT', 0.28), // the line plays in waves
-    ...(odd ? [J('NT', 'FRONT', 'NT', 0.55 + 0.4 * base), J('DE1', 'FRONT', 'DE', 0.95), J('DE2', 'FRONT', 'DE', 0.5 + 0.5 * base)] : [J('DT1', 'FRONT', 'DT', 0.95), J('DT2', 'FRONT', 'NT', 0.55 + 0.4 * base)]),
-    J('RUSHE', 'FRONT', 'EDGE', 0.22, p => (a(p, 'prsh') - 66) * 0.45, true), J('RUSHI', 'FRONT', 'DT', 0.22, p => (a(p, 'prsh') - 62) * 0.45, true),
-    J('MLB', 'FRONT', 'MLB', 1), J('WLB', 'FRONT', 'WLB', 1 - dime * 0.6), ...(odd ? [] : [J('SAM', 'FRONT', 'WLB', base * 0.85)]),
-    J('CB1', 'DB', 'CB', 1), J('CB2', 'DB', 'CB', 1), J('NCB', 'DB', 'NCB', sub), J('DIME', 'DB', 'NCB', dime), J('FS', 'DB', 'FS', 1), J('SS', 'DB', 'SS', 1), J('CB4', 'DB', 'CB', 0.2), J('S3', 'DB', 'SS', 0.3),
-    J('K', 'K', 'K', 0.5), J('P', 'P', 'P', 0.35),
-  ];
+  const base = dt.base !== undefined ? dt.base : 0.3, dime = 0.13, sub = clamp(1 - base, 0.3, 0.95), BF = foBaseFront(tid), out = [];
+  const J = (key, w, opt) => { opt = opt || {}; const spot = chartSpotFor(tid, key), unit = GROUP_UNIT[SPOTS[spot].g], n = opt.n || 1;
+    for (let i = 0; i < n; i++) out.push({ key: key + (opt.rot ? '~R' : '') + (n > 1 ? '#' + (i + 1) : ''), base: key, unit, spot, w, free: !!opt.free, rot: !!opt.rot }); };
+  J('QB', 1); J('LT', 1); J('RT', 1); J('C', 1); J('LG', 1); J('RG', 1);
+  J('RB', 0.7); J('RB', 0.3, { rot: true }); J('X', 1); J('Z', 0.95); J('Y', 0.85); J('SLOT', slot); J('H', te2);
+  if (fb >= 0.06) J('FB', fb * 0.6); J('SLOT2', Math.max(0.15, sh('10') + 0.1)); J('Y2', Math.max(0.05, sh('13')));
+  J('RB3D', 0.28, { free: true }); J('RBSY', 0.08, { free: true }); J('Y3D', 0.1, { free: true }); // situational: a man already on the field can hold these too
+  for (const k in BF.line) { const w = clamp((BF.use[k] || 0.3) * 0.85, 0.15, 0.85); J(k, w, { n: BF.line[k] }); J(k, w * 0.25, { n: BF.line[k], rot: true }); } // the second man in the wave
+  J('RUSHE', 0.22, { free: true }); J('RUSHI', 0.22, { free: true });
+  J('MLB', 1); J('WLB', 1 - dime * 0.6); if (BF.sam) J('SAM', base * 0.85);
+  J('CB', 1, { n: 2 }); J('FS', 1); J('SS', 1); J('NCB', sub); J('DIME', dime);
+  J('K', 0.8); J('P', 0.5);
+  return out;
+}
+// how the club grades a man at one of its jobs: the coaching staff's read (its own players as they are, with this week's lean
+// toward the young); anyone else as its scouting sees him, which can be off
+function foJobRead(p, tid, j, L) {
+  if (SPOTS[j.spot].side !== SPOTS[p.spot].side || !p.a) return 0;
+  const own = p.tid === tid;
+  return staffRead(p, tid, j.base, own ? L : null, j.spot) + (own ? 0 : staffEvalErr(p, tid, j.spot));
+}
+function staffEvalErr(p, tid, spot) {
+  const q = foQuality(T(tid)), sd = FO.sdJob * (1.7 - q / 100);
+  return (viewOvr(p, tid) - p.ovr) + hashGauss(p.id * 7 + SPOT_KEYS.indexOf(spot), 900 + tid, state.season) * sd * (spot === p.spot ? 0.5 : 1);
 }
 // a unit's worth: its best lineup healthy, with each starter missing, and with each pair missing, weighted by how likely that is
 function foUnitScoreSlow(jobs, ids, V, H, skip) {
@@ -81,20 +115,20 @@ function foUnitScore(jobs, ids, V, H, skip) {
 // the staff's 53: cut the man the club would miss least, re-check his unit, and repeat
 let FO_CACHE = { key: null, plan: null };
 function foCutPlan(tid, limit) {
-  const all = rosterOf(tid).filter(p => p.a && (typeof countsOn53 !== 'function' || countsOn53(p)) && !onIR(p));
+  const all = rosterOf(tid).filter(p => p.a && (typeof countsOn53 !== 'function' || countsOn53(p, true)) && !onIR(p));
   const key = `${tid}:${limit}:${state.season}:${state.phase}:${all.length}:${all.reduce((s, p) => s + p.id, 0)}`;
   if (FO_CACHE.key === key) return FO_CACHE.plan;
-  const jobsAll = foJobs(tid), units = {}, V = {}, H = {}, extra = {}, byId = {}, dev = {};
+  const jobsAll = foJobs(tid), units = {}, V = {}, H = {}, extra = {}, byId = {}, dev = {}, S = stanceCfg(tid), rplan = roomPlan(tid), LN = typeof youthLeanOf === 'function' ? youthLeanOf(tid) : null;
   for (const p of all) {
     byId[p.id] = p; const u = FO_UNIT[p.pos] || 'SKILL', jobs = units[u] || (units[u] = { jobs: jobsAll.filter(j => j.unit === u).sort((x, y) => (x.free - y.free) || (y.w * (SPOTS[y.spot].val || 1) - x.w * (SPOTS[x.spot].val || 1))), ids: [] }); jobs.ids.push(p.id);
     const fit = typeof schemeFit === 'function' ? schemeFit(p, tid) : 0;
-    V[p.id] = jobs.jobs.map(j => { const side = SPOTS[j.spot].side === SPOTS[p.spot].side; if (!side) return 0; const r = foRead(p, tid, j.spot, fit) + (j.extra ? j.extra(p) : 0); return j.w * foVal(r, j.spot); });
+    V[p.id] = jobs.jobs.map(j => { const r = foJobRead(p, tid, j, LN); return r ? j.w * foVal(r, j.spot) : 0; });
     H[p.id] = Math.min(0.6, (FO.hurt[p.pos] || 0.1) * (1 + Math.max(0, p.age - 28) * 0.06) * FO.risk);
     // beyond today's lineup: what he may become, what he does in the kicking game, and what he costs to keep
-    const now = foRead(p, tid, p.spot, fit), g = p.age <= 26 ? viewGrowth(p, tid) * Math.min(1, (27 - p.age) / 4) : 0;
-    dev[p.id] = FO.dev * Math.max(0, foVal(now + g, p.spot) - foVal(now, p.spot));
+    const now = foRead(p, tid, p.spot, fit), g = p.age <= 25 ? viewGrowth(p, tid) * Math.min(1, (26 - p.age) / 4) : 0;
+    dev[p.id] = FO.dev * S.dev * Math.max(0, foVal(now + g, p.spot) - foVal(now, p.spot)); // a rebuilding club counts upside for more
     extra[p.id] = (typeof stCover === 'function' && ST_OK.has(p.spot) ? clamp((stCover(p) - 60) / 10, 0, 1.5) * FO.st : 0)
-      - Math.max(0, cutSavings(p) - MIN_SALARY) * FO.money + (p.exp === 0 && p.draft ? (p.draft.round <= 3 ? 3 : 0.8) : 0);
+      - moneyCost(tid, cutSavingsByYear(p)) + foDraftHold(p) + (rplan.succ.has(p.id) ? 1.5 : 0); // what keeping him costs at this club's price of money; the heir to a job is kept
   }
   for (const pos of POSITIONS) all.filter(p => p.pos === pos).sort((a, b) => dev[b.id] - dev[a.id]).forEach((p, i) => { extra[p.id] += dev[p.id] * Math.pow(0.5, i); });
   const worth = {}, sweep = u => { const U = units[u], full = foUnitScore(U.jobs, U.ids, V, H, -1); for (const id of U.ids) worth[id] = full - foUnitScore(U.jobs, U.ids, V, H, id) + extra[id]; };
@@ -118,20 +152,20 @@ function foCutPlan(tid, limit) {
 //  Used wherever a club brings someone in: filling the camp roster, waiver claims, replacing the injured.
 // =====================================================================
 function foModel(tid, players) {
-  const M = { tid, jobsAll: foJobs(tid), units: {}, V: {}, H: {}, extra: {}, dev: {}, byId: {}, counts: {}, comp: {} };
+  const M = { tid, jobsAll: foJobs(tid), units: {}, V: {}, H: {}, extra: {}, dev: {}, byId: {}, counts: {}, comp: {}, L: typeof youthLeanOf === 'function' ? youthLeanOf(tid) : null };
   for (const p of players) foAdd(M, p);
   return M;
 }
-function foUnitOf(M, p) { const u = FO_UNIT[p.pos] || 'SKILL'; return M.units[u] || (M.units[u] = { key: u, jobs: M.jobsAll.filter(j => j.unit === u).sort((x, y) => (x.free - y.free) || (y.w * (SPOTS[y.spot].val || 1) - x.w * (SPOTS[x.spot].val || 1))), ids: [] }); }
+function foUnitOf(M, p) { const u = FO_UNIT[p.pos] || 'SKILL'; return M.units[u] || (M.units[u] = { key: u, jobs: M.jobsAll.filter(j => j.unit === u).sort((x, y) => (x.free - y.free) || (x.rot - y.rot) || ((CHART_PRI[y.base] || 0) - (CHART_PRI[x.base] || 0)) || (y.w * (SPOTS[y.spot].val || 1) - x.w * (SPOTS[x.spot].val || 1))), ids: [] }); }
 // work out one man's reads for this club (whether or not he is on it yet)
 function foRow(M, p) {
   if (M.V[p.id]) return;
   const U = foUnitOf(M, p), fit = typeof schemeFit === 'function' ? schemeFit(p, M.tid) : 0;
   M.byId[p.id] = p;
-  M.R = M.R || {}; M.R[p.id] = U.jobs.map(j => SPOTS[j.spot].side === SPOTS[p.spot].side ? foRead(p, M.tid, j.spot, fit) + (j.extra ? j.extra(p) : 0) : 0);
+  M.R = M.R || {}; M.R[p.id] = U.jobs.map(j => foJobRead(p, M.tid, j, M.L));
   M.V[p.id] = U.jobs.map((j, i) => M.R[p.id][i] ? j.w * foVal(M.R[p.id][i], j.spot) : 0);
   M.H[p.id] = Math.min(0.6, (FO.hurt[p.pos] || 0.1) * (1 + Math.max(0, p.age - 28) * 0.06) * FO.risk);
-  const now = foRead(p, M.tid, p.spot, fit), g = p.age <= 26 ? viewGrowth(p, M.tid) * Math.min(1, (27 - p.age) / 4) : 0;
+  const now = foRead(p, M.tid, p.spot, fit), g = p.age <= 25 ? viewGrowth(p, M.tid) * Math.min(1, (26 - p.age) / 4) : 0;
   M.dev[p.id] = FO.dev * Math.max(0, foVal(now + g, p.spot) - foVal(now, p.spot));
   M.extra[p.id] = (typeof stCover === 'function' && ST_OK.has(p.spot) ? clamp((stCover(p) - 60) / 10, 0, 1.5) * FO.st : 0);
 }
@@ -148,7 +182,7 @@ function foGain(M, p) {
 function foWorths(M, unitKey) {
   const out = {};
   for (const u in M.units) { if (unitKey && u !== unitKey) continue; const U = M.units[u], full = foUnitScore(U.jobs, U.ids, M.V, M.H, -1);
-    for (const id of U.ids) { const p = M.byId[id]; out[id] = full - foUnitScore(U.jobs, U.ids, M.V, M.H, id) + M.extra[id] + M.dev[id] * 0.5 - Math.max(0, cutSavings(p) - MIN_SALARY) * FO.money; } }
+    for (const id of U.ids) { const p = M.byId[id]; out[id] = full - foUnitScore(U.jobs, U.ids, M.V, M.H, id) + M.extra[id] + M.dev[id] * 0.5 - moneyCost(M.tid, cutSavingsByYear(p)) + (p.tid === M.tid ? foDraftHold(p) : 0); } } // letting him go: what it saves (or costs) at this club's price; its own picks get their time
   return out;
 }
 function foLeast(M, keepIds) { // the man the club would miss least, never taking a position below its floor
@@ -207,11 +241,16 @@ function foCampSignings(tid) {
 // ---------- waivers: would this man make the club better than the man he would replace? ----------
 const FO_MODELS = { key: null, m: {} };
 function foCachedModel(tid) { const key = state.season + ':' + state.phase + ':' + state.week; if (FO_MODELS.key !== key) { FO_MODELS.key = key; FO_MODELS.m = {}; } return FO_MODELS.m[tid] || (FO_MODELS.m[tid] = foModel(tid, rosterOf(tid).filter(p => p.a && !onIR(p)))); }
+// A claim takes on his contract and turns over a roster spot, so it has to be a clear upgrade, not a marginal one.
+const FO_CLAIM_BAR = 1.0;
 function foWaiverDrop(p, tid) {
   const M = foCachedModel(tid); if (M.byId[p.id] && foUnitOf(M, p).ids.includes(p.id)) return null;
-  const g = foGain(M, p); if (g < 0.35) return null;
+  const bar = FO_CLAIM_BAR + (state.phase === 'REG' || state.phase === 'PLAYOFFS' ? FO_CHURN * 3 : 0); // mid-season, turning a spot over costs more
+  const c = p.waiver ? p.waiver.c : { amt: MIN_SALARY, yrs: 1 }; if (!streetPayOk(tid, p, c.amt)) return null; // his contract comes with him: no more than the club would pay him
+  const g = foGain(M, p) - moneyCost(tid, overMin(c.amt, Math.min(3, c.yrs || 1))) - bar + 0.35; if (g < 0.35) return null;
   if ((M.counts[p.pos] || 0) >= (FO.cap[p.pos] || 99)) { // already carrying all it wants there: one of them has to be the man who goes
     const U = foUnitOf(M, p), w = foWorths(M, U.key); let b = null, low = 1e9; for (const id of U.ids) if (M.byId[id].pos === p.pos && w[id] < low) { low = w[id]; b = M.byId[id]; }
+    if (b && (p.pos === 'K' || p.pos === 'P')) low = foSwapWorth(M, p, b);
     return b && g - low > 0.35 ? b : null;
   }
   M.least = M.least || foLeast(M); // the one man this club would let go
@@ -234,12 +273,13 @@ function foInjuryMoves(tid) {
   let moves = 0;
   for (const pos of poss) {
     const out = Math.min(left, Math.max(...hurt.filter(p => p.pos === pos).map(p => p.injury.weeks))), share = out / left; // the part of what is left that he misses
+    if (out <= 2 && elevationCovers(tid, pos)) continue; // a week or two: the squad covers it on game day
     const room = capRoom(tid);
-    const fa = Object.values(state.players).filter(p => p.tid === -1 && p.a && p.pos === pos && !p.injury && !p.waiver && p.ask <= room).sort((a, b) => viewOvr(b, tid) - viewOvr(a, tid)).slice(0, 8);
+    const fa = Object.values(state.players).filter(p => p.tid === -1 && p.a && p.pos === pos && !p.injury && !p.waiver && p.ask <= room).sort((a, b) => viewOvr(b, tid) - viewOvr(a, tid)).slice(0, 8).filter(p => streetPayOk(tid, p, p.ask));
     const own = typeof psOf === 'function' ? psOf(tid).filter(p => p.a && p.pos === pos && !p.injury) : [];
     const over = g => share * g[0] + (1 - share) * g[1]; // value across the rest of the season
     let pick = null, bg = 0;
-    for (const p of [...fa, ...own]) { const g = over([foGain(now, p), foGain(full, p)]) + (p.tid === -3 ? 0.1 : -Math.max(0, p.ask - MIN_SALARY) * FO.money * 0.5); if (g > bg) { bg = g; pick = p; } } // his own man knows the system and costs the minimum
+    for (const p of [...fa, ...own]) { const g = over([foGain(now, p), foGain(full, p)]) + (p.tid === -3 ? 0.1 : -moneyCost(tid, [p.ask - MIN_SALARY]) * 0.5); if (g > bg) { bg = g; pick = p; } } // his own man knows the system and costs the minimum
     if (!pick || bg < 0.2) continue;
     let drop = null;
     if (activeCount(tid) >= ROSTER_MAX) { // someone has to go: the man the club will miss least over the same stretch
@@ -267,11 +307,15 @@ const FO_SHOP = {
   cut: { bar: 0.45, reserve: 3, per: 12 },  // after cutdown: other clubs' cuts against the bottom of the 53
   week: { bar: 0.9, reserve: 2, per: 6 },   // during the season: only a clear upgrade is worth the churn
 };
-function foShop(kind, only) {
+// opts.skip: players not on this market yet. opts.ext: another bidder (you) whose offers stand; a man both want chooses.
+// what the man a club lets go is worth to it once the newcomer is in the room
+function foSwapWorth(M, p, d) { foAdd(M, p); const w = foWorths(M, FO_UNIT[p.pos] || 'SKILL')[d.id]; foRemove(M, p); return w === undefined ? 0 : w; }
+function foShop(kind, only, opts) {
+  opts = opts || {};
   const cfg = FO_SHOP[kind];
   const clubs = state.teams.filter(t => isAI(t.id) && (!FO.extra || FO.extra(t.id)) && (!only || only(t.id)));
   if (!clubs.length || FO.on === false) return 0;
-  const byPos = {}; for (const p of Object.values(state.players)) if (p.tid === -1 && p.a && !p.injury && !p.waiver) (byPos[p.pos] = byPos[p.pos] || []).push(p);
+  const byPos = {}; for (const p of Object.values(state.players)) if (p.tid === -1 && p.a && !p.injury && !p.waiver && !(opts.skip && opts.skip.has(p.id))) (byPos[p.pos] = byPos[p.pos] || []).push(p);
   const cand = []; for (const pos in byPos) cand.push(...byPos[pos].sort((a, b) => perOvr(b) - perOvr(a)).slice(0, cfg.per)); // the names every club has on its list
   if (!cand.length) return 0;
   const S = clubs.map(t => ({ tid: t.id, M: foModel(t.id, rosterOf(t.id).filter(p => p.a && !p.injury && !onIR(p))), g: {}, weak: null, least: undefined, done: false }));
@@ -295,11 +339,13 @@ function foShop(kind, only) {
       let best = null, bs = -1e9, bd = null, open = false;
       for (const p of cand) {
         if (p.tid !== -1 || p.ask > room) continue;
+        if (p.ask > MIN_SALARY * 1.5 && isAI(c.tid) && !streetPayOk(c.tid, p, p.ask)) continue; // not at that price
         const over = kind !== 'camp' && (c.M.counts[p.pos] || 0) >= (FO.cap[p.pos] || 99), drop = over ? leastAt(c, p.pos) : full ? c.least : null;
         if ((over || full) && (!drop || drop.p.id === p.id)) continue;
         let g = c.g[p.id];
+        const solo = drop && drop.p.pos === p.pos && (p.pos === 'K' || p.pos === 'P');
         if (g === undefined) g = c.g[p.id] = viewOvr(p, c.tid) + 6 < weakOf(c, p) && p.pos !== 'K' && p.pos !== 'P' ? 0 : foGain(c.M, p);
-        const net = g - Math.max(0, p.ask - MIN_SALARY) * FO.money - (drop ? Math.max(0, drop.worth) : 0);
+        const net = g - moneyCost(c.tid, [p.ask - MIN_SALARY]) - (drop ? Math.max(0, solo ? foSwapWorth(c.M, p, drop.p) : drop.worth) : 0);
         if (net > bs) { bs = net; best = p; bd = drop; open = !drop; }
       }
       const bar = open && kind === 'cut' ? 0.01 : cfg.bar; // an open place on the 53 goes to the best man available
@@ -309,7 +355,8 @@ function foShop(kind, only) {
     bids.sort((a, b) => b.net - a.net); const took = new Set();
     for (const b of bids) {
       if (took.has(b.p.id)) continue; // he went elsewhere: this club looks again next round
-      const c = b.c;
+      const c = b.c, X = opts.ext;
+      if (X && X.ids.has(b.p.id) && b.p.tid === -1 && X.choose(b.p, c.tid) && X.sign(b.p)) { took.add(b.p.id); continue; } // he took your offer instead
       if (b.drop) { releasePlayer(b.drop.p.id); foRemove(c.M, b.drop.p); }
       else if (count(c.tid) >= limit) { c.done = true; continue; }
       if (signFA(b.p.id, c.tid, 1)) { c.done = true; continue; }
@@ -336,3 +383,4 @@ function foPsOrder(tid, pool, score) {
   const top = pool.slice(0, 48).map(p => ({ p, s: score(p) + (p.a ? clamp(foGain(M, p), 0, 3) * 1.5 : 0) })).sort((a, b) => b.s - a.s).map(x => x.p);
   return top.concat(pool.slice(48));
 }
+if (typeof document !== 'undefined' && typeof clubBudget === 'undefined') document.write('<script src="js/budget.js?v=' + Date.now() + '"></script>');

@@ -171,8 +171,12 @@ function draftOrder(year) {
 
 function startOffseason() {
   state.plan = null; // a new offseason: the roster planner starts from the staff's chart again
+  for (const p of Object.values(state.players)) if (p.waiver) delete p.waiver; // the season's waiver wire closes: anyone left on it is a free agent
+  if (state.iw) state.iw = { claims: {}, ps: [] };
   const year = state.season + 1;
+  const unused = typeof carryoverClose === 'function' ? carryoverClose() : null;
   growCap(); // new league year: cap, minimum salary and dead money roll over
+  if (unused) carryoverOpen(unused);
   state.draft = { year, order: draftOrder(year), idx: 0 };
   // progression, retirement, healing, contracts
   const retired = [];
@@ -227,10 +231,11 @@ function needAt(tid, pos, excludeId) {
 }
 function aiWantsResign(p) {
   const v = viewOvr(p, p.tid);
-  if (p.age >= 34 && v < 80) return false;
-  const n = needAt(p.tid, p.pos, p.id);
+  if (p.age >= ageFor(p, 32) && v < 80) return false;
   if (v >= 76) return true;
-  if (v >= n.floor - 2 && v >= 62) return true;
+  const R = clubRead(p.tid, p), n = needAt(p.tid, p.pos, p.id); // what the room loses without him: the gap to the man who would take over
+  if ((R.start || R.gap >= -2) && v >= 62) return true;
+  if (R.g >= 1.5) return true;
   if (n.count < ROSTER_MIN[p.pos] && p.ask <= 3) return true;
   return rand() < 0.25 && p.ask <= 1.5;
 }
@@ -244,7 +249,30 @@ function resignPlayer(pid, yrs) {
   p.expiring = false; delete p.ask;
   return null;
 }
+// the re-signing decision for a club's own free agent: is he still part of the plan, at a price this club will pay
+function aiResign(p, tid) {
+  const S = stanceCfg(tid), v = viewOvr(p, tid), st = stanceOf(tid);
+  if (p.age >= walkAge(S, p) && v < 80) return false;
+  if ((st === 'rebuild' || st === 'retool') && p.age >= ageFor(p, 29) && v < 76) return false;
+  if (!aiWantsResign(p) && planNeedFor(tid, p) <= 0) return false;
+  if (p.ask > capRoom(tid) - S.reserve || p.ask > aiCeil(p.pos)) return false;
+  if (p.pos === 'QB' && clubRead(tid, p).clear < 0.5 && p.ask > 0.05 * state.cap) return false; // a quarterback the club is not sure starts: a competition's money at most
+  return p.ask <= clubMaxAAV(tid, p, faClubAAV(tid, p), { own: true, yrs: 2 }) * (clubRead(tid, p).sure >= 0.5 ? 1.08 : 1) + (v >= 76 ? 0.5 : 0); // a little extra to keep a starter the room knows
+}
+// before the market opens, a club that means to buy and is short of room turns salary into bonus
+function aiRestructures(tid) {
+  const st = stanceOf(tid); if (st !== 'allin' && st !== 'contend') return 0;
+  const S = stanceCfg(tid), b = clubBudget(tid), short = roomPlan(tid).shop0 - (capRoom(tid) - S.reserve);
+  if (short <= 0 || (st === 'contend' && b.y[1].slack < short * 0.5)) return 0; // a contender does not mortgage a year it cannot afford
+  let made = 0, need = short;
+  for (const p of rosterOf(tid).filter(p => p.contract.yrs >= 2 && p.contract.amt > MIN_SALARY * 6 && viewOvr(p, tid) >= 72).sort((a, b) => b.contract.amt - a.contract.amt)) {
+    if (need <= 0 || made >= 3) break;
+    const x = Math.min(need + 1, p.contract.amt * 0.4); restructure(p, x); need -= x; made++;
+  }
+  return made;
+}
 function leaveResign() {
+  if (typeof setStances === 'function') setStances(false); // the new league year: each front office decides what it is trying to do
   if (!isAI(state.userTid)) keepResignPromises(state.userTid); // your word to a coach
   autoOptions(state.userTid); // undecided options get the staff's recommendation
   if (!isAI(state.userTid)) releaseUserPS(); // practice squad players you did not sign to a futures deal move on
@@ -253,15 +281,17 @@ function leaveResign() {
     const exp = rosterOf(t.id).filter(p => p.expiring).sort((a, b) => viewOvr(b, t.id) - viewOvr(a, t.id));
     for (const p of exp) {
       // a player with leverage and an agent who likes the open market goes to see what another club thinks he is
-      const tests = leverageOf(p) >= 0.55 && p.age <= 31 && rand() < 0.12 + agentOf(p).d[0] * 0.3;
-      if (isAI(t.id) && aiWantsResign(p) && p.ask <= capRoom(t.id) - 4 && !tests) {
-        resignPlayer(p.id);
+      const tests = leverageOf(p) >= 0.55 && p.age <= 31 && rand() < 0.05 + agentOf(p).d[0] * 0.18;
+      if (isAI(t.id) && aiResign(p, t.id) && !tests) {
+        const terms = resignTerms(p), yrs = Math.min(terms.pref, clubMaxYears(t.id, p)), o = terms.opts.find(x => x.yrs === yrs && x.ok);
+        if (resignPlayer(p.id, o ? yrs : undefined)) resignPlayer(p.id);
       } else {
         toFreeAgency(p);
         if (perOvr(p) >= 78 || t.id === state.userTid) addNews(`${p.lbl} ${pname(p)} (${tierOf(p)}) hits free agency from ${t.abbr}.`, [t.id], 'fa');
       }
     }
   }
+  for (const t of state.teams) if (isAI(t.id)) aiRestructures(t.id);
   state.phase = 'FA'; state.faWave = 0;
   faOpen(); // the market opens: clubs bid over a run of days (freeagency.js)
 }
@@ -273,18 +303,21 @@ function toFreeAgency(p) {
 }
 
 // ---------- free agency ----------
-function rosterLimit() { return state.phase === 'REG' || state.phase === 'PLAYOFFS' ? ROSTER_MAX : OFFSEASON_MAX; }
-function rosterCount(tid) { return state.phase === 'REG' || state.phase === 'PLAYOFFS' ? activeCount(tid) : rosterOf(tid).length; }
+const ROSTER_53 = () => state.phase === 'REG' || state.phase === 'PLAYOFFS' || state.phase === 'WAIVERS'; // from cut day on, the 53 is what counts
+function rosterLimit() { return ROSTER_53() ? ROSTER_MAX : OFFSEASON_MAX; }
+function rosterCount(tid) { return ROSTER_53() ? activeCount(tid) : rosterOf(tid).length; }
 
 function signFA(pid, tid, yrs) {
   const p = P(pid);
   if (!p || p.tid !== -1) return 'Player is not a free agent';
   if (p.waiver) return 'He is on waivers: put in a claim';
-  if (typeof faInMarket === 'function' && faInMarket(p)) return 'He is on the market: sit down with his agent';
+  if (typeof faInMarket === 'function' && faInMarket(p)) { if (tid === state.userTid || !state.fa.cut) return 'He is on the market: sit down with his agent'; delete state.fa.in[p.id]; delete state.fa.off[p.id]; delete state.fa.talks[p.id]; } // cut day: a club signing him off the street
   if (state.phase === 'UDFA' && isUdfa(p)) return 'Undrafted rookies choose between offers: make yours on the Free Agents tab';
   if (rosterCount(tid) >= rosterLimit()) return 'Roster is full';
   if (p.ask > capRoom(tid)) return 'Not enough cap room';
-  setTid(p, tid);
+  if (isAI(tid) && typeof streetPayOk === 'function' && !streetPayOk(tid, p, p.ask)) return 'Not at that price';
+  const qbt = p.pos === 'QB' && isAI(tid) && typeof qbTier === 'function' ? qbTier(tid, p, p.ask) : null;
+  setTid(p, tid); if (qbt) qbBought(tid, qbt);
   p.contract = makeContract(p, p.ask, yrs || (state.phase === 'REG' ? 1 : contractYears(p)));
   delete p.ask;
   if (perOvr(p) >= 72 || tid === state.userTid) addNews(`${T(tid).abbr} signed ${p.lbl} ${pname(p)} (${tierOf(p)}) — ${p.contract.yrs} yr, ${fmtMoney(p.contract.amt)}/yr.`, [tid], 'sign');
@@ -298,36 +331,30 @@ function releasePlayer(pid) {
   t.dead = round2((t.dead || 0) + d.now); t.deadNext = round2((t.deadNext || 0) + d.next);
   p.lastTid = t.id;
   const old = Object.assign({}, p.contract);
-  addNews(`${t.abbr} ${state.wv && p.exp < WAIVER_EXP ? 'waived' : 'released'} ${p.lbl} ${pname(p)}.`, [t.id], 'release');
+  // waivers: on cut day and all season for anyone with fewer than four seasons; after the trade deadline, everyone
+  const inSeason = state.phase === 'REG' || state.phase === 'PLAYOFFS', onWire = ((state.wv && !state.wv.done) || inSeason) && (p.exp < WAIVER_EXP || (inSeason && state.week > TRADE_DEADLINE));
+  addNews(`${t.abbr} ${onWire ? 'waived' : 'released'} ${p.lbl} ${pname(p)}.`, [t.id], 'release');
   toFreeAgency(p);
-  if (state.wv && p.exp < WAIVER_EXP && !state.wv.done) p.waiver = { from: t.id, c: old }; else delete p.waiver;
+  if (onWire) p.waiver = { from: t.id, c: old, wk: state.week || 0 }; else delete p.waiver;
+  if (!onWire && inSeason && isAI(t.id) && p.promPS && p.promPS.tid === t.id && p.promPS.s === state.season && typeof signToPS === 'function') signToPS(p.id, t.id); // a veteran he brought up goes back to the squad
   p.ask = round2(Math.max(MIN_SALARY, p.ask * 0.8));
 }
 
-function faGain(tid, p) {
-  const n = needAt(tid, p.pos);
-  const v = viewOvr(p, tid);
-  let g = Math.max(0, v + schemeFit(p, tid) * 0.8 - n.floor) * 1.2;
-  if (n.count < ROSTER_TEMPLATE[p.pos]) g += 3 + Math.max(0, v - 55) * 0.15;
-  if (n.count < ROSTER_MIN[p.pos]) g += 6;
-  g += spotNeedBonus(tid, p) * 3.5; // e.g. a team with six slot receivers needs an outside one
-  if (n.count >= ROSTER_TEMPLATE[p.pos] + 1) g *= 0.3;
-  if (p.age >= 32) g *= 0.75;
-  return g * SPOTS[p.spot].val;
-}
+// what he adds to this club: its staff's read of its lineups with him and without (budget.js clubRead)
+function faGain(tid, p) { return clubRead(tid, p).g * (p.age >= ageFor(p, 31) ? 0.75 : 1); }
 function aiFreeAgencyWave(maxSigns) {
   const fas = () => Object.values(state.players).filter(p => p.tid === -1).sort((a, b) => perOvr(b) - perOvr(a));
   const order = shuffle(state.teams.filter(t => isAI(t.id)).map(t => t.id));
   for (let k = 0; k < maxSigns; k++) {
     const pool = fas();
     for (const tid of order) {
-      const reserve = state.phase === 'DRAFT' || state.phase === 'FA' ? 8 : 1;
+      const S = stanceCfg(tid), reserve = state.phase === 'DRAFT' || state.phase === 'FA' ? S.reserve : 1, w = 0.15 * priceNow(tid) / 0.3;
       const room = capRoom(tid) - reserve;
-      // teams sitting on a pile of cap space are motivated buyers
-      let bestP = null, best = capRoom(tid) > state.cap * 0.2 ? 0.5 : 2;
+      let bestP = null, best = 0.5; // the price of money already says how motivated a buyer the club is
       for (const p of pool) {
-        if (p.tid !== -1 || p.ask > room || faInMarket(p)) continue;
-        const s = faGain(tid, p) - p.ask * 0.15;
+        if (p.tid !== -1 || p.ask > room || faInMarket(p) || p.ask > clubMaxAAV(tid, p, p.ask * 1.2, { yrs: 1 })) continue;
+        if (p.pos === 'QB' && !qbChaseOk(tid, qbTier(tid, p, p.ask), p.ask)) continue;
+        const s = faGain(tid, p) * clamp(1 + planNeedFor(tid, p) * 0.15, 0.7, 1.3) - p.ask * w;
         if (s > best) { best = s; bestP = p; }
       }
       if (bestP && rosterCount(tid) < rosterLimit()) signFA(bestP.id, tid);
@@ -384,7 +411,8 @@ function draftBoard(tid, noise) {
     // judged against the starters at his own position (a quarterback is not graded on a guard's scale)
     let s = v - th(p).starter + 74 + 0.55 * viewGrowth(p, tid) + schemeFit(p, tid) * 0.5 + (p.pos === 'RB' ? -2 : 0);
     if (DRAFT_SPEC[p.pos]) s += DRAFT_SPEC[p.pos] - (n.arr[0] && viewOvr(n.arr[0], tid) >= th(p).starter - 3 ? 12 : 0);
-    if (p.pos === 'QB') s += qbNeed;
+    if (p.pos === 'QB') s += qbNeed + (qbHunt(tid) ? 3 : 0);
+    s += clamp(planNeedFor(tid, p, v) * 3, -2, 4); // the room plan: a lean, not a takeover
     if (n.count < ROSTER_MIN[p.pos]) s += 4;
     if (v > n.floor) s += 2;
     let sb = 0; for (const k in (p.cf || { [p.spot]: 100 })) if (comfortOf(p, k) >= 60) sb = Math.max(sb, D(k));
@@ -505,7 +533,7 @@ function fillRoster(tid, template) {
     let n = rosterOf(tid).filter(p => p.pos === pos && !onIR(p)).length;
     while (n < target[pos] && activeCount(tid) < ROSTER_MAX) {
       const fa = Object.values(state.players).filter(p => p.tid === -1 && p.pos === pos).sort((a, b) => viewOvr(b, tid) - viewOvr(a, tid));
-      const p = fa.find(x => x.ask <= capRoom(tid)) || fa.find(x => x.ask <= 3);
+      const p = fa.find(x => x.ask <= capRoom(tid) && (!isAI(tid) || streetPayOk(tid, x, x.ask))) || fa.find(x => x.ask <= MIN_SALARY * 1.5);
       if (!p) { const np = genVeteran(pos, 'fringe'); setTid(np, -1); np.ask = MIN_SALARY; continue; }
       p.ask = Math.min(p.ask, Math.max(MIN_SALARY, capRoom(tid)));
       setTid(p, tid); p.contract = makeContract(p, p.ask, 1, 0.1); delete p.ask;
@@ -536,21 +564,28 @@ function startNewSeason() { beginWaivers(); resolveWaivers(); }
 // ---------- cutdown → waivers → season ----------
 // Cuts happen league-wide, players with fewer than four seasons hit the waiver wire, claims are awarded worst record first.
 function beginWaivers() {
-  const plan = (state.cut && state.cut.plan) || {}, u = state.userTid;
+  const plan = (state.cut && state.cut.plan) || {}, u = state.userTid, calls = {};
+  for (const p of Object.values(state.players)) if (p.tid >= 0 && p.injury && !p.injury.preview) { const c = irCallOf(p); if (c) calls[p.id] = c; } // yours from your plan, the rest from each staff
   if (state.pre && state.pre.sched) { state.preRes = packWeeks(state.pre.sched); setSharpness(); }
   state.pre = null; state.cut = null; state.udfa = null;
   const prio = standings().slice().sort((a, b) => (a.w + a.t * 0.5) - (b.w + b.t * 0.5) || a.pf - a.pa - (b.pf - b.pa)).map(r => r.tid);
-  state.wv = { claims: {}, ai: {}, ps: [], want: {}, prio: prio.length === state.teams.length ? prio : state.teams.map(t => t.id) };
+  state.wv = { claims: {}, ai: {}, ps: [], want: {}, offers: {}, back: {}, prio: prio.length === state.teams.length ? prio : state.teams.map(t => t.id) };
+  state.wvPrio = state.wv.prio.slice(); // the order for the first three weeks of the season
   trainingCamp();
   devSummer('pre'); // camp and preseason development, if it has not been paid yet
-  // anyone still hurt opens the season on IR (decided before cutdown so the 53 is real)
-  for (const p of Object.values(state.players)) { if (p.tid >= 0 && p.injury && p.injury.weeks >= IR_WEEKS) p.ir = { wk: 1 }; else delete p.ir; }
+  // the injured, by the rules: reserve/PUP and season-ending IR go before the cut and do not count; a man designated to return
+  // makes the 53 and goes to IR right after it, opening his spot
+  for (const p of Object.values(state.players)) { delete p.ir; const c = p.tid >= 0 ? calls[p.id] : null; if (c === 'pup') p.ir = { wk: 1, pup: true }; else if (c === 'ir') p.ir = { wk: 1, season: true }; }
   // your cuts first (practice-squad designations are remembered), then every other front office
   for (const id in plan) { const p = P(+id); if (!p || p.tid !== u || (plan[id] !== 'cut' && plan[id] !== 'ps')) continue; if (plan[id] === 'ps') state.wv.ps.push(p.id); releasePlayer(p.id); }
   for (const t of state.teams) {
     if (isAI(t.id)) fixCap(t.id);
     if (isAI(t.id)) autoCut(t.id, ROSTER_MAX, true); // your cuts are yours: the screen does not let you past cutdown day over the limit
   }
+  for (const id in calls) { const p = P(+id); if (calls[id] === 'dtr' && p && p.tid >= 0 && !p.ir) { p.ir = { wk: 1, dtr: true }; if (p.tid === u) addNews(`${p.lbl} ${pname(p)} went to injured reserve with a designation to return (week ${1 + IR_MIN_WEEKS} at the earliest).`, [u], 'inj'); } }
+  if (typeof cutMarketOpen === 'function') cutMarketOpen(); // the veterans worth a real contract: the same sit-down as free agency
+  // each staff names the cuts it wants back on its practice squad if they clear (only where nobody better is out there)
+  for (const t of state.teams) if (isAI(t.id)) state.wv.back[t.id] = psBringBacks(t.id);
   aiWaiverClaims();
   state.phase = 'WAIVERS';
 }
@@ -570,8 +605,7 @@ function aiWaiverClaims() {
     if (!isAI(t.id)) continue;
     const mine = pool.filter(p => p.waiver.from !== t.id && p.waiver.c.amt <= capRoom(t.id) + 1).map(p => ({ p, d: waiverDrop(p, t.id) })).filter(x => x.d)
       .sort((a, b) => (waiverScore(b.p, t.id) - waiverScore(b.d, t.id)) - (waiverScore(a.p, t.id) - waiverScore(a.d, t.id)));
-    const used = new Set();
-    for (const x of mine) { if (used.size >= 2) break; if (used.has(x.d.id)) continue; used.add(x.d.id); (wv.ai[x.p.id] = wv.ai[x.p.id] || []).push([t.id, x.d.id]); }
+    for (const x of mine) (wv.ai[x.p.id] = wv.ai[x.p.id] || []).push([t.id, x.d.id]); // as many as it likes: each award is checked again when it comes up
   }
 }
 function waiverRisk(p) { const n = ((state.wv && state.wv.ai[p.id]) || []).length; return n >= 3 ? 'Will be claimed' : n >= 1 ? 'Could be claimed' : 'Should clear'; }
@@ -582,11 +616,15 @@ function claimRiskIfCut(p) {
   for (const t of state.teams) { if (t.id === p.tid) continue; const room = rosterOf(t.id).filter(x => x.pos === p.pos).sort((a, b) => perOvr(b) - perOvr(a)); const last = room[Math.min(room.length, ROSTER_TEMPLATE[p.pos]) - 1]; if (last && perOvr(p) + (p.age <= 24 ? p.per.g * 0.4 : 0) > perOvr(last) + (last.age <= 24 ? last.per.g * 0.4 : 0) + 3) n++; }
   return n >= 4 ? 'Will be claimed' : n >= 1 ? 'Could be claimed' : 'Should clear';
 }
+// your moves in the waiver window that would each take a place on the 53, with the man you named to make room (0 if none)
+function wvPending(exceptPid) { const wv = state.wv, l = [...Object.entries(wv.claims), ...Object.entries(wv.offers || {})];
+  if (typeof cutMarketOn === 'function' && cutMarketOn()) for (const pid in state.fa.off) if (state.fa.off[pid].some(o => o.tid === state.userTid)) l.push([pid, (wv.mdrop || {})[pid] || 0]);
+  return l.filter(([id]) => +id !== exceptPid).map(([id, d]) => [+id, d]); }
 function waiverClaim(pid, dropPid) {
   const p = P(pid), wv = state.wv, u = state.userTid;
   if (!wv || !p || !p.waiver) return 'He is not on waivers';
   if (dropPid === null) { delete wv.claims[pid]; return null; }
-  const active = rosterOf(u).filter(x => !onIR(x)).length, pend = Object.entries(wv.claims).filter(([id]) => +id !== pid);
+  const active = rosterOf(u).filter(x => !onIR(x)).length, pend = wvPending(pid);
   const net = active + pend.filter(([, d]) => !d).length;
   if (!dropPid && net >= ROSTER_MAX) return 'Your roster is full: choose a player to release if the claim goes through';
   if (dropPid && pend.some(([, d]) => d === dropPid)) return 'That player is already tied to another claim';
@@ -594,18 +632,38 @@ function waiverClaim(pid, dropPid) {
   wv.claims[pid] = dropPid || 0;
   return null;
 }
+// an offer to a free agent during the waiver window: one year at his asking price, decided with everyone else's when claims are processed
+function waiverOffer(pid, dropPid) {
+  const p = P(pid), wv = state.wv, u = state.userTid;
+  if (!wv || !p || p.tid !== -1 || p.waiver) return 'He is not a free agent';
+  wv.offers = wv.offers || {};
+  if (dropPid === null) { delete wv.offers[pid]; return null; }
+  const active = rosterOf(u).filter(x => !onIR(x)).length, pend = wvPending(pid);
+  if (!dropPid && active + pend.filter(([, d]) => !d).length >= ROSTER_MAX) return 'Your roster is full: choose a player to release if he signs';
+  if (dropPid && pend.some(([, d]) => d === dropPid)) return 'That player is already tied to another move';
+  if (p.ask > capRoom(u) + (dropPid ? cutSavings(P(dropPid)) : 0)) return 'Not enough cap room for his asking price';
+  wv.offers[pid] = dropPid || 0;
+  return null;
+}
+// a veteran with more than one offer goes where he sees the clearest path to playing, with a lean toward a winner and his old club
+function vetAppeal(p, tid) {
+  const ahead = rosterOf(tid).filter(x => x.pos === p.pos && !onIR(x) && x.id !== p.id && perOvr(x) >= perOvr(p) - 1).length, r = standings().find(x => x.tid === tid);
+  return clamp((ROSTER_TEMPLATE[p.pos] - ahead) * 1.3, -5, 5) + (r ? (r.w + r.t * 0.5) / Math.max(1, r.w + r.l + r.t) * 2 : 1) + (p.lastTid === tid ? 1.5 : 0) + hashGauss(p.id, 600 + tid, state.season) * 1.5;
+}
 function wantForPS(pid, on) { const wv = state.wv; if (!wv) return; if (on) wv.want[pid] = 1; else delete wv.want[pid]; }
 // award claims (worst record first), settle practice squads, start the season. Returns what happened to you.
 function resolveWaivers() {
   const wv = state.wv, u = state.userTid, out = { won: [], lost: [], taken: [], ps: [], psLost: [] };
   wv.done = true; // releases from here on are ordinary
-  const rank = tid => wv.prio.indexOf(tid);
+  const rank = tid => wv.prio.indexOf(tid), cleared = new Set();
+  // 1. claims, worst record first. A club's claim is looked at again when its turn comes: it may have filled the spot already.
   for (const p of onWaivers().sort((a, b) => perOvr(b) - perOvr(a))) {
-    const bids = (wv.ai[p.id] || []).map(([tid, drop]) => ({ tid, drop }));
+    const bids = (wv.ai[p.id] || []).map(([tid]) => ({ tid, ai: true }));
     if (wv.claims[p.id] !== undefined && !isAI(u)) bids.push({ tid: u, drop: wv.claims[p.id] });
     bids.sort((a, b) => rank(a.tid) - rank(b.tid));
     let winner = null;
     for (const b of bids) {
+      if (b.ai) { const d = waiverDrop(p, b.tid); if (!d || p.waiver.c.amt > capRoom(b.tid) + cutSavings(d)) continue; b.drop = d.id; }
       const d = b.drop ? P(b.drop) : null;
       if (b.drop && (!d || d.tid !== b.tid)) continue; // the player he would have dropped is already gone
       if (!b.drop && rosterOf(b.tid).filter(x => !onIR(x)).length >= ROSTER_MAX) continue;
@@ -615,26 +673,47 @@ function resolveWaivers() {
     const mine = bids.find(b => b.tid === u), from = p.waiver.from;
     if (winner) {
       setTid(p, winner.tid); p.contract = Object.assign({}, p.waiver.c, { gtd: 0 }); if (!(p.contract.yrs > 0)) p.contract.yrs = 1; delete p.ask; delete p.waiver;
+      if (typeof FO_MODELS !== 'undefined') delete FO_MODELS.m[winner.tid]; // its roster changed: the next look starts from the new one
       addNews(`${T(winner.tid).abbr} claimed ${p.lbl} ${pname(p)} off waivers from ${T(from).abbr}.`, [winner.tid, from], 'sign');
       if (winner.tid === u) out.won.push(p); else if (mine) out.lost.push({ p, to: winner.tid });
       if (from === u && winner.tid !== u) out.taken.push({ p, to: winner.tid, ps: wv.ps.includes(p.id) });
-    } else { if (mine) out.lost.push({ p, to: null }); delete p.waiver; }
+    } else { if (mine) out.lost.push({ p, to: null }); delete p.waiver; cleared.add(p.id); }
   }
-  // practice squads: your own cuts you marked come back if they cleared; players you targeted from elsewhere may prefer their old club
-  if (!isAI(u)) {
-    for (const id of wv.ps) { const p = P(id); if (p && p.tid === -1 && !signToPS(p.id, u)) out.ps.push(p); }
-    for (const id in wv.want) { const p = P(+id); if (!p || p.tid !== -1) { if (p) out.psLost.push({ p, why: 'claimed off waivers' }); continue; }
-      if (rand() < 0.55 && !signToPS(p.id, u)) out.ps.push(p); else out.psLost.push({ p, why: 'chose to stay with ' + (p.lastTid != null && p.lastTid >= 0 ? T(p.lastTid).abbr : 'another club') }); }
-  }
-  // every club shops the cuts that cleared: open places are filled and the bottom of the 53 is turned over where a better man is free.
-  // The old head counts remain only as a backstop. Not yours: you fill your own roster.
+  // 2. the veterans who were on the market all window (not the men who just cleared): every club's offers at once.
+  //    A man you and a club both want picks the one he likes better.
+  const offers = isAI(u) ? {} : (wv.offers || {}); out.offWon = []; out.offLost = [];
+  const myOffer = p => { const dId = offers[p.id], d = dId ? P(dId) : null;
+    if (dId && (!d || d.tid !== u)) return 'the player you would have released was already gone';
+    if (!d && rosterOf(u).filter(x => !onIR(x)).length >= ROSTER_MAX) return 'your 53 was full';
+    if (p.ask > capRoom(u) + (d ? cutSavings(d) : 0)) return 'you no longer had the cap room';
+    if (d) releasePlayer(d.id);
+    const err = signFA(p.id, u, 1); if (err) return err.toLowerCase();
+    out.offWon.push(p); return null; };
+  const deals = {}; if (!isAI(u) && typeof cutMarketOn === 'function' && cutMarketOn()) for (const pid in state.fa.off) { const o = state.fa.off[pid].find(x => x.tid === u); if (o) deals[pid] = o; }
+  const myDeal = p => { const o = deals[p.id], dId = (wv.mdrop || {})[p.id], d = dId ? P(dId) : null;
+    if (!o.night && faOfferValue(p, o) < faDemand(p, state.fa.day) * 0.97) return 'he turned your offer down';
+    if (dId && (!d || d.tid !== u)) return 'the player you would have released was already gone';
+    if (!d && rosterOf(u).filter(x => !onIR(x)).length >= ROSTER_MAX) return 'your 53 was full';
+    if (faHit(o) > capRoom(u) + (d ? cutSavings(d) : 0)) return 'you no longer had the cap room';
+    if (d) releasePlayer(d.id);
+    faSign(p, o); out.offWon.push(p); return null; };
+  const ext = isAI(u) ? null : { tid: u, ids: new Set([...Object.keys(offers), ...Object.keys(deals)].map(Number)), lost: {},
+    choose: (p, tid) => deals[p.id] ? faOfferValue(p, deals[p.id]) >= faOfferValue(p, cutAIOffer(p, tid)) : vetAppeal(p, u) >= vetAppeal(p, tid),
+    sign: p => !(deals[p.id] ? myDeal(p) : myOffer(p)) };
   const foOn = typeof foShop === 'function' && FO.on !== false;
+  if (foOn) foShop('cut', null, { skip: cleared, ext });
+  if (ext) for (const id of ext.ids) { const p = P(id); if (!p) continue;
+    if (p.tid === -1) { const why = deals[p.id] ? myDeal(p) : myOffer(p); if (why) out.offLost.push({ p, why }); }
+    else if (p.tid !== u && !out.offWon.includes(p)) out.offLost.push({ p, why: p.tid >= 0 ? `he chose ${T(p.tid).abbr}` : 'he went elsewhere' }); }
+  if (typeof cutMarketClose === 'function') cutMarketClose();
+  // 3. practice squads: every club's own cuts it asked for come back first (yours too), then your targets, then the open market
+  { const r = psMarket([...wv.ps, ...Object.keys(wv.want).map(Number)]); out.ps.push(...r.got); out.psLost.push(...r.lost); } // nobody is signed to your practice squad for you
+  // 4. any holes left on the 53, from whoever is still unsigned. Not yours: you fill your own roster.
   if (foOn) foShop('cut');
   for (const t of state.teams) if (isAI(t.id)) fillRoster(t.id, foOn && (!FO.extra || FO.extra(t.id)) ? ROSTER_MIN : ROSTER_TEMPLATE);
-  if (foOn) foShop('cut');
-  for (const t of shuffle(state.teams.slice())) if (isAI(t.id)) fillPS(t.id); // nobody is signed to your practice squad for you
   CAP_ALL = true; // from here every contract counts
   for (const t of state.teams) if (isAI(t.id)) fixCap(t.id);
+  if (typeof aiAdvance === 'function') for (const t of state.teams) if (isAI(t.id)) aiAdvance(t.id); // well under what it means to spend: pay ahead
   CAP_ALL = false;
   refreshChart(u);
   state.wv = null;
@@ -662,20 +741,77 @@ function resolveWaivers() {
   return out;
 }
 
+// ---------- waivers during the season ----------
+// Claims settle before each week's games (and each playoff round): last season's order through week 3, then the current
+// standings, worst first. A club claims only a clear upgrade, a little clearer than in the summer: turning a spot over mid-year costs.
+function waiverPrioNow() {
+  if (state.phase === 'REG' && state.week <= 3 && state.wvPrio && state.wvPrio.length === state.teams.length) return state.wvPrio;
+  const pct = r => (r.w + r.t * 0.5) / Math.max(1, r.w + r.l + r.t);
+  return standings().slice().sort((a, b) => pct(a) - pct(b) || (a.pf - a.pa) - (b.pf - b.pa)).map(r => r.tid);
+}
+function inSeasonWaivers() {
+  const pool = onWaivers(); if (!pool.length) return null;
+  const u = state.userTid, iw = state.iw || (state.iw = { claims: {}, ps: [] }), prio = waiverPrioNow(), rank = tid => prio.indexOf(tid);
+  const out = { wk: state.week, round: state.phase === 'PLAYOFFS', won: [], lost: [], taken: [], cleared: [], ps: [] };
+  for (const p of pool.sort((a, b) => perOvr(b) - perOvr(a))) {
+    const from = p.waiver.from, bids = state.teams.filter(t => isAI(t.id) && t.id !== from).map(t => ({ tid: t.id, ai: true }));
+    if (iw.claims[p.id] !== undefined && !isAI(u) && from !== u) bids.push({ tid: u, drop: iw.claims[p.id] });
+    bids.sort((a, b) => rank(a.tid) - rank(b.tid));
+    let win = null;
+    for (const b of bids) {
+      if (b.ai) { if (p.waiver.c.amt > capRoom(b.tid) + 2) continue; const d = waiverDrop(p, b.tid); if (!d || p.waiver.c.amt > capRoom(b.tid) + cutSavings(d)) continue; b.drop = d.id; }
+      const d = b.drop ? P(b.drop) : null;
+      if (b.drop && (!d || d.tid !== b.tid)) continue; // the man he would have dropped is already gone
+      if (!b.drop && activeCount(b.tid) >= ROSTER_MAX) continue;
+      if (!b.ai && p.waiver.c.amt > capRoom(u) + (d ? cutSavings(d) : 0)) continue;
+      if (d) releasePlayer(d.id); // he goes on waivers himself, for next week
+      win = b; break;
+    }
+    const mine = bids.find(b => b.tid === u);
+    if (win) {
+      setTid(p, win.tid); p.contract = Object.assign({}, p.waiver.c, { gtd: 0 }); if (!(p.contract.yrs > 0)) p.contract.yrs = 1; delete p.ask; delete p.waiver;
+      if (typeof FO_MODELS !== 'undefined') delete FO_MODELS.m[win.tid];
+      addNews(`${T(win.tid).abbr} claimed ${p.lbl} ${pname(p)} off waivers from ${T(from).abbr}.`, [win.tid, from], 'sign');
+      if (win.tid === u) out.won.push(p); else if (mine) out.lost.push({ p, to: win.tid });
+      if (from === u) out.taken.push({ p, to: win.tid });
+    } else {
+      delete p.waiver; if (mine) out.lost.push({ p, to: null });
+      if (from !== u && isAI(from) && p.promPS && p.promPS.tid === from && p.promPS.s === state.season) signToPS(p.id, from); // back to the squad he came up from
+      if (from === u) { out.cleared.push(p); if (iw.ps.includes(p.id) && !signToPS(p.id, u)) { out.ps.push(p); addNews(`${pname(p)} cleared waivers and signed to your practice squad.`, [u], 'sign'); } }
+    }
+  }
+  iw.claims = {}; iw.ps = [];
+  iw.last = out.won.length || out.lost.length || out.taken.length || out.cleared.length ? out : null;
+  return out;
+}
+function iwClaim(pid, dropPid) {
+  const p = P(pid), u = state.userTid, iw = state.iw || (state.iw = { claims: {}, ps: [] });
+  if (!p || !p.waiver) return 'He is not on waivers';
+  if (p.waiver.from === u) return 'You waived him';
+  if (dropPid === null) { delete iw.claims[pid]; return null; }
+  const pend = Object.entries(iw.claims).filter(([id]) => +id !== pid);
+  if (!dropPid && activeCount(u) + pend.filter(([, d]) => !d).length >= ROSTER_MAX) return 'Your roster is full: choose a player to release if the claim goes through';
+  if (dropPid && pend.some(([, d]) => d === dropPid)) return 'That player is already tied to another claim';
+  if (p.waiver.c.amt > capRoom(u) + (dropPid ? cutSavings(P(dropPid)) : 0)) return 'Not enough cap room to take on his contract';
+  iw.claims[pid] = dropPid || 0; return null;
+}
+
 // ---------- in-season AI ----------
 function inSeasonMoves() {
+  if (typeof shutDowns === 'function') for (const t of state.teams) shutDowns(t.id);
+  for (const p of Object.values(state.players)) if (p.tid === -1 && !p.waiver && p.ask > MIN_SALARY) p.ask = round2(Math.max(MIN_SALARY, p.ask * 0.92)); // a man still unsigned in season takes less each week
   psPoaching();
   if (typeof foShop === 'function') foShop('week', tid => (tid + state.week) % 3 === 0); // each club takes a look at the street every third week
   psPromotions(state.userTid);
   for (const t of state.teams) {
     if (!isAI(t.id)) continue;
-    if (psOf(t.id).length < PS_MAX - 3) fillPS(t.id);
+    if (psOf(t.id).length < PS_MAX) fillPS(t.id); // a spot that opens is filled by the next week
     if (typeof foInjuryMoves === 'function' && FO.on !== false && (!FO.extra || FO.extra(t.id))) foInjuryMoves(t.id); // the man who fixes the hole an injury left, from the street or the practice squad
     psPromotions(t.id); // then the old head counts, as a backstop: nobody lines up short
     for (const pos of POSITIONS) {
       const healthy = rosterOf(t.id).filter(p => p.pos === pos && !p.injury).length;
       const need = LINEUP_NEED[pos] + (pos === 'QB' ? 1 : 0);
-      if (healthy >= need) continue;
+      if (healthy >= need || elevationCovers(t.id, pos)) continue;
       if (activeCount(t.id) >= ROSTER_MAX) {
         const counts = {};
         rosterOf(t.id).forEach(p => { if (!p.injury) counts[p.pos] = (counts[p.pos] || 0) + 1; });
@@ -705,7 +841,7 @@ function comfortOffseason(p) {
 // which spots a player cross-trains at in camp: your depth chart decides for your team; AI staffs pick a neighbor he could help at
 function campFocus(p) {
   if (p.tid === state.userTid && !isAI(p.tid)) { const s = userDepthSpots(p); if (p.xt && !s.includes(p.xt)) s.unshift(p.xt); if (s.length) return s; }
-  if (p.age >= 31) return [];
+  if (p.age >= 30) return [];
   const nb = (SPOT_NEIGHBORS[p.spot] || []).filter(s => comfortOf(p, s) < 85);
   // staffs cross-train where the roster is thin first
   const needy = nb.filter(s => p.tid >= 0 && spotDeficit(p.tid, s) > 0).sort((a, b) => spotRating(p, b) - spotRating(p, a));

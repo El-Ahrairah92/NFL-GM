@@ -10,12 +10,12 @@ const ROUND_NAMES = ['Wild Card', 'Divisional', 'Conference Final', 'Championshi
 
 function newLeague(userTid) {
   state = {
-    version: SAVE_VERSION, devV: 1, cp: 0, retired: {}, season: START_SEASON, phase: 'REG', week: 1, userTid,
+    version: SAVE_VERSION, devV: 1, ageV: 2, cp: 0, retired: {}, season: START_SEASON, phase: 'REG', week: 1, userTid,
     teams: [], players: {}, coaches: {}, schedule: [], games: {}, playoffs: null,
     picks: [], draft: null, news: [], history: [], teamHist: {}, faWave: 0,
     nextPid: 1, nextCid: 1, nextGid: 1, nextPickId: 1, settings: { autoUser: false, showTrue: false },
   };
-  state.cap = BASE_CAP; syncEconomy();
+  state.cap = BASE_CAP; state.lvl = 1; syncEconomy();
   TEAMS.forEach((t, i) => {
     state.teams.push({ id: i, region: t[0], name: t[1], abbr: t[2], conf: t[3], div: t[4], color: t[5], hc: null, oc: null, dc: null, stc: null, sc: null, dead: 0 });
     state.teamHist[i] = [];
@@ -27,6 +27,7 @@ function newLeague(userTid) {
         setTid(p, t.id);
       }
     }
+    for (const p of rosterOf(t.id)) if (p.age >= 31 && p.contract.yrs > 0) p.contract.yrs = Math.min(p.contract.yrs, p.age >= 34 ? 1 : p.age >= 32 ? 2 : 3); // nobody gives a 34-year-old five years
     // fit under the cap
     let pay = payroll(t.id), target = CAP * (0.86 + rand() * 0.1);
     if (pay > target) for (const p of rosterOf(t.id)) p.contract.amt = round2(Math.max(MIN_SALARY, p.contract.amt * target / pay));
@@ -48,6 +49,7 @@ function newLeague(userTid) {
   for (const t of shuffle(state.teams.slice())) fillPS(t.id); // every club starts with a practice squad in place, yours included
   for (const p of Object.values(state.players)) if (p.tid >= 0 || p.tid === -3) { const tid = p.tid >= 0 ? p.tid : p.psTid; p.pbTid = tid; p.pb = p.exp === 0 ? 82 : 96 + Math.round(rand() * 4); if (tid === userTid) p.seenW = p.exp === 0 ? 4 : 16; }
   ensureCoachContracts(); seedWeb(); snapPlaybooks();
+  state.lvl = 1.3; // from here the market pays what a full cap buys
   practiceWeekAll();
   addNews(`Welcome to the ${START_SEASON} season. You are the GM of the ${teamName(userTid)}.`, [userTid]);
   return state;
@@ -100,6 +102,14 @@ function migrateState(st) {
   if (st.version === SAVE_VERSION && (st.phase === 'REG' || st.phase === 'PLAYOFFS' || st.phase === 'RECAP')) ensureDraftClass(st.season + 1);
   // positional comfort & adaptability for saves that predate them
   if (st.version === SAVE_VERSION) for (const id in st.players) { const p = st.players[id]; if (!p.a) continue; if (p.h && p.h.adapt === undefined) p.h.adapt = Math.round(clamp(gauss(55, 18), 5, 99)); if (!p.cf) { genComfort(p); updateRatings(p); } }
+  // the league's aging curve (players peak at 25-26 and slip from the late 20s, as the real league's starters do): every player keeps
+  // his own decline age relative to his position, moved by the change in that position's typical age, and his ceiling is re-read
+  if (st.version === SAVE_VERSION && (st.ageV || 0) < 2) {
+    const OLD_DECL = { QB: 33, RB: 27, FB: 29, WRX: 29, WRZ: 29, SLOT: 29, TEY: 30, TEH: 30, LT: 31, LG: 31, C: 31, RG: 31, RT: 31, NT: 30, DT: 30, DE: 29.5, EDGE: 29, MLB: 29, WLB: 29, CB: 28, NCB: 28, FS: 30, SS: 30, K: 36, P: 36 };
+    for (const id in st.players) { const p = st.players[id]; if (!p.a || !p.dc) continue; p.dc.a = round1(p.dc.a + (DECL_SPOT[p.spot] || 29) - (OLD_DECL[p.spot] || 29)); updateRatings(p); }
+    st.ageV = 2;
+    addNews('League updated: players now develop faster and peak around 25-26, with veterans slipping from their late twenties (each on his own timeline). Rookies have a learning curve in their first season.');
+  }
   // Phase 5: perception (fog, hype, labels) for saves that predate it
   if (st.version === SAVE_VERSION) {
     st.settings.showTrue = !!st.settings.showTrue;
@@ -120,7 +130,7 @@ function payroll(tid) {
   for (const p of psOf(tid)) s += p.contract.amt;
   return round2(s);
 }
-function capRoom(tid) { return round2(CAP - payroll(tid)); }
+function capRoom(tid) { return round2((typeof capOf === 'function' ? capOf(tid) : CAP) - payroll(tid)); } // the league cap plus the club's carryover
 
 function ensurePicks() {
   for (const yr of [state.season + 1, state.season + 2]) {
@@ -241,20 +251,26 @@ function confSeeds(conf) {
 // ---------- weekly sim ----------
 function simWeek() {
   if (state.phase !== 'REG') return;
+  inSeasonWaivers(); // claims settle before kickoff
   refreshChart(state.userTid); // auto units follow the staff; departed players drop off
   const wk = state.schedule[state.week - 1];
+  gameDayElevations(wk.flatMap(m => [m.h, m.a]), false);
   for (const m of wk) {
     const box = simGame(m.h, m.a, { week: state.week, pbp: m.h === state.userTid || m.a === state.userTid });
     m.gid = box.id; m.score = [box.score[0], box.score[1]];
     state.games[box.id] = box;
     applyBox(box, false);
   }
+  revertElevations(); // the men brought up go back to the squad
+  if (state.elev) state.elev = {}; // your picks were for this game
   pruneWatchFrames();
   irPlacements();
   injuryTick();
   irActivations();
   weeklyRecovery();
   practiceReps(state.userTid);
+  for (const id in state.players) { const p = state.players[id]; if (p.rook && (p.tid >= 0 || p.tid === -3)) rookieLearn(p, 0, true); } // a week of practice
+  if (state.week === TRADE_DEADLINE && typeof setStances === 'function') setStances(true); // the record speaks: a sinking contender starts selling
   inSeasonMoves();
   { const i = CP_WEEKS.indexOf(state.week); if (i >= 0) devCheckpoint(state.week >= SEASON_WEEKS ? 'final' : 'season', state.week - (i ? CP_WEEKS[i - 1] : 0)); } // growth earned over the last month
   state.week++;
@@ -338,11 +354,13 @@ function playoffMatchups() {
   return matchups;
 }
 function simPlayoffRound() {
+  inSeasonWaivers();
   const po = state.playoffs;
   const r = po.round;
   const matchups = playoffMatchups();
   pruneWatchFrames();
   const results = [];
+  gameDayElevations(matchups.flatMap(x => [x[0], x[1]]), true);
   for (const [h, a] of matchups) {
     const box = simGame(h, a, { playoff: ROUND_NAMES[r], neutral: r === 3, pbp: true });
     state.games[box.id] = box;
@@ -353,6 +371,7 @@ function simPlayoffRound() {
     results.push({ h, a, gid: box.id, score: box.score, win });
     addNews(`${ROUND_NAMES[r]}: ${T(win).abbr} ${Math.max(...box.score)}, ${T(lose).abbr} ${Math.min(...box.score)}`, [win, lose]);
   }
+  revertElevations(); if (state.elev) state.elev = {};
   injuryTick();
   po.rounds.push(results);
   po.round++;
@@ -373,6 +392,7 @@ function repsLearning(box) {
       let changed = false;
       const L = learnRate(p);
       p.spSeason = p.spSeason || {};
+      if (p.rook) rookieLearn(p, l.snp || 0, false); // the rookie year: game snaps teach fastest
       for (const s in l.sp) {
         p.spSeason[s] = (p.spSeason[s] || 0) + l.sp[s];
         if (comfortOf(p, s) < 100 && learnSpot(p, s, l.sp[s] * 0.015 * L)) changed = true;

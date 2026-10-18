@@ -8,6 +8,7 @@
 const PRESEASON_GAMES = 3;
 function startPreseason() {
   state.pre = { wk: 0, sched: [] };
+  for (const id in state.players) { const p = state.players[id]; if (p.a && p.exp === 0 && (p.tid >= 0 || p.tid === -3)) startRookieYear(p); } // the rookies arrive
   for (let w = 0; w < PRESEASON_GAMES; w++) {
     const ids = shuffle(state.teams.map(t => t.id)), wk = [];
     for (let i = 0; i < ids.length; i += 2) wk.push({ h: ids[i], a: ids[i + 1] });
@@ -309,7 +310,37 @@ function applyPreBox(box, keep) {
 function preGrade(p) { return p.preS && p.preS.snp >= 15 ? overallGrade(p.preS.adv, p.spot) : null; }
 
 // ---------- cutdown day ----------
-function countsOn53(p) { return !(p.injury && p.injury.weeks >= IR_WEEKS); } // long-term injuries open on IR
+// The injured at cutdown, by the league's rules. A man put on injured reserve before the final cut is done for the year. A man
+// hurt before camp who has not practiced can open on reserve/PUP: he does not count and misses at least the first four games.
+// Anyone else a club wants back this season has to make the 53, then goes to IR the day after with a designation to return
+// (two at cutdown, eight a season, at least four games out).
+const CUT_DTR = 2;
+function campHurt(p) { return !!(p.injury && (p.injury.camp || Object.values(state.games).some(b => b && b.pre && b.season === state.season && (b.injuries || []).some(x => x.pid === p.id)))); }
+function pupEligible(p) { return !!(p.injury && !p.injury.preview) && !campHurt(p); }
+const IR_CALL_TXT = { pup: 'Reserve/PUP', ir: 'IR: out for the year', dtr: 'IR after cuts: back this year' };
+// what the staff would do with each injured man: 'pup', 'ir' (the season), 'dtr' (on the 53 at cuts, IR the day after), or nothing (stays on the 53)
+function staffIRCalls(tid) {
+  const out = {}, hurt = rosterOf(tid).filter(p => p.injury && !p.injury.preview), long = [];
+  const rank = {}; rosterOf(tid).slice().sort((a, b) => cutValue(b) - cutValue(a)).forEach((p, i) => rank[p.id] = i);
+  for (const p of hurt) { const w = p.injury.weeks;
+    if (pupEligible(p) && w >= 3) out[p.id] = 'pup';
+    else if (w >= SEASON_WEEKS - 2) out[p.id] = 'ir';
+    else if (w >= IR_WEEKS) long.push(p); }
+  // the two designations go to men the staff would keep anyway; a fringe player who is hurt is let go, not stashed
+  let n = 0; long.sort((a, b) => rank[a.id] - rank[b.id]).forEach(p => { const c = rank[p.id] >= 46 ? null : n < CUT_DTR ? 'dtr' : rank[p.id] < 30 && p.injury.weeks <= 6 ? null : 'ir'; if (c === 'dtr') n++; if (c) out[p.id] = c; });
+  return out;
+}
+let IR_CALLS = { key: null, m: {} };
+// the call for one man: yours on cut day comes from your plan (nothing is decided for you); everyone else's, and yours before cut day, is the staff's
+function irCallOf(p, staff) {
+  if (!p.injury || p.tid < 0) return null;
+  if (!staff && p.tid === state.userTid && !isAI(p.tid) && state.cut) return (state.cut.ir && state.cut.ir[p.id]) || null;
+  const key = state.season + ':' + state.phase + ':' + (state.pre ? state.pre.wk : '') + ':' + (state.week || 0);
+  if (IR_CALLS.key !== key) IR_CALLS = { key, m: {} };
+  const m = IR_CALLS.m[p.tid] || (IR_CALLS.m[p.tid] = staffIRCalls(p.tid));
+  return m[p.id] || null;
+}
+function countsOn53(p, staff) { const c = irCallOf(p, staff === true); return c !== 'pup' && c !== 'ir'; } // staff must be exactly true: filter() passes an index here
 // the staff's recommendation: who they'd release to reach 53, and who is on the bubble
 function cutPreview(tid) {
   if (typeof foCutPlan === 'function' && FO.on !== false) { const plan = foCutPlan(tid, ROSTER_MAX); return { cuts: plan.cuts, bubble: plan.bubble }; }
@@ -325,7 +356,7 @@ function cutPreview(tid) {
 // what the position coach says about a player in the meeting
 function cutNote(p, prev) {
   const g = preGrade(p), d = deadIfCut(p), dead = d.now + d.next, notes = [];
-  if (!countsOn53(p)) return 'Heading to injured reserve: he does not count against the 53.';
+  if (p.injury && !p.injury.preview) { const c = irCallOf(p, true); return c === 'pup' ? `Hurt before camp (${p.injury.weeks} wk): reserve/PUP, he does not count and misses at least the first four games.` : c === 'ir' ? `Out ${p.injury.weeks} weeks: injured reserve now, which ends his season.` : c === 'dtr' ? `Out ${p.injury.weeks} weeks: keep him on the 53 today, then IR with a designation to return.` : `Out ${p.injury.weeks} week${p.injury.weeks === 1 ? '' : 's'}: he stays on the 53.`; }
   if (g !== null && g >= 78) notes.push(`Flashed this preseason (${g} grade).`);
   else if (g !== null && g <= 48) notes.push(`Struggled this preseason (${g} grade).`);
   else if (g === null && p.preS === undefined && p.exp <= 2) notes.push('Barely played this preseason.');

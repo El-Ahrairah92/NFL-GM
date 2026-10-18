@@ -230,7 +230,7 @@ function linePen(p, ax) { return penOfComfort(lineComfort(p, ax)); }
 function lineRating(p, ax) { let r = 0; for (const [s, w] of lineBlend(ax)) r += w * spotRating(p, s); return r; }
 // how heavy he is for the spot, in steps of twelve pounds: a 256-pound edge at nose is six short, a 330-pound nose out wide is six over
 function lineMass(p, ax) { if (!p || !p.m) return 0; let w = 0; for (const [k, v] of lineBlend(ax)) w += v * SPOTS[k].body[2]; return clamp((p.m.wt - w) / 12, -4, 4); }
-function lineSlotRating(p, ax) { return p.a ? lineRating(p, ax) - linePen(p, ax) : p.ovr || 40; }
+function lineSlotRating(p, ax) { return p.a ? lineRating(p, ax) - linePen(p, ax) - (p.rook || 0) : p.ovr || 40; }
 // history at neighboring spots: most players have a little, veterans more; true utility men are rare
 // nearly the same job: most players at one have real reps at the other
 const CLOSE_PAIRS = new Set(['DT>DE', 'DE>DT', 'DT>NT', 'NT>DT', 'LG>RG', 'RG>LG', 'LT>RT', 'RT>LT', 'MLB>WLB', 'WLB>MLB', 'FS>SS', 'SS>FS', 'WRX>WRZ', 'WRZ>WRX', 'TEY>TEH', 'TEH>TEY', 'CB>NCB', 'NCB>CB']);
@@ -297,7 +297,7 @@ function updateRatings(p) {
 }
 
 // ---------- aging ----------
-const BASE_PEAK = { E: 25, P: 28, T: 27, M: 29.5 };
+const BASE_PEAK = { E: 24, P: 26, T: 25, M: 27 }; // most players are near their best by 25 or 26 (the real league's starters are youngest at 24-26)
 const GROW_RATE = { E: 1.0, P: 1.8, T: 2.4, M: 2.0 }; // points per year still to grow before peak
 function peakAge(p, g) {
   let pk = BASE_PEAK[g] + p.ag[g][0];
@@ -443,8 +443,12 @@ function rasOf(p, peers) {
 // That spread is what gives the league its passing-down backs and its short-yardage backs, with every shade in between.
 // Skills in the same family share one roll per player (a back is a receiver or he is not), plus a smaller roll of their own.
 const GEN_LOOSE = { RB: { hnd: [2.5, 6, 'rec'], rte: [2.5, 6, 'rec'], pbk: [2.5, 6, 'rec'], str: [1.5, 9] } }, GEN_BENT = { rec: 15 };
+// Talent by position group, on the q scale (about 5 rating points to 1). The game engine is tuned to each group's level of play;
+// this keeps every group there under the league's aging curve (a group that peaks before it declines would otherwise run hot).
+const GEN_POS_Q = { QB: -0.08, RB: -0.6, WR: -0.12, TE: -0.08, OL: -0.16, DL: 0, LB: 0, CB: -0.1, S: -0.07 };
 function genPlayer(spot, q, age, gf, raw) {
   const S = SPOTS[spot];
+  if (typeof q === 'number') q += GEN_POS_Q[S.g] || 0;
   const [first, last] = randomName(S.g);
   const ht = Math.round(gauss(S.body[0], S.body[1]));
   const wt = Math.round(gauss(S.body[2], S.body[3]));

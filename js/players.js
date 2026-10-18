@@ -28,28 +28,32 @@ function pshort(p) { return p ? p.first[0] + '. ' + p.last : '—'; }
 
 // ---------- money / value ----------
 // the market pays for perception (consensus value incl. hype), not the hidden truth
+// how much the whole market pays, relative to where it started: a new league opens at 1.0 for its own contracts, then 1.3
+function payLevel() { return state && state.lvl !== undefined ? state.lvl : 1.3; }
 function marketValue(p, as) { // as: price him at this rating instead (one club's own read of him)
   const max = SPOTS[p.spot].sal * capFactor(), ov = as !== undefined ? as : typeof perOvr === 'function' ? perOvr(p) : p.ovr;
   const gr = p.per ? p.per.g : Math.max(0, p.pot - p.ovr);
   const f = clamp((ov - 58) / 37, 0, 1); // the very best reset the market, they don't double it
   // mkt flattens the curve: when teams have room, the middle class gets paid; the top of each position stays anchored to its ceiling
-  let v = MIN_SALARY + (max - MIN_SALARY) * Math.pow(f, POS_SAL_EXP[p.pos] / (state && state.mkt || 1)) * 1.12;
+  let v = MIN_SALARY + (max - MIN_SALARY) * payLevel() * Math.pow(f, POS_SAL_EXP[p.pos] / (state && state.mkt || 1)) * 1.12;
   const ageStart = p.pos === 'QB' || p.pos === 'K' || p.pos === 'P' ? 34 : p.pos === 'RB' ? 28 : 30; // QBs keep getting paid into their mid-30s
   if (p.age >= ageStart) v *= Math.max(0.35, 1 - (p.age - ageStart + 1) * 0.09);
   if (p.age <= 25 && gr > 0) v *= 1 + Math.min(0.25, gr * 0.01);
   return round2(Math.max(MIN_SALARY, v));
 }
 function contractYears(p) {
-  if (p.age <= 25) return 4;
-  if (p.age <= 28) return 3;
-  if (p.age <= 31) return 2;
+  const a = p.age - (p.pos === 'QB' || p.pos === 'K' || p.pos === 'P' ? 2 : 0);
+  if (a <= 24) return 4;
+  if (a <= 27) return 3;
+  if (a <= 30) return 2;
   return 1;
 }
 // abstract "asset value" used for trades and AI decisions
 function playerValue(p, forTid) {
   let v = viewOvr(p, forTid) + (forTid != null && forTid >= 0 && typeof schemeFit === 'function' ? schemeFit(p, forTid) * 0.8 : 0);
-  if (p.age < 26) v += viewGrowth(p, forTid) * 0.45 * Math.min(1, (26 - p.age) / 4);
-  if (p.age > 28) v -= (p.age - 28) * (p.pos === 'RB' ? 2.2 : p.pos === 'QB' || p.pos === 'K' || p.pos === 'P' ? 0.8 : 1.4);
+  if (p.age < 25) v += viewGrowth(p, forTid) * 0.45 * Math.min(1, (25 - p.age) / 4);
+  const piv = p.pos === 'RB' ? 26 : p.pos === 'QB' ? 30 : p.pos === 'K' || p.pos === 'P' ? 32 : 27; // most players are past their best from about 27
+  if (p.age > piv) v -= (p.age - piv) * (p.pos === 'RB' ? 2.2 : p.pos === 'QB' || p.pos === 'K' || p.pos === 'P' ? 0.8 : 1.4);
   let val = Math.pow(Math.max(0, v - 45) / 10, 2.4) * SPOTS[p.spot].val;
   // contract surplus
   const surplus = marketValue(p) - p.contract.amt;
@@ -82,8 +86,8 @@ function genVeteran(spotOrGroup, tier) {
   const spot = SPOTS[spotOrGroup] ? spotOrGroup : spotForGroup(spotOrGroup);
   const [qm, qs] = TIER_Q[tier] || TIER_Q.fringe;
   let q = gauss(qm, qs), age;
-  if (tier === 'starter') age = clamp(Math.round(gauss(27.5, 3)), 22, 36);
-  else if (tier === 'backup') age = clamp(Math.round(gauss(26, 3)), 22, 34);
+  if (tier === 'starter') age = clamp(Math.round(gauss(26.5, 3)), 22, 36); // the real league's starters are mostly 23-28
+  else if (tier === 'backup') age = clamp(Math.round(gauss(25.5, 3)), 22, 34);
   else age = clamp(Math.round(gauss(25, 3)), 21, 33);
   if (spot === 'QB' && tier === 'starter') { q = gauss(0.8, 1.6); age = clamp(Math.round(gauss(28.5, 4)), 22, 40); }
   if (spot === 'K' || spot === 'P') { q = gauss(1.6, 1.2); age = clamp(Math.round(gauss(29, 4)), 22, 40); }
@@ -105,7 +109,7 @@ function genVeteran(spotOrGroup, tier) {
 // out-select the league's established talent level over a decade (measured in a 10-season drift test).
 const DRAFT_Q_ADJ = { QB: -1.3, RB: -0.5, FB: -0.3, WRX: -0.6, WRZ: -0.6, SLOT: -0.6, TEY: -0.95, TEH: -0.95, LT: 0.05, LG: 0.05, C: 0.05, RG: 0.05, RT: 0.05,
   NT: -0.1, DT: -0.1, DE: -0.1, EDGE: -0.15, MLB: -0.55, WLB: -0.55, CB: -0.3, NCB: -0.3, FS: -0.3, SS: -0.3, K: 0, P: 0 };
-const DRAFT_Q = { mean: -0.9, sd: 1.2, bust: 0.24, bustF: 0.3, boom: 0.09, boomF: 1.6, raw: 3.8, udfa: -1.8, udfaSd: 0.85, slope: 0.25 };
+const DRAFT_Q = { mean: -0.45, sd: 1.2, bust: 0.21, bustF: 0.3, boom: 0.11, boomF: 1.6, raw: 1.2, udfa: -1.8, udfaSd: 0.85, slope: 0.25 };
 // The class is two populations on one board: the men every club has a draftable grade on, and the far larger group behind them
 // who will mostly go undrafted. Nobody is told which is which: a club can draft from the second group and a draftable man can slide out.
 const CLASS_DRAFT = 256, CLASS_DEPTH = 500;

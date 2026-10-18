@@ -15,22 +15,43 @@ const DEV = {
   expect: 0.69, expectP: 0.83,        // ...so this is what the scouts assume he keeps of what is left
   swing: 1.8,                          // good year / bad year, in rating points per skill area
   surge: 0.0030, collapse: 0.020, late: 0.012, tail: 0.12,
-  front: [1.5, 1.3, 1.1],               // the first seasons in the league are when most of it comes
+  breakout: 0.015,                     // a player everyone had figured out takes a real step, all at once (24-30)
+  cliff: [0.025, 0.015, 0.12],          // a veteran's sudden fall in one offseason: the chance at 29, more each year after, at most
+  front: [2.2, 1.6, 1.2],               // the first seasons in the league are when most of it comes
   gameSnaps: 62,
 };
 const CP_WEEKS = [4, 8, 12, 16, 18]; // regular-season checkpoints (after these weeks)
+
+// ---------- the rookie year: learning the pro game ----------
+// A rookie plays below what he is until the speed, the playbook and the technique catch up. Game snaps close the gap fastest,
+// practice slowly: a rookie who starts is usually himself within five or six games; one who waits closes about half of it by
+// December. Gone by his second year. The staff sees it in practice, so it shapes who starts as well as how he plays.
+const ROOKIE_GAP = { QB: 4.5, OL: 3, CB: 3, S: 2.6, LB: 2.6, TE: 2.6, WR: 2.2, DL: 2.2, RB: 1.5, FB: 1.5, K: 0.4, P: 0.4 };
+function rookieGap(p) { return (p && p.rook) || 0; }
+function startRookieYear(p) {
+  if (!p || !p.a || p.exp > 0 || p.rookS === state.season) return;
+  const ad = (p.h && p.h.adapt) || 55;
+  p.rook = round1(Math.max(0, (ROOKIE_GAP[p.pos] || 3) * clamp(1.35 - ad / 150, 0.7, 1.15) * Math.max(0.3, gauss(1, 0.25)))); p.rookS = state.season;
+}
+function rookieLearn(p, snaps, practice) {
+  if (!p.rook) return false;
+  p.rook = round2(Math.max(0, p.rook - ((snaps || 0) / 60 * 0.6 + (practice ? 0.12 : 0)) * learnRate(p)));
+  if (p.rook < 0.1) delete p.rook;
+  return true;
+}
 const TRACK_LABEL = { surge: 'Breaking out', ahead: 'Ahead of schedule', on: 'On track', behind: 'Behind schedule', stalled: 'Stalled', late: 'Late bloomer', steady: 'Holding steady', slip: 'Lost a step', fall: 'Falling off', done: 'Finished product' };
 const TRACK_CLS = { surge: 'good', ahead: 'good', on: '', behind: 'warn', stalled: 'bad', late: 'good', steady: '', slip: 'warn', fall: 'bad', done: '' };
 
 // ---------- when a player starts to decline, and how ----------
-const DECL_SPOT = { QB: 33, RB: 27, FB: 29, WRX: 29, WRZ: 29, SLOT: 29, TEY: 30, TEH: 30, LT: 31, LG: 31, C: 31, RG: 31, RT: 31, NT: 30, DT: 30, DE: 29.5, EDGE: 29,
-  MLB: 29, WLB: 29, CB: 28, NCB: 28, FS: 30, SS: 30, K: 36, P: 36 };
-const DECL_OFFSET = { E: -1, T: 0, P: 1, M: 3 }; // the legs go first, the mind last
-const DECL_RATE = { g: 1.9, c: 1.9, a: 1.2 };
+// the typical age a position starts to slip; each player's own age is spread around it (genDecline), and some never fit the mould
+const DECL_SPOT = { QB: 30, RB: 26, FB: 27.5, WRX: 27.5, WRZ: 27.5, SLOT: 27.5, TEY: 27.5, TEH: 27.5, LT: 28.5, LG: 28.5, C: 28.5, RG: 28.5, RT: 28.5, NT: 27.5, DT: 27.5, DE: 27.5, EDGE: 27,
+  MLB: 27.5, WLB: 27.5, CB: 27, NCB: 27, FS: 28, SS: 28, K: 36, P: 36 };
+const DECL_OFFSET = { E: -1, T: 0, P: 1, M: 2 }; // the legs go first, the mind last
+const DECL_RATE = { g: 2.6, c: 2.6, a: 1.7 }; // the year-on-year slide; some of the fall comes as a sudden cliff instead (DEV.cliff)
 const CLIFF_EXTRA = { E: 2.6, T: 2.2, P: 1.2, M: 0.6 }; // a cliff ager loses this much on top, every year once it starts
 function genDecline(p) {
   const norm = DECL_SPOT[p.spot] || 29, dur = (p.h && p.h.dur) || 55;
-  p.dc = { a: round1(clamp(norm + gauss(0, 1.5) + (dur - 55) / 45, norm - 2.5, norm + 5)), t: weightedPick(['g', 'c', 'a'], [65, 20, 15]) };
+  p.dc = { a: round1(clamp(norm + gauss(0, 2) + (dur - 55) / 45, norm - 3, norm + 5.5)), t: weightedPick(['g', 'c', 'a'], [65, 20, 15]) };
   return p.dc;
 }
 function declStart(p, g) { const dc = p.dc || genDecline(p); return dc.a + DECL_OFFSET[g] + (dc.t === 'a' ? 3 : 0); }
@@ -123,6 +144,12 @@ function progressPlayer(p) {
     const chance = DEV.late * (pc && (pc.yrs || 0) <= 1 && pc.dev >= 60 ? 1.8 : 1);
     if (rand() < chance) { p.grow.T = round2((p.grow.T || 0) + randInt(3, 6)); p.grow.M = round2((p.grow.M || 0) + randInt(2, 4)); p.lateTo = age + 3; ev = 'late'; }
   }
+  // the big swings of a single offseason: a known quantity breaks out, or a veteran falls off a cliff
+  if (!ev && age >= 24 && age <= 30 && left < 2 && age < declStart(p, 'T') && rand() < DEV.breakout) {
+    shiftSoft(p, 'T', Math.max(2, gauss(3.5, 1))); shiftSoft(p, 'M', Math.max(1, gauss(2, 0.8))); ev = 'breakout';
+  } else if (!ev && age >= 29 && rand() < Math.min(DEV.cliff[2], DEV.cliff[0] + DEV.cliff[1] * (age - 29))) {
+    shiftSoft(p, 'E', -Math.max(2, gauss(4, 1.2))); shiftSoft(p, 'P', -Math.max(1, gauss(2.5, 1))); shiftSoft(p, 'T', -Math.max(0.5, gauss(2, 1))); ev = 'cliff';
+  }
   const yr = {};
   for (const g of AGE_GROUPS) {
     const pk = growPeak(p, g), ds = declStart(p, g);
@@ -141,7 +168,7 @@ function progressPlayer(p) {
     if (g === 'T' || g === 'M') shiftSoft(p, g, fatTail(DEV.swing * (g === 'M' ? 0.7 : 1), DEV.tail, 2.2));
   }
   p.yr = yr; // what is still on offer this coming year (camp, then the season)
-  delete p.pa; p.cs = 0;
+  delete p.pa; p.cs = 0; delete p.rook; // the rookie year is over
   if (p.lateTo && age >= p.lateTo) delete p.lateTo;
   p.age++;
   p.exp++;
@@ -149,6 +176,7 @@ function progressPlayer(p) {
   const d = p.ovr - old;
   p.dv = Object.assign(p.dv || {}, { d, ev: ev || undefined });
   if (ev) p.dv.evS = state.season + 1;
+  if (ev === 'breakout') p.dv.sg = (state.cp || 0) + 1; // shows as a breakout for the next few checkpoints
   return d;
 }
 
@@ -192,6 +220,7 @@ function trackOf(p) {
   const dv = p.dv || {}, cp = state.cp || 0;
   if (dv.sg && cp - dv.sg < 3) return 'surge';
   if (p.lateTo) return 'late';
+  if (dv.ev === 'cliff' && dv.evS >= state.season) return 'fall';
   const growing = isDeveloping(p);
   // The label is about the player, not the room: a great teacher lifts everyone he coaches (and that growth is real), but
   // 'ahead of schedule' means ahead of what you would expect of a man in this building, so the coach's share is set aside.
@@ -204,8 +233,8 @@ function trackOf(p) {
 // ---- what the staff believes after each checkpoint ----
 const CP_LABEL = { camp: 'training camp', pre: 'the preseason', season: 'the last month', final: 'the season', off: 'the offseason' };
 const UP_WHY = {
-  1: { camp: 'a strong camp', pre: 'strong preseason film', season: 'what he has put on film this month', final: 'his season', off: 'outgrowing expectations this offseason', surge: 'a breakout that looks real', late: 'a late jump nobody saw coming' },
-  '-1': { camp: 'a poor camp', pre: 'a rough preseason', season: 'what the film has shown this month', final: 'a season that did not answer the questions', off: 'another year without the progress they wanted', collapse: 'a step backwards', inj: 'the injury' },
+  1: { camp: 'a strong camp', pre: 'strong preseason film', season: 'what he has put on film this month', final: 'his season', off: 'outgrowing expectations this offseason', surge: 'a breakout that looks real', late: 'a late jump nobody saw coming', breakout: 'a jump nobody expected from a player they thought they knew' },
+  '-1': { camp: 'a poor camp', pre: 'a rough preseason', season: 'what the film has shown this month', final: 'a season that did not answer the questions', off: 'another year without the progress they wanted', collapse: 'a step backwards', cliff: 'the years catching up with him all at once', inj: 'the injury' },
 };
 function perceptionCheckpoint(kind, weeks) {
   for (const id in state.players) {

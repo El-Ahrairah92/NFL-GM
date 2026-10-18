@@ -50,7 +50,7 @@ function simGame(hTid, aTid, opts = {}) {
   for (const p of g.dressed) {
     const s = p.tid === hTid ? 0 : 1, cul = knob(C(T(p.tid).hc), 'acc');
     // form: the week of practice (known beforehand) plus what nobody could see coming
-    p._gs = (p.h ? gauss(0, (0.5 + (100 - p.h.cons) / 25) * (1.15 - cul / 330) * 0.78) + pracBump(p) - repPenalty(p) - wearPenalty(p) : 0) + bonus[s];
+    p._gs = (p.h ? gauss(0, (0.5 + (100 - p.h.cons) / 25) * (1.15 - cul / 330) * 0.78) + pracBump(p) - repPenalty(p) - wearPenalty(p) - (p.rook || 0) : 0) + bonus[s];
   }
   for (let s = 0; s < 2; s++) initSide(g, s);
   ensureChem(); gameChem(g);
@@ -748,7 +748,7 @@ function startPossession(g, side, ydl) {
   // committee backs: some series go to the No. 2
   const rb1 = g.cx[side].ot.rb1;
   const ch = userChart(g, side, 'off');
-  g.side[side].rb2Turn = ch ? rand() < rotOf(ch, 'RB') : rand() < clamp(0.18 + rbLean(g, side) * 0.5, 0.18, 0.58); // the playbook's lean: a workhorse system gives away fewer series
+  g.side[side].rb2Turn = ch && !ch.staff ? rand() < rotOf(ch, 'RB') : rand() < clamp(0.18 + rbLean(g, side) * 0.5, 0.18, 0.58); // the playbook's lean: a workhorse system gives away fewer series
   g.side[side].rb3Turn = g.side[side].rb2Turn && rand() < 0.24;
   // series off for receivers and tight ends (never in the two-minute drill or late in a game)
   const T_ = g.side[side]; T_.rest = null;
@@ -758,7 +758,7 @@ function startPossession(g, side, ydl) {
     T_.rest = rest;
     // the defense spells its linebackers by series too: the second one most, the man in the middle rarely (your own chart sets this for your club)
     const dS = 1 - side, D_ = g.side[dS];
-    if (D_ && !userChart(g, dS, 'def')) { const dr = new Set(); for (const e of defUnit(g, dS, g.cx[dS].dt.front, 'NICKEL', false)) { const pr = e.slot === 'WLB' ? TUNE.lbRest : e.slot === 'MLB' ? TUNE.lbRest * 0.15 : 0; if (pr && e.p.id >= 0 && rand() < pr) dr.add(e.p.id); } D_.rest = dr; }
+    const dch = userChart(g, dS, 'def'); if (D_ && (!dch || dch.staff)) { const dr = new Set(); for (const e of defUnit(g, dS, g.cx[dS].dt.front, 'NICKEL', false)) { const pr = e.slot === 'WLB' ? TUNE.lbRest : e.slot === 'MLB' ? TUNE.lbRest * 0.15 : 0; if (pr && e.p.id >= 0 && rand() < pr) dr.add(e.p.id); } D_.rest = dr; }
   }
 }
 function changePoss(g, newYdl, result) { endDrive(g, result); startPossession(g, 1 - g.poss, newYdl); }
@@ -803,7 +803,7 @@ function injure(g, p) {
   const [name, mn, mx_] = weightedPick(INJURIES, INJURIES.map(x => x[3]));
   const sc = p.tid >= 0 ? C(T(p.tid).sc) : null;
   const weeks = Math.max(1, Math.round(randInt(mn, mx_) * (1.15 - knob(sc, 'recov') / 333)));
-  p.injury = { name, weeks, fresh: true };
+  p.injury = { name, weeks, fresh: true }; if (state.phase === 'PRESEASON') p.injury.camp = 1; // hurt in camp: no PUP for him
   g.injuries.push({ pid: p.id, tid: p.tid, name, weeks });
   pbpLog(g, `Injury: ${pshort(p)} (${name.toLowerCase()})`, false);
   const s = g.tids[0] === p.tid ? 0 : 1;

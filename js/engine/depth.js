@@ -348,8 +348,9 @@ function deepArm(p, g) { if (!p || !p.a) return DEEP.ref; return g ? (ea(g, { p 
 // ---------- team game state ----------
 function slotRating(p, spot) {
   if (!p.a) return p.ovr || 40;
-  if (p.fit && p.fit[spot] !== undefined) return p.fit[spot];
-  return spotRating(p, spot) - comfortPen(p, spot);
+  const rk = p.rook || 0; // a rookie still learning the pro game
+  if (p.fit && p.fit[spot] !== undefined) return p.fit[spot] - rk;
+  return spotRating(p, spot) - comfortPen(p, spot) - rk;
 }
 // Build a side's per-game state: healthy roster and per-spot depth (players listed at every spot they could fill)
 function initSide(g, s) {
@@ -357,6 +358,8 @@ function initSide(g, s) {
   const T_ = g.side[s] || (g.side[s] = { tid, onField: new Set() });
   if (!T_.active) T_.active = g.scrim ? scrimActives(tid, g) : g.pre ? preseasonActives(tid) : gameDayActives(tid); // 48 dress on game day; in preseason the starters sit
   T_.roster = rosterOf(tid).filter(p => !p.injury && T_.active.has(p.id));
+  // the staff's lean toward the young (or the veterans) on close calls: where the season stands, the coach, the front office
+  if (!T_.yb) { T_.yb = {}; const L = !g.pre && !g.scrim && typeof youthLeanOf === 'function' ? youthLeanOf(tid) : null; if (L && L.lean) for (const p of rosterOf(tid)) if (p.a) { const b = youthBoost(p, tid, L); if (b) T_.yb[p.id] = b; } }
   // the emergency quarterback: a third passer who did not dress may come in once the men ahead of him are hurt
   if (!g.pre && !T_.roster.some(p => p.pos === 'QB')) { const em = rosterOf(tid).filter(p => p.pos === 'QB' && !p.injury && !T_.active.has(p.id)).sort((a, b) => b.ovr - a.ovr)[0]; if (em) { T_.active.add(em.id); T_.roster.push(em); if (g.pbp) g.pbp.push({ q: g.q || 1, c: Math.max(0, Math.round(g.clock || 0)), t: tid, dd: '', x: `${T(tid).abbr} are down to the emergency quarterback: ${em.first} ${em.last} comes in` }); } }
   if (T_.roster.length < 22) { // emergency fillers so a decimated team can still line up
@@ -368,7 +371,7 @@ function initSide(g, s) {
     // only men from that side of the ball: when a club runs out of tight ends the next body is a lineman, not a defensive tackle
     const sd = SPOTS[spot].side;
     const guard = GROUP_GUARD[SPOTS[spot].g] || 0; // a tight end is not a tackle and only a quarterback is a quarterback, whatever the ratings say, while a real one is available
-    T_.depth[spot] = T_.roster.filter(p => !p.a || (SPOTS[p.spot] && SPOTS[p.spot].side === sd)).map(p => ({ p, r: slotRating(p, spot) - (guard && p.a && p.pos !== SPOTS[spot].g ? guard : 0) })).filter(x => x.r > 25 - guard).sort((a, b) => b.r - a.r);
+    T_.depth[spot] = T_.roster.filter(p => !p.a || (SPOTS[p.spot] && SPOTS[p.spot].side === sd)).map(p => ({ p, r: slotRating(p, spot) - (guard && p.a && p.pos !== SPOTS[spot].g ? guard : 0) + (T_.yb[p.id] || 0) })).filter(x => x.r > 25 - guard).sort((a, b) => b.r - a.r);
   }
   for (const p of T_.roster) if (!g.ps[p.id]) g.ps[p.id] = { fat: 0, snp: 0, last: null };
 }
@@ -416,9 +419,10 @@ function resolveChart(g, s, T_, slots, table, opts, chart, listFor) {
   return out;
 }
 // Fill a list of slots with the best available players (rating at the slot's spot, minus fatigue, plus continuity)
+const FILL_PRI = { QB: 10, LT: 5, RT: 4.5, C: 4, LG: 3.5, RG: 3.5, EDGE: 4, DE: 3.5, NT: 3, DT: 3, CB: 4, FS: 3, SS: 3, NCB: 2.5, MLB: 3, WLB: 2.5 };
 function fillSlots(g, s, slots, table, opts = {}) {
   const T_ = g.side[s], used = new Set(opts.exclude || []), out = [];
-  const chart = opts.chart;
+  const chart = opts.chart, inRoom = (p, spot) => !(chart && chart.staff) || !p || !p.a || staffGuard(p, spot) <= 2; // a staff rotates within the room; your chart rotates to whoever you listed
   const sameSide = spot => { const sd = SPOTS[spot] && SPOTS[spot].side, l = T_.roster.filter(p => !p.a || (SPOTS[p.spot] && SPOTS[p.spot].side === sd)); return l.length ? l : T_.roster; };
   const listFor = key => { if (!key) return null; for (const pk of opts.pkgKeys || []) { const l = chart.lists[pk + ':' + key]; if (l) return l; } return chart.lists[key] && chart.lists[key].length ? chart.lists[key] : null; };
   // everybody who starts somewhere in this grouping: the man who rotates in is the first one listed who is not already on the field
@@ -444,14 +448,17 @@ function fillSlots(g, s, slots, table, opts = {}) {
   // your chart is worked out for the whole look first (exhibitions keep their own strings); anything it could not fill is left to the staff
   const plan = chart && !preOn ? resolveChart(g, s, T_, slots, table, opts, chart, listFor) : null;
   if (plan) for (const id of plan._taken) used.add(id);
-  for (const [name, slot, x, depth] of slots) {
+  // the staff seats its best men where they matter most first (tackles before guards, outside corners before the nickel), so a
+  // tackle is not taken at guard before the tackle spots are filled; the lineup goes back into formation order afterwards
+  const order = slots.map((sl, i) => [sl, i]).sort((a, b) => (FILL_PRI[table[b[0][1]][0]] || 0) - (FILL_PRI[table[a[0][1]][0]] || 0) || a[1] - b[1]), at = new Map();
+  for (const [[name, slot, x, depth], oi] of order) {
     const [spot, grp] = table[slot];
     let best = null, bs = -1e9;
     let cands = T_.depth[spot].length ? T_.depth[spot] : sameSide(spot).map(p => ({ p, r: 30 }));
     // a man on the defensive line is judged at the spot he is actually lining up in, not by the name of the job
     const ax = grp === 'DL' && !(depth > 0) && x !== undefined ? Math.abs(x) : null;
     if (ax !== null) { const lc = T_.lc || (T_.lc = {}), k = ax.toFixed(2);
-      if (!lc[k]) { const seen = new Set(), all = []; for (const s of LINE_SPOTS) for (const c of T_.depth[s] || []) if (!seen.has(c.p.id)) { seen.add(c.p.id); all.push({ p: c.p, r: lineSlotRating(c.p, ax) }); } lc[k] = all.sort((a, b) => b.r - a.r); }
+      if (!lc[k]) { const seen = new Set(), all = []; for (const s of LINE_SPOTS) for (const c of T_.depth[s] || []) if (!seen.has(c.p.id)) { seen.add(c.p.id); all.push({ p: c.p, r: lineSlotRating(c.p, ax) + ((T_.yb && T_.yb[c.p.id]) || 0) }); } lc[k] = all.sort((a, b) => b.r - a.r); }
       if (lc[k].length) cands = lc[k]; }
     if (slot === 'QB' && !g.pre && !cands.some(c => c.p.pos === 'QB' && !used.has(c.p.id))) { const em = rosterOf(g.tids[s]).filter(p => p.pos === 'QB' && !p.injury && !onIR(p) && !T_.roster.includes(p)).sort((a, b) => b.ovr - a.ovr)[0];
       if (em) { T_.active.add(em.id); T_.roster.push(em); if (!g.ps[em.id]) g.ps[em.id] = { fat: 0, snp: 0, last: null }; const c = { p: em, r: slotRating(em, 'QB') }; T_.depth.QB = [c, ...T_.depth.QB]; cands = T_.depth.QB; if (g.pbp) g.pbp.push({ q: g.q || 1, c: Math.max(0, g.clock || 0), t: `${pshort(em)} comes in as the emergency quarterback`, s: g.score ? g.score.slice() : [0, 0] }); }
@@ -470,7 +477,7 @@ function fillSlots(g, s, slots, table, opts = {}) {
       const listed = list.map(id => T_.roster.find(p => p.id === id)).filter(Boolean).filter(p => !cands.some(c => c.p === p)).map(p => ({ p, r: slotRating(p, spot) }));
       if (listed.length) cands = [...listed, ...cands];
       rotHit = g.preview || g.pre ? false : opts.rot ? opts.rot(key) : rand() < rotOf(chart, ROT_BAND[key] || !opts.rotKeyOf ? key : opts.rotKeyOf(name)); // a preview shows the order as set, never a random rotation snap
-      if (rotHit) rotId = list.find((id, i) => i >= 1 && !firsts.has(id) && !used.has(id) && T_.roster.some(p => p.id === id));
+      if (rotHit) rotId = list.find((id, i) => i >= 1 && !firsts.has(id) && !used.has(id) && T_.roster.some(p => p.id === id && inRoom(p, spot)));
     }
     const pl = plan ? plan[name] : null;
     if (pl) best = { p: pl.p, r: 0 };
@@ -502,15 +509,16 @@ function fillSlots(g, s, slots, table, opts = {}) {
     const pen = best.p.a ? (ax !== null ? linePen(best.p, ax) : comfortPen(best.p, spot)) : 0; // how well he knows this spot; his own attributes do the rest
     const ent = { p: best.p, slot, name, spot, grp, x, depth: depth || 0, pen, s }; if (ax !== null) ent.lw = lineBlend(ax);
     if (plan) ent.why = pl ? pl.why : 'staff'; if (ax !== null) ent.ax = ax;
-    out.push(ent);
+    out.push(ent); at.set(ent, oi);
   }
+  out.sort((a, b) => at.get(a) - at.get(b));
   // Coming off for a breather: a rotation snap, a tired man, a planned series off. Whoever comes off is replaced by a man further down
   // that job's list who is not on the field (and is not himself sitting this snap out). It never moves anyone else, and with nobody
   // behind him he stays in. Done last, once every spot is settled, so a breather cannot take a man another spot is counting on.
   if (plan && !g.preview) { const onF = new Set(out.map(e => e.p.id));
     const eff = (q, p, i) => -i * 14 * (ROT_GAP[q.grp] || 1) - fatPenalty(g, p, q.grp) - (T_.rest && T_.rest.has(p.id) ? 40 : 0);
     for (const e of out) { const a = plan[e.name]; if (!a || a.why === 'ov') continue; const q = plan._slots.find(x => x.name === e.name);
-      const later = q.list.map((id, i) => ({ id, i, p: T_.roster.find(p => p.id === id) })).filter(x => x.i > a.i && x.p && !onF.has(x.id) && !plan._taken.has(x.id) && !pkgOnlyBlock(g, x.id, q.key)); if (!later.length) continue;
+      const later = q.list.map((id, i) => ({ id, i, p: T_.roster.find(p => p.id === id) })).filter(x => x.i > a.i && x.p && inRoom(x.p, q.spot) && !onF.has(x.id) && !plan._taken.has(x.id) && !pkgOnlyBlock(g, x.id, q.key)); if (!later.length) continue;
       const hit = g.pre ? false : opts.rot ? opts.rot(q.key) : rand() < rotOf(chart, ROT_BAND[q.key] || !opts.rotKeyOf ? q.key : opts.rotKeyOf(q.name));
       let sub = null, why = 'rot';
       if (hit) sub = later[0];
@@ -585,7 +593,10 @@ function starterQB(g, s) {
   return e ? e.p : null;
 }
 function hasList(chart, k) { return chart.lists[k] && chart.lists[k].length; }
-function userChart(g, s, unit) { if (g.scrim && g.scrim.chart) return g.scrim.chart[unit === 'st' ? 'none' : 'lists'] ? g.scrim.chart : null; const t = T(g.tids[s]); if (state.settings.autoUser && t.id === state.userTid) return null; return t.dch && !t.dch.auto[unit] ? t.dch : null; }
+function userChart(g, s, unit) { if (g.scrim && g.scrim.chart) return g.scrim.chart[unit === 'st' ? 'none' : 'lists'] ? g.scrim.chart : null; const t = T(g.tids[s]);
+  if (!(state.settings.autoUser && t.id === state.userTid) && t.dch && !t.dch.auto[unit]) return t.dch; // your own units
+  if (unit === 'st' || g.pre || g.preview || typeof staffChart !== 'function') return null;
+  return staffChart(t.id); } // everyone else, and the units you leave to your staff: the staff's chart
 function chartFirst(g, s, key) {
   const chart = userChart(g, s, CHART_UNIT(key));
   if (!chart || !hasList(chart, key)) return null;
@@ -614,7 +625,7 @@ function defUnit(g, s, front, pkg, subRush, bign, look) {
   if (bign) { layout = packageLayout(front, pkg, look); } // on your chart a big nickel is whoever you put in the nickel role
   const lk = defLookKey(front, pkg, look, subRush);
   // a pass-down job with fewer men named than it has spots falls back on the regular job's order for the rest
-  const lists = Object.create(chart.lists), ch = { lists, rot: chart.rot, ov: chart.ov, auto: chart.auto };
+  const lists = Object.create(chart.lists), ch = { lists, rot: chart.rot, ov: chart.ov, auto: chart.auto, staff: chart.staff };
   return fix(fillSlots(g, s, layout, DEF_SLOT, { score, chart: ch, pkgKeys: [], rotKeyOf: () => '-', ov: name => chart.ov ? chart.ov[lk + ':' + name] : undefined,
     keyOf: (name, slot, x, depth) => { const role = defRoleKey(name, slot, x, depth, front, pkg);
       if (subRush) { const k = defPassKey(name, slot, x, depth); if (k && hasList(chart, k)) { const kk = '~' + k + ':' + role; if (!lists[kk]) lists[kk] = [...chart.lists[k], ...(chart.lists[role] || []).filter(id => !chart.lists[k].includes(id))]; return kk; } }
