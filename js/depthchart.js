@@ -64,8 +64,9 @@ function staffRead(p, tid, key, L, spot) {
   const ax = chartAx(key), yb = (L && L.lean ? youthBoost(p, tid, L) : 0) + draftRope(p, tid), a = k => (p.a && p.a[k]) || 40;
   // the specialists' skills count for the men from that room (a passing-down back is a back who catches, not a receiver)
   const spec = key === 'RB3D' && p.pos === 'RB' ? ((a('hnd') + a('pbk') + a('rte')) / 3 - 60) * 0.9 : key === 'RBSY' && (p.pos === 'RB' || p.spot === 'FB') ? ((a('str') + a('bal')) / 2 - 70) * 1.6 : key === 'Y3D' && p.pos === 'TE' ? ((a('rte') + a('hnd')) / 2 - 60) * 0.6 : 0;
-  if (ax !== null) return lineSlotRating(p, ax) + (key === 'RUSHI' || key === 'RUSHE' ? ((p.a.prsh || 40) - 60) * 0.35 : 0) - (p.pos === 'DL' ? 0 : p.pos === 'LB' ? 4 : 8) + yb;
-  return slotRating(p, spot) - staffGuard(p, spot) + spec + yb;
+  const se = staffErr(p, tid); // the staff grades its own men as well as it knows them
+  if (ax !== null) return lineSlotRating(p, ax) + (key === 'RUSHI' || key === 'RUSHE' ? ((p.a.prsh || 40) - 60) * 0.35 : 0) - (p.pos === 'DL' ? 0 : p.pos === 'LB' ? 4 : 8) + yb + se;
+  return slotRating(p, spot) - staffGuard(p, spot) + spec + yb + se;
 }
 // the staff's chart, as the game uses it for a club the staff runs: rebuilt each week (and whenever the roster changes)
 const STAFF_CHART = { key: null, m: {} };
@@ -423,7 +424,7 @@ function practiceTeam(tid) {
   }
   ensureChem(); chemCamp(tid); chemWeek(tid); // a week together
 }
-function practiceWeekAll() { if (state.userTid >= 0 && !isAI(state.userTid) && typeof ensureReps === 'function') { ensureReps(); repsSyncWork(); } for (const t of state.teams) practiceTeam(t.id); }
+function practiceWeekAll() { if (typeof staffLearnWeek === 'function') staffLearnWeek(); /* a week of practice: every staff sees its men a little better */ if (state.userTid >= 0 && !isAI(state.userTid) && typeof ensureReps === 'function') { ensureReps(); repsSyncWork(); } for (const t of state.teams) practiceTeam(t.id); }
 // game day: the week of practice shows up as a small edge or drag; taking snaps without the reps costs a little
 function pracBump(p) { return p.prac && p.prac.g !== null && p.prac.g !== undefined ? clamp((p.prac.g - 50) * 0.09, -3, 3) : 0; }
 function repPenalty(p) { const t = p.prac ? p.prac.t : 0; return !t ? 0 : (p.pos === 'QB' ? 1.2 : p.pos === 'OL' ? 0.8 : 0.4) * (t >= 2 ? 1 : 0.6); }

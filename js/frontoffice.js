@@ -4,8 +4,9 @@
 //  One question drives every roster decision: how much better are this club's lineups with a player than without him?
 //  - The jobs are the coaching staff's depth-chart jobs, weighted by how much each is on the field in its scheme.
 //  - A player is graded at each job the way the staff grades him for its chart (staffRead: his rating at the spot, the room
-//    guard, the specialists' skills, this week's lean toward the young). The staff sees its own players as they are; anyone
-//    else is seen through the club's scouting, as well as its coaches' eye for talent allows (coachEval).
+//    guard, the specialists' skills, this week's lean toward the young). The staff sees its own players as well as it has
+//    come to know them (perception.js: staffKnow); anyone else is seen through the club's scouting. Every club scouts as
+//    accurately as every other, each with its own read.
 //  - Jobs are filled in the staff's order, so the club's model, its depth chart, the lineups in its games and every
 //    player's role all agree. A unit is scored healthy, with each starter missing and with each pair missing.
 //  - A player's worth is what the lineups lose without him, plus what he may become and what he does on special teams,
@@ -29,14 +30,15 @@ const FO_UNIT = { QB: 'QB', RB: 'SKILL', WR: 'SKILL', TE: 'SKILL', OL: 'OL', DL:
 // how well a club reads players it does not coach: its coaching staff's eye for talent (the head coach's most of all). A staff that
 // judges well builds better rosters; one that does not overpays for what it thinks it sees.
 function coachEval(c) { if (!c) return 55; if (c.ev === undefined) c.ev = Math.round(clamp(66 + hashGauss(c.id, 917, 3) * 11, 35, 95)); return c.ev; }
-function foQuality(t) { return Math.round(coachEval(C(t.hc)) * 0.5 + coachEval(C(t.oc)) * 0.25 + coachEval(C(t.dc)) * 0.25); }
+// every club reads players as accurately as every other (each its own way): no staff is a better judge of talent than another
+function foQuality(t) { return 66; }
 function foVal(v, spot) { return v <= 45 ? 0 : Math.pow((v - 45) / 10, 2.4) * (SPOTS[spot].val || 1); }
 function foSize(p, spot) { const b = SPOTS[spot].body; return b && p.m ? clamp((p.m.wt - b[2]) / b[3], -2.5, 2.5) * (FO.size[SPOTS[spot].g] || 0) : 0; }
 // the club keeps players in their own rooms the way its coaches do: a man from another room has to be clearly better to take the job
 function foGuard(p, spot) { return staffGuard(p, spot); }
 // what this club thinks he is at a given spot
 function foRead(p, tid, spot, fit) {
-  const q = foQuality(T(tid)), own = p.tid === tid, same = spot === p.spot;
+  const q = foQuality(T(tid)), own = clubOf(p) === tid, same = spot === p.spot;
   const sd = (same ? FO.sdOwn : FO.sdJob) * (1.7 - q / 100) * (own ? FO.ownMen : 1);
   return slotRating(p, spot) + (viewOvr(p, tid) - p.ovr) + foSize(p, spot) + (same ? (fit || 0) * 0.8 : 0) + hashGauss(p.id * 7 + SPOT_KEYS.indexOf(spot), 900 + tid, state.season) * sd;
 }
@@ -80,7 +82,7 @@ function foJobs(tid) {
 // toward the young); anyone else as its scouting sees him, which can be off
 function foJobRead(p, tid, j, L) {
   if (SPOTS[j.spot].side !== SPOTS[p.spot].side || !p.a) return 0;
-  const own = p.tid === tid;
+  const own = clubOf(p) === tid;
   return staffRead(p, tid, j.base, own ? L : null, j.spot) + (own ? 0 : staffEvalErr(p, tid, j.spot));
 }
 function staffEvalErr(p, tid, spot) {

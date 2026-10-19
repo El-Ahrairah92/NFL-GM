@@ -55,9 +55,9 @@ Phase 5 notes (`js/perception.js`):
   
   It carries over at half strength each year. Measured: perception error correlates +0.25–0.33 with team win% and +0.3–0.47 with yardage, so overrated stat-padders and underrated players on bad teams exist.
 - **Who sees what:**
-  - AI teams see consensus plus their own deterministic noise per player and season.
-  - Every team sees its own players half-way to the truth, because coaches watch practice. That includes you.
-  - The engine always plays the truly better player. Depth charts and film grades are honest signals.
+  - Every team, yours included, sees other clubs' players as consensus plus its own deterministic noise per player and season. Every club scouts as accurately as every other; each reads a man its own way (section 66).
+  - A club learns its own players over time (section 66). Your own players are shown half-way to the truth, as before.
+  - The engine always plays the truly better player. Film grades are honest signals.
 - **AI decisions run on perception:** market value and asks, re-signing, free agency, the draft board, cuts, trade value and needs. FA asks correlate 0.61–0.66 with perception versus 0.52 with truth. Draft order correlates about −0.65 with true potential.
 - **Labels:**
   - **Tier:** league-wide rank by consensus within the position group, against starting jobs. Elite is the top 3%, All-Pro the top 10%, Starter covers the starting jobs, Rotation/Backup up to 1.75×, and Depth up to 2.6×. Below that, players are Project/Fringe/Washed by age.
@@ -1346,3 +1346,10 @@ A full attribute audit (docs/ATTRIBUTES.md) after section 64 found no attribute 
 
 Rating weights were refitted to what each attribute is now worth on the field (version 7); saves re-rate every player on load.
 
+## 66. What a club knows about its own players
+Every club scouts as accurately as every other, but each reads a player its own way, so two clubs can see the same man differently. No coach is a better or worse judge of talent.
+- **A new arrival is seen as the club's scouts saw him.** That covers a rookie, a free agent, a waiver claim and a trade, misreads included. Rookies are the most misread, partly because a club drafts the men it rated highest.
+- **The read moves toward the truth** with every week of practice and every snap he plays. Starters are known well by the end of a season; a backup who rarely plays can be misjudged for longer. Play is noisy, so a read moves a little with a man's form.
+- **One read everywhere.** The staff's depth chart, the front office's value of its own men, cuts, call-ups and re-signing all use the club's read of its own player. A player on its practice squad counts as its own. The engine always plays his true ability, so a misread man plays to his real level and his staff sees it.
+- **Older saves and new leagues** start with every club already knowing the men it has, the longer he has been in the league, the better.
+- Calibrated to nflverse snap counts 2014-24: a week-one starter loses his job by mid-season about 13% of the time when he is new to the club and 15% when he is new to the league (sim 12% and 14%); benched starters get the job back within three games about 69% of the time (sim 68%). Rookies start about as often as real ones by round.

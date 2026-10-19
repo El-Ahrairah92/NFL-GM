@@ -49,6 +49,7 @@ function newLeague(userTid) {
   for (const t of shuffle(state.teams.slice())) fillPS(t.id); // every club starts with a practice squad in place, yours included
   for (const p of Object.values(state.players)) if (p.tid >= 0 || p.tid === -3) { const tid = p.tid >= 0 ? p.tid : p.psTid; p.pbTid = tid; p.pb = p.exp === 0 ? 82 : 96 + Math.round(rand() * 4); if (tid === userTid) p.seenW = p.exp === 0 ? 4 : 16; }
   ensureCoachContracts(); seedWeb(); snapPlaybooks();
+  seedStaffKnow(state, true); state.skV = 1; // a new league: every club already knows the men it has
   state.lvl = 1.3; // from here the market pays what a full cap buys
   practiceWeekAll();
   addNews(`Welcome to the ${START_SEASON} season. You are the GM of the ${teamName(userTid)}.`, [userTid]);
@@ -82,6 +83,8 @@ function migrateState(st) {
     st.version = 3;
   }
   // calibrated position weights changed: recompute every player's ratings
+  // clubs' reads of their own men (older saves: they already know the men they have had)
+  if (st.version === SAVE_VERSION && !st.skV) { seedStaffKnow(st); st.skV = 1; }
   const rv = typeof DERIVED !== 'undefined' ? DERIVED.version : 0;
   if (st.version === SAVE_VERSION && st.ratingsVer !== rv) { for (const id in st.players) if (st.players[id].a) updateRatings(st.players[id]); st.ratingsVer = rv; }
   // Phase 6: cap growth, guarantees, practice squads, IR stays
@@ -282,6 +285,7 @@ function simWeek() {
 function applyBox(box, playoff) {
   filmUpdate(box); // every snap on tape sharpens the league's read on who played
   repsLearning(box); // game reps at a spot build positional comfort
+  staffLearnBox(box); // and every snap shows his own staff a little more of what he is
   recordForm(box); // rolling game grades feed the star rating
   // advanced charting: season totals for players and teams (regular season); full detail kept for your games and the playoffs
   if (box.adv) {
