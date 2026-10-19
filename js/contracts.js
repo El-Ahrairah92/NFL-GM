@@ -379,7 +379,12 @@ function psPromotions(tid) {
     if (activeCount(tid) >= ROSTER_MAX) {
       const counts = {}; rosterOf(tid).forEach(p => { if (!p.injury) counts[p.pos] = (counts[p.pos] || 0) + 1; });
       const keep = q => healthy >= need ? Math.max(LINEUP_NEED[q] + 1, ELEV_DRESS[q] || 1) : LINEUP_NEED[q] + 1; // filling a dress hole does not open another
-      const cut = rosterOf(tid).filter(p => !onIR(p) && p.pos !== pos && (counts[p.pos] || 0) > keep(p.pos)).sort((a, b) => cutValue(a) - cutValue(b))[0];
+      let cut = null;
+      if (typeof foModel === 'function' && FO.on !== false) {
+        // the man the club would miss least (his money counted only as far as letting him go saves it), from a room that can spare him
+        const M = foModel(tid, rosterOf(tid).filter(p => p.a && !p.injury)), keepIds = new Set(rosterOf(tid).filter(p => p.pos === pos || (counts[p.pos] || 0) <= keep(p.pos)).map(p => p.id));
+        const L = foLeast(M, keepIds); if (L) cut = L.p;
+      } else cut = rosterOf(tid).filter(p => !onIR(p) && p.pos !== pos && (counts[p.pos] || 0) > keep(p.pos)).sort((a, b) => cutValue(a) - cutValue(b))[0];
       if (!cut) continue;
       releasePlayer(cut.id);
     }
