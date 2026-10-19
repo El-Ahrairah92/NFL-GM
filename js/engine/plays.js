@@ -414,7 +414,7 @@ function resolvePass(g, off, def, oc, dc) {
   const shade = star ? TUNE.shade * (dc.cov === 'C0' ? 0 : ['C2', 'C4', 'C2M', 'T2', 'C6'].includes(dc.cov) ? 0.34 : 0.2) * clamp((pass[0][1] - 70) / 14, 0, 1.7) * clamp(0.5 + (pass[0][1] - pass[1][1]) / 12, 0.5, 1.2) : 0;
   for (const r of rlist) {
     const e = r.e, deep = r.band === 'D';
-    let defE = null, help = e === star ? -shade : 0, hole = false, w, sx = 0, dx = 0; // sx, dx: what this receiver, and this defender, added to the window over an ordinary man at the job
+    let defE = null, help = e === star ? -shade : 0, hole = false, w, sx = 0, dx = 0, hb = null, ha = 0; // hb, ha: the man helping on this route, and how much // sx, dx: what this receiver, and this defender, added to the window over an ordinary man at the job
     const rte = ea(g, e, 'rte'), agi = ea(g, e, 'agi'), spd = ea(g, e, 'spd'), bur = ea(g, e, 'bur');
     if (man) {
       defE = mm.m.get(e) || null;
@@ -433,8 +433,8 @@ function resolvePass(g, off, def, oc, dc) {
       if (hole) w += TUNE.holeBonus + 0.6;
       // deep help over the top
       const fs = mm.free.find(x => x.slot === 'FS' || x.slot === 'SS');
-      if (dc.cov === 'C1' && fs && (deep || r.band === 'I') && Math.abs(r.endX) < 3) help -= 0.45 * clamp((ea(g, fs, 'zone') * 0.55 + ea(g, fs, 'spd') * 0.45) / 75, 0.6, 1.3); // range is as much speed as it is eyes
-      if (dc.cov === 'C2M' && deep) help -= 0.55;
+      if (dc.cov === 'C1' && fs && (deep || r.band === 'I') && Math.abs(r.endX) < 3) { ha = 0.45 * clamp((ea(g, fs, 'zone') * 0.55 + ea(g, fs, 'spd') * 0.45) / 75, 0.6, 1.3); help -= ha; hb = fs; } // range is as much speed as it is eyes
+      if (dc.cov === 'C2M' && deep) { help -= 0.55; const sf = mm.free.filter(x => x.slot === 'FS' || x.slot === 'SS').sort((a, b) => Math.abs(a.x - r.endX) - Math.abs(b.x - r.endX))[0]; if (sf) { hb = sf; ha = 0.55; } } // the half-field safety on his side
       if (oc.tags.has('RUB') && r.dir === 'IN' && r.band !== 'D') w += 0.55;
       if (e.moved && e.moved !== 'insert') w += TUNE.motionMan * (e.moved === 'jet' ? 1.3 : 1); // his man is chasing him across the formation, or playing through a stack
       if (defE && r.band !== 'D') w += (ea(g, e, 'rel') - ea(g, defE, 'prs')) * 0.011; // hand fighting through the stem, press or not
@@ -455,7 +455,7 @@ function resolvePass(g, off, def, oc, dc) {
           const carry = droppers.filter(x => (wideMan ? x.slot === 'CB' : x.slot === 'NCB' || x.slot === 'DIME') && Math.sign(x.x) === Math.sign(e.x) && !bit.has(x) && !owners.some(o2 => o2[0] === x))[0];
           if (carry) owners = [[carry, TUNE.zoneCarry], ...owners.map(([x, wt]) => [x, wt * 0.5])]; } }
       if (!owners.length) { hole = true; defE = nearestDef(droppers, r.endX); }
-      else { owners.sort((a, b) => b[1] - a[1]); defE = owners[0][0]; if (owners.length > 1) { const h2 = owners[1][0]; help -= 0.3 * owners[1][1] * clamp(1 + (ea(g, h2, 'zone') * 0.6 + ea(g, h2, 'prec') * 0.25 + ea(g, h2, 'spd') * 0.15 - TUNE.helpRef) * TUNE.helpSkill, 0.4, 1.7); } } // the second man in the area helps as well as he plays zone
+      else { owners.sort((a, b) => b[1] - a[1]); defE = owners[0][0]; if (owners.length > 1) { const h2 = owners[1][0]; ha = 0.3 * owners[1][1] * clamp(1 + (ea(g, h2, 'zone') * 0.6 + ea(g, h2, 'prec') * 0.25 + ea(g, h2, 'spd') * 0.15 - TUNE.helpRef) * TUNE.helpSkill, 0.4, 1.7); help -= ha; hb = h2; } } // the second man in the area helps as well as he plays zone
       const mid = r.band === 'I';
       const offC = deep ? rte * (0.9 - TUNE.deepSpeed * 0.95) + agi * 0.1 + spd * TUNE.deepSpeed * 0.95 : mid ? rte * 0.5 + agi * 0.1 + bur * 0.2 + spd * 0.2 : rte * 0.55 + agi * 0.15 + bur * 0.3;
       const own = owners.length ? owners[0][1] : 0.6;
@@ -495,7 +495,7 @@ function resolvePass(g, off, def, oc, dc) {
     w += (7 - droppers.length) * TUNE.thinCover + (dc.cov === 'C1' && r.band !== 'S' ? TUNE.oneHigh : 0);
     w += help + sepNet - g.key * 0.35 + luck;
     if (g.down >= 3 && r.depth >= g.togo && g.togo <= 15) w -= 0.22; // money down: the defense sits on the sticks
-    r.w = w; r.w0 = w; r.wPre = w - luck; r.def = defE; r.sx = sx * 1.4; r.dx = dx * 1.4; // in yards, as separation is // w0: how open he came on his own, before the quarterback's time in the pocket added to it if (e === star) r.shade = shade; // film credits beating the extra attention
+    r.w = w; r.w0 = w; r.wPre = w - luck; r.def = defE; r.hb = hb !== defE ? hb : null; r.ha = ha; r.sx = sx * 1.4; r.dx = dx * 1.4; // in yards, as separation is // w0: how open he came on his own, before the quarterback's time in the pocket added to it if (e === star) r.shade = shade; // film credits beating the extra attention
   }
   // ---- the QB's read ----
   const proc = ea(g, qb, 'proc'), dec = ea(g, qb, 'dec'), pkt = ea(g, qb, 'pkt');
@@ -647,6 +647,10 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
   const pcL = TUNE.catchBase + 0.2 + r.w * 0.95 + edgeE - (air >= 20 ? TUNE.deepCatch : air >= 10 ? TUNE.midCatch : air <= 2 ? -0.95 : -TUNE.shortCatch) + (r.role === 3 && air <= 5 ? 0.55 : 0) + (e.slot === 'RB' ? 0.55 : 0) - (yardsToGoal <= 5 ? 0.3 : yardsToGoal <= 12 ? 0.2 : 0);
   const pCatchable = lgt(pcL);
   res.target = e; res.air = airY; res.def = defE; res.hurry = hurry; res.route = r;
+  // the safety over the top, or the second man in the zone, sometimes gets to the ball before the man in coverage: a ballhawk more often than an ordinary man
+  const bh = x => ea(g, x, 'bsk') * 0.6 + ea(g, x, 'spd') * 0.25 + ea(g, x, 'jmp') * 0.15;
+  const pm = defE && r.hb && ['FS', 'SS', 'CB', 'NCB', 'DIME'].includes(r.hb.slot) && rand() < clamp(r.ha * TUNE.helpBall * (1 + (bh(r.hb) - bh(defE)) * TUNE.helpHawk), 0, 0.6) ? r.hb : defE; // pm: the man who plays the ball
+  res.pm = pm;
   // batted at the line: tall, long linemen with their hands up, and a short quarterback throwing through them
   if (!onRun && air < 20 && TUNE.size) {
     const front = (res.prot ? res.prot.rushers : []).filter(a => a.e.depth === 0 && !a.free);
@@ -663,17 +667,17 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
   // in the air it is reach and leap; underneath, in traffic, it is strength and hands
   const up = jumpBall(air, yardsToGoal), low = 1 - up;
   const rcOf = e => ea(g, e, 'cth') * TUNE.cthW + ea(g, e, 'hnd') * 0.15 + radius(g, e, up) * TUNE.radius + TUNE.catchPt + bod(e).w * 1.5 * TUNE.size + low * ((ea(g, e, 'str') - 55) * TUNE.trafficStr + (ea(g, e, 'hnd') - 70) * TUNE.trafficHnd);
-  const rcC = rcOf(e), dfC = defE ? (['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 42 + (ea(g, defE, 'bsk') * 0.6 - 40) * 0.5 + radius(g, defE, up) * TUNE.radius * 0.5 : ea(g, defE, 'bsk') * 0.6 + radius(g, defE, up) * TUNE.radius + TUNE.catchPtD) + bod(defE).w * 1.2 * TUNE.size + low * (ea(g, defE, 'str') - 55) * TUNE.trafficD : 50;
+  const rcC = rcOf(e), dfC = pm ? (['MLB', 'WLB', 'SAM'].includes(pm.slot) ? 42 + (ea(g, pm, 'bsk') * 0.6 - 40) * 0.5 + radius(g, pm, up) * TUNE.radius * 0.5 : ea(g, pm, 'bsk') * 0.6 + radius(g, pm, up) * TUNE.radius + TUNE.catchPtD) + bod(pm).w * 1.2 * TUNE.size + low * (ea(g, pm, 'str') - 55) * TUNE.trafficD : 50;
   const pDrop = clamp(TUNE.dropBase * Math.exp(-(ea(g, e, 'hnd') - 70) * 0.05) * (r.w < 0.25 ? 1.35 : 1) * (air <= 3 ? 0.6 : 1), 0.008, 0.3); // hands: every catch, and most of all in traffic
   const tight = e.slot === 'RB' && air <= 4 ? -0.15 : 0.25; // a checkdown is not a contested catch unless the linebacker is sitting on it
   if (r.w < tight && defE) cWinP = lgt(0.25 + (rcC - dfC) * 0.05 + r.w * 0.8);
   res.xc = pCatchable * (1 - pDrop) * cWinP;
   const decF = 1 + soft(Math.max(0, 70 - ea(g, qb, 'dec')), 18) * 0.015;
-  const posF = defE ? (['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 0.35 : defE.depth === 0 ? 0.25 : 1.12) : 0.6;
-  const pInt = TUNE.intBase * clamp(1 - soft(72 - acc, 16) * 0.014, 0.75, 1.12) * Math.exp(-r.w * 0.7) * decF * (hurry ? 1.45 : 1) * (covID ? 1 : 1.5) * (airY >= 20 ? 1.35 : 1) * (airY >= 10 || outside ? clamp(1 + (70 - arm) * 0.004, 0.85, 1.2) : 1) * (defE ? 1 + soft(ea(g, defE, 'bsk') - 65, 20) * 0.025 : 1) * posF;
+  const posF = pm ? (['MLB', 'WLB', 'SAM'].includes(pm.slot) ? 0.35 : pm.depth === 0 ? 0.25 : 1.12) : 0.6;
+  const pInt = TUNE.intBase * clamp(1 - soft(72 - acc, 16) * 0.014, 0.75, 1.12) * Math.exp(-r.w * 0.7) * decF * (hurry ? 1.45 : 1) * (covID ? 1 : 1.5) * (airY >= 20 ? 1.35 : 1) * (airY >= 10 || outside ? clamp(1 + (70 - arm) * 0.004, 0.85, 1.2) : 1) * (pm ? 1 + soft(ea(g, pm, 'bsk') - 65, 20) * 0.025 : 1) * posF;
   // what the same throw is worth with an ordinary man at each end, and how likely it was to be picked
-  { const lbD = defE && ['MLB', 'WLB', 'SAM'].includes(defE.slot), ctd = r.w < tight && defE;
-    const pI1 = defE ? (0.075 + soft(ea(g, defE, 'bsk') - 65, 20) * 0.002 + up * (ea(g, defE, 'jmp') - 82) * TUNE.leapPick) * (lbD ? 0.4 : 1) : 0;
+  { const lbD = pm && ['MLB', 'WLB', 'SAM'].includes(pm.slot), ctd = r.w < tight && defE;
+    const pI1 = pm ? (0.075 + soft(ea(g, pm, 'bsk') - 65, 20) * 0.002 + up * (ea(g, pm, 'jmp') - 82) * TUNE.leapPick) * (lbD ? 0.4 : 1) : 0;
     res.xint = pCatchable * (1 - pDrop) * (ctd ? (1 - cWinP) * pI1 : 0) + (1 - pCatchable) * (defE ? Math.min(1, pInt / Math.max(0.05, 1 - lgt(TUNE.catchBase + r.w))) : 0);
     const aq = avgEnt(g, qb), ar = avgEnt(g, e);
     if (aq) { const A2 = accOf(aq); res.xcQ = lgt(pcL + (soft(A2[0] - 72, 16) - soft(acc - 72, 16)) * TUNE.accScale + (air >= 15 ? (A2[1] - arm) * 0.01 : 0) + (r.w < 0.4 && air >= 5 ? (A2[1] - arm) * 0.008 : 0)) * (1 - pDrop) * cWinP; }
@@ -688,8 +692,8 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
       res.contested = r.w < TUNE.contestLabel;
       const win = lgt(0.25 + (rcC - dfC) * 0.05 + r.w * 0.8);
       if (rand() > win) {
-        if (rand() < (0.075 + soft(ea(g, defE, 'bsk') - 65, 20) * 0.002 + up * (ea(g, defE, 'jmp') - 82) * TUNE.leapPick) * (['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 0.4 : 1)) return interception(g, def, res, qb, defE, airY, tag);
-        Object.assign(res, { kind: 'inc', pbu: rand() < (['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 0.75 : 0.3) ? null : defE, desc: tag + ` — broken up by ${pshort(defE.p)}` }); return res;
+        if (rand() < (0.075 + soft(ea(g, pm, 'bsk') - 65, 20) * 0.002 + up * (ea(g, pm, 'jmp') - 82) * TUNE.leapPick) * (['MLB', 'WLB', 'SAM'].includes(pm.slot) ? 0.4 : 1)) return interception(g, def, res, qb, pm, airY, tag);
+        Object.assign(res, { kind: 'inc', pbu: rand() < (['MLB', 'WLB', 'SAM'].includes(pm.slot) ? 0.75 : 0.3) ? null : pm, desc: tag + ` — broken up by ${pshort(pm.p)}` }); return res;
       }
     }
     // catch → yards after catch
@@ -713,8 +717,8 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
     return res;
   }
   // off target or covered: incomplete or picked
-  if (defE && rand() < pInt / Math.max(0.05, 1 - lgt(TUNE.catchBase + r.w))) return interception(g, def, res, qb, defE, airY, tag);
-  if (defE && r.w < 0.4 && rand() < (['MLB', 'WLB', 'SAM'].includes(defE.slot) ? 0.06 : defE.slot === 'FS' || defE.slot === 'SS' ? 0.1 : 0.155)) res.pbu = defE;
+  if (defE && rand() < pInt / Math.max(0.05, 1 - lgt(TUNE.catchBase + r.w))) return interception(g, def, res, qb, pm, airY, tag);
+  if (pm && r.w < 0.4 && rand() < (['MLB', 'WLB', 'SAM'].includes(pm.slot) ? 0.06 : pm.slot === 'FS' || pm.slot === 'SS' ? 0.1 : 0.155)) res.pbu = pm;
   Object.assign(res, { kind: 'inc', desc: tag + ' — incomplete' + (res.pbu ? `, defended by ${pshort(res.pbu.p)}` : '') });
   return res;
 }

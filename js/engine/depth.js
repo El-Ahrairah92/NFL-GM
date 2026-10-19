@@ -37,6 +37,8 @@ const TUNE = {
   teKeepDeep: 0.35, teKeepDrop: 0.1, // how often the starting tight end stays in to block on a deep call, and on a dropback
   evCap: 73, evSlope: 0.4, // a ball carrier's elusiveness past this counts for less (keeps the best backs from 7 yards a carry)
   rushCap: 12,        // a pass rusher's edge over his blocker, in rating points, before diminishing returns (keeps one mismatch from a 30-sack year)
+  blockCap: 18,       // a run blocker's edge over the man in front of him, before diminishing returns: looser than the defender's, so an elite line keeps moving good fronts
+  pbCap: 26,          // a pass blocker's edge over his rusher: looser still, so an elite tackle keeps beating good rushers
   edgeK: 0.25, edgeSlope: 0.2, // downfield: a passer and receiver's combined edge (logit) past which it counts for less
   sackShare: 0.4,      // how often two rushers who arrive together split the sack
   slideAt: 12,         // how badly a tackle has to be overmatched before the protection slides a guard out to help him
@@ -86,6 +88,9 @@ const TUNE = {
   motionMan: 0.15, motionTell: 0.6, motionBump: 0.65, motionCheck: 0.7, // motion: the step it gives the moving man against man coverage, how much it tells the quarterback, how often a zone bumps over in time, and how much it costs the offense's own check at the line
   hashCov: 0.05, hashSpace: 0.3, hashRun: 0.05, hashThrow: 1.5, // the hash: how much easier a zone is to throw on to the wide side, the room after a catch there, the room on an outside run there, and the arm the far throw takes
   helpRef: 64, helpSkill: 0.03, // zone help: the rating at which the second defender in an area helps the standard amount, and how much each point changes it
+  helpBall: 0.6, helpHawk: 0.06, // how often the helping defensive back gets to the ball first, per unit of help he gave; and how much his ball skills, speed and leap (over the covering man's) add to that, per point
+  fgBase: 0.975, fgCurve: 0.00042, // field goals: the routine make rate, and how fast it falls with each yard past 25 (an ordinary kicker: 92% at 37, 77% at 47, 55% at 57)
+  fgRangeP: 0.6,     // a coach's range: the longest kick his man makes about three times in five
   containRead: 0.02, chaseSpeed: 0.02, // the ends: play recognition keeps contain (fewer escapes outside), speed runs an escaped quarterback down sooner
   chemRef: 81,          // the chemistry of an ordinary settled unit: above it helps, below it hurts
   chemOL: 2.6, chemDL: 3.2, chemLB: 2.2, chemContain: 2.5, chemDB: 0.3, chemQB: 0.4, chemD: 0.0025, chemKB: 0.3, // how much each unit's chemistry is worth where it acts
@@ -126,10 +131,10 @@ const TUNE = {
   covWeight: 1.5,      // a defender's coverage skill counts this much more than the receiver's route skill
   holeBonus: 0.9,
   readTime: 0.34,
-  catchBase: 2.1,
+  catchBase: 2.05,
   shade: 0.4, // how hard defenses roll coverage toward the best receiver
   dropBase: 0.041,
-  intBase: 0.0086,
+  intBase: 0.0085,
   // tackling
   tackleBase: 2.3,
   tackleScale: 0.03,
@@ -671,6 +676,8 @@ function coverUnitScore(g, s) {
 
 // diminishing returns on rating gaps: big edges matter, but not linearly forever
 function soft(x, cap) { return cap * Math.tanh(x / cap); }
+// the same with a different limit on each side: x > 0 is the attacker's edge, x < 0 the blocker's
+function soft2(x, up, dn) { return x >= 0 ? soft(x, up) : soft(x, dn); }
 
 // Effective attribute for an on-field player this snap
 // ---- body: how big he is for his position ----

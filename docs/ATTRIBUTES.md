@@ -289,3 +289,32 @@ No attribute works backwards. The largest single attributes, points a game for t
 - Safeties: speed 1.4, ball skills 1.0.
 
 Too small to measure even at 2,400 games: a quarterback's throw on the run, a back's pass blocking, a receiver's release and strength, most of a tight end's skills taken one at a time, an edge rusher's speed and agility, linebacker and safety coverage skills, press, and ball stripping everywhere.
+
+
+## Re-audit after the season-totals work, and fixes (rating weights version 7)
+
+Same method, 2,400 games a row (noise about 0.3 points), run twice: once on the engine after the stat-line and injury work, and again after the fixes below.
+
+No attribute works backwards. (The test flags corner and safety special-teams skill because better coverage units make fewer special-teams tackles; kick-return field position moves strongly the right way.)
+
+Found and fixed:
+- **An elite blocker stopped mattering.** The diminishing-returns limit on a mismatch between a pass rusher and his blocker (and between a run defender and his) worked both ways, so it capped the blocker's edge as well as the rusher's. A 97 pass blocker against an 85 cut no sacks at all. The limit is now one-sided: the attacker's edge keeps it (12 for the pass rush, 11 for the run), a run blocker's edge gets a looser one (18) and a pass blocker's looser still (26). A 97 against an 85 now cuts 0.16 sacks a game and is worth as much on the scoreboard as a 70 against a 58; in the run game the two gaps now move yards per carry equally.
+- **A safety's ball skills barely counted.** Only the man covering the target could intercept or break up a throw, and safeties are that man on less than half as many throws as corners. Now the help defender (the free safety over the top in Cover 1, the half-field safety in two-man, the second man in a zone area, when he is a defensive back) sometimes gets to the ball first, more often the better his ball skills, speed and leap are than the covering man's. Interceptions and breakups on those throws are his. Safety ball skills: +0.08 interceptions a game for the 30-point gap (was +0.05), 0.6 points (was 0.0). Interceptions by position: corners 43-47%, safeties 38-40%, linebackers 13-16% (real 2021-23: 39-42, 36-42, 16-18). The base interception rate was lowered to keep the league total where it was.
+- **Field goals were too easy from 40-49 and tried too often from 55+.** The make rate now falls smoothly with distance, as the league's does: consistency sets the routine kick, range moves the whole curve out, falloff sets how steeply it drops, trajectory is a little range. A coach's range is the longest kick his man makes about three times in five. Kicks by distance, sim against real 2023: under 40, 50% of attempts made 96% (52%, 96%); 40-49, 28% made 83% (26%, 80%); 50-54, 14% made 72% (15%, 74%); 55 and up, 9% made 65% (7%, 58%). Range falloff now shows clearly in field-goal rate.
+
+The largest single attributes after the fixes, points a game for the 30-point gap:
+- Quarterback: processing 2.7, short accuracy 2.0, decision-making 1.3, arm strength 1.1, speed 1.1, pocket presence 1.0.
+- Running back: contact balance 1.3, strength 1.2, agility 1.0. Elusiveness and vision move yards per carry most clearly (0.30 and 0.24).
+- Receivers: contested catch 1.8, route running 1.6, hands 1.6, contact balance 1.4, burst 1.2.
+- Tight end: burst 0.8, contested catch 0.6; his other skills one at a time are still too small to see.
+- Offensive line: pass blocking 2.4, run blocking 1.4, agility 1.0, strength 0.9.
+- Interior line: pass rush 1.3, burst 1.0, strength 0.9, block shedding 0.7.
+- Edge: burst 1.9, pass rush 1.8, agility 1.0, strength 0.9.
+- Linebackers: tackling 1.4, play recognition 1.3, speed 1.1, block shedding 1.1.
+- Cornerbacks: man coverage 1.6, ball skills 1.3, speed 1.2, zone coverage 1.1, press 1.1, play recognition 1.0.
+- Safeties: speed 1.1, man coverage 0.7, ball skills 0.6.
+- Kicker: range moves field-goal rate most (+8.9 points of make rate), then falloff (+3.9) and consistency (+3.4). Punter: spin, distance, hang time.
+
+Too small to measure: a quarterback's contact balance; a back's pass blocking and leaping; most of a tight end's skills one at a time (release does nothing measurable); an interior lineman's play recognition, agility and stripping; linebacker man coverage (a linebacker in man moves the window a third as much as a defensive back, by design), press and ball skills; safety press and play recognition; punter placement.
+
+**Rating weights refitted (version 7)** by the same rule as version 6: half the old weight, half what the attribute is now measured to be worth less one standard error (kickers by field-goal rate), every position re-centred so its average rating does not move. A typical player moves under one point, the largest about four (nose tackles). Main shifts: processing up and arm down for quarterbacks; contested catch and contact balance up and route running and speed down for receivers; pass blocking up and blocking awareness down for linemen; pass rush and burst up and block shedding down for the interior line; burst up for edge rushers; range up and consistency down for kickers. Positional value was left alone. Saves re-rate every player when they load.

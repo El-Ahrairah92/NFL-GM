@@ -172,15 +172,16 @@ function snap(g) {
   runPlay(g, oc, dc);
 }
 function fgRange(g, K) {
-  // longest kick a coach will try: where the make rate falls to ~45%
-  for (let dist = 62; dist >= 30; dist--) if (fgProb(g, K, dist) >= 0.56) return dist;
+  // longest kick a coach will try as a matter of course: where the make rate falls to about three in five
+  for (let dist = 62; dist >= 30; dist--) if (fgProb(g, K, dist) >= TUNE.fgRangeP) return dist;
   return 30;
 }
+// the make rate falls gently through the thirties and faster beyond the forties, as the league's does: consistency is the routine kick,
+// range moves the whole curve out, falloff is how steeply it drops, trajectory is a little range
 function fgProb(g, K, dist) {
-  const comfort = 32 + (ea(g, K, 'krng') - 50) * 0.45 + (ea(g, K, 'ktrj') - 70) * 0.05;
-  let p = clamp(0.935 + (ea(g, K, 'kcon') - 70) * 0.004, 0.8, 0.975); // consistency: the kicks he is supposed to make
-  if (dist > comfort) { const x = dist - comfort; p -= x * (0.022 - (ea(g, K, 'kfal') - 60) * 0.00035) + x * x * 0.0003; }
-  return clamp(p, 0.02, 0.975);
+  const p0 = clamp(TUNE.fgBase + (ea(g, K, 'kcon') - 74) * 0.004, 0.9, 0.99);
+  const d = dist - (ea(g, K, 'krng') - 73) * 0.45 - (ea(g, K, 'ktrj') - 72) * 0.05, x = Math.max(0, d - 25);
+  return clamp(p0 - x * x * TUNE.fgCurve * clamp(1 - (ea(g, K, 'kfal') - 72) * 0.02, 0.6, 1.4), 0.02, 0.99);
 }
 
 // Who gets the tackle on the stat sheet. Linemen who hold the point rarely finish the play themselves: the back
