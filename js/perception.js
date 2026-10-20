@@ -25,7 +25,7 @@ function expDelta(p) {
   return -clamp((p.age + 1 - pk) * 0.42, 0, 3);
 }
 
-const FOG = { b: 5.5, g: 7.5, miss: 0.11, missBy: 7, gem: 0.08, gemBy: 6 }; // misread too high, and too low: both happen, and either can be big
+const FOG = { b: 4.5, g: 7.5, miss: 0.11, missBy: 7, gem: 0.08, gemBy: 6 }; // misread too high, and too low: both happen, and either can be big
 const FOG_POS = { QB: 1.3, WR: 1.2, CB: 1.2, TE: 1.05, EDGE: 1.05, IDL: 1.05, S: 1, RB: 0.85, FB: 0.85, OL: 0.85, LB: 0.85, K: 0.7, P: 0.7 };
 function initPerception(p, kind) {
   const prospect = kind === 'prospect';
