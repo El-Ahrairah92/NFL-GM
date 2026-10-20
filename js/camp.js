@@ -39,7 +39,8 @@ function campOf(p) { return p.camp && p.camp.s === state.season ? p.camp : (p.ca
 // ---- the coach who runs his room, and how sharp his eye is ----
 function campCoach(tid, pos) { return pos === 'K' || pos === 'P' ? C(T(tid).stc) : posCoach(tid, pos); }
 function campCoachQ(c) { return !c ? 38 : typeof c.dev === 'number' && typeof c.coh === 'number' ? (c.dev + c.coh) / 2 : c.k && c.k.cov !== undefined ? (c.k.cov + c.k.ret) / 2 : c.ovr || 50; }
-function campEyeWord(c) { const q = campCoachQ(c); return q >= 78 ? 'His reads are usually right' : q >= 62 ? 'A reliable evaluator' : q >= 48 ? 'Hit and miss as an evaluator' : 'His reads have missed before'; }
+// every coach reads his room as well as any other; what sets them apart is what they lean toward
+function campEyeWord(c) { return !c ? 'No position coach: the coordinator reads the room' : ({ Teacher: 'Leans toward young players he can coach up', 'Old school': 'Trusts veterans who know the job', Demanding: 'Rewards discipline and work', "Players' coach": 'Backs the leaders in his room', Innovator: 'Falls for athletes', Motivator: 'Rewards the ones who work hardest' })[c.style] || 'Calls it as he sees it'; }
 // what a coach's temperament makes him lean toward (advisory only)
 function campBias(c, p) {
   if (!c || !p.h) return 0;
@@ -67,15 +68,11 @@ function campBiasWhy(c, p) {
 }
 // camp grade so far: practice weeks, most recent counting a little more
 function campGrade(p) { const c = p.camp && p.camp.s === state.season ? p.camp : null; if (!c || !c.sc.length) return null; let s = 0, w = 0; c.sc.forEach((v, i) => { const k = 1 + i * 0.25; s += v * k; w += k; }); return Math.round(s / w); }
-// the coach's number for a player (never shown as a number): a noisy first impression that evidence pulls toward the truth
+// the coach's number for a player (never shown as a number): his staff's read of the man at the spot he is working, his own lean
+// included (the same read the depth chart and the front office use; camp weeks and preseason games sharpen it)
 function coachRead(p, tid) {
-  const c = campCoach(tid === undefined ? p.tid : tid, cpos(p)), q = campCoachQ(c), ov = campOvr(p), sd = clamp(5 - (q - 40) / 14, 1.5, 5);
-  const prior = ov + campBias(c, p) + clamp(hashGauss(p.id, 700 + (c ? c.id % 89 : 0), state.season), -1.8, 1.8) * sd;
-  const cg = campGrade(p), pg = typeof preGrade === 'function' ? preGrade(p) : null;
-  const blocks = p.camp && p.camp.s === state.season ? p.camp.sc.length : 0, games = p.preS ? p.preS.gp || 0 : 0;
-  const w = Math.min(0.62, blocks * 0.16 + games * 0.07);
-  const num = v => typeof v === 'number' && isFinite(v), evid = ov + (num(cg) ? (cg - 60) * 0.22 : 0) + (num(pg) ? (pg - 60) * 0.14 : 0);
-  return prior * (1 - w) + evid * w + campBias(c, p) * w;
+  tid = tid === undefined ? clubOf(p) : tid;
+  return campOvr(p) + (clubOf(p) === tid ? staffErr(p, tid) : viewOvr(p, tid) - p.ovr);
 }
 function jobRead(p, spot, tid) { return slotRating(p, spot) + (coachRead(p, tid) - campOvr(p)); }
 // ---- what camp shows that the ratings do not ----
@@ -339,6 +336,7 @@ function openCamp() {
 }
 function campWeek(label, load) {
   const cm = state.camp; if (!cm || cm.blocks >= CAMP_BLOCKS) return;
+  if (typeof staffLearnCamp === 'function') staffLearnCamp(load); // every club has camp: each staff sees its men a little better
   cm.label = label; if (repsOn()) { ensureReps(); repsSyncWork(); }
   campPractice(cm.tid, load); cm.blocks++; campBattles(cm.tid);
   cm.label = label;

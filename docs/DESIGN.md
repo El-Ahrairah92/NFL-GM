@@ -56,7 +56,7 @@ Phase 5 notes (`js/perception.js`):
   It carries over at half strength each year. Measured: perception error correlates +0.25–0.33 with team win% and +0.3–0.47 with yardage, so overrated stat-padders and underrated players on bad teams exist.
 - **Who sees what:**
   - Every team, yours included, sees other clubs' players as consensus plus its own deterministic noise per player and season. Every club scouts as accurately as every other; each reads a man its own way (section 66).
-  - A club learns its own players over time (section 66). Your own players are shown half-way to the truth, as before.
+  - A club learns its own players over time (section 66). Your own players are shown as your staff reads them, with how well it knows each man (section 67).
   - The engine always plays the truly better player. Film grades are honest signals.
 - **AI decisions run on perception:** market value and asks, re-signing, free agency, the draft board, cuts, trade value and needs. FA asks correlate 0.61–0.66 with perception versus 0.52 with truth. Draft order correlates about −0.65 with true potential.
 - **Labels:**
@@ -1353,3 +1353,12 @@ Every club scouts as accurately as every other, but each reads a player its own 
 - **One read everywhere.** The staff's depth chart, the front office's value of its own men, cuts, call-ups and re-signing all use the club's read of its own player. A player on its practice squad counts as its own. The engine always plays his true ability, so a misread man plays to his real level and his staff sees it.
 - **Older saves and new leagues** start with every club already knowing the men it has, the longer he has been in the league, the better.
 - Calibrated to nflverse snap counts 2014-24: a week-one starter loses his job by mid-season about 13% of the time when he is new to the club and 15% when he is new to the league (sim 12% and 14%); benched starters get the job back within three games about 69% of the time (sim 68%). Rookies start about as often as real ones by round.
+
+## 67. Decisions under uncertainty, coaches' leans, and what you see
+- **Every read knows how sure it is.** A club's read of its own man narrows with each practice week and snap; its read of anyone else's is as sure as the league's scouting of him. Every "how sure" call uses it: whether a man is the starter (starter money, extensions, the one-quarterback rule), and the comparisons behind every roster move.
+- **Acquisitions have to clear the noise.** A waiver claim, an injury replacement or an in-season signing counts the newcomer below the club's read of him by its uncertainty: a man it barely knows has to look clearly better than the man he would replace; a well-scouted veteran, or one of its own practice squad, much less so.
+- **A close cut keeps the unknown.** At cutdown a young man on the minimum the club has barely seen gets the benefit of the doubt: it wants to see more of him.
+- **Coaches lean; they do not see better.** Every staff reads its men as accurately as every other. Each position coach's temperament bends his read in a known direction: a Teacher toward the young players he can coach up, an Old-school coach toward veterans, a Demanding coach toward discipline and work, an Innovator toward athletes, a Players' coach toward the room's leaders, a Motivator toward the hardest workers. The depth chart and the front office use the leaning read, so a Teacher's room plays more young men and an Old-school room more veterans. Camp boards show the same read and the coach's lean in place of an "eye for talent".
+- **Camp counts.** Every club's camp weeks and preseason games teach its staff its men; your camp boards are your staff's read.
+- **What you see.** Your own players appear as your staff reads them. The report says how well it knows each man (Known well, Getting to know him, Still learning him), the tiers the truth could sit between, and when his position coach is high or cool on him and why. Other clubs' players show your scouts' confidence and the same range.
+- Measured: misread cutdown cuts (the club's own read had the two men the wrong way round) fell by about a third; in-season arrivals gone within four weeks fell from about 20% to 16%; job changes, benchings and league totals stayed at their calibrated levels.

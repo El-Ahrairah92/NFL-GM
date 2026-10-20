@@ -53,7 +53,7 @@ function perOvr(p) { return p.per ? p.per.b + p.per.h : p.ovr; }
 // how team tid sees him (null/undefined = league consensus)
 function viewOvr(p, tid) {
   if (!p.per || tid == null || tid < 0) return perOvr(p);
-  if (clubOf(p) === tid) return tid === state.userTid ? 0.5 * perOvr(p) + 0.5 * p.ovr : staffKnow(p, tid); // his own staff's read (yours is shown as before)
+  if (clubOf(p) === tid) return ownRead(p, tid); // his own staff's read, yours included
   return outsideView(p, tid);
 }
 // every club scouts as well as every other, yours included, but each reads a man its own way
@@ -63,20 +63,32 @@ function outsideView(p, tid) { return perOvr(p) + hashGauss(p.id, tid + 1, state
 // A club knows its own men better than anyone, but not all at once: a new arrival is seen as its scouts saw him, and the read moves
 // toward what he really is with every week of practice and every snap he plays. Play is noisy, so a starter's read moves with his
 // form, and a slump can cost a man his job. Every club learns at the same rate.
-const KNOW = { game: 0.08, gameSd: 6, prac: 0.06, pracSd: 3 };
+const KNOW = { game: 0.08, gameSd: 6, prac: 0.06, pracSd: 3, camp: 0.045, lean: 0.75 };
 function clubOf(p) { return p.tid >= 0 ? p.tid : p.tid === -3 ? p.psTid : null; }
 function staffKnow(p, tid) {
   if (!p.per) return p.ovr;
-  if (!p.sk || p.sk.c !== tid) p.sk = { c: tid, v: round1(outsideView(p, tid)) };
+  if (!p.sk || p.sk.c !== tid) p.sk = { c: tid, v: round1(outsideView(p, tid)), s2: round2(outsideSd(p) ** 2) };
+  if (p.sk.s2 === undefined) p.sk.s2 = round2(knownSd(p) ** 2);
   return p.sk.v;
 }
+// how unsure a read is, in rating points: anyone else's man through scouting (the club's own noise, the league's lag, the hype),
+// its own man by how much it has seen of him (it knows how much it has seen, not how far off it is)
+function outsideSd(p) { const c = p.per ? p.per.conf : 0.9; return Math.hypot(0.8 + 2.5 * (1 - c), 1 + 4.5 * (1 - c), 1); }
+function knownSd(p) { return clamp(3 - (p.exp || 0) * 0.7, 0.8, 3); }
+function readSd(p, tid) { if (clubOf(p) === tid && p.per) { staffKnow(p, tid); return Math.sqrt(p.sk.s2); } return outsideSd(p); }
+// every staff reads as well as every other; where they differ is what their position coaches lean toward (the young they can
+// coach up, the veterans who know the job, the athletes, the grinders): each coach's temperament, out in the open, bends his read
+function staffLean(p, tid) { return typeof campBias === 'function' && typeof campCoach === 'function' && p.a && p.h ? campBias(campCoach(tid, cpos(p)), p) * KNOW.lean : 0; }
+function ownRead(p, tid) { return staffKnow(p, tid) + staffLean(p, tid); }
 // how far the club's read of its own man is from the truth (nothing for anyone else's: their reads come through scouting)
-function staffErr(p, tid) { return clubOf(p) === tid && p.per ? staffKnow(p, tid) - p.ovr : 0; }
-function staffLearn(p, w, sd) { const c = clubOf(p); if (c == null || c < 0 || !p.per || !p.a) return; staffKnow(p, c); p.sk.v = round1(p.sk.v + w * (p.ovr + gauss(0, sd) - p.sk.v)); }
+function staffErr(p, tid) { return clubOf(p) === tid && p.per ? ownRead(p, tid) - p.ovr : 0; }
+// a week of camp: every club's staff sees its men in pads, the weight of the week's load
+function staffLearnCamp(load) { for (const id in state.players) staffLearn(state.players[id], KNOW.camp * (load || 1), KNOW.pracSd); }
+function staffLearn(p, w, sd) { const c = clubOf(p); if (c == null || c < 0 || !p.per || !p.a) return; staffKnow(p, c); p.sk.v = round1(p.sk.v + w * (p.ovr + gauss(0, sd) - p.sk.v)); p.sk.s2 = round2((1 - w) ** 2 * p.sk.s2 + w * w * sd * sd); }
 function staffLearnBox(box) { for (const pid in box.stats) { const p = P(pid), l = box.stats[pid]; if (p && l.snp) staffLearn(p, KNOW.game * (p.spot === 'K' || p.spot === 'P' ? 0.5 : clamp(l.snp / 64, 0, 1)), KNOW.gameSd); } }
 function staffLearnWeek() { for (const id in state.players) staffLearn(state.players[id], KNOW.prac, KNOW.pracSd); }
 // a new league, or a save from before: clubs already know the men they have had, the longer the better
-function seedStaffKnow(st, fresh) { for (const id in st.players) { const p = st.players[id], c = p.tid >= 0 ? p.tid : p.tid === -3 ? p.psTid : null; if (c == null || c < 0 || !p.a || !p.per || (!fresh && p.sk && p.sk.c === c)) continue; p.sk = { c, v: round1(p.ovr + gauss(0, clamp(3 - (p.exp || 0) * 0.7, 0.8, 3))) }; } }
+function seedStaffKnow(st, fresh) { for (const id in st.players) { const p = st.players[id], c = p.tid >= 0 ? p.tid : p.tid === -3 ? p.psTid : null; if (c == null || c < 0 || !p.a || !p.per || (!fresh && p.sk && p.sk.c === c)) continue; const sd = knownSd(p); p.sk = { c, v: round1(p.ovr + gauss(0, sd)), s2: round2(sd * sd) }; } }
 function viewGrowth(p, tid) {
   if (!p.per) return Math.max(0, p.pot - p.ovr);
   return tid != null && tid === p.tid ? 0.5 * p.per.g + 0.5 * Math.max(0, p.pot - p.ovr) : p.per.g;

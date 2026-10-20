@@ -3366,12 +3366,12 @@ function cardOverHTML(p) {
 const CF_PIPS = { Natural: 4, Comfortable: 3, Decent: 2, Raw: 1, Unfamiliar: 0 };
 function pipsHTML(n, cls) { return `<span class="pips ${cls || ''}">${[0, 1, 2, 3].map(i => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`; }
 function scReportHTML(p) {
-  const prospect = p.tid === -2, own = p.tid === state.userTid || (p.tid === -3 && p.psTid === state.userTid), buzz = buzzLabel(p);
+  const prospect = p.tid === -2, own = clubOf(p) === state.userTid, buzz = buzzLabel(p), know = own ? knowWord(p) : null;
   const tierT = tierOf(p), upT = upsideOf(p), young = p.age <= 25 && upT !== tierT;
   const DAY1 = { Elite: 'a franchise-changing talent', 'All-Pro': 'an instant-impact player', Starter: 'a day-one starter', Rotation: 'a rotational contributor', Backup: 'a backup early on', Depth: 'a depth player early on', Project: 'a developmental prospect', Fringe: 'a developmental prospect', Washed: 'a developmental prospect' };
   const line = prospect ? `Scouts see ${DAY1[tierT]} with ${upT.toLowerCase()} upside.` : `Viewed as ${/^[AEIOU]/.test(tierT) ? 'an' : 'a'} ${tierT.toLowerCase()} today${young ? ` with ${upT.toLowerCase()} upside` : ''}.`;
   let h = `<div class="ds-lb">The report</div><div class="ds-read sc-read">${esc(scoutProfile(p))}.</div><div class="sc-note">${esc(line)}</div>
-    <div class="sc-meta"><span class="stamp ${own || confLabel(p) === 'High' ? 'good' : confLabel(p) === 'Low' ? 'bad' : ''}" title="How sure your staff is of this read">${own ? 'Seen daily' : confLabel(p) + ' confidence'}</span>${buzz ? ` <span class="stamp note">${esc(buzz)}</span>` : ''}</div>`;
+    <div class="sc-meta"><span class="stamp ${own ? (know === 'Known well' ? 'good' : know === 'Still learning him' ? 'bad' : '') : confLabel(p) === 'High' ? 'good' : confLabel(p) === 'Low' ? 'bad' : ''}" title="${own ? 'How well your staff knows him: it learns its own men with every practice and every snap' : 'How sure your scouts are of this read'}">${own ? know : confLabel(p) + ' confidence'}</span>${buzz ? ` <span class="stamp note">${esc(buzz)}</span>` : ''}</div>${prospect ? '' : readRangeHTML(p)}`;
   // the finished product
   if (p.a && p.per && p.grow) {
     const dev = isDeveloping(p), m = p.upM, moved = m && !prospect ? `<div class="sc-note ${m.d > 0 ? 'good' : 'bad'}">${m.d > 0 ? '▲' : '▼'} Upside ${m.d > 0 ? 'raised' : 'lowered'} from ${m.from} after ${esc(m.why)} (${m.s}).</div>` : '';
@@ -3548,6 +3548,16 @@ function playerModal(pid, replace) {
 }
 
 // what your scouts say: phrases, confidence, buzz — never numbers
+// how well your staff knows its own man, in words (it knows how much it has seen of him, not how far off it is)
+function knowWord(p) { const sd = readSd(p, state.userTid); return sd <= 1.3 ? 'Known well' : sd <= 2.5 ? 'Getting to know him' : 'Still learning him'; }
+// the tiers the truth could sit between (your read, give or take its uncertainty), and your position coach's lean on him
+function readRangeHTML(p) {
+  const u = state.userTid, own = clubOf(p) === u, sd = readSd(p, u), v = uOvr(p), lo = tierOf(p, v - 1.3 * sd), hi = tierOf(p, v + 1.3 * sd);
+  let h = lo === hi ? '' : `<div class="sc-note">Could be anywhere from <b>${lo}</b> to <b>${hi}</b>.</div>`;
+  if (own && typeof campCoach === 'function') { const c = campCoach(u, cpos(p)), bias = staffLean(p, u);
+    if (c && Math.abs(bias) >= 1) h += `<div class="sc-note">His position coach ${bias > 0 ? 'is high on him' : 'is cooler on him'}: ${esc(bias > 0 ? campBiasWhy(c, p) : c.style === 'Teacher' ? 'he wants the young players on the field' : c.style === 'Old school' ? 'he has not earned it the hard way yet' : 'he does not see what the others see')}.</div>`; }
+  return h;
+}
 function scoutingHTML(p) {
   const tags = traitTags(p), buzz = buzzLabel(p), own = p.tid === state.userTid;
   const conf = own ? 'High (your coaches see him every day)' : confLabel(p);

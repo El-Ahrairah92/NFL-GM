@@ -247,10 +247,12 @@ function clubRead(tid, p) {
   let bi = -1; U.jobs.forEach((j, i) => { if (hW[i] === p.id && !j.free && (bi < 0 || j.w > U.jobs[bi].w)) bi = i; });
   const start = bi >= 0 && U.jobs[bi].w >= 0.5, holds = hW.includes(p.id);
   if (bi < 0) { let bg = -1e9; U.jobs.forEach((j, i) => { if (j.free || j.w < 0.3 || !Rd[p.id][i]) return; const d = Rd[p.id][i] - (hW[i] >= 0 ? Rd[hW[i]][i] : 40); if (d > bg) { bg = d; bi = i; } }); }
-  let gap = -99, read = 0;
-  if (bi >= 0) { read = Rd[p.id][bi]; const nx = hW[bi] === p.id ? hWo[bi] : hW[bi]; gap = read - (nx >= 0 ? Rd[nx][bi] : 40); }
+  let gap = -99, read = 0, nx = -1;
+  if (bi >= 0) { read = Rd[p.id][bi]; nx = hW[bi] === p.id ? hWo[bi] : hW[bi]; gap = read - (nx >= 0 ? Rd[nx][bi] : 40); }
   const k = 1.7 - foQuality(T(tid)) / 100, j = bi >= 0 ? U.jobs[bi] : null, mine = had || p.tid === tid;
-  const sd = Math.hypot(mine ? FO.sdOwn * k * FO.ownMen : FO.sdJob * k * (j && j.spot === p.spot ? 0.5 : 1), FO.sdOwn * k * FO.ownMen);
+  // how unsure the comparison is: the club's read of him (its own man as well as it has come to know him, anyone else through
+  // scouting), more if the job is not his own spot, and its read of the man next in line
+  const sd = Math.hypot(readSd(p, tid), j && j.spot !== p.spot ? FO.sdJob * k * 0.5 : 0, nx >= 0 && M.byId[nx] ? readSd(M.byId[nx], tid) : 1);
   const barF = j ? clamp((read - (foBar(j) - 4)) / 4, 0, 1) : 0, clear = start ? clamp((gap - 2 - sd) / 4, 0, 1) * barF : 0;
   // how sure the club is that he is its starter: for a newcomer, the clear call above. A man already starting here is known to be the
   // starter (a close backup makes him worth less, which his value already says, not less certain); a quarterback still needs the clear call.

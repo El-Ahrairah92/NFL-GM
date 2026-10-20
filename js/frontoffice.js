@@ -18,6 +18,8 @@ const FO = {
   ownMen: 0.5,                // a club's doubt about its own players, against anyone else's
   risk: 2.0,                  // clubs weigh injuries more heavily than the bare odds: a season is long and a hole is costly
   dev: 0.15, st: 0.8, money: 0.3,
+  unsure: 1.0,                // a claim or an in-season signing is counted this many standard deviations below the club's read of him
+  explore: 0.5,               // at cutdown, a young man on the minimum the club barely knows is given this share of his uncertainty
   hurt: { QB: 0.08, RB: 0.18, WR: 0.14, TE: 0.10, OL: 0.11, DL: 0.07, LB: 0.15, CB: 0.15, S: 0.16, K: 0.02, P: 0.02 }, // share of a season a starter misses (as the injuries in the games have it)
   size: { QB: 0.2, RB: 0.8, WR: 0.5, TE: 0.5, OL: 1.2, DL: 1.0, LB: 0.6, CB: 0.8, S: 0.5 },                          // rating points per standard deviation of weight
   floor: { QB: 2, RB: 3, WR: 5, TE: 3, OL: 8, DL: 7, LB: 4, CB: 5, S: 3, K: 1, P: 1 },
@@ -124,7 +126,9 @@ function foCutPlan(tid, limit) {
   for (const p of all) {
     byId[p.id] = p; const u = FO_UNIT[p.pos] || 'SKILL', jobs = units[u] || (units[u] = { jobs: jobsAll.filter(j => j.unit === u).sort((x, y) => (x.free - y.free) || (y.w * (SPOTS[y.spot].val || 1) - x.w * (SPOTS[x.spot].val || 1))), ids: [] }); jobs.ids.push(p.id);
     const fit = typeof schemeFit === 'function' ? schemeFit(p, tid) : 0;
-    V[p.id] = jobs.jobs.map(j => { const r = foJobRead(p, tid, j, LN); return r ? j.w * foVal(r, j.spot) : 0; });
+    // a young man on the minimum the club has barely seen gets the benefit of the doubt: it wants to see more of him
+    const xb = p.exp <= 2 && p.contract && p.contract.amt <= MIN_SALARY * 1.5 ? FO.explore * Math.max(0, readSd(p, tid) - 1.5) : 0;
+    V[p.id] = jobs.jobs.map(j => { const r = foJobRead(p, tid, j, LN); return r ? j.w * foVal(r + xb, j.spot) : 0; });
     H[p.id] = Math.min(0.6, (FO.hurt[p.pos] || 0.1) * (1 + Math.max(0, p.age - 28) * 0.06) * FO.risk);
     // beyond today's lineup: what he may become, what he does in the kicking game, and what he costs to keep
     const now = foRead(p, tid, p.spot, fit), g = p.age <= 25 ? viewGrowth(p, tid) * Math.min(1, (26 - p.age) / 4) : 0;
@@ -178,6 +182,17 @@ function foGain(M, p) {
   foRow(M, p); const U = foUnitOf(M, p); if (U.ids.includes(p.id)) return 0;
   const base = U.base !== undefined && U.base !== null ? U.base : (U.base = foUnitScore(U.jobs, U.ids, M.V, M.H, -1)), withHim = foUnitScore(U.jobs, [...U.ids, p.id], M.V, M.H, -1);
   const projects = U.ids.filter(id => M.byId[id].pos === p.pos && M.dev[id] > M.dev[p.id]).length; // a club's appetite for projects at a position halves with each one it already has
+  return withHim - base + M.extra[p.id] + M.dev[p.id] * Math.pow(0.5, projects);
+}
+// A claim or an in-season signing has to be clearly better than what the club has, not better within the noise of its read: it
+// counts the newcomer below its read of him by its uncertainty (a man it barely knows must look a good deal better; a well-scouted
+// veteran loses little; one of its own squad men, whom it sees every day, less still).
+function foGainSure(M, p) {
+  foRow(M, p); const U = foUnitOf(M, p); if (U.ids.includes(p.id)) return 0;
+  const sd = readSd(p, M.tid) * FO.unsure, R = M.R[p.id];
+  const V = Object.assign({}, M.V); V[p.id] = U.jobs.map((j, i) => R[i] ? j.w * foVal(R[i] - sd, j.spot) : 0);
+  const base = U.base !== undefined && U.base !== null ? U.base : (U.base = foUnitScore(U.jobs, U.ids, M.V, M.H, -1)), withHim = foUnitScore(U.jobs, [...U.ids, p.id], V, M.H, -1);
+  const projects = U.ids.filter(id => M.byId[id].pos === p.pos && M.dev[id] > M.dev[p.id]).length;
   return withHim - base + M.extra[p.id] + M.dev[p.id] * Math.pow(0.5, projects);
 }
 // what each man already here is worth to the club (the drop without him), for deciding who makes way
@@ -249,7 +264,7 @@ function foWaiverDrop(p, tid) {
   const M = foCachedModel(tid); if (M.byId[p.id] && foUnitOf(M, p).ids.includes(p.id)) return null;
   const bar = FO_CLAIM_BAR + (state.phase === 'REG' || state.phase === 'PLAYOFFS' ? FO_CHURN * 3 : 0); // mid-season, turning a spot over costs more
   const c = p.waiver ? p.waiver.c : { amt: MIN_SALARY, yrs: 1 }; if (!streetPayOk(tid, p, c.amt)) return null; // his contract comes with him: no more than the club would pay him
-  const g = foGain(M, p) - moneyCost(tid, overMin(c.amt, Math.min(3, c.yrs || 1))) - bar + 0.35; if (g < 0.35) return null;
+  const g = foGainSure(M, p) - moneyCost(tid, overMin(c.amt, Math.min(3, c.yrs || 1))) - bar + 0.35; if (g < 0.35) return null;
   if ((M.counts[p.pos] || 0) >= (FO.cap[p.pos] || 99)) { // already carrying all it wants there: one of them has to be the man who goes
     const U = foUnitOf(M, p), w = foWorths(M, U.key); let b = null, low = 1e9; for (const id of U.ids) if (M.byId[id].pos === p.pos && w[id] < low) { low = w[id]; b = M.byId[id]; }
     if (b && (p.pos === 'K' || p.pos === 'P')) low = foSwapWorth(M, p, b);
@@ -281,7 +296,7 @@ function foInjuryMoves(tid) {
     const own = typeof psOf === 'function' ? psOf(tid).filter(p => p.a && p.pos === pos && !p.injury) : [];
     const over = g => share * g[0] + (1 - share) * g[1]; // value across the rest of the season
     let pick = null, bg = 0;
-    for (const p of [...fa, ...own]) { const g = over([foGain(now, p), foGain(full, p)]) + (p.tid === -3 ? 0.1 : -moneyCost(tid, [p.ask - MIN_SALARY]) * 0.5); if (g > bg) { bg = g; pick = p; } } // his own man knows the system and costs the minimum
+    for (const p of [...fa, ...own]) { const g = over([foGainSure(now, p), foGainSure(full, p)]) + (p.tid === -3 ? 0.1 : -moneyCost(tid, [p.ask - MIN_SALARY]) * 0.5); if (g > bg) { bg = g; pick = p; } } // his own man knows the system and costs the minimum
     if (!pick || bg < 0.2) continue;
     let drop = null;
     if (activeCount(tid) >= ROSTER_MAX) { // someone has to go: the man the club will miss least over the same stretch
@@ -346,7 +361,7 @@ function foShop(kind, only, opts) {
         if ((over || full) && (!drop || drop.p.id === p.id)) continue;
         let g = c.g[p.id];
         const solo = drop && drop.p.pos === p.pos && (p.pos === 'K' || p.pos === 'P');
-        if (g === undefined) g = c.g[p.id] = viewOvr(p, c.tid) + 6 < weakOf(c, p) && p.pos !== 'K' && p.pos !== 'P' ? 0 : foGain(c.M, p);
+        if (g === undefined) g = c.g[p.id] = viewOvr(p, c.tid) + 6 < weakOf(c, p) && p.pos !== 'K' && p.pos !== 'P' ? 0 : state.phase === 'REG' || state.phase === 'PLAYOFFS' ? foGainSure(c.M, p) : foGain(c.M, p); // in season, a signing has to be clearly better
         const net = g - moneyCost(c.tid, [p.ask - MIN_SALARY]) - (drop ? Math.max(0, solo ? foSwapWorth(c.M, p, drop.p) : drop.worth) : 0);
         if (net > bs) { bs = net; best = p; bd = drop; open = !drop; }
       }
