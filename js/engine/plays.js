@@ -91,11 +91,14 @@ function resolveRun(g, off, def, oc, dc) {
   // RPO: a conflict defender decides the play; the QB reads him
   if (oc.tags.has('RPO')) {
     const conflict = def.filter(e => ['MLB', 'WLB', 'SAM', 'SS', 'NCB'].includes(e.slot)).sort((a, b) => Math.abs(a.x - oc.side * 2) - Math.abs(b.x - oc.side * 2))[0];
-    if (conflict) {
+    // a defense that has seen it all day plays it sound: a safety rotates down and the conflict defender plays it straight
+    const A0 = g.tadv && g.tadv[g.poss], sound = A0 && rand() < clamp((A0.u_tagRPO || 0) / Math.max(12, A0.plays || 0) * TUNE.rpoSeen, 0, 0.7);
+    if (conflict && !sound) {
       const playsRun = bites(g, conflict, 0.3);
-      const reads = lgt(0.9 + (ea(g, qb, 'proc') - 70) * 0.05);
+      const reads = lgt(0.9 + ((ea(g, qb, 'proc') + ea(g, qb, 'dec')) / 2 - 70) * 0.05); // reading him is seeing it (processing) and trusting it (decision-making)
       const pull = rand() < reads ? playsRun : rand() < 0.5;
-      if (pull) { conflict.used = true; return resolvePass(g, off, def, Object.assign({}, oc, { type: 'QUICK', rpoThrow: true, rpoVacated: conflict }), dc); }
+      // pulled on a man who bit: the window behind him is empty. Pulled on a man who dropped: the throw goes where he is standing.
+      if (pull) { if (playsRun) conflict.used = true; return resolvePass(g, off, def, Object.assign({}, oc, { type: 'QUICK', rpoThrow: true, rpoVacated: playsRun ? conflict : null }), dc); }
       if (!playsRun) conflict.used = true; // he dropped: one fewer in the box
     }
   }
@@ -644,7 +647,7 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
   // what the passer and the receiver add over ordinary men: downfield, an elite pair's edge has diminishing returns (a great deep ball is still a contested catch)
   const edgeQ = soft(acc - 72, 16) * TUNE.accScale + (air >= 15 ? (arm - 70) * 0.01 : 0) + (r.w < 0.4 && air >= 5 ? (arm - 70) * 0.008 : 0) + (ea(g, e, 'hnd') - 70) * 0.022 + (air >= 5 ? (radius(g, e) - TUNE.radRef) * TUNE.radCatch : 0);
   const edgeE = air >= 5 && edgeQ > TUNE.edgeK ? TUNE.edgeK + (edgeQ - TUNE.edgeK) * TUNE.edgeSlope : edgeQ;
-  const pcL = TUNE.catchBase + 0.2 + r.w * 0.95 + edgeE - (air >= 20 ? TUNE.deepCatch : air >= 10 ? TUNE.midCatch : air <= 2 ? -0.95 : -TUNE.shortCatch) + (r.role === 3 && air <= 5 ? 0.55 : 0) + (e.slot === 'RB' ? 0.55 : 0) - (yardsToGoal <= 5 ? 0.3 : yardsToGoal <= 12 ? 0.2 : 0);
+  const pcL = TUNE.catchBase + 0.2 + r.w * 0.95 + edgeE - (air >= 20 ? TUNE.deepCatch : air >= 10 ? TUNE.midCatch : air <= 2 ? -0.95 : -(TUNE.shortCatch - Math.max(0, air - 5) * TUNE.shortSlope)) + (r.role === 3 && air <= 5 ? 0.55 : 0) + (e.slot === 'RB' ? 0.55 : 0) - (yardsToGoal <= 5 ? 0.3 : yardsToGoal <= 12 ? 0.2 : 0);
   const pCatchable = lgt(pcL);
   res.target = e; res.air = airY; res.def = defE; res.hurry = hurry; res.route = r;
   // the safety over the top, or the second man in the zone, sometimes gets to the ball before the man in coverage: a ballhawk more often than an ordinary man
@@ -674,7 +677,7 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
   res.xc = pCatchable * (1 - pDrop) * cWinP;
   const decF = 1 + soft(Math.max(0, 70 - ea(g, qb, 'dec')), 18) * 0.015;
   const posF = pm ? (['MLB', 'WLB', 'SAM'].includes(pm.slot) ? 0.35 : pm.depth === 0 ? 0.25 : 1.12) : 0.6;
-  const pInt = TUNE.intBase * clamp(1 - soft(72 - acc, 16) * 0.014, 0.75, 1.12) * Math.exp(-r.w * 0.7) * decF * (hurry ? 1.45 : 1) * (covID ? 1 : 1.5) * (airY >= 20 ? 1.35 : 1) * (airY >= 10 || outside ? clamp(1 + (70 - arm) * 0.004, 0.85, 1.2) : 1) * (pm ? 1 + soft(ea(g, pm, 'bsk') - 65, 20) * 0.025 : 1) * posF;
+  const pInt = TUNE.intBase * clamp(1 - soft(72 - acc, 16) * 0.014, 0.75, 1.12) * Math.exp(-r.w * 0.7) * decF * (hurry ? 1.45 : 1) * (covID ? 1 : 1.5) * (airY >= 20 ? TUNE.deepPick : 1) * (airY >= 10 || outside ? clamp(1 + (70 - arm) * 0.004, 0.85, 1.2) : 1) * (pm ? 1 + soft(ea(g, pm, 'bsk') - 65, 20) * 0.025 : 1) * posF;
   // what the same throw is worth with an ordinary man at each end, and how likely it was to be picked
   { const lbD = pm && ['MLB', 'WLB', 'SAM'].includes(pm.slot), ctd = r.w < tight && defE;
     const pI1 = pm ? (0.075 + soft(ea(g, pm, 'bsk') - 65, 20) * 0.002 + up * (ea(g, pm, 'jmp') - 82) * TUNE.leapPick) * (lbD ? 0.4 : 1) : 0;

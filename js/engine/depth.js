@@ -19,7 +19,9 @@ const TUNE = {
   insideRush: 1.1,     // interior rushers take longer to get home than edges (crowded path, more double teams)    // how strongly the rush/block gap moves win time
   preKnow: 0,          // 1: the pre-snap read knows which receiver will come open, luck included; 0: it knows the matchup only
   preNoise: 0.3,       // how fuzzy that matchup read is
-  quickScale: 1.3,       // the same for the quick game
+  quickScale: 0.6,       // the same for the quick game
+  deepPick: 0.8,       // how much likelier a ball 20+ yards downfield is to be picked than the same window shorter (the league picks about 6% of them)
+  rpoSeen: 10,         // how fast a defense goes RPO-sound as it sees them: the chance a snap is played straight, per unit of the offense's RPO share this game
   tbScale: 0.72,          // how long routes take to break and the quarterback takes to set up (1 = as designed)
   holdMax: 0.3,        // the longest he will stand in a clean pocket waiting for a downfield route
   procRead: 0.02,    // how much faster a sharp quarterback gets from one read to the next (per point of processing)
@@ -30,7 +32,7 @@ const TUNE = {
   assistRate: 0.21,    // how often a second man is credited on a tackle that had no assist yet
   spill: 0.6,         // how often a run stopped by a lineman past the line is really finished by the second level
   dimeLong: 0.8, dimeMid: 0.45, // how often a defense goes to six defensive backs on third and long, and third and medium
-  sackBase: 0.235,    // chance a pressured quarterback goes down, before the matchup
+  sackBase: 0.37,     // chance a pressured quarterback goes down, before the matchup
   raceCap: 5,         // a speed edge in the open field, in rating points, before it runs into diminishing returns
   runCap: 11,         // a run defender's edge over his blocker, before diminishing returns (keeps one line from making every back look elite)
   sepCap: 11,         // a receiver's route edge over an ordinary man, before diminishing returns (coverage keeps its 14)
@@ -131,10 +133,10 @@ const TUNE = {
   covWeight: 1.5,      // a defender's coverage skill counts this much more than the receiver's route skill
   holeBonus: 0.9,
   readTime: 0.34,
-  catchBase: 2.05,
+  catchBase: 1.9,
   shade: 0.4, // how hard defenses roll coverage toward the best receiver
   dropBase: 0.041,
-  intBase: 0.0085,
+  intBase: 0.011,
   // tackling
   tackleBase: 2.3,
   tackleScale: 0.03,
@@ -157,8 +159,9 @@ const TUNE = {
   glSqueeze: 0.85,     // inside the ten, how deep the linebackers and safeties meet a run, as a share of the yards to the goal line
   glOne: 0.35,         // at the one: how often they fill a step deep, in the end zone, rather than at the line
   safetyRun: -1.6,     // a safety coming down on a back who has cleared the second level: negative makes the tackle harder
-  deepCatch: 2.3,     // how much harder a ball thrown 20+ yards is to put on a receiver
+  deepCatch: 2.1,     // how much harder a ball thrown 20+ yards is to put on a receiver
   shortCatch: 0.45,      // how much easier a ball thrown 3 to 9 yards is to complete
+  shortSlope: 0.2,       // ...less so the longer it is past 5 yards (the league completes 74% at 1-5 yards, 63% at 6-10)
   shortTight: 1.25,      // yards closer the defender is when a short ball is caught: completed more easily, tackled sooner
   teOpen: 0.05,       // tight ends work the seams and the middle against linebackers and safeties: how much more open that leaves them
   rbSpace: 4.8,       // extra yards of room a back has when he catches it: nobody is covering him tight
@@ -360,7 +363,7 @@ const ROT_GAP = { DL: 0.5, WR: 0.55, TE: 0.5 }; // receivers and tight ends get 
 const GROUP_GUARD = { OL: 40, QB: 60, LB: 18, RB: 20, TE: 24 }; // (a tight end's rating counts half in the choice, so his guard is doubled) // a real one first: a safety, receiver or back takes the job only when he is clearly better at it
 // The deep ball. How often it is called and how readily it is thrown follow the quarterback's arm: a coordinator with a big,
 // accurate deep thrower calls more shots, and that quarterback lets it go to a man who is only a step open.
-const DEEP = { base: 0.12, perPt: 0.03, lo: -0.5, hi: 0.6, mid: 0.3, shot: 0.45, shotArm: 0.8, call: 0.02, callLo: 0.45, callHi: 1.5, ref: 70 };
+const DEEP = { base: 0.12, perPt: 0.03, lo: -0.5, hi: 0.6, mid: 0.3, shot: 0.75, shotArm: 0.8, call: 0.02, callLo: 0.45, callHi: 1.5, ref: 70 };
 function deepArm(p, g) { if (!p || !p.a) return DEEP.ref; return g ? (ea(g, { p }, 'arm') + ea(g, { p }, 'dacc')) / 2 : ((p.a.arm || 60) + (p.a.dacc || 60)) / 2; }
 // ---------- team game state ----------
 function slotRating(p, spot) {
