@@ -272,10 +272,30 @@ function chartProblems(tid) {
 function userDepthSpots(p) {
   const c = T(p.tid).dch;
   if (!c) return [];
-  // (listed anywhere in any grouping counts as practice time at that spot)
+  // (listed anywhere in any grouping counts as practice time at that spot; the kicking units are not a position and teach none)
   const out = new Set();
-  for (const key in c.lists) if (!c.auto[CHART_UNIT(key)] && c.lists[key].includes(p.id)) { const s = chartSpotFor(p.tid, key); if (s !== p.spot && comfortOf(p, s) < 100) out.add(s); }
+  for (const key in c.lists) if (CHART_UNIT(key) !== 'st' && !c.auto[CHART_UNIT(key)] && c.lists[key].includes(p.id)) { const s = chartSpotFor(p.tid, key); if (s !== p.spot && comfortOf(p, s) < 100) out.add(s); }
   return [...out];
+}
+// The kicking units once counted as practice at the position each is filed under (kick and punt coverage at safety, punt return at
+// corner, kick return at the move tight end, the returners at running back), so men who only covered kicks became "comfortable"
+// there. Take that back from your men (and anyone who has played for you): not his own spot or one next to it, not a secondary spot
+// for a defensive back, not where you are cross-training him or list him on offense or defense, and not where he has real game snaps.
+function cleanSTComfort(st) {
+  const u = st.userTid; if (u == null || u < 0) return 0;
+  const t = st.teams.find(x => x.id === u), c = t && t.dch, listed = {}, DB = new Set(['CB', 'NCB', 'FS', 'SS']);
+  if (c && c.lists) for (const key in c.lists) { if (CHART_UNIT(key) === 'st') continue; const s = CHART_SPOT[baseKey(key)]; if (s) for (const id of c.lists[key]) (listed[id] = listed[id] || new Set()).add(s); }
+  let n = 0;
+  for (const id in st.players) { const p = st.players[id]; if (!p || !p.cf || !p.a) continue;
+    if (!(p.tid === u || (p.tid === -3 && p.psTid === u) || (p.career || []).some(x => x.tid === u))) continue;
+    let changed = false;
+    for (const s of ['SS', 'CB', 'TEH', 'RB']) {
+      if (!p.cf[s] || s === p.spot || (SPOT_NEIGHBORS[p.spot] || []).includes(s) || (DB.has(p.spot) && DB.has(s)) || p.xt === s || (listed[p.id] && listed[p.id].has(s)) || (p.spSeason && (p.spSeason[s] || 0) >= 20)) continue;
+      delete p.cf[s]; changed = true; n++;
+    }
+    if (changed) updateRatings(p);
+  }
+  return n;
 }
 // weekly practice reps for players listed away from their natural spot
 function practiceReps(tid) {

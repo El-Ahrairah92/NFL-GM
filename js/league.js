@@ -85,6 +85,8 @@ function migrateState(st) {
   // calibrated position weights changed: recompute every player's ratings
   // clubs' reads of their own men (older saves: they already know the men they have had)
   if (st.version === SAVE_VERSION && !st.skV) { seedStaffKnow(st); st.skV = 1; }
+  // comfort the kicking units should never have taught (see cleanSTComfort)
+  if (st.version === SAVE_VERSION && !st.stCf) { const n = cleanSTComfort(st); st.stCf = 1; if (n) (st.news = st.news || []).unshift({ s: st.season, when: 'Staff', text: `Position comfort picked up only on the kicking units has been taken back (${n} spot${n === 1 ? '' : 's'}).`, tids: [st.userTid], type: 'prog' }); }
   const rv = typeof DERIVED !== 'undefined' ? DERIVED.version : 0;
   if (st.version === SAVE_VERSION && st.ratingsVer !== rv) { for (const id in st.players) if (st.players[id].a) updateRatings(st.players[id]); st.ratingsVer = rv; }
   // Phase 6: cap growth, guarantees, practice squads, IR stays
