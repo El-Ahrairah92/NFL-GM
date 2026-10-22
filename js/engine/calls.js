@@ -85,6 +85,7 @@ function offenseCall(g) {
   else if (g.q >= 3 && sit.diff <= -14) pr += 0.12;
   else if (g.q >= 3 && sit.diff >= (g.q >= 4 ? 9 : 17)) pr -= 0.12; // sitting on a lead: shorten the game
   if (sit.hurry) pr = Math.max(pr, 0.84);
+  if (sit.needClock && g.to[o] === 0 && g.clock <= 45 && (g.q === 2 || sit.diff <= 0)) pr = Math.max(pr, 0.98); // no timeouts and no time: a run (a draw least of all) lets the clock run out
   // play caller's plan + in-game adjustment toward what works
   pr += g.tilt[o] * pcF * TUNE.passLean;
   const fr = g.famStats[o];

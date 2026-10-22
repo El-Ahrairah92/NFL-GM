@@ -162,7 +162,10 @@ function snap(g) {
   if (g.q >= 4 && diff > 0 && k >= 1 && g.clock <= 2 * k + 40 * Math.max(0, k - g.to[d])) { kneel(g); return; }
   // last play of a half/game
   const endHalf = (g.q === 2 || g.q >= 4) && g.clock <= 7;
-  if (endHalf && fgDist <= range + 2 && (g.q === 2 || (diff >= -3 && diff <= 0) || g.q >= 5)) { fieldGoal(g); return; }
+  // the kick that ties or wins (or ends the half with points): take it while there is time, not one play too late. With a timeout in
+  // hand he can run a play and stop the clock; without one, once the clock is stopped inside fourteen seconds there is no play to run first.
+  const kickNow = (g.q === 2 || g.q >= 4) && (g.clock <= 8 || (g.to[o] === 0 && !g.running && g.clock <= 14));
+  if (kickNow && fgDist <= range + 2 && (g.q === 2 || (diff >= -3 && diff <= 0) || g.q >= 5)) { fieldGoal(g); return; }
   if (endHalf && fgDist > range + 2 && (g.q === 2 ? g.ydl >= 45 : diff < 0 && diff >= -8)) { hailPlay(g); return; }
   // spike to stop the clock in the 2-minute drill
   if (g.spikeNext) { g.spikeNext = false; spike(g); return; }
