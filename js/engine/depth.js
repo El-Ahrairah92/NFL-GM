@@ -283,6 +283,15 @@ function sendMotion(off, def, oc, dc, g) {
 // The emergency quarterback: when every quarterback is hurt, somebody who is not one has to take the snaps. A club names him;
 // if it has not (or he is unavailable), the staff picks the best arm among the backs, receivers, tight ends and defensive backs.
 function emergencyScore(p) { return p.a ? (p.a.sacc || 30) * 0.4 + (p.a.arm || 30) * 0.25 + (p.a.dec || 30) * 0.2 + (p.a.proc || 30) * 0.15 : 0; }
+// a practice squad quarterback can be the emergency man: yours if you named him (or left it to the staff), the best one for a computer
+// club. Once every quarterback on the 53 is hurt he is brought up for the rest of the game and goes back to the squad after it (an
+// emergency call-up, not one of his three elevations).
+function emergencySquadQB(tid) {
+  if (typeof psOf !== 'function') return null;
+  const t = T(tid), ps = psOf(tid).filter(p => p.pos === 'QB' && p.a && !p.injury); if (!ps.length) return null;
+  if (!isAI(tid) && t.eqb !== undefined) return ps.find(p => p.id === t.eqb) || null; // you named someone: him, or nobody from the squad
+  return ps.sort((a, b) => b.ovr - a.ovr)[0];
+}
 function emergencyPasser(tid, avail) {
   const t = T(tid), ok = p => p.pos !== 'QB' && !['OL', 'DL', 'K', 'P'].includes(p.pos) && !p.injury;
   const pool = (avail || rosterOf(tid)).filter(ok);
@@ -480,7 +489,8 @@ function fillSlots(g, s, slots, table, opts = {}) {
     if (ax !== null) { const lc = T_.lc || (T_.lc = {}), k = ax.toFixed(2);
       if (!lc[k]) { const seen = new Set(), all = []; for (const s of LINE_SPOTS) for (const c of T_.depth[s] || []) if (!seen.has(c.p.id)) { seen.add(c.p.id); all.push({ p: c.p, r: lineSlotRating(c.p, ax) + ((T_.yb && T_.yb[c.p.id]) || 0) }); } lc[k] = all.sort((a, b) => b.r - a.r); }
       if (lc[k].length) cands = lc[k]; }
-    if (slot === 'QB' && !g.pre && !cands.some(c => c.p.pos === 'QB' && !used.has(c.p.id))) { const em = rosterOf(g.tids[s]).filter(p => p.pos === 'QB' && !p.injury && !onIR(p) && !T_.roster.includes(p)).sort((a, b) => b.ovr - a.ovr)[0];
+    if (slot === 'QB' && !g.pre && !cands.some(c => c.p.pos === 'QB' && !used.has(c.p.id))) { let em = rosterOf(g.tids[s]).filter(p => p.pos === 'QB' && !p.injury && !onIR(p) && !T_.roster.includes(p)).sort((a, b) => b.ovr - a.ovr)[0];
+      if (!em) { const sq = emergencySquadQB(g.tids[s]); if (sq) { sq.elev = { tid: g.tids[s], wk: state.week, emerg: true }; setTid(sq, g.tids[s]); em = sq; } } // no quarterback left on the 53: the squad's man comes up
       if (em) { T_.active.add(em.id); T_.roster.push(em); if (!g.ps[em.id]) g.ps[em.id] = { fat: 0, snp: 0, last: null }; const c = { p: em, r: slotRating(em, 'QB') }; T_.depth.QB = [c, ...T_.depth.QB]; cands = T_.depth.QB; if (g.pbp) g.pbp.push({ q: g.q || 1, c: Math.max(0, g.clock || 0), t: `${pshort(em)} comes in as the emergency quarterback`, s: g.score ? g.score.slice() : [0, 0] }); }
       else { const eq = emergencyPasser(g.tids[s], T_.roster.filter(p => !used.has(p.id) && !(g.out && g.out[p.id]))); // no quarterback left at all: the man the club named takes the snaps
         if (eq) { cands = [{ p: eq, r: slotRating(eq, 'QB') }, ...cands.filter(c => c.p !== eq)]; if (g.pbp && !T_.eqSaid) { T_.eqSaid = true; g.pbp.push({ q: g.q || 1, c: Math.max(0, g.clock || 0), t: `${pshort(eq)}, the emergency quarterback, is in at quarterback`, s: g.score ? g.score.slice() : [0, 0] }); } } } }

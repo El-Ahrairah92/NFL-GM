@@ -1075,8 +1075,10 @@ function chemStripHTML(tid, tab) {
 }
 // the emergency quarterback: who takes the snaps if every quarterback is hurt
 function emergencyQBHTML(t) {
-  const pool = rosterOf(t.id).filter(p => p.pos !== 'QB' && !['OL', 'DL', 'K', 'P'].includes(p.pos) && p.a).sort((a, b) => emergencyScore(b) - emergencyScore(a)).slice(0, 12), cur = emergencyPasser(t.id);
-  return `<div class="dc2-lk" title="If every quarterback is hurt during a game, he takes the snaps."><span>Emergency QB</span><select data-change="eqbSet">${pool.map(p => `<option value="${p.id}" ${cur && cur.id === p.id ? 'selected' : ''}>${esc(pshort(p))} · ${esc(p.lbl)}</option>`).join('')}</select>${t.eqb === undefined ? '<i class="small muted" style="margin-left:6px">staff pick</i>' : ''}</div>`;
+  const sq = psOf(t.id).filter(p => p.pos === 'QB' && p.a).sort((a, b) => b.ovr - a.ovr); // practice squad quarterbacks first
+  const pool = [...sq, ...rosterOf(t.id).filter(p => p.pos !== 'QB' && !['OL', 'DL', 'K', 'P'].includes(p.pos) && p.a).sort((a, b) => emergencyScore(b) - emergencyScore(a)).slice(0, 12)];
+  const cur = t.eqb !== undefined ? pool.find(p => p.id === t.eqb) : emergencySquadQB(t.id) || emergencyPasser(t.id);
+  return `<div class="dc2-lk" title="If every quarterback on the 53 is hurt during a game, he takes the snaps. A practice squad quarterback is brought up for the rest of that game (it does not use one of his elevations)."><span>Emergency QB</span><select data-change="eqbSet">${pool.map(p => `<option value="${p.id}" ${cur && cur.id === p.id ? 'selected' : ''}>${esc(pshort(p))} · ${p.tid === -3 ? 'QB (practice squad)' : esc(p.lbl)}</option>`).join('')}</select>${t.eqb === undefined ? '<i class="small muted" style="margin-left:6px">staff pick</i>' : ''}</div>`;
 }
 function scPrac() { return view === 'depth' && ui.scMode === 'prac'; }
 // the practice order, shaped like a depth chart so the same page can show it
