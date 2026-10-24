@@ -21,6 +21,8 @@ const TUNE = {
   preNoise: 0.3,       // how fuzzy that matchup read is
   quickScale: 0.6,       // the same for the quick game
   deepPick: 0.8,       // how much likelier a ball 20+ yards downfield is to be picked than the same window shorter (the league picks about 6% of them)
+  passDesign: 0.004, protDesign: 2.0, pickDesign: 0.008, // coordinators' design, coach against coach: pass concepts against coverage (the receiver's window), protection against pressure (the rush), pickups against blitzes and games
+  gm4th: 0.012,        // game management: how much likelier per point the head coach makes the sound fourth-down call (10% at 30, 40% at 55, 70% at 80)
   rpoSeen: 10,         // how fast a defense goes RPO-sound as it sees them: the chance a snap is played straight, per unit of the offense's RPO share this game
   tbScale: 0.72,          // how long routes take to break and the quarterback takes to set up (1 = as designed)
   holdMax: 0.3,        // the longest he will stand in a clean pocket waiting for a downfield route

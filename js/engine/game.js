@@ -11,7 +11,7 @@ function coachCtx(tid, oppTid) {
   const ooc = C(opp.oc), odc = C(opp.dc), ostc = C(opp.stc);
   const net = (a, b) => clamp(a - b, -35, 35) * 0.025;
   return {
-    pb: net(designKnob(t, 'protD'), designKnob(opp, 'presD')) * 0.5,
+    pb: net(designKnob(t, 'protD'), designKnob(opp, 'presD')) * TUNE.protDesign,
     rb: net(designKnob(t, 'runD'), designKnob(opp, 'frontD')) * 2.2,
     ot: offTend(t), dt: defTend(t), ft: formTraits(t), cb: conceptBook(t),
     pc: knob(offCaller(t), 'pc'), adp: knob(offCaller(t), 'pc'), dpc: knob(defCaller(t), 'pc'),
@@ -561,7 +561,7 @@ function fourthDown(g, range) {
   if (g.q >= 5 && diff < 0 && (diff < -3 || dist > range)) return false;
   const seenRange = Math.min(range + clamp(gauss(0, (100 - cx.gm) / 12), -6, 3), 64);
   let call;
-  if (rand() < 0.04 + cx.gm / 170) call = recommend4th(g, dist, range);
+  if (rand() < clamp(0.1 + (cx.gm - 30) * TUNE.gm4th, 0.05, 0.85)) call = recommend4th(g, dist, range); // a good game manager makes the sound call most of the time, a poor one seldom
   else if (g.togo <= 1 && g.ydl >= 40 && rand() < 0.15 + cx.aggr * 0.45) call = 'go';
   else if (g.togo <= 3 && g.ydl >= 55 && dist > seenRange && rand() < cx.aggr * 0.6) call = 'go';
   else call = dist <= seenRange ? 'fg' : 'punt';

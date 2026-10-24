@@ -405,7 +405,7 @@ function resolvePass(g, off, def, oc, dc) {
   const dbChem = chemEdge(droppers, ['CB', 'S']) * TUNE.chemDB;
   const zown = man ? null : zoneOwners(dc.cov, droppers);
   const pNet = cx.pb * 0; // protection already used the coach net; separation uses Pass Design vs Coverage Design:
-  const sepNet = clamp(designKnob(T(g.tids[o]), 'passD') - designKnob(T(g.tids[d]), 'covD'), -35, 35) * 0.002;
+  const sepNet = clamp(designKnob(T(g.tids[o]), 'passD') - designKnob(T(g.tids[d]), 'covD'), -35, 35) * TUNE.passDesign;
   // PA / RPO: underneath defenders who bite leave windows behind them
   const bit = new Set();
   if (pa) for (const e of droppers) if (['MLB', 'WLB', 'SAM', 'SS'].includes(e.slot) && bites(g, e, TUNE.paBite + paCred - paSeen, 'pass')) bit.add(e);

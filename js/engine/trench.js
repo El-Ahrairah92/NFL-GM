@@ -137,7 +137,7 @@ function passProtection(g, off, def, oc, dc, extraProtect) {
     if (edge) edge.chip = h;
   }
   // pickup checks: blitzers, simulated pressure and stunts test the protection's awareness
-  const design0 = clamp(designKnob(T(g.tids[d]), 'presD') - designKnob(T(g.tids[o]), 'protD'), -35, 35) * 0.004;
+  const design0 = clamp(designKnob(T(g.tids[d]), 'presD') - designKnob(T(g.tids[o]), 'protD'), -35, 35) * TUNE.pickDesign;
   // a line that has played together passes things off; a front that has played together runs its games in step
   const chO = chemEdge(off, ['OL']) * TUNE.chemOL, chD = chemEdge(def, ['DL']) * TUNE.chemDL, design = design0 - chO, designT = design0 - chO + chD;
   // how much of a surprise each thing still is: something this defense has done on a quarter of today's snaps is the ordinary amount
