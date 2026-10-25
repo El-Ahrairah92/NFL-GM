@@ -989,8 +989,8 @@ function contractHTML(p) {
   }
   return h + '</div>';
 }
-// the move to the practice squad is offered to any man who could make it, and, when the squad is full, to every man who could otherwise (a click says it is full)
-function psBtnOK(p) { const w = toPSWhyNot(p, state.userTid); return !w || /is full/.test(w); }
+// the move to the practice squad is on every card of a man on your 53 while squads exist; a click on one who cannot go says why
+function psBtnOK(p) { const w = toPSWhyNot(p, state.userTid); return !w || !/not on your 53|time of year/.test(w); }
 function rosterActions(p) {
   if (p.expiring && state.phase === 'RESIGN') return `<button class="sm primary" data-action="faOpen" data-pid="${p.id}" title="Sit down with his agent">Negotiate · asks ${fmtMoney(p.ask)}</button>`;
   return `<button class="sm danger" data-action="release" data-pid="${p.id}">Release</button>`;
@@ -1141,10 +1141,11 @@ function depthChartHTML() {
     const lay = prac ? pl0.lay : dcLayout(t, tab, vid, pass), normal = prac ? pl0.m : dcLineup(u, tab, vid, pass), lineup = outP && !prac ? dcLineup(u, tab, vid, pass, outP.id) : normal, ok = ovKeyFor(t, tab, vid, pass);
     // why a spot is not being played by the first man on its list
     const whyText = (b, p) => { const w = lineup._why[b.name]; if (prac || !w || w === 'ov' || auto) return null;
-      if (w === 'staff') return ['staff', "Nobody left on this job's list: the staff put him here"];
       if (w === 'rot' || w === 'tired') return ['rest', 'In while the man ahead of him takes a breather'];
-      const list = c.lists[b.key] || [], above = list.slice(0, Math.max(0, list.indexOf(p.id))).map(id => P(id)).filter(q => q && q.tid === u), at = q => lay.find(x => lineup[x.name] === q);
+      const list = c.lists[b.key] || [], at = q => lay.find(x => lineup[x.name] === q);
+      const above = (w === 'staff' ? list : list.slice(0, Math.max(0, list.indexOf(p.id)))).map(id => P(id)).filter(q => q && q.tid === u);
       const why = above.map(q => (outP && q.id === outP.id) || q.injury ? `${q.last} is out` : at(q) ? `${q.last} is at ${at(q).label.toLowerCase()} in this look` : dcSat(q) ? `${q.last} is sitting` : onIR(q) ? `${q.last} is on injured reserve` : `${q.last} is inactive: the staff left him out of the 48`);
+      if (w === 'staff') return ['staff', "Nobody left on this job's list, so the staff put him here" + (why.length ? ': ' + why.join(' · ') : '')];
       return ['next up', why.length ? why.join(' · ') : 'Next man up']; };
     const pills = tab === 'def'
       ? [...new Set(views.map(v => v.group))].map(gr => `<div class="dc2-lk"><span>${esc(gr)}</span>${views.filter(v => v.group === gr).map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.label)}${v.share && v.group !== 'Other' ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div>`).join('') + (prac ? '' : greenDotHTML(t))

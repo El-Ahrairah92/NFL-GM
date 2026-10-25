@@ -292,7 +292,7 @@ function promoteFromPS(pid, tid, why) {
 function toPSWhyNot(p, tid) {
   if (!p || p.tid !== tid) return 'He is not on your 53';
   if (!['REG', 'PLAYOFFS', 'PRESEASON', 'DRAFT', 'FA'].includes(state.phase)) return state.phase === 'CUTDOWN' ? 'Use the cut list: mark him Practice squad there' : 'Not at this time of year';
-  if (p.injury || onIR(p)) return 'An injured player cannot go to the practice squad';
+  if (p.injury || onIR(p)) return 'He is injured: a hurt player cannot be sent to the practice squad. Wait until he is healthy, or put him on injured reserve';
   if (p.pos === 'K' || p.pos === 'P') return 'Kickers and punters do not go to the practice squad';
   if (p.age > PS_AGE || p.exp > 6) return 'He is too experienced for the practice squad';
   if (!psRoom(tid, p)) return psOf(tid).length >= PS_MAX ? 'Your practice squad is full' : `Your practice squad already has its ${PS_VETS} veterans`;
@@ -494,10 +494,13 @@ function gameDayActives(tid) {
     if ((keep && keep.has(p.id)) || p.elev) continue; // a man elevated for this game dresses
     if (counts[p.pos] > (GAMEDAY_MIN[p.pos] || 1)) { out.add(p.id); counts[p.pos]--; }
   }
-  // still more than 48 (your chart names more men than fit): the lowest-graded of them sit after all
-  for (const p of ro.slice().sort((a, b) => a.ovr + stRosterValue(a) * 1.5 - b.ovr - stRosterValue(b) * 1.5)) {
+  // still more than 48 (your chart names more men than fit): the next men it names sit first, the lowest-graded of them, and a man
+  // it starts only if that is still not enough
+  const byGrade = ro.slice().sort((a, b) => a.ovr + stRosterValue(a) * 1.5 - b.ovr - stRosterValue(b) * 1.5);
+  for (const startersToo of [false, true]) for (const p of byGrade) {
     if (ro.length - out.size <= GAMEDAY_ACTIVE) break;
-    if (!out.has(p.id) && !p.elev && counts[p.pos] > (GAMEDAY_MIN[p.pos] || 1)) { out.add(p.id); counts[p.pos]--; }
+    if (out.has(p.id) || p.elev || (!startersToo && keep && keep.core && keep.core.has(p.id))) continue;
+    if (counts[p.pos] > (GAMEDAY_MIN[p.pos] || 1)) { out.add(p.id); counts[p.pos]--; }
   }
   return new Set(ro.filter(p => !out.has(p.id)).map(p => p.id));
 }

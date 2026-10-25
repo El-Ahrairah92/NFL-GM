@@ -178,18 +178,24 @@ function dcLineup0(tid, tab, vid, pass) {
   const u = tab === 'off' ? offUnit(g, 0, vid, pass === 'pass' ? { passDown: true } : null) : defUnit(g, 0, L.front, L.pkg, !!pass && (L.pkg === 'NICKEL' || L.pkg === 'DIME'), false, lookTOf(L));
   const m = {}, why = {}; for (const e of u) { m[e.name] = e.p; if (e.why) why[e.name] = e.why; } Object.defineProperty(m, '_why', { value: why }); return m;
 }
-// everyone your chart starts somewhere (as many per job as it has spots, plus the next man), and anyone pinned to a spot in a look
+// who plays on Sunday by your chart, and by the staff's for any unit you have left to them: everyone who starts somewhere (as many
+// per job as it has spots), the four kicking units, the returners and the specialists, then the next man at each job. Anyone in
+// none of that is not going to see the field, and is the first to sit when only 48 dress.
 function chartDress(tid) {
   const t = T(tid), c = t && t.dch; if (!c || (typeof isAI === 'function' && isAI(tid)) || (state.settings.autoUser && tid === state.userTid)) return null;
-  const keep = new Set(), J = c.auto.def ? null : defJobs(t), sat = satSet(tid);
+  const keep = new Set(), core = new Set(), J = defJobs(t), sat = satSet(tid), staff = staffChart(tid).lists;
   // only men who can play this week hold a place: a hurt, sitting or departed man listed above someone does not use up his
   const ok = id => { const p = P(id); return !!p && p.tid === tid && !p.injury && !onIR(p) && !(sat && sat.has(id)); }, jobs = [];
-  for (const k in c.lists) { const u = CHART_UNIT(k); if (u === 'st' || c.auto[u] || k.includes(':')) continue;
-    jobs.push([k, u === 'def' ? (J.n[k] || (k === 'RUSHE' || k === 'RUSHI' ? 2 : 1)) : 1, c.lists[k].filter(ok)]); }
-  // and a man who starts at another job plays there, so he does not take the place of this job's next man either
+  for (const k of new Set([...Object.keys(c.lists), ...Object.keys(staff)])) { if (k.includes(':')) continue; const u = CHART_UNIT(k), l = ((c.auto[u] ? staff[k] : c.lists[k]) || []).filter(ok);
+    if (u === 'st') { l.slice(0, ST_UNIT[k] ? 10 : k === 'KR' ? 2 : 1).forEach(id => core.add(id)); continue; }
+    jobs.push([k, u === 'def' ? (J.n[k] || (k === 'RUSHE' || k === 'RUSHI' ? 2 : 1)) : 1, l]); }
+  // a man who starts at another job plays there, so he does not take the place of this job's next man either
   const starts = {}; for (const [k, n, l] of jobs) l.slice(0, n).forEach(id => (starts[id] = starts[id] || new Set()).add(k));
   for (const [k, n, l] of jobs) { let left = n + 1; for (const id of l) { if (left <= 0) break; keep.add(id); if (!starts[id] || starts[id].has(k)) left--; } }
-  for (const k in c.ov || {}) keep.add(c.ov[k]);
+  for (const id in starts) core.add(+id);
+  for (const k in c.ov || {}) core.add(c.ov[k]);
+  for (const id of core) keep.add(id);
+  keep.core = core; // the men who play, ahead of the next men if not everyone fits in 48
   return keep;
 }
 function ovKeyFor(t, tab, vid, pass) { if (tab === 'off') return vid; const L = defLookOf(t, vid); return defLookKey(L.front, L.pkg, lookTOf(L), !!pass && (L.pkg === 'NICKEL' || L.pkg === 'DIME')); }
