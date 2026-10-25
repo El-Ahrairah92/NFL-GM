@@ -105,11 +105,15 @@ function genVeteran(spotOrGroup, tier) {
   return p;
 }
 
-// Prospect quality by position: positions with many prospects per starting job (QB, RB) would otherwise
-// out-select the league's established talent level over a decade (measured in a 10-season drift test).
-const DRAFT_Q_ADJ = { QB: -1.3, RB: -0.5, FB: -0.3, WRX: -0.6, WRZ: -0.6, SLOT: -0.6, TEY: -0.95, TEH: -0.95, LT: 0.05, LG: 0.05, C: 0.05, RG: 0.05, RT: 0.05,
-  NT: -0.1, DT: -0.1, DE: -0.1, EDGE: -0.15, MLB: -0.55, WLB: -0.55, CB: -0.3, NCB: -0.3, FS: -0.3, SS: -0.3, K: 0, P: 0 };
-const DRAFT_Q = { mean: -0.45, sd: 1.2, bust: 0.21, bustF: 0.3, boom: 0.11, boomF: 1.6, raw: 1.2, udfa: -1.8, udfaSd: 0.85, slope: 0.25 };
+// Prospect quality by position: a level and a spread. Positions with many prospects per starting job (QB, RB) would otherwise
+// out-select the league's established talent level over a decade, so their level sits lower; at quarterback, tight end and
+// linebacker the spread is wider as well, so most prospects are ordinary and a few are special. Lowering the level alone held
+// the average starter but starved the top: over 18 seasons the league's 85+ players fell from 77 to 54, its 85+ quarterbacks
+// from 4 to 1. Both are set so the stars and the average starter at each position hold over 14 simulated seasons (DESIGN 70).
+const DRAFT_Q_ADJ = { QB: -1.7, RB: -0.5, FB: -0.3, WRX: -0.6, WRZ: -0.6, SLOT: -0.6, TEY: -1.15, TEH: -1.15, LT: -0.15, LG: -0.15, C: -0.15, RG: -0.15, RT: -0.15,
+  NT: -0.2, DT: -0.2, DE: -0.2, EDGE: -0.25, MLB: -0.95, WLB: -0.95, CB: -0.3, NCB: -0.3, FS: -0.3, SS: -0.3, K: 0, P: 0 };
+const DRAFT_Q_SD = { QB: 1.3, TEY: 1.2, TEH: 1.2, MLB: 1.35, WLB: 1.35 }; // the spread of a class at a position, against DRAFT_Q.sd
+const DRAFT_Q = { mean: -0.45, sd: 1.2, bust: 0.21, bustF: 0.3, boom: 0.16, boomF: 1.9, raw: 1.2, udfa: -1.8, udfaSd: 0.85, slope: 0.25 };
 // The class is two populations on one board: the men every club has a draftable grade on, and the far larger group behind them
 // who will mostly go undrafted. Nobody is told which is which: a club can draft from the second group and a draftable man can slide out.
 const CLASS_DRAFT = 256, CLASS_DEPTH = 500;
@@ -118,7 +122,7 @@ const DEPTH_MIX = { QB: 0.4, RB: 1.8, WRX: 1.2, WRZ: 1.2, SLOT: 1.2, TEY: 0.6, T
 // every rookie (drafted or not) is made the same way: raw on arrival, with a hidden amount of growth in him
 function rookiePlayer(spot, qMean, qSd, maxAge) {
   const r = rand(), gf = r < DRAFT_Q.bust ? DRAFT_Q.bustF : r < DRAFT_Q.bust + DRAFT_Q.boom ? DRAFT_Q.boomF : 1;
-  const q = gauss(qMean + (DRAFT_Q_ADJ[spot] || 0), qSd);
+  const q = gauss(qMean + (DRAFT_Q_ADJ[spot] || 0), qSd * (DRAFT_Q_SD[spot] || 1));
   // lesser prospects are closer to what they will ever be: below-average talent has less room to grow into
   const room = clamp(1 + DRAFT_Q.slope * (q - DRAFT_Q.mean - (DRAFT_Q_ADJ[spot] || 0)) / DRAFT_Q.sd, 0.5, 1);
   const p = genPlayer(spot, q, randInt(21, maxAge), gf * room, Math.max(0, gauss(DRAFT_Q.raw, 1.2)));
