@@ -287,6 +287,23 @@ function promoteFromPS(pid, tid, why) {
   else if (tid === state.userTid) addNews(`${T(tid).abbr} promoted ${p.lbl} ${pname(p)} from the practice squad${why ? ' (' + why + ')' : ''}.`, [tid], 'sign');
   return null;
 }
+// Down from the 53 to the practice squad: he is released first, as in the league. A man who has to go through waivers sits on
+// them until the next game and joins the squad only if nobody claims him; anyone else signs straight onto it.
+function toPSWhyNot(p, tid) {
+  if (!p || p.tid !== tid) return 'He is not on your 53';
+  if (!['REG', 'PLAYOFFS', 'PRESEASON', 'DRAFT', 'FA'].includes(state.phase)) return state.phase === 'CUTDOWN' ? 'Use the cut list: mark him Practice squad there' : 'Not at this time of year';
+  if (p.injury || onIR(p)) return 'An injured player cannot go to the practice squad';
+  if (p.pos === 'K' || p.pos === 'P') return 'Kickers and punters do not go to the practice squad';
+  if (p.age > PS_AGE || p.exp > 6) return 'He is too experienced for the practice squad';
+  if (!psRoom(tid, p)) return psOf(tid).length >= PS_MAX ? 'Your practice squad is full' : `Your practice squad already has its ${PS_VETS} veterans`;
+  return null;
+}
+function sendToPS(pid, tid) {
+  const p = P(pid), why = toPSWhyNot(p, tid); if (why) return why;
+  releasePlayer(pid);
+  if (p.waiver) { const iw = state.iw || (state.iw = { claims: {}, ps: [] }); if (!iw.ps.includes(pid)) iw.ps.push(pid); return null; }
+  return signToPS(pid, tid);
+}
 function releaseFromPS(pid) { const p = P(pid); if (!p || p.tid !== -3) return; setTid(p, -1); delete p.psTid; p.ask = MIN_SALARY; p.contract = { amt: MIN_SALARY, yrs: 0, gtd: 0 }; }
 // What a practice squad spot is for: a prospect worth developing, or a ready body to call up when someone goes down.
 // A club's own cut has two edges over an outsider: the staff watched him all camp, and he already knows the playbook.
@@ -476,6 +493,11 @@ function gameDayActives(tid) {
     if (ro.length - out.size <= GAMEDAY_ACTIVE) break;
     if ((keep && keep.has(p.id)) || p.elev) continue; // a man elevated for this game dresses
     if (counts[p.pos] > (GAMEDAY_MIN[p.pos] || 1)) { out.add(p.id); counts[p.pos]--; }
+  }
+  // still more than 48 (your chart names more men than fit): the lowest-graded of them sit after all
+  for (const p of ro.slice().sort((a, b) => a.ovr + stRosterValue(a) * 1.5 - b.ovr - stRosterValue(b) * 1.5)) {
+    if (ro.length - out.size <= GAMEDAY_ACTIVE) break;
+    if (!out.has(p.id) && !p.elev && counts[p.pos] > (GAMEDAY_MIN[p.pos] || 1)) { out.add(p.id); counts[p.pos]--; }
   }
   return new Set(ro.filter(p => !out.has(p.id)).map(p => p.id));
 }

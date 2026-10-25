@@ -989,6 +989,8 @@ function contractHTML(p) {
   }
   return h + '</div>';
 }
+// the move to the practice squad is offered to any man who could make it, and, when the squad is full, to every man who could otherwise (a click says it is full)
+function psBtnOK(p) { const w = toPSWhyNot(p, state.userTid); return !w || /is full/.test(w); }
 function rosterActions(p) {
   if (p.expiring && state.phase === 'RESIGN') return `<button class="sm primary" data-action="faOpen" data-pid="${p.id}" title="Sit down with his agent">Negotiate · asks ${fmtMoney(p.ask)}</button>`;
   return `<button class="sm danger" data-action="release" data-pid="${p.id}">Release</button>`;
@@ -1141,8 +1143,8 @@ function depthChartHTML() {
     const whyText = (b, p) => { const w = lineup._why[b.name]; if (prac || !w || w === 'ov' || auto) return null;
       if (w === 'staff') return ['staff', "Nobody left on this job's list: the staff put him here"];
       if (w === 'rot' || w === 'tired') return ['rest', 'In while the man ahead of him takes a breather'];
-      const list = c.lists[b.key] || [], above = list.slice(0, Math.max(0, list.indexOf(p.id))).map(id => P(id)).filter(Boolean), at = q => lay.find(x => lineup[x.name] === q);
-      const why = above.map(q => (outP && q.id === outP.id) || q.injury ? `${q.last} is out` : at(q) ? `${q.last} is at ${at(q).label.toLowerCase()} in this look` : `${q.last} is not dressed`);
+      const list = c.lists[b.key] || [], above = list.slice(0, Math.max(0, list.indexOf(p.id))).map(id => P(id)).filter(q => q && q.tid === u), at = q => lay.find(x => lineup[x.name] === q);
+      const why = above.map(q => (outP && q.id === outP.id) || q.injury ? `${q.last} is out` : at(q) ? `${q.last} is at ${at(q).label.toLowerCase()} in this look` : dcSat(q) ? `${q.last} is sitting` : onIR(q) ? `${q.last} is on injured reserve` : `${q.last} is inactive: the staff left him out of the 48`);
       return ['next up', why.length ? why.join(' · ') : 'Next man up']; };
     const pills = tab === 'def'
       ? [...new Set(views.map(v => v.group))].map(gr => `<div class="dc2-lk"><span>${esc(gr)}</span>${views.filter(v => v.group === gr).map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.label)}${v.share && v.group !== 'Other' ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div>`).join('') + (prac ? '' : greenDotHTML(t))
@@ -3528,6 +3530,7 @@ function cardButtonsHTML(p) {
   if (p.tid === -1 && p.exp <= 6 && psRoom(u, p) && ['REG', 'PRESEASON', 'CUTDOWN', 'DRAFT', 'FA'].includes(state.phase)) left += `<button data-action="signPS" data-pid="${p.id}">Sign to practice squad (${fmtMoney(PS_SALARY)})</button>`;
   if (p.tid === u) {
     if (p.expiring && state.phase === 'RESIGN') left += `<button class="primary" data-action="faOpen" data-pid="${p.id}">Negotiate a new contract</button>`;
+    if (psBtnOK(p)) left += `<button data-action="toPS" data-pid="${p.id}" title="Released and put on your practice squad (through waivers if his experience calls for it)">Move to practice squad</button>`;
     left += `<button class="danger" data-action="release" data-pid="${p.id}">Release</button>`;
   } else if (p.waiver) { left += '<div class="small muted">On waivers: claim him from the Waiver Wire tab.</div>';
   } else if (state.phase === 'UDFA' && state.udfa && isUdfa(p)) { const cur = state.udfa.offers[p.id], pl = udfaPathLabel(udfaPath(p, u)); left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Undrafted rookie · market: <b>${udfaInterest(p)}</b> · his view of your roster: <b>${pl}</b>${cur !== undefined ? ` · your offer: <b>${fmtBonus(cur)}</b>` : ''}</div><div class="row" style="gap:6px">${UDFA_BONUS.map(b => `<button class="sm ${cur === b ? 'primary' : ''}" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="${b}">${b ? fmtBonus(b) : 'No bonus'}</button>`).join('')}${cur !== undefined ? `<button class="sm danger" data-action="udfaOfferBtn" data-pid="${p.id}" data-b="">Withdraw</button>` : ''}</div></div>`;
@@ -4150,6 +4153,13 @@ const actions = {
   extend: d => { const err = extendPlayer(+d.pid, d.yrs ? +d.yrs : undefined); toast(err || 'Extension signed.'); closeModal(); save(); render(); },
   elevToggle: d => { const u = state.userTid, id = +d.pid; state.elev = state.elev || {}; const L = state.elev[u] || (state.elev[u] = []), k = L.indexOf(id); if (k >= 0) L.splice(k, 1); else { if (L.length >= ELEV_MAX) { toast(`Only ${ELEV_MAX} a game.`); return; } L.push(id); } save(); render(); },
   promote: d => { const err = promoteFromPS(+d.pid, state.userTid); toast(err || 'Promoted to the 53.'); closeModal(); save(); render(); },
+  toPS: async d => {
+    const p = P(+d.pid), u = state.userTid, why = toPSWhyNot(p, u); if (why) { toast(why); return; }
+    const dm = deadIfCut(p), inS = state.phase === 'REG' || state.phase === 'PLAYOFFS', wire = inS && (p.exp < WAIVER_EXP || state.week > TRADE_DEADLINE);
+    const how = wire ? `To go down he has to be released, and ${p.exp < WAIVER_EXP ? `with ${p.exp} accrued season${p.exp === 1 ? '' : 's'}` : 'after the trade deadline'} he goes on waivers until your next game: <b>any club can claim him</b>. If nobody does, he signs to your practice squad.` : 'He is released and signs straight onto your practice squad.';
+    if (!await ask({ title: `Move ${pname(p)} to the practice squad?`, body: how + ` He comes off the 53 now and is paid the squad rate (${fmtMoney(PS_SALARY)}).` + (dm.now + dm.next ? ` Dead money from his current deal: <b>${fmtMoney(dm.now)}</b> this year${dm.next ? ` and <b>${fmtMoney(dm.next)}</b> next year` : ''}.` : ''), yes: 'Move him', no: 'Keep him' })) return;
+    const err = sendToPS(p.id, u); toast(err || (p.waiver ? `${pname(p)} is on waivers. He joins your practice squad if he clears.` : `${pname(p)} is on your practice squad.`)); closeModal(); save(); render();
+  },
   psRelease: d => { releaseFromPS(+d.pid); toast('Released from the practice squad.'); closeModal(); save(); render(); },
   signPS: d => { const err = signToPS(+d.pid, state.userTid); toast(err || 'Signed to the practice squad.'); closeModal(); save(); render(); },
   pbTeamSet: d => { ui.pbTid = +d.tid; render(); },
@@ -4384,7 +4394,7 @@ document.addEventListener('click', e => {
   if (!el) return;
   { const f = e.target.closest('select, textarea, option, input:not([type="checkbox"]):not([type="radio"])'); if (f && !f.dataset.action && el.contains(f)) return; } // a dropdown or text box inside a clickable row is for typing and choosing; a tick box is the row
   const fn = actions[el.dataset.action];
-  if (fn) { e.preventDefault(); fn(el.dataset, el); }
+  if (fn) { e.preventDefault(); try { fn(el.dataset, el); } catch (err) { showError(err, 'handling ' + el.dataset.action); } } // caught here, the real message shows (an uncaught one from a page opened as a file reads only "Script error")
 });
 // numbers typed into the sit-down are kept without redrawing the page (a redraw between the keystroke and the click would eat the click)
 document.addEventListener('input', e => {
@@ -4397,7 +4407,7 @@ document.addEventListener('change', e => {
   const el = e.target.closest('[data-change]');
   if (!el) return;
   const fn = changes[el.dataset.change];
-  if (fn) { fn(el.value, el); render(); }
+  if (fn) { try { fn(el.value, el); render(); } catch (err) { showError(err, 'handling ' + el.dataset.change); } }
 });
 document.addEventListener('toggle', e => { const el = e.target; if (el && el.dataset && el.dataset.fold) (ui.fold || (ui.fold = {}))[el.dataset.fold] = el.open; }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (askResolve) askDone(false); else closeModal(); } });

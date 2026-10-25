@@ -181,9 +181,14 @@ function dcLineup0(tid, tab, vid, pass) {
 // everyone your chart starts somewhere (as many per job as it has spots, plus the next man), and anyone pinned to a spot in a look
 function chartDress(tid) {
   const t = T(tid), c = t && t.dch; if (!c || (typeof isAI === 'function' && isAI(tid)) || (state.settings.autoUser && tid === state.userTid)) return null;
-  const keep = new Set(), J = c.auto.def ? null : defJobs(t);
+  const keep = new Set(), J = c.auto.def ? null : defJobs(t), sat = satSet(tid);
+  // only men who can play this week hold a place: a hurt, sitting or departed man listed above someone does not use up his
+  const ok = id => { const p = P(id); return !!p && p.tid === tid && !p.injury && !onIR(p) && !(sat && sat.has(id)); }, jobs = [];
   for (const k in c.lists) { const u = CHART_UNIT(k); if (u === 'st' || c.auto[u] || k.includes(':')) continue;
-    const n = (u === 'def' ? (J.n[k] || (k === 'RUSHE' || k === 'RUSHI' ? 2 : 1)) : 1) + 1; c.lists[k].slice(0, n).forEach(id => keep.add(id)); }
+    jobs.push([k, u === 'def' ? (J.n[k] || (k === 'RUSHE' || k === 'RUSHI' ? 2 : 1)) : 1, c.lists[k].filter(ok)]); }
+  // and a man who starts at another job plays there, so he does not take the place of this job's next man either
+  const starts = {}; for (const [k, n, l] of jobs) l.slice(0, n).forEach(id => (starts[id] = starts[id] || new Set()).add(k));
+  for (const [k, n, l] of jobs) { let left = n + 1; for (const id of l) { if (left <= 0) break; keep.add(id); if (!starts[id] || starts[id].has(k)) left--; } }
   for (const k in c.ov || {}) keep.add(c.ov[k]);
   return keep;
 }
