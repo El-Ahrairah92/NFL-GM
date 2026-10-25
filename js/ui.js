@@ -3672,7 +3672,7 @@ function boxModal(gid) {
     for (const l of b.pbp) {
       if (l.q !== cur) { cur = l.q; pb += `<tr class="sep"><td colspan="3">${cur > 4 ? 'Overtime' : 'Quarter ' + cur}</td></tr>`; }
       const big = /TOUCHDOWN|INTERCEPTED|FUMBLE|field goal is GOOD|sacked|Injury/.test(l.x);
-      pb += `<tr><td class="small muted" style="white-space:nowrap">${fmtClock(l.c)} ${T(l.t).abbr}</td><td class="small muted" style="white-space:nowrap">${esc(l.dd || '')}</td><td class="small" style="white-space:normal${big ? ';font-weight:600' : ''}">${esc(l.x)}</td></tr>`;
+      pb += `<tr><td class="small muted" style="white-space:nowrap">${fmtClock(l.c)} ${typeof l.t === 'number' && T(l.t) ? T(l.t).abbr : ''}</td><td class="small muted" style="white-space:nowrap">${esc(l.dd || '')}</td><td class="small" style="white-space:normal${big ? ';font-weight:600' : ''}">${esc(l.x || (typeof l.t === 'string' ? l.t : ''))}</td></tr>`;
     }
     html += `<details style="margin-top:14px"><summary class="section-title" style="cursor:pointer;display:inline">Play-by-Play (${b.pbp.length})</summary><div class="tbl-wrap"><table>${pb}</table></div></details>`;
   }
