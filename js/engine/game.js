@@ -390,7 +390,7 @@ function applyResult(g, res, oc, dc, off, def, b) {
     if (res.tackler && !res.noTkl && g.ydl + yds < 100) { credit(res.tackler, 'tkl'); if (yds < 0) credit(res.tackler, 'tfl'); }
     if (res.assist && !res.noTkl && g.ydl + yds < 100) credit(res.assist, 'tkl');
     stop = res.slide ? false : (res.kind === 'scramble' && rand() < 0.3) || (oc.dir === 'OUT' && rand() < 0.2);
-    desc += ` for ${yds === 0 ? 'no gain' : yds + ' yd' + (Math.abs(yds) === 1 ? '' : 's')}`;
+    desc += ` for ${yds === 0 ? 'no gain' : yds + ' yd' + (Math.abs(yds) === 1 ? '' : 's')}` + tackledBy(g, res, yds);
     if (res.fumble && g.ydl + yds < 100) return fumbleLost(g, res, c, yds, txt, desc, b);
   } else if (res.kind === 'comp') {
     yds = Math.min(res.yds, 100 - g.ydl);
@@ -401,7 +401,7 @@ function applyResult(g, res, oc, dc, off, def, b) {
     if (res.tackler && !res.noTkl && g.ydl + yds < 100) { credit(res.tackler, 'tkl'); if (yds < 0) credit(res.tackler, 'tfl'); }
     if (res.assist && !res.noTkl && g.ydl + yds < 100) credit(res.assist, 'tkl');
     stop = !!res.oob && (g.q === 2 && g.clock <= 120 || g.q >= 4 && g.clock <= 300);
-    desc += ` for ${yds} yd${Math.abs(yds) === 1 ? '' : 's'}`;
+    desc += ` for ${yds} yd${Math.abs(yds) === 1 ? '' : 's'}` + tackledBy(g, res, yds);
     if (res.fumble && g.ydl + yds < 100) return fumbleLost(g, res, res.target, yds, txt, desc, b);
   } else if (res.kind === 'inc') {
     stop = true;
@@ -448,6 +448,11 @@ function applyResult(g, res, oc, dc, off, def, b) {
   trackFamily(g, oc, b, yds);
   resolveYards(g, yds, res, oc);
   timeoutCheck(g);
+}
+// who made the stop, as the play-by-play reads it: ' (tackled by A. Smith and B. Jones)', or who pushed him out
+function tackledBy(g, res, yds) {
+  if (!g.pbp || !res.tackler || res.noTkl || g.ydl + yds >= 100) return '';
+  return ` (${res.oob ? 'pushed out by' : 'tackled by'} ${pshort(res.tackler.p)}${res.assist ? ' and ' + pshort(res.assist.p) : ''})`;
 }
 function logPlay(g, txt, desc) { if (g.pbp) { const last = { q: g.q, c: Math.max(0, Math.round(g.clock)), t: g.tids[g.poss], dd: g.pendingDD || '', x: txt ? `${txt.pre} ${desc}. ${txt.post}` : desc, s: [g.score[0], g.score[1]], p: g.poss, y: g.ydl }; if (g.snapPre) { last.f = g.snapPre; g.snapPre = null; } g.pbp.push(last); } }
 function trackFamily(g, oc, b, yds) {
@@ -653,9 +658,9 @@ function punt(g) {
       const expR = 7.5 + (rc - 78) * 0.08 + g.cx[d].st * 0.025;
       let r = Math.round(expRand(Math.max(2, expR + mCov * ST_K.pu)) * clamp(1.2 - (hang - 4.25) * 0.75, 0.5, 1.8));
       if (rand() < 0.004 * Math.exp(clamp(mCov, -12, 12) / 6)) r = land; // to the house
-      stShare(g, PU, clamp(expR - r, -15, 8)); stShare(g, PRU, clamp(r - expR, -8, 15)); if (r < land) stTackle(g, PU);
+      stShare(g, PU, clamp(expR - r, -15, 8)); stShare(g, PRU, clamp(r - expR, -8, 15)); const tk = r < land ? stTackle(g, PU) : null;
       inc(g, ret.p, 'prA'); inc(g, ret.p, 'prY', r);
-      recv = 100 - land + r; text = `returned ${r} yds by ${pshort(ret.p)}`;
+      recv = 100 - land + r; text = `returned ${r} yds by ${pshort(ret.p)}${tk ? ` (tackled by ${pshort(tk)})` : ''}`;
       if (recv >= 100) { pbpLog(g, `${pshort(Pn.p)} punts ${gross} yds — ${pshort(ret.p)} RETURNS IT FOR A TOUCHDOWN`); endDrive(g, 'Punt'); g.drive = null; g.poss = d; inc(g, ret.p, 'prTD'); touchdown(g, d, `${pshort(ret.p)} ${land} yd punt return`); return; }
     }
   }
@@ -679,7 +684,7 @@ function kickoff(g, kickSide, safetyKick) {
     stSnap(g, [KO, KRU]);
     start = Math.round(gauss(expS + mKo * ST_K.ko, 6.5));
     if (rand() < 0.012 * Math.exp(clamp(mKo, -12, 12) / 7)) start += randInt(20, 45);
-    stShare(g, KO, clamp(expS - start, -15, 8)); stShare(g, KRU, clamp(start - expS, -8, 15)); if (start < 95) stTackle(g, KO);
+    stShare(g, KO, clamp(expS - start, -15, 8)); stShare(g, KRU, clamp(start - expS, -8, 15)); const kTk = start < 95 ? stTackle(g, KO) : null;
     start = clamp(start, 5, 99);
     if (!safetyKick) scoreKick(g, K, 'ko', start <= 14 ? 2 : start <= 21 ? 1 : start >= 55 ? -2 : start >= 40 ? -1 : 0); // where the return left them
     const r = start - (safetyKick ? 20 : 0);
@@ -692,7 +697,7 @@ function kickoff(g, kickSide, safetyKick) {
       inc(g, ret.p, 'krTD'); touchdown(g, recv, `${pshort(ret.p)} kickoff return`);
       return;
     }
-    pbpLog(g, `${pshort(K.p)} ${safetyKick ? 'free kick' : 'kicks off'}, ${pshort(ret.p)} returns to the ${start < 50 ? T(g.tids[recv]).abbr + ' ' + start : start === 50 ? '50' : T(g.tids[kickSide]).abbr + ' ' + (100 - start)}`, false);
+    pbpLog(g, `${pshort(K.p)} ${safetyKick ? 'free kick' : 'kicks off'}, ${pshort(ret.p)} returns to the ${start < 50 ? T(g.tids[recv]).abbr + ' ' + start : start === 50 ? '50' : T(g.tids[kickSide]).abbr + ' ' + (100 - start)}${kTk ? ` (tackled by ${pshort(kTk)})` : ''}`, false);
   }
   startPossession(g, recv, clamp(start, 1, 99));
 }

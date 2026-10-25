@@ -355,7 +355,7 @@ function pageHTML() {
   switch (view) {
     case 'home': return homeHTML();
     case 'roster': return rosterHTML();
-    case 'depth': return depthChartHTML();
+    case 'depth': return withPendingElev(state.userTid, depthChartHTML); // squad men coming up for the game can be put on the chart
     case 'playbook': return playbookHTML();
     case 'schedule': return scheduleHTML();
     case 'standings': return standingsHTML();
@@ -1049,7 +1049,7 @@ function dcSat(p) { const u = state.userTid, c = T(u).dch; return state.phase ==
 function dcChip(p, k, i, starts) {
   const tr = jobTier(p, k), sat = !scPrac() && dcSat(p);
   return `<div class="dcc ${tr ? TIER_CLS[tr] : ''} ${i < starts ? 'st' : ''} ${ui.dchPid === p.id ? 'pk' : ''} ${sat ? 'sat' : ''}" draggable="true" data-dcp="${p.id}" data-dci="${i}" data-dcjob="${k}" data-action="dchMan" data-pid="${p.id}" title="${esc(pname(p))}${tr ? ' · ' + tr + ' at this job' : ''}">
-    <span class="dcc-n">${i + 1}</span><button class="link dcc-nm" data-action="player" data-pid="${p.id}" title="${esc(pname(p))} · ${esc(p.lbl)}${tr ? ' · ' + tr + ' at this job' : ''} — open his card">${esc(p.last)}</button>${dcDot(p, k)}<span class="dcc-sp"></span>${dcDurSel(p, k, i)}${scPrac() ? '' : `<button class="dcc-sit ${sat ? 'on' : ''}" data-action="dcSit" data-pid="${p.id}" title="${sat ? 'Sitting: he does not dress and takes no snaps anywhere. Click to play him.' : 'Sit him: he does not dress and takes no snaps anywhere, not even on special teams'}">Sit</button>`}<button class="dcc-x" data-action="dcRemove" data-key="${k}" data-i="${i}" title="Take him off this job" aria-label="Remove ${esc(p.last)}">×</button></div>`;
+    <span class="dcc-n">${i + 1}</span><button class="link dcc-nm" data-action="player" data-pid="${p.id}" title="${esc(pname(p))} · ${esc(p.lbl)}${tr ? ' · ' + tr + ' at this job' : ''} — open his card">${esc(p.last)}</button>${p.elev && p.elev.preview ? '<i class="dcc-ps" title="Practice squad: comes up for this game">PS</i>' : ''}${dcDot(p, k)}<span class="dcc-sp"></span>${dcDurSel(p, k, i)}${scPrac() ? '' : `<button class="dcc-sit ${sat ? 'on' : ''}" data-action="dcSit" data-pid="${p.id}" title="${sat ? 'Sitting: he does not dress and takes no snaps anywhere. Click to play him.' : 'Sit him: he does not dress and takes no snaps anywhere, not even on special teams'}">Sit</button>`}<button class="dcc-x" data-action="dcRemove" data-key="${k}" data-i="${i}" title="Take him off this job" aria-label="Remove ${esc(p.last)}">×</button></div>`;
 }
 function dcJobCard(t, c, k, need, where, prob) {
   const prac = !!c.prac, u = t.id, list = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === u), n = prac ? 99 : chartMax(k, u), on = ui.dcJob === k;
@@ -3673,7 +3673,7 @@ function boxModal(gid) {
     for (const l of b.pbp) {
       if (l.q !== cur) { cur = l.q; pb += `<tr class="sep"><td colspan="3">${cur > 4 ? 'Overtime' : 'Quarter ' + cur}</td></tr>`; }
       const big = /TOUCHDOWN|INTERCEPTED|FUMBLE|field goal is GOOD|sacked|Injury/.test(l.x);
-      pb += `<tr><td class="small muted" style="white-space:nowrap">${fmtClock(l.c)} ${typeof l.t === 'number' && T(l.t) ? T(l.t).abbr : ''}</td><td class="small muted" style="white-space:nowrap">${esc(l.dd || '')}</td><td class="small" style="white-space:normal${big ? ';font-weight:600' : ''}">${esc(l.x || (typeof l.t === 'string' ? l.t : ''))}</td></tr>`;
+      pb += `<tr><td class="small muted" style="white-space:nowrap">${fmtClock(l.c)} ${typeof l.t === 'number' && T(l.t) ? T(l.t).abbr : ''}</td><td class="small muted" style="white-space:nowrap">${esc(l.dd || '')}</td><td class="small" style="white-space:normal${big ? ';font-weight:600' : ''}">${pbpText(b, l)}</td></tr>`;
     }
     html += `<details style="margin-top:14px"><summary class="section-title" style="cursor:pointer;display:inline">Play-by-Play (${b.pbp.length})</summary><div class="tbl-wrap"><table>${pb}</table></div></details>`;
   }
@@ -3766,18 +3766,35 @@ const WF_FORM = { SG: 'Shotgun', UC: 'Under center', PI: 'Pistol', EMP: 'Empty' 
 function wfLat(x) { const a = Math.abs(x); return Math.sign(x) * (a <= 2.5 ? a * 3.3 : 8.25 + (a - 2.5) * 6); } // the line is drawn wider than life so every man can be read
 // how far behind the ball an offensive man is drawn: linemen and attached ends on the line, flankers and slots a step off it, backs at their depth
 function wfOffDepth(name, d) { if (['LT', 'LG', 'C', 'RG', 'RT', 'OL6'].includes(name)) return 0.6; if (['X', 'Y', 'H', 'Y2'].includes(name)) return 0.75; if (['Z', 'SLOT', 'SLOT2'].includes(name)) return 1.8; return name === 'QB' ? Math.max(1.6, d) : Math.max(1.6, d); }
+// The field as it lies, the same way round as the strip above it: the home club attacks to the right, the visitors to the left. The
+// yard lines are the real ones and the ball moves along them; the offense's right hand is on its right as it faces downfield.
 function watchFieldHTML(b, f, e, res, nextE) {
   const u = state.userTid, tid = b.tids[f.o], opp = b.tids[1 - f.o], oc = T(tid).color, dcol = T(opp).color, BACK = 13, AHEAD = 19, SPAN = BACK + AHEAD, HALF = 27;
-  const X = d => (BACK + d) / SPAN * 100, Y = lat => 50 - wfLat(lat) / HALF * 50;
+  const dir = f.o === 0 ? 1 : -1, X = d => (dir === 1 ? BACK + d : AHEAD - d) / SPAN * 100, Y = lat => 50 + dir * wfLat(lat) / HALF * 50;
+  const band = (d0, d1, cls, c) => { const a = clamp(X(d0), 0, 100), z = clamp(X(d1), 0, 100); return Math.abs(z - a) < 0.01 ? '' : `<div class="${cls}" style="left:${Math.min(a, z)}%;width:${Math.abs(z - a)}%${c ? ';--c:' + c : ''}"></div>`; };
   const dot = (r, side) => { const p = P(r[0]); if (!p) return ''; const d = side === 'off' ? -wfOffDepth(r[1], r[3] || 0) : Math.max(0.8, r[3] || 0);
     const left = clamp(X(d), 1.5, 98.5), top = clamp(Y(r[2] || 0), 3, 97), lab = side === 'off' ? r[1] : (JOB_SHORT[r[1]] || r[1]);
     return `<div class="wf-dot ${side} ${p.tid === u ? 'mine' : ''}" style="left:${left}%;top:${top}%;--c:${side === 'off' ? oc : dcol}" data-tip="${esc(lab)} · ${esc(pname(p))} (${esc(p.lbl)}, ${p.age})" data-action="player" data-pid="${p.id}"><span>${esc(String(lab).slice(0, 4))}</span></div>`; };
-  const first = f.ydl + f.tg >= 100 ? null : f.tg, yl = [-10, -5, 5, 10, 15].filter(d => f.ydl + d > 0 && f.ydl + d < 100);
-  let h = `<div class="wf-zoom ${res ? 'res' : ''}"><div class="wf-los" style="left:${X(0)}%"></div>${first !== null ? `<div class="wf-first" style="left:${X(first)}%"></div>` : ''}${f.ydl + AHEAD >= 100 ? `<div class="wf-ez" style="left:${X(100 - f.ydl)}%;--c:${dcol}"></div>` : ''}
-    ${yl.map(d => `<div class="wf-yl" style="left:${X(d)}%"><span>${(() => { const a = f.ydl + d; return a > 50 ? 100 - a : a; })()}</span></div>`).join('')}
+  // the real five-yard lines in view (yards from the offense's own goal line), the mown stripe between every other pair, the end zones
+  const first = f.ydl + f.tg >= 100 ? null : f.tg, marks = [];
+  for (let m = 5; m <= 95; m += 5) if (m - f.ydl > -BACK && m - f.ydl < AHEAD) marks.push(m);
+  let stripes = ''; for (let m = 0; m < 100; m += 10) if (m + 5 - f.ydl > -BACK && m - f.ydl < AHEAD) stripes += band(Math.max(m, f.ydl - BACK) - f.ydl, Math.min(m + 5, f.ydl + AHEAD) - f.ydl, 'wf-band');
+  const ends = (f.ydl - BACK < 0 ? band(-BACK, -f.ydl, 'wf-ez', oc) : '') + (f.ydl + AHEAD > 100 ? band(100 - f.ydl, AHEAD, 'wf-ez', dcol) : '');
+  let h = `<div class="wf-zoom ${res ? 'res' : ''}">${stripes}${ends}<div class="wf-los" style="left:${X(0)}%"></div>${first !== null ? `<div class="wf-first" style="left:${X(first)}%"></div>` : ''}
+    ${marks.map(m => `<div class="wf-yl" style="left:${X(m - f.ydl)}%"><span>${m > 50 ? 100 - m : m}</span></div>`).join('')}
     ${f.off.map(r => dot(r, 'off')).join('')}${f.def.map(r => dot(r, 'def')).join('')}
     <div class="wf-tag off" style="--c:${oc}">${esc(T(tid).abbr)} ${esc(f.pers)} · ${esc(WF_FORM[f.form] || f.form || '')}${f.fm ? ' · ' + esc(f.fm) : ''}</div><div class="wf-tag def" style="--c:${dcol}">${esc(T(opp).abbr)} ${esc({ BASE: 'Base', NICKEL: 'Nickel', DIME: 'Dime', GL: 'Goal line', BIGN: 'Big nickel' }[f.pkg] || f.pkg)}${f.bign ? ' (big)' : ''} · ${esc(f.front)} front</div></div>`;
   return h;
+}
+// a play's words with every man in them a link to his card: anyone on the field for the snap or with a line in the box score.
+// Two men with the same short name in one game are left as plain words: there is no telling which one it was.
+function pbpText(b, e) {
+  const txt = esc(e.x || (typeof e.t === 'string' ? e.t : '')); if (!txt) return txt; // older saves kept an emergency quarterback's line where the team goes
+  const ids = new Set(Object.keys(b.stats || {}).map(Number).filter(id => id >= 0)); if (e.f) for (const r of [...e.f.off, ...e.f.def]) ids.add(r[0]);
+  const m = new Map(); for (const id of ids) { const p = P(id); if (!p) continue; const k = esc(pshort(p)); m.set(k, m.has(k) && m.get(k) !== p.id ? null : p.id); }
+  const keys = [...m.keys()].filter(k => m.get(k)).sort((x, y) => y.length - x.length).map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!keys.length) return txt;
+  return txt.replace(new RegExp('(^|[^A-Za-z])(' + keys.join('|') + ')(?![A-Za-z])', 'g'), (all, pre, nm) => `${pre}<button class="link pbp-p" data-action="player" data-pid="${m.get(nm)}">${nm}</button>`);
 }
 function watchStripHTML(b, y, poss, firstTo) {
   const h = b.tids[0], a = b.tids[1], bx = poss === 0 ? y : 100 - y, fx = firstTo === null || firstTo === undefined ? null : poss === 0 ? y + firstTo : 100 - y - firstTo;
@@ -3802,11 +3819,11 @@ function watchHTML() {
   // the card under the field: the look before the snap, what happened after it
   const look = f ? `<b>${esc(T(b.tids[f.o]).abbr)}</b> ${esc(f.pers)} personnel, ${esc(WF_FORM[f.form] || f.form || '')}${f.fm ? ', ' + esc(f.fm) : ''}${f.tags ? ' <span class="muted">(' + esc(f.tags.toLowerCase().replace('pa', 'play-action look').replace('motion', 'motion')) + ')</span>' : ''} <span class="muted">against</span> <b>${esc(T(b.tids[1 - f.o]).abbr)}</b> ${esc({ BASE: 'base', NICKEL: 'nickel', DIME: 'dime', GL: 'goal line' }[f.pkg] || String(f.pkg).toLowerCase())}, ${esc(f.front)} front` : '';
   h += `<div class="wcard ${st === 1 ? 'res' : 'pre'} ${st === 1 && big ? (bad ? 'bad' : 'big') : ''}">${st === 0 ? `<div class="ds-lb">At the line · ${esc(e.dd || dd)}</div><div class="wc-x">${look}</div><div class="small muted">Hover a player to see who he is. Next to run the play.</div>`
-    : `<div class="ds-lb">${e.dd ? esc(e.dd) : 'The play'}</div><div class="wc-x">${esc(e.x || '')}</div>`}</div>`;
+    : `<div class="ds-lb">${e.dd ? esc(e.dd) : 'The play'}</div><div class="wc-x">${pbpText(b, e)}</div>`}</div>`;
   h += `<div class="wctl"><button data-action="watchStep" data-d="-1" ${k === 0 ? 'disabled' : ''}>◀ Previous</button><span class="small muted">Play ${b.pbp.slice(0, i + 1).filter(x => x.f).length} · ${st === 0 ? 'before the snap' : 'the result'}${last ? ' · final' : ''}</span>
     <button class="primary" data-action="watchStep" data-d="1" ${last ? 'disabled' : ''}>Next ▶</button><span class="spacer"></span><button data-action="watchDrive">Skip to the next drive</button><button data-action="watchEnd">Skip to the final</button>${last ? `<button class="primary" data-action="watchDone">Box score</button>` : ''}</div>`;
   const recent = []; for (let j = i - (st === 0 ? 1 : 0); j >= 0 && recent.length < 6; j--) recent.push(b.pbp[j]);
-  h += `<div class="wlog">${recent.map(x => `<div class="wl-r"><span class="muted">${x.q > 4 ? 'OT' : 'Q' + x.q} ${fmtClock(x.c)}</span><span class="muted">${esc(x.dd || '')}</span><span>${esc(x.x || '')}</span></div>`).join('')}</div>`;
+  h += `<div class="wlog">${recent.map(x => `<div class="wl-r"><span class="muted">${x.q > 4 ? 'OT' : 'Q' + x.q} ${fmtClock(x.c)}</span><span class="muted">${esc(x.dd || '')}</span><span>${pbpText(b, x)}</span></div>`).join('')}</div>`;
   return h + '</div>';
 }
 // ---------- game day: preview & wrap ----------

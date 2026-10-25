@@ -238,7 +238,7 @@ function ensureChart(tid) {
 // units on auto are refreshed from the staff; manual units drop players who left
 function refreshChart(tid) {
   const c = ensureChart(tid), def = defaultChart(tid);
-  const mine = new Set(rosterOf(tid).map(p => p.id));
+  const mine = new Set([...rosterOf(tid), ...pendingElev(tid)].map(p => p.id)); // a squad man marked to come up keeps the place you gave him
   for (const sec of CHART_SECTIONS) for (const [key] of sec.rows) {
     if (c.auto[sec.unit]) c.lists[key] = def[key] || [];
     else c.lists[key] = (c.lists[key] || []).filter(id => mine.has(id));

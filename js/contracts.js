@@ -229,6 +229,14 @@ function elevate(p, tid, playoff) {
   if (!playoff) { if (p.elevS !== state.season) { p.elevS = state.season; p.elevN = 0; } p.elevN++; }
   p.elev = { tid, wk: state.week }; setTid(p, tid);
 }
+// the squad men you have marked to come up for the next game. They join the roster at kickoff, but you set where they play before it:
+// while the depth chart is drawn they stand with the 53 (nothing else changes, and they are back on the squad afterwards)
+function pendingElev(tid) { if (isAI(tid) || !state.elev || !state.elev[tid]) return []; const po = state.phase === 'PLAYOFFS'; return state.elev[tid].map(id => P(id)).filter(p => canElevate(p, tid, po)).slice(0, ELEV_MAX); }
+function withPendingElev(tid, fn) {
+  const list = pendingElev(tid); if (!list.length) return fn();
+  for (const p of list) { p.tid = tid; p.elev = { tid, wk: state.week, preview: true }; } ROSTERS = null;
+  try { return fn(); } finally { for (const p of list) { p.tid = -3; delete p.elev; } ROSTERS = null; }
+}
 function revertElevations() { for (const id in state.players) { const p = state.players[id]; if (!p.elev) continue; const tid = p.elev.tid; delete p.elev; if (p.tid === tid) { p._rev = 1; setTid(p, -3); delete p._rev; } } }
 // a computer club elevates where injuries have left it short of what it usually dresses at a position (the third back, the fifth
 // receiver, the eighth lineman), the biggest holes first
