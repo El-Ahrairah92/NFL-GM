@@ -336,6 +336,7 @@ function sideHTML() {
     <button class="sb-team" data-action="navHead" data-h="home" style="--tc:${t.color}" title="${esc(t.region + ' ' + t.name)}"><span class="sb-mono">${esc(t.abbr)}</span><span class="sb-tn"><b>${esc(t.region)}</b><span>${esc(t.name)}</span></span></button>
     <div class="sb-meta"><div><span>${state.season}</span><b>${watchOn() ? '—' : recOf(t.id, standings())}</b></div><div title="Cap room"><span>Cap</span><b>${fmtMoney(capRoom(t.id))}</b></div></div>
     ${over ? `<button class="sb-warn" data-action="nav" data-view="roster" title="You are over the roster limit: make a move before the next game">Roster ${rosterCount(t.id)}/${rosterLimit()}: over the limit</button>` : ''}
+    ${!state.settings.autoUser && psOverBy(t.id) ? `<button class="sb-warn" data-action="nav" data-view="roster" title="Your practice squad is over its limit: promote or release someone before the next game">Practice squad ${psOf(t.id).length}/${PS_MAX}: over the limit</button>` : ''}
     ${sideYearHTML()}
     <nav class="sb-nav">${items}</nav>
   </aside>`;
@@ -3990,8 +3991,13 @@ function phaseLabel() {
 // Nothing is cut for you: this just sends you to the roster to make the move yourself.
 function rosterOver() { if (!state || state.settings.autoUser) return 0; const u = state.userTid; return Math.max(0, rosterCount(u) - rosterLimit()); }
 function rosterBlock() {
-  const n = rosterOver(); if (!n || ['CUTDOWN', 'WAIVERS'].includes(state.phase)) return false;
-  ask({ title: 'Roster over the limit', body: `You have ${rosterCount(state.userTid)} players on a ${rosterLimit()}-man roster. Release, trade or move ${n === 1 ? 'one player' : n + ' players'} to injured reserve or the practice squad before you carry on. Nobody is cut for you.`, yes: 'Go to the roster', no: 'Close' }).then(go => { if (go) { view = 'roster'; render(); } });
+  if (['CUTDOWN', 'WAIVERS'].includes(state.phase)) return false;
+  const n = rosterOver(), u = state.userTid, ps = state.settings.autoUser ? 0 : psOverBy(u), nps = psOf(u).length, vets = psOf(u).filter(psVet).length;
+  if (!n && !ps) return false;
+  const parts = [];
+  if (n) parts.push(`You have ${rosterCount(u)} players on a ${rosterLimit()}-man roster. Release, trade or move ${n === 1 ? 'one player' : n + ' players'} to injured reserve or the practice squad.`);
+  if (ps) parts.push(nps > PS_MAX ? `Your practice squad has ${nps} players; it holds ${PS_MAX}. Promote or release ${nps - PS_MAX === 1 ? 'one' : nps - PS_MAX}.` : `Your practice squad has ${vets} veterans; it can carry ${PS_VETS}. Promote or release ${vets - PS_VETS === 1 ? 'one' : vets - PS_VETS}.`);
+  ask({ title: n ? 'Roster over the limit' : 'Practice squad over the limit', body: parts.join(' ') + ' Do it before you carry on: nobody is cut for you.', yes: 'Go to the roster', no: 'Close' }).then(go => { if (go) { view = 'roster'; render(); } });
   return true;
 }
 
@@ -4176,12 +4182,13 @@ const actions = {
   tag: d => { const err = franchiseTag(+d.pid); toast(err || 'Franchise tag applied.'); closeModal(); save(); render(); },
   extend: d => { const err = extendPlayer(+d.pid, d.yrs ? +d.yrs : undefined); toast(err || 'Extension signed.'); closeModal(); save(); render(); },
   elevToggle: d => { const u = state.userTid, id = +d.pid; state.elev = state.elev || {}; const L = state.elev[u] || (state.elev[u] = []), k = L.indexOf(id); if (k >= 0) L.splice(k, 1); else { if (L.length >= ELEV_MAX) { toast(`Only ${ELEV_MAX} a game.`); return; } L.push(id); } save(); render(); },
-  promote: d => { const err = promoteFromPS(+d.pid, state.userTid); toast(err || 'Promoted to the 53.'); closeModal(); save(); render(); },
+  promote: d => { const u = state.userTid, err = promoteFromPS(+d.pid, u); toast(err || (activeCount(u) > ROSTER_MAX ? `Promoted to the 53. You are at ${activeCount(u)} of ${ROSTER_MAX}: make a move before your next game.` : 'Promoted to the 53.')); closeModal(); save(); render(); },
   toPS: async d => {
     const p = P(+d.pid), u = state.userTid, why = toPSWhyNot(p, u); if (why) { toast(why); return; }
     const dm = deadIfCut(p), inS = state.phase === 'REG' || state.phase === 'PLAYOFFS', wire = inS && (p.exp < WAIVER_EXP || state.week > TRADE_DEADLINE);
+    const full = !psRoom(u, p) ? ` <b>Your squad is full</b>: ${wire ? 'if he clears, he' : 'he'} puts it over (${psOf(u).length + 1} of ${PS_MAX}${psVet(p) && psOf(u).filter(psVet).length >= PS_VETS ? `, or past its ${PS_VETS} veterans` : ''}), and you will have to promote or release someone from it before you can play again.` : '';
     const how = wire ? `To go down he has to be released, and ${p.exp < WAIVER_EXP ? `with ${p.exp} accrued season${p.exp === 1 ? '' : 's'}` : 'after the trade deadline'} he goes on waivers until your next game: <b>any club can claim him</b>. If nobody does, he signs to your practice squad.` : 'He is released and signs straight onto your practice squad.';
-    if (!await ask({ title: `Move ${pname(p)} to the practice squad?`, body: how + ` He comes off the 53 now and is paid the squad rate (${fmtMoney(PS_SALARY)}).` + (dm.now + dm.next ? ` Dead money from his current deal: <b>${fmtMoney(dm.now)}</b> this year${dm.next ? ` and <b>${fmtMoney(dm.next)}</b> next year` : ''}.` : ''), yes: 'Move him', no: 'Keep him' })) return;
+    if (!await ask({ title: `Move ${pname(p)} to the practice squad?`, body: how + full + ` He comes off the 53 now and is paid the squad rate (${fmtMoney(PS_SALARY)}).` + (dm.now + dm.next ? ` Dead money from his current deal: <b>${fmtMoney(dm.now)}</b> this year${dm.next ? ` and <b>${fmtMoney(dm.next)}</b> next year` : ''}.` : ''), yes: 'Move him', no: 'Keep him' })) return;
     const err = sendToPS(p.id, u); toast(err || (p.waiver ? `${pname(p)} is on waivers. He joins your practice squad if he clears.` : `${pname(p)} is on your practice squad.`)); closeModal(); save(); render();
   },
   psRelease: d => { releaseFromPS(+d.pid); toast('Released from the practice squad.'); closeModal(); save(); render(); },

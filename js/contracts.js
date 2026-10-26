@@ -237,7 +237,7 @@ function withPendingElev(tid, fn) {
   for (const p of list) { p.tid = tid; p.elev = { tid, wk: state.week, preview: true }; } ROSTERS = null;
   try { return fn(); } finally { for (const p of list) { p.tid = -3; delete p.elev; } ROSTERS = null; }
 }
-function revertElevations() { for (const id in state.players) { const p = state.players[id]; if (!p.elev) continue; const tid = p.elev.tid; delete p.elev; if (p.tid === tid) { p._rev = 1; setTid(p, -3); delete p._rev; } } }
+function revertElevations() { for (const id in state.players) { const p = state.players[id]; if (!p.elev) continue; const tid = p.elev.tid; delete p.elev; if (p.tid === tid && p.psTid === tid) { p._rev = 1; setTid(p, -3); delete p._rev; } } } // only a squad man goes back down: one signed to the 53 since keeps his place
 // a computer club elevates where injuries have left it short of what it usually dresses at a position (the third back, the fifth
 // receiver, the eighth lineman), the biggest holes first
 const ELEV_DRESS = { QB: 2, RB: 3, WR: 5, TE: 3, OL: 8, DL: 8, LB: 5, CB: 5, S: 4, K: 1, P: 1 };
@@ -273,11 +273,11 @@ function psRoom(tid, p) {
   if (p && psVet(p) && ps.filter(psVet).length >= PS_VETS) return false;
   return true;
 }
-function signToPS(pid, tid) {
+function signToPS(pid, tid, over) { // over: your own move, allowed past the squad's limits until your next game
   const p = P(pid);
   if (!p || p.tid !== -1) return 'Not a free agent';
   if (p.waiver) return 'He is on waivers';
-  if (!psRoom(tid, p)) return 'Practice squad is full';
+  if (!over && !psRoom(tid, p)) return 'Practice squad is full';
   if (p.pbTid !== tid) pbArrive(p, tid);
   setTid(p, -3); p.psTid = tid; p.contract = { amt: PS_SALARY, yrs: 1, gtd: 0 }; delete p.ask;
   return null;
@@ -285,10 +285,10 @@ function signToPS(pid, tid) {
 function promoteFromPS(pid, tid, why) {
   const p = P(pid);
   if (!p || p.tid !== -3) return 'Not on a practice squad';
-  if (activeCount(tid) >= ROSTER_MAX) return 'Active roster is full';
+  if (activeCount(tid) >= ROSTER_MAX && isAI(tid)) return 'Active roster is full'; // you may go over for now and make the move before your next game
   if (capRoom(tid) < MIN_SALARY * 1.2 - PS_SALARY) return 'Not enough cap room';
   const from = p.psTid;
-  setTid(p, tid); delete p.psTid;
+  setTid(p, tid); delete p.psTid; delete p.elev;
   if (from === tid) p.promPS = { tid, s: state.season }; else delete p.promPS; // his own squad: if he is let go this season, he can come back to it
   p.contract = makeContract(p, MIN_SALARY * (from === tid ? 1 : 1.2), from === tid ? 1 : 2, 0.2);
   if (from !== tid && from === state.userTid) addNews(`${T(tid).abbr} signed ${p.lbl} ${pname(p)} off your practice squad.`, [from, tid], 'sign');
@@ -303,15 +303,16 @@ function toPSWhyNot(p, tid) {
   if (p.injury || onIR(p)) return 'He is injured: a hurt player cannot be sent to the practice squad. Wait until he is healthy, or put him on injured reserve';
   if (p.pos === 'K' || p.pos === 'P') return 'Kickers and punters do not go to the practice squad';
   if (p.age > PS_AGE || p.exp > 6) return 'He is too experienced for the practice squad';
-  if (!psRoom(tid, p)) return psOf(tid).length >= PS_MAX ? 'Your practice squad is full' : `Your practice squad already has its ${PS_VETS} veterans`;
-  return null;
+  return null; // a full squad does not stop you: you go over for now and make room before your next game
 }
 function sendToPS(pid, tid) {
   const p = P(pid), why = toPSWhyNot(p, tid); if (why) return why;
   releasePlayer(pid);
   if (p.waiver) { const iw = state.iw || (state.iw = { claims: {}, ps: [] }); if (!iw.ps.includes(pid)) iw.ps.push(pid); return null; }
-  return signToPS(pid, tid);
+  return signToPS(pid, tid, true);
 }
+// how far your squad is over its limits (more than 16, or more than its six veterans), for the block before a game
+function psOverBy(tid) { const ps = psOf(tid); return Math.max(0, ps.length - PS_MAX, ps.filter(psVet).length - PS_VETS); }
 function releaseFromPS(pid) { const p = P(pid); if (!p || p.tid !== -3) return; setTid(p, -1); delete p.psTid; p.ask = MIN_SALARY; p.contract = { amt: MIN_SALARY, yrs: 0, gtd: 0 }; }
 // What a practice squad spot is for: a prospect worth developing, or a ready body to call up when someone goes down.
 // A club's own cut has two edges over an outsider: the staff watched him all camp, and he already knows the playbook.

@@ -777,7 +777,7 @@ function inSeasonWaivers() {
     } else {
       delete p.waiver; if (mine) out.lost.push({ p, to: null });
       if (from !== u && isAI(from) && p.promPS && p.promPS.tid === from && p.promPS.s === state.season) signToPS(p.id, from); // back to the squad he came up from
-      if (from === u) { out.cleared.push(p); if (iw.ps.includes(p.id) && !signToPS(p.id, u)) { out.ps.push(p); addNews(`${pname(p)} cleared waivers and signed to your practice squad.`, [u], 'sign'); } }
+      if (from === u) { out.cleared.push(p); if (iw.ps.includes(p.id) && !signToPS(p.id, u, true)) { out.ps.push(p); addNews(`${pname(p)} cleared waivers and signed to your practice squad.`, [u], 'sign'); } }
     }
   }
   iw.claims = {}; iw.ps = [];
