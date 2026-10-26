@@ -243,7 +243,8 @@ function continueLabel() {
     case 'RECAP': return 'Start Offseason →';
     case 'COACHES': { const d = state.car ? state.car.day : 0; return d >= CAROUSEL_DAYS - 1 ? 'Close the Coaching Search →' : `Next Day of the Search (${d + 1} of ${CAROUSEL_DAYS}) →`; }
     case 'RESIGN': return 'Done Re-signing →';
-    case 'FA': { const d = state.fa && state.fa.yr === state.season ? state.fa.day : 0; return d >= FA_DAYS - 1 ? 'Close Free Agency →' : `Next Day of Free Agency (${d + 1} of ${FA_DAYS}) →`; }
+    case 'FA': { if (faTampering()) return state.fa.day >= FA_TAMPER - 1 ? 'Open the League Year →' : `Next Day of the Negotiating Window (${state.fa.day + 1} of ${FA_TAMPER}) →`;
+      const d = state.fa && state.fa.yr === state.season ? state.fa.day : 0; return d >= FA_DAYS - 1 ? 'Close Free Agency →' : `Next Day of Free Agency (${d + 1} of ${FA_DAYS}) →`; }
     case 'DRAFT': { const pk = currentPick(); return pk && pk.owner === state.userTid ? 'Auto-pick for Me' : 'Sim to My Pick'; }
     case 'UDFA': return state.udfa && state.udfa.round >= UDFA_ROUNDS - 1 ? 'Final Round: Send Offers & Open Camp →' : `Send Offers (Round ${(state.udfa ? state.udfa.round : 0) + 1} of ${UDFA_ROUNDS}) →`;
     case 'PRESEASON': return !state.pre ? '▶ Open Training Camp' : !preCamped() ? '▶ Run Training Camp (two weeks)' : `▶ Play Preseason Game ${state.pre.wk + 1}`;
@@ -261,7 +262,7 @@ function calSubHTML() {
         else h += tk(w === state.week ? 'cur' : m ? '' : 'bye', `Week ${w}: ${opp}`); }
       return `<span class="cal-n">Week ${Math.min(state.week, SEASON_WEEKS)} of ${SEASON_WEEKS}</span><span class="cal-t">${h}</span>`; }
     case 'PLAYOFFS': { const r = state.playoffs ? state.playoffs.round : 0; return `<span class="cal-n">${ROUND_NAMES[r] || ''}</span><span class="cal-t">${ROUND_NAMES.map((n, i) => tk(i < r ? 'done' : i === r ? 'cur' : '', n)).join('')}</span>`; }
-    case 'FA': { const d = state.fa ? state.fa.day : 0; let h = ''; for (let i = 0; i < FA_DAYS; i++) h += tk(i < d ? 'done' : i === d ? 'cur' : '', 'Day ' + (i + 1)); return `<span class="cal-n">Day ${Math.min(d + 1, FA_DAYS)} of ${FA_DAYS}</span><span class="cal-t">${h}</span>`; }
+    case 'FA': { const d = state.fa ? state.fa.day : 0, tw = !!(state.fa && state.fa.tw); let h = ''; for (let i = 0; i < FA_DAYS; i++) h += tk(i < d ? 'done' : i === d ? 'cur' : '', tw && i < FA_TAMPER ? `Negotiating window, day ${i + 1}` : 'Day ' + (i + 1)); return `<span class="cal-n">${faTampering() ? `Negotiating window, day ${d + 1} of ${FA_TAMPER}` : `Day ${Math.min(d + 1, FA_DAYS)} of ${FA_DAYS}`}</span><span class="cal-t">${h}</span>`; }
     case 'DRAFT': { const pk = currentPick(), r = pk ? pk.round : DRAFT_ROUNDS; let h = ''; for (let i = 1; i <= DRAFT_ROUNDS; i++) h += tk(i < r ? 'done' : i === r ? 'cur' : '', 'Round ' + i); return `<span class="cal-n">${pk ? `Round ${pk.round}, pick ${pk.pick}` : 'Done'}</span><span class="cal-t">${h}</span>`; }
     case 'UDFA': { const r = state.udfa ? state.udfa.round : 0; let h = ''; for (let i = 0; i < UDFA_ROUNDS; i++) h += tk(i < r ? 'done' : i === r ? 'cur' : '', 'Round ' + (i + 1)); return `<span class="cal-n">Round ${r + 1} of ${UDFA_ROUNDS}</span><span class="cal-t">${h}</span>`; }
     case 'PRESEASON': { const st = preSteps().filter(x => x.k !== 'cut'), c = st.find(x => x.cur); return `<span class="cal-n">${c ? c.l : 'Camp'}</span><span class="cal-t">${st.map(x => tk(x.done ? 'done' : x.cur ? 'cur' : '', x.l)).join('')}</span>`; }
@@ -395,7 +396,7 @@ function phaseCallout() {
     case 'RECAP': return 'The season is over. Review the awards below, then start the offseason: players age and progress, contracts expire and a draft class is revealed.';
     case 'COACHES': { const d = state.car ? state.car.day : 0, open = ALL_ROLES.filter(r => !staffCoach(T(u), r)).length; return `Coaching search, day ${d + 1} of ${CAROUSEL_DAYS}. Other clubs hire <b>${DAY_NAME[Math.min(d, 3)].toLowerCase()}</b> when you advance. Interview, negotiate and hire on the <b>Staff</b> tab. You have <b>${open}</b> open job${open === 1 ? '' : 's'} and ${fmtMoney(staffRoom(u))} of staff budget left. Jobs still open when the search closes are filled by the coaches above them.`; }
     case 'RESIGN': { const n = rosterOf(u).filter(p => p.expiring).length; return `You have <b>${n}</b> expiring contract${n === 1 ? '' : 's'}. Re-sign players on the <b>Roster</b> tab. Anyone you don't re-sign becomes a free agent.`; }
-    case 'FA': return `Free agency, day ${(state.fa ? state.fa.day : 0) + 1} of ${FA_DAYS}. Every club is bidding and nobody sees the other offers. Sit down with a player's agent on the <b>Free Agents</b> tab; players decide overnight, and prices soften as the days pass.`;
+    case 'FA': return faTampering() ? `The negotiating window, day ${state.fa.day + 1} of ${FA_TAMPER}. Clubs can talk to every free agent and agree terms, but a deal with a new club is only an agreement until the league year opens. Your own free agents can still re-sign with you, and if one agrees terms elsewhere you can beat it until then. Sit down with a player's agent on the <b>Free Agents</b> tab.` : `Free agency, day ${(state.fa ? state.fa.day : 0) + 1} of ${FA_DAYS}. Every club is bidding and nobody sees the other offers. Sit down with a player's agent on the <b>Free Agents</b> tab; players decide overnight, and prices soften as the days pass.`;
     case 'DRAFT': { const pk = currentPick(); return pk ? `Pick ${pk.pick} (Rd ${pk.round}): <b>${T(pk.owner).abbr}</b> on the clock. ${pk.owner === u ? 'That\'s you! Choose on the <b>Draft</b> tab.' : ''}` : ''; }
     case 'UDFA': { const n = rosterOf(u).length, o = state.udfa ? Object.keys(state.udfa.offers).length : 0; return `Rookie free agency, round ${(state.udfa ? state.udfa.round : 0) + 1} of ${UDFA_ROUNDS}. Every team is bidding for the best undrafted players. Make your offers on the <b>Free Agents</b> tab, then send them. You have <b>${n}</b> of ${OFFSEASON_MAX} camp spots filled and <b>${o}</b> offer${o === 1 ? '' : 's'} out. Nobody is signed for you.`; }
     case 'PRESEASON': return !state.pre ? 'Rookie free agency is over. <b>Meet with your staff</b> on the Staff page: every coach has his view of the roster, the open jobs and what he wants to see. When you are ready, open training camp.' : `Camp and ${PRESEASON_GAMES} exhibition games. Each coach files a <b>camp report</b> on the Staff page after every practice block. Set how long each group plays on the Roster page: a starter who does not play in August opens the season a step slow.`;
@@ -2083,6 +2084,7 @@ function faMarketOn() { return state.phase === 'FA' && state.fa && !state.fa.ove
 function faStatus(p) {
   const u = state.userTid;
   if (!faInMarket(p)) return ['Signs now', 'muted'];
+  const ag = faAgreedWith(p); if (ag) return ag.tid === u ? ['Agreed with you', 'good'] : [`Agreed with ${T(ag.tid).abbr}${p.lastTid === u ? ': you can still beat it' : ''}`, p.lastTid === u ? 'warn' : 'bad'];
   const mine = faOffers(p).find(o => o.tid === u), t = state.fa.talks[p.id];
   if (mine) return [mine.night ? 'Answer tomorrow' : mine.dl ? 'Deadline tonight' : mine.fo ? 'Front office bidding' : 'Your offer is out', 'good'];
   if (state.fa.orders[p.id]) return ['Front office bidding', 'good'];
@@ -2219,6 +2221,9 @@ function faSitHTML(p) {
     ${hist.length ? `<div class="small muted">Your dealings: ${hist.map(x => `${esc(x.n)} ${x.s} — ${x.r === 'signed' ? `signed, ${fmtMoney(x.aav)}/yr${x.ask ? ` (opened at ${fmtMoney(x.ask)})` : ''}` : x.r === 'lost' ? 'went elsewhere' : x.r === 'pulled' ? 'you pulled your offer' : 'you walked away'}`).join(' · ')}</div>` : ''}</div>`;
   if (mine) h += `<div class="callout" style="margin:8px 0">Your offer: <b>${mine.yrs} yr, ${fmtMoney(mine.sal !== undefined ? mine.sal * mine.yrs + mine.gtd : mine.aav * mine.yrs)}</b>, ${fmtMoney(mine.gtd)} to sign · ${mine.night ? 'the agent took it to him: answer tomorrow' : mine.dl ? 'expires tonight' : 'on the table, binding'} <button class="sm" data-action="faPullA" data-pid="${p.id}">Withdraw</button></div>`;
   if (t && t.log.length) h += `<div class="fa-log" style="max-height:120px">${t.log.slice(-2).map(l => `<div class="fa-line ${l.w}"><span>${esc(l.t)}</span></div>`).join('')}</div>`;
+  { const ag = faAgreedWith(p); if (ag && ag.tid !== u) { // agreed elsewhere in the negotiating window: only his old club can still talk to him
+    if (p.lastTid !== u) return h + `<div class="callout" style="margin-top:10px">He has agreed to terms with <b>${esc(T(ag.tid).abbr)}</b>: ${ag.yrs} yr, ${fmtMoney(ag.aav * ag.yrs)}. It becomes official when the league year opens.</div>`;
+    h += `<div class="callout" style="margin-top:10px">He has agreed to terms with <b>${esc(T(ag.tid).abbr)}</b>: ${ag.yrs} yr, ${fmtMoney(ag.aav * ag.yrs)}. You are his old club: beat it before the league year opens and he stays.</div>`; } }
   h += `<div style="margin-top:10px"><button class="primary" data-action="faOpen" data-pid="${p.id}" ${t && t.closed === 'done' ? 'disabled' : ''}>${t ? (t.closed === 'done' ? 'Talks are over' : t.closed ? 'Back to the table (he is done for today)' : 'Back to the table') : 'Negotiate with ' + esc(a.last)}</button></div>`;
   return h + faOrderHTML(p, ord, i);
 }
@@ -2321,7 +2326,8 @@ function faMarketHTML() {
   let sel = ui.faSel !== undefined ? P(ui.faSel) : null; if (!sel || sel.tid !== -1 || sel.waiver) sel = fas[0] || null;
   const live = on ? Object.keys(state.fa.off).map(id => P(+id)).filter(p => p && faOffers(p).some(o => o.tid === u)) : [];
   let html = `<div class="fa-strip card"><div class="row" style="gap:18px">
-    ${on ? `<div><div class="big">Day ${state.fa.day + 1} <span class="muted small">of ${FA_DAYS}</span></div><div class="small muted">Clubs bid, players decide overnight</div></div>` : `<div><div class="big">Free agents</div><div class="small muted">${state.phase === 'REG' ? 'In-season signings are one-year deals' : 'Available now'}</div></div>`}
+    ${on && faTampering() ? `<div title="Clubs can talk to every free agent and agree terms, but a deal with a new club is only an agreement until the league year opens. Your own free agents can still re-sign with you, and you can beat a deal one of them agreed elsewhere until then."><div class="big">Negotiating window <span class="muted small">day ${state.fa.day + 1} of ${FA_TAMPER}</span></div><div class="small muted">Deals are agreements until the league year opens</div></div>`
+      : on ? `<div><div class="big">Day ${state.fa.day + 1} <span class="muted small">of ${FA_DAYS}</span></div><div class="small muted">Clubs bid, players decide overnight</div></div>` : `<div><div class="big">Free agents</div><div class="small muted">${state.phase === 'REG' ? 'In-season signings are one-year deals' : 'Available now'}</div></div>`}
     <div><div class="big">${fmtMoney(capRoom(u))}</div><div class="small muted">Cap room</div></div>
     ${on ? `<div><div class="big ${com.amt > capRoom(u) ? 'bad' : ''}">${fmtMoney(com.amt)}</div><div class="small muted">In ${com.n} live offer${com.n === 1 ? '' : 's'}</div></div>` : ''}
     <div><div class="big">${rosterCount(u)}<span class="muted small">/${rosterLimit()}</span></div><div class="small muted">Roster</div></div>
@@ -4037,7 +4043,7 @@ const actions = {
     if (rosterBlock()) return;
     if (state.phase === 'RESIGN' && !state.settings.autoUser) {
       const n = rosterOf(state.userTid).filter(p => p.expiring).length;
-      if (n && !await ask(`${n} expiring player(s) will leave in free agency. Continue?`)) return;
+      if (n && !await ask(`${n} expiring player(s) go to the market. You can still re-sign them during the two-day negotiating window, and beat any deal one of them agrees elsewhere before the league year opens. Continue?`)) return;
     }
     if (state.phase === 'UDFA' && !state.settings.autoUser && state.udfa.round >= UDFA_ROUNDS - 1) {
       const n = rosterOf(state.userTid).length + Object.keys(state.udfa.offers).length;

@@ -14,6 +14,13 @@
 //  state.agentHist = { agentId: [{ s, n, r ('signed'|'lost'|'walked'|'pulled'), aav, ask }] }   the user's own dealings with him
 // =====================================================================
 const FA_DAYS = 8, AGENT_N = 46, FA_MARKET_MIN = 1.6; // a player expected to earn under 1.6x the minimum signs without a negotiation
+// The negotiating window ("legal tampering"): the market's first two days come before the league year opens. Clubs talk to every free
+// agent and can agree terms, but a deal with a new club is only an agreement until the league year opens. His own club can still re-sign
+// him, and when the window closes it gets a last chance to beat what he agreed. Agreements that still fit the cap and the roster then
+// become contracts, and the market carries on.
+const FA_TAMPER = 2;
+function faTampering() { const fa = state.fa; return !!(fa && fa.tw && !fa.over && !fa.cut && fa.day < FA_TAMPER); }
+function faAgreedWith(p) { const fa = state.fa; return fa && fa.agree ? fa.agree[p.id] || null : null; }
 
 function faHash(a, b) { const x = Math.sin(a * 127.1 + b * 311.7 + 13.37) * 43758.5453; return x - Math.floor(x); }
 
@@ -261,7 +268,7 @@ function faContract(o) {
 
 
 // ---------- the market ----------
-function faPool() { return Object.values(state.players).filter(p => p.tid === -1 && !p.waiver && state.fa.in[p.id]); }
+function faPool() { return Object.values(state.players).filter(p => p.tid === -1 && !p.waiver && state.fa.in[p.id] && !(state.fa.agree && state.fa.agree[p.id])); } // a man who has agreed terms is off the board
 function faOffers(p) { return (state.fa && state.fa.off && state.fa.off[p.id]) || []; }
 function faBest(p, notTid) { let b = null, bv = -1; for (const o of faOffers(p)) { if (o.tid === notTid) continue; const v = faOfferValue(p, o); if (v > bv) { bv = v; b = o; } } return b ? { o: b, v: bv } : null; }
 function faCommitted(tid) { let s = 0, n = 0; for (const pid in state.fa.off) for (const o of state.fa.off[pid]) if (o.tid === tid) { s += faHit(o); n++; } return { amt: round2(s), n }; }
@@ -278,7 +285,7 @@ function faClubAAV(tid, p) {
 }
 function faOpen() {
   ensureAgents();
-  const fa = state.fa = { yr: state.season, day: 0, in: {}, off: {}, talks: {}, heat: {}, win: {}, inbox: [], orders: {}, over: false };
+  const fa = state.fa = { yr: state.season, day: 0, tw: true, agree: {}, in: {}, off: {}, talks: {}, heat: {}, win: {}, inbox: [], orders: {}, over: false };
   let ok = false;
   try { const st = standings(); for (const t of state.teams) { const r = st[t.id], g = r ? r.w + r.l + (r.t || 0) : 0; if (g >= 8) { fa.win[t.id] = r.w / g; ok = true; } } } catch (e) { ok = false; }
   if (!ok) { // no finished season to go by: the best rosters are the contenders
@@ -321,7 +328,7 @@ function faClubDay(tid, maxNew) {
     let aav = mine ? mine.aav : Math.min(cv, Math.max(faFloor(p, day), faExp(p) * (0.9 + faHash(p.id, tid + 9) * 0.08)));
     let v = faOfferValue(p, mk(aav));
     if (best && best.v >= v) { aav = round2(aav * best.v * 1.03 / Math.max(0.01, v)); v = faOfferValue(p, mk(aav)); } // the agent says someone is higher
-    if (aav > cv) continue; // past what he is worth to this club
+    if (aav > cv || aav < MIN_SALARY) continue; // past what he is worth to this club (a club with no room for him at all is worth nothing to him)
     if (mine && Math.abs(aav - mine.aav) < 0.01) continue;
     const yy = Math.min(yrs, 2), money = moneyCost(tid, overMin(aav, yy)) / yy * 0.5; // a year of his money at this club's price
     cand.push({ p, o: mk(aav), raise: !!mine, old: mine ? faHit(mine) : 0, score: faGain(tid, p) * clamp(1 + planNeedFor(tid, p) * 0.15, 0.7, 1.3) - money + (cv - aav) * 0.4 });
@@ -357,13 +364,47 @@ function faSign(p, o) {
   const others = faOffers(p).filter(x => x.tid !== o.tid).map(x => x.tid);
   setTid(p, o.tid); p.contract = faContract(o); delete p.ask; p.expiring = false; if (p.pos === 'QB' && o.tier) qbBought(o.tid, o.tier);
   if (p.contract.inc) { for (const x of p.contract.inc) x.likely = incLikely(p, x); p.contract.incL = incLikelySum(p, p.contract.inc); p.contract.amt = round2(p.contract.sched[0] + p.contract.incL); }
-  delete fa.off[p.id]; delete fa.in[p.id]; delete fa.orders[p.id];
+  delete fa.off[p.id]; delete fa.in[p.id]; delete fa.orders[p.id]; if (fa.agree) delete fa.agree[p.id];
   if (o.aav > exp * 1.04) fa.heat[p.pos] = round2(Math.min(1.12, (fa.heat[p.pos] || 1) * (1 + Math.min(0.04, (o.aav / exp - 1) * 0.3)))); // a big deal resets the market at his position
   const u = state.userTid, mineWon = o.tid === u, iLost = others.includes(u) && !mineWon;
   if (perOvr(p) >= 72 || mineWon || iLost) addNews(`${T(o.tid).abbr} signed ${p.lbl} ${pname(p)} (${tierOf(p)}) — ${o.yrs} yr, ${fmtMoney(o.aav * o.yrs)}, ${fmtMoney(p.contract.gtd)} signing bonus${o.inc && o.inc.length ? ', plus incentives' : ''}.`, [o.tid], 'sign');
   if (!isAI(u)) { if (mineWon) { agentNote(a, p, 'signed', o.aav, faAsk(p)); fa.inbox.push(`${pname(p)} signed with you: ${o.yrs} yr, ${fmtMoney(o.aav)}/yr.`); }
     else if (iLost || fa.talks[p.id]) { agentNote(a, p, 'lost', o.aav, 0); fa.inbox.push(`${pname(p)} signed with ${T(o.tid).abbr}${a.d[1] > 0.5 ? ` for ${fmtMoney(o.aav)}/yr over ${o.yrs}` : ''}.`); } }
   delete fa.talks[p.id];
+}
+// a deal is done: a contract, or in the negotiating window with a new club, terms agreed until the league year opens
+function faDeal(p, o) {
+  if (!faTampering() || o.tid === p.lastTid) { faSign(p, o); return; } // his own club can re-sign him at any time
+  const fa = state.fa, u = state.userTid, others = faOffers(p).filter(x => x.tid !== o.tid).map(x => x.tid);
+  fa.agree[p.id] = o; fa.off[p.id] = [o]; delete fa.orders[p.id]; delete o.night; delete o.dl; // the other offers are off the table
+  if (perOvr(p) >= 72 || o.tid === u || p.lastTid === u || others.includes(u)) addNews(`${p.lbl} ${pname(p)} (${tierOf(p)}) agreed to terms with ${T(o.tid).abbr}: ${o.yrs} yr, ${fmtMoney(o.aav * o.yrs)}. It is official when the league year opens.`, [o.tid].concat(p.lastTid >= 0 ? [p.lastTid] : []), 'sign');
+  if (!isAI(u)) {
+    if (o.tid === u) fa.inbox.push(`${pname(p)} agreed to terms with you: ${o.yrs} yr, ${fmtMoney(o.aav)}/yr. Official when the league year opens.`);
+    else if (p.lastTid === u) fa.inbox.push(`${pname(p)} agreed to terms with ${T(o.tid).abbr}${agentOf(p).d[1] > 0.4 ? ` at ${fmtMoney(o.aav)}/yr over ${o.yrs}` : ''}. Until the league year opens you can still beat it.`);
+    else if (others.includes(u) || fa.talks[p.id]) fa.inbox.push(`${pname(p)} agreed to terms with ${T(o.tid).abbr}.`);
+  }
+  if (o.tid !== u && p.lastTid !== u) delete fa.talks[p.id];
+}
+// the window closes: his old club's last chance to beat the deal he agreed, then every agreement that still fits becomes a contract
+function faLeagueYearOpens() {
+  const fa = state.fa, u = state.userTid; if (!fa || !fa.agree) return;
+  for (const pid of Object.keys(fa.agree)) {
+    const p = P(+pid), ag = fa.agree[pid]; if (!p || p.tid !== -1) { delete fa.agree[pid]; continue; }
+    const home = p.lastTid, need = faOfferValue(p, ag) * 1.01;
+    if (home >= 0 && home !== ag.tid) {
+      const mine = home === u && !isAI(u) ? faOffers(p).find(o => o.tid === u) : null;
+      if (mine && faOfferValue(p, mine) >= need && faCanFit(u, mine)) { faSign(p, mine); continue; } // you beat it in time
+      if (isAI(home)) { // what keeping him is worth to his old club, against the price of beating the deal
+        const role = offerRole(home, p), base = { tid: home, yrs: ag.yrs, gtd: ag.gtd, load: 'even', role }, v1 = faOfferValue(p, Object.assign({}, base, { aav: ag.aav }));
+        const aav = round2(ag.aav * need / Math.max(0.01, v1)), keep = Object.assign(base, { aav }), S = stanceCfg(home);
+        if (clubRead(home, p).g >= 1 && aav <= clubMaxAAV(home, p, faClubAAV(home, p), { own: true, yrs: ag.yrs }) && faHit(keep) <= capRoom(home) - S.reserve && rosterCount(home) < rosterLimit()) {
+          faSign(p, keep); addNews(`${T(home).abbr} kept ${p.lbl} ${pname(p)}, beating the deal he had agreed with ${T(ag.tid).abbr}.`, [home, ag.tid], 'sign'); continue; }
+      }
+    }
+    if (faCanFit(ag.tid, ag)) faSign(p, ag);
+    else { delete fa.agree[pid]; faPull(p, ag.tid); addNews(`${p.lbl} ${pname(p)}'s agreement with ${T(ag.tid).abbr} fell through: it no longer fit under their cap. He is back on the market.`, [ag.tid], 'fa'); if (ag.tid === u) fa.inbox.push(`${pname(p)}'s agreement with you fell through: it no longer fit under your cap or roster.`); }
+  }
+  fa.agree = {};
 }
 function faCanFit(tid, o) { return rosterCount(tid) < rosterLimit() && faHit(o) <= capRoom(tid); }
 // the end of a day: players with an offer they like sign it
@@ -377,7 +418,7 @@ function faResolveDay() {
       if (!faCanFit(o.tid, o)) { faPull(p, o.tid); continue; }
       const agreed = o.night && o === list[0].o; // the agent already said yes to this one; only a better offer overnight stops it
       const bar = last ? faFloor(p, day) * 0.97 : faDemand(p, day), early = lev >= 0.8 && day < 1 && list.length < 2 && v < faAsk(p);
-      if (agreed || (o.dl && o === list[0].o && v >= faFloor(p, day)) || (v >= bar && !early)) { faSign(p, o); signed = true; }
+      if (agreed || (o.dl && o === list[0].o && v >= faFloor(p, day)) || (v >= bar && !early)) { faDeal(p, o); signed = true; }
       break; // only the best offer is ever taken
     }
     if (signed) continue;
@@ -404,6 +445,7 @@ function faAdvanceDay() {
   for (const pid in fa.talks) { const t = fa.talks[pid]; if (t.closed === 'day') t.closed = null; t.pat = t.pat0; t.stood = false; }
   for (const p of faPool()) p.ask = faExp(p);
   fa.day++;
+  if (fa.tw && fa.day === FA_TAMPER) faLeagueYearOpens(); // the window closes
   if (fa.day >= FA_DAYS) faEndMarket();
 }
 // what the grapevine says: how many clubs are thought to be in on him
@@ -452,7 +494,7 @@ function faTire(p, t, n) {
   t.pat -= n === undefined ? 1 : n;
   if (t.pat <= 0 && !t.closed) { t.closed = 'day'; t.log.push({ w: 'a', t: faSay(agentOf(p), 'bye') }); }
 }
-function faOpenCheck(p, t) { return !t ? 'He is not on the market' : t.closed === 'done' ? 'His agent will not take your calls about him' : t.closed === 'day' ? 'His agent is done for today' : null; }
+function faOpenCheck(p, t) { const ag = faAgreedWith(p); if (ag && ag.tid !== state.userTid && p.lastTid !== state.userTid) return `He has agreed to terms with ${T(ag.tid).abbr}`; return !t ? 'He is not on the market' : t.closed === 'done' ? 'His agent will not take your calls about him' : t.closed === 'day' ? 'His agent is done for today' : null; }
 function faGtdNeed(p, t, yrs) {
   const a = agentOf(p);
   return round2(faGtdWant(p, yrs) * (0.72 + a.d[3] * 0.3 + (t.newPos ? 0.12 : 0)) * faExp(p) * yrs);
@@ -514,7 +556,8 @@ function faAgree(p, t, o, viaPlayer) {
   const wait = !viaPlayer && ((lev >= 0.8 && fa.day < 1 && faOfferValue(p, o) < faAsk(p)) || (rivals > 0 && a.d[2] > 0.62));
   if (wait) { o.night = true; faPlace(p, o); t.closed = 'day'; t.log.push({ w: 'a', t: 'I can sell that. Let me take it to him tonight. You will hear from me tomorrow.' }); return; }
   t.log.push({ w: 'a', t: viaPlayer ? 'He called me himself. He wants to be there. Get the paper ready.' : faSay(a, 'yes') });
-  faSign(p, o);
+  if (faTampering() && o.tid !== p.lastTid) t.log.push({ w: 'a', t: 'It becomes official the moment the league year opens.' });
+  faDeal(p, o);
 }
 // step 2: the salary, how it is spread, and any incentives on top
 function faSaySalary(pid, sal, load, inc) {
