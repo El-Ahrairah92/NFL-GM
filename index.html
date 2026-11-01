@@ -22,6 +22,8 @@
   <input type="file" id="importFile" accept=".json,application/json" hidden>
   <div id="errbar" class="hidden"></div>
   <script>
+    // iPhone: small dropdowns and boxes without Safari zooming the page on every tap (pinch zoom still works there)
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) document.querySelector('meta[name=viewport]').content += ', maximum-scale=1';
     // offline: keep the last copy that loaded (only when served over http; a local file needs none of this)
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   </script>

@@ -138,6 +138,9 @@ tbody tr:hover td { background: var(--hover); }
 .check-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
 .check-row:hover { background: var(--hover); }
 .check-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.check-row .ck-pos { width: 64px; flex: none; } .check-row .ck-c { width: 90px; flex: none; text-align: right; }
+.ck-list { container-type: inline-size; }
+@container (max-width: 460px) { .check-row .ck-tier { display: none; } .check-row .ck-pos { width: 40px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .check-row .ck-c { width: 76px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } } /* a narrow list keeps room for the name */
 .scroll { max-height: 520px; overflow-y: auto; }
 @media (max-width: 700px) { .g2 { grid-template-columns: 1fr; } main { padding: 12px; } .bracket { grid-template-columns: 1fr 1fr; } }
 .pill.pt-elite, .v.pt-elite { color: var(--elite); border-color: var(--elite-b); }
@@ -1324,6 +1327,7 @@ button.ghost { background: none; border: none; box-shadow: none; padding: 0 4px;
 /* ---- the free agent list: any view, any column sorted, filters a click down ---- */
 .fa-row, .fa-row.lv-scout, .fa-row.lv-stats, .fa-row.lv-phys { grid-template-columns: 44px minmax(118px, 1fr) 30px var(--fa-cols, 70px 74px 96px); }
 .fa-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.fa-sx { display: contents; } /* a phone scrolls the heading and the list sideways together */
 .fa-filters { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 10px; margin-bottom: 8px; background: var(--panel2); border: 1px solid var(--line2); border-radius: 6px; }
 .fa-filters select.set { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); } .fa-chk { display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; } .fa-chk.set { font-weight: 700; }
 .fa-h { cursor: pointer; white-space: nowrap; user-select: none; } .fa-h:hover { color: var(--text); } .fa-h.on { color: var(--text); } .fa-h i { font-style: normal; font-size: 8px; margin-left: 3px; vertical-align: 1px; }
@@ -1530,3 +1534,170 @@ svg.sb-ic { width: 16px; height: 16px; }
 @media (max-width: 1000px) { #app.shell { grid-template-columns: 52px minmax(0, 1fr); } .sb-head { padding: 10px 0; } }
 @media (max-width: 760px) { #app.shell { display: block; } }
 .dcc-ps { font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: .5px; color: var(--accent); margin-left: 4px; } /* a squad man coming up for this game */
+
+/* ============================================================
+   Phones, third pass: economy of space. Smaller type, one-line rows, a picker that won't fit becomes a dropdown,
+   and a row's buttons wait in a menu that opens when you tap the row.
+   ============================================================ */
+.mk-sheet { display: none; }
+@media (max-width: 760px) {
+  html, body { font-size: 13px; line-height: 1.35; }
+  .small, .muted.small { font-size: 11.5px; }
+  main { padding: calc(6px + env(safe-area-inset-top)) 6px calc(94px + env(safe-area-inset-bottom)); }
+  .grid, .g2, .g3, .card-cols, .fv-grid, .dc-wrap { gap: 6px; }
+  .card { padding: 8px 9px; }
+  .card h3 { font-size: 11px; margin-bottom: 6px; }
+  .section-title { margin: 10px 0 5px; font-size: 10.5px; }
+  .pagehead { margin-bottom: 6px; gap: 4px 8px; align-items: center; }
+  .pagehead h1 { font-size: 14px; letter-spacing: .5px; }
+  .pagehead .sub { font-size: 11.5px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; cursor: pointer; }
+  .pagehead .sub.open { display: block; }
+  main p.small.muted:not(.open) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; cursor: pointer; } /* the page's notes: two lines, a tap for the rest */
+  .mclamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; cursor: pointer; } .mclamp.open { display: block; }
+  .mclip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; } .mclip.open { white-space: normal; }
+  /* a page's controls on one line: the roster's team, view and position */
+  .ros-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 6px; }
+  .ros-top > .row { display: contents; } .ros-top > .row > label, .ros-top > .row > .spacer { display: none; }
+  .ros-top > .row > select { flex: 1 1 34%; min-width: 0; } .ros-top > .subtabs { flex: 1 1 22%; margin: 0; } .ros-top > .subtabs .mk-sel { width: 100%; }
+  .ros-top > .row > button { flex: 1 1 100%; }
+  .ros-top > .mclip, .ros-top > .small { flex-basis: 100%; margin: 2px 0 0 !important; order: 5; } .ros-top > .row > select:first-child { flex-basis: 40%; } .ros-top > .subtabs { flex-basis: 20%; }
+  .callout { font-size: 12px; padding: 6px 8px; margin-bottom: 8px; }
+  /* controls */
+  button { min-height: 30px; padding: 4px 10px; font-size: 13px; }
+  button.sm { min-height: 26px; padding: 2px 8px; font-size: 12px; }
+  select, input, textarea { font-size: 13px; min-height: 30px; padding: 3px 6px; }
+  input[type="checkbox"] { width: 17px; height: 17px; }
+  .row { gap: 6px; }
+  .subtabs { gap: 3px; margin-bottom: 6px; }
+  .subtabs button { padding: 3px 9px; min-height: 28px; font-size: 12px; }
+  .pill { font-size: 10.5px; padding: 0 5px; }
+  .stars { font-size: 11.5px; letter-spacing: 0; }
+  .stat-tiles { gap: 5px; }
+  .tile { padding: 5px 7px; } .tile .v { font-size: 15px; } .tile .l { font-size: 10px; }
+  .big { font-size: 20px; }
+  /* tables: tight rows, a name on one line */
+  table { font-size: 12px; }
+  th, td { padding: 4px 5px; }
+  th { font-size: 9.5px; padding: 5px 5px; letter-spacing: .4px; }
+  tr.sep td { font-size: 10px; padding: 3px 5px; }
+  td .link[data-action="player"], td .link[data-action="coach"], td .link[data-action="team"] { white-space: nowrap; }
+  table.pn td:first-child, table.pn th:first-child { width: 44px; min-width: 44px; max-width: 44px; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  table.pn td:nth-child(2), table.pn th:nth-child(2) { left: 44px; white-space: nowrap; max-width: 158px; overflow: hidden; text-overflow: ellipsis; }
+  .wrapcell { display: inline-block; min-width: 0; max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; font-size: 11px; }
+  .mbar { gap: 6px; margin-bottom: 6px; }
+  /* a picker that became a dropdown */
+  .mk-hid { display: none !important; }
+  .mk-sel { flex: 1 1 auto; min-width: 0; max-width: 100%; font-weight: 600; }
+  /* a row's buttons wait in the tap menu */
+  .mk-row { cursor: pointer; }
+  .mk-row .mk-act { display: none !important; }
+  td.mk-dots { width: 16px; padding-left: 0; padding-right: 4px; text-align: right; }
+  td.mk-dots[data-mk-cur]::after { content: attr(data-mk-cur) ' ⋯'; font-weight: 600; color: var(--text); }
+  td.mk-dots::after, .dec-r.mk-row::after, .fut-row.mk-row::after { content: '⋯'; color: var(--muted); font-weight: 700; margin-left: 4px; }
+  .dec-r { margin: 0 !important; padding: 4px 0; border-bottom: 1px solid var(--line2); }
+  .mk-sheet { display: flex; position: fixed; inset: 0; z-index: 95; background: rgba(8, 12, 20, .5); align-items: flex-end; }
+  .mk-sheet.hidden { display: none; }
+  .mk-card { width: 100%; max-height: 75vh; overflow-y: auto; background: var(--panel); border-top: 2px solid var(--brass); border-radius: 12px 12px 0 0; padding: 4px 0 calc(4px + env(safe-area-inset-bottom)); }
+  .mk-h { font-size: 12px; font-weight: 700; color: var(--muted); text-align: center; padding: 6px 12px 8px; border-bottom: 1px solid var(--line2); }
+  .mk-card button { display: block; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--line2); border-radius: 0; box-shadow: none; padding: 11px 16px; font-size: 14px; min-height: 0; }
+  .mk-card button.on { font-weight: 700; } .mk-card button.on::after { content: ' ✓'; color: var(--accent); }
+  .mk-card button.danger { color: var(--bad); }
+  .mk-card .mk-x { color: var(--muted); text-align: center; border-bottom: none; }
+  /* snap counts: one screen */
+  .mdc .callout { margin-bottom: 6px; }
+  .mdc-bar { display: flex; gap: 4px; align-items: center; margin-bottom: 4px; } .mdc-bar select { flex: 1 1 0; min-width: 0; font-weight: 600; } .mdc-bar button { flex: none; }
+  .mdc-note { margin: 0 2px 6px; } .mdc-note .link { color: var(--accent); }
+  .mfold { margin-bottom: 6px; padding: 6px 8px; } .mfold > summary { cursor: pointer; font-size: 12px; font-weight: 600; }
+  .mfold[open] > summary { margin-bottom: 6px; }
+  .mdc-sels { display: flex; gap: 4px; margin-bottom: 6px; } .mdc-sels select { flex: 1 1 0; min-width: 0; }
+  .mfold .dc2-lk { margin: 0 0 6px; gap: 6px; } .mfold .dc2-lk select { flex: 1; min-width: 0; }
+  .mfold .chm-strip { margin-bottom: 6px; }
+  .mdc-card { padding: 6px 8px; margin-bottom: 6px; }
+  .mdc-h { display: flex; align-items: center; gap: 6px; padding: 2px 0 4px; border-bottom: 1px solid var(--line); }
+  .mdc-h b { font-size: 13px; }
+  .mrow { display: flex; align-items: center; gap: 5px; min-height: 31px; padding: 2px 2px; border-bottom: 1px solid var(--line2); font-size: 12.5px; background: var(--panel); }
+  .mrow:last-child { border-bottom: none; }
+  .mrow .pill { flex: none; }
+  .mnm { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 3px; }
+  .mnm .link { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .mh { flex: none; width: 22px; align-self: stretch; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 15px; touch-action: none; cursor: grab; }
+  .mn { flex: none; width: 14px; text-align: right; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .mjr.st .mn { color: var(--text); font-weight: 700; }
+  .mjr.sat .mnm .link { color: var(--muted); text-decoration: line-through; }
+  .mrow.mdrag { position: relative; z-index: 5; box-shadow: 0 4px 14px rgba(10, 14, 24, .25); opacity: .95; }
+  .mdiv { font-size: 9.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); padding: 4px 2px 2px; border-bottom: 1px dashed var(--line); }
+  .mpos { flex: none; color: var(--muted); font-size: 11px; }
+  .mat { flex: none; font-size: 10.5px; color: var(--muted); max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mon { flex: none; width: 26px; text-align: center; color: var(--good); font-weight: 700; }
+  .mbr button.sm { flex: none; min-width: 26px; padding: 0 6px; }
+  .mbr.in .mnm .link { color: var(--muted); }
+  .mdc-empty { padding: 8px 2px; }
+  .mdc .dcj-more { margin-top: 4px; } .mdc .dcc-dur { flex: none; max-width: 92px; min-height: 26px; font-size: 11px; padding: 1px 4px; }
+  /* the staff tree: small cards, the same tree */
+  button.oc, div.oc { padding: 6px 34px 6px 7px; gap: 7px; } button.oc.hc, div.oc.hc { padding: 7px 38px 7px 8px; gap: 8px; } button.oc.sp, div.oc.sp { padding: 5px 30px 5px 6px; }
+  .ss-c { padding: 8px 9px; }
+  .mono { width: 28px; height: 28px; font-size: 10.5px; border-radius: 5px; } .mono.lg { width: 40px; height: 40px; font-size: 14px; }
+  .oc.hc .mono { width: 34px; height: 34px; font-size: 12px; } .oc.hc .oc-name { font-size: 14px; } .oc.sp .mono { width: 26px; height: 26px; font-size: 10px; }
+  .oc-name, .oc.sp .oc-name { font-size: 12.5px; } .oc-role { font-size: 10.5px; }
+  .oc-sub { margin-top: 2px; gap: 4px; font-size: 10.5px; } .oc-line { font-size: 10.5px; margin-top: 1px; } .oc-flag { margin-top: 2px; font-size: 9px; }
+  .oc-code, .oc.hc .oc-code { top: 6px; right: 6px; font-size: 9px; padding: 0 4px; }
+  .tree-top { padding-bottom: 10px; } .tree-top::after { height: 10px; }
+  .fork { margin-top: 14px; gap: 6px; } .fork::before { top: -7px; } .fork::after { top: -14px; height: 7px; } .leaf::before { top: -7px; height: 7px; }
+  .tree-pos { gap: 5px; margin-top: 10px; }
+  .ss-name { font-size: 16px; }
+  /* search: name and position, the rest folded */
+  .msrch { padding: 6px 8px; } .msrch .mdc-bar { margin: 0; } .msrch .mdc-bar input { flex: 1 1 0; min-width: 0; width: auto !important; } .msrch .subtabs { flex: 0 0 96px; margin: 0; } .msrch .subtabs .mk-sel { width: 100%; }
+  .mfold-in > summary { cursor: pointer; font-size: 12px; color: var(--muted); padding: 6px 0 0; } .mfold-in .row { margin-top: 6px; gap: 6px; } .mfold-in input[type="number"] { width: 64px !important; }
+  /* free agency: the list and its heading scroll sideways together */
+  .fa-bar { gap: 4px; margin-bottom: 6px; } .fa-bar .subtabs { flex: 0 0 84px; margin: 0; } .fa-bar .subtabs .mk-sel { width: 100%; } .fa-bar input { flex: 1 1 0; min-width: 0; width: auto !important; } .fa-bar > label { display: none; } .fa-bar > select { flex: 1 1 0; min-width: 0; } .fa-bar .spacer { display: none; }
+  .fa-sx { display: block; overflow-x: auto; border: 1px solid var(--line2); border-radius: 5px; }
+  .fa-sx > .fa-row, .fa-sx > .fa-list { min-width: 470px; } .fa-sx > .fa-list { border: none; border-radius: 0; overflow-x: visible; max-height: 52vh; }
+  .fa-row, .fa-row.lv-scout, .fa-row.lv-stats, .fa-row.lv-phys { grid-template-columns: 34px minmax(130px, 1fr) 22px var(--fa-cols, 70px 74px 96px); gap: 5px; padding: 4px 6px; font-size: 12px; }
+  .fa-head { font-size: 9.5px !important; padding-right: 6px; }
+  /* season review: awards two to a row, one name a line in the all-pro teams */
+  .wr-grid, .wr-grid.sm { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .wr-aw, .wr-aw.big { padding: 7px 8px; } .wr-aw.big .wr-n, .wr-aw .wr-n { font-size: 13.5px; } .wr-aw .small, .wr-aw .muted, .wr-aw .wr-t, .wr-aw .wr-l { font-size: 11px; } .wr-aw .wr-l { margin-top: 3px; line-height: 1.3; }
+  .wr-hero { padding: 12px 12px; gap: 10px; } .wr-cup { font-size: 30px; }
+  .wr-tbl { font-size: 11.5px; } .wr-tbl td { white-space: normal; padding: 4px 6px 4px 0; } .wr-tbl th:first-child, .wr-tbl td:first-child { width: 78px; padding-right: 6px; }
+  .wr-p { display: block; margin: 0 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fa-doc { max-height: 22vh; padding: 10px 12px; }
+  /* the draft: your picks and the ticker above the board */
+  .dr-side { order: -1; display: grid; gap: 6px; } .dr-side .card { margin: 0 !important; }
+  .dr-mine > div { display: inline-block; margin: 0 10px 2px 0; font-size: 12px; } .dr-recent { max-height: 150px; overflow-y: auto; }
+  /* the staff meeting */
+  .mt-head { padding: 8px 10px; gap: 8px; } .mt-head h2 { font-size: 15px; } .mt-face { width: 34px; height: 34px; font-size: 12px; } .mt-cols > div { padding: 8px 10px; }
+  .mt-say { grid-template-columns: 52px minmax(0, 1fr) auto; gap: 6px; padding: 5px 0; font-size: 12px; line-height: 1.35; }
+  .mt-ord { grid-template-columns: 14px minmax(0, 1fr) 52px 46px 30px 30px; gap: 4px; font-size: 11.5px; } .mt-ord.head { font-size: 8.5px; letter-spacing: .2px; }
+  .mt-ord .ph-who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .mt-ord .pill { font-size: 9.5px; padding: 0 3px; }
+  /* camp: a man's row is his name, where the staff has him, and his grades */
+  .ph-track .ph-row { grid-template-columns: minmax(0, 1fr) auto 26px auto 10px; gap: 5px; padding: 4px 8px; font-size: 12px; }
+  .ph-row .ph-who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ph-row .ph-who .muted { font-size: 10.5px; } .ph-row .pill { font-size: 9.5px; padding: 0 4px; }
+  .ph-row .ph-num .muted.small, .ph-row .ph-wks { display: none; } .ph-row .ph-num { white-space: nowrap; } .ph-row.mk-row .ph-chev::before { content: '⋯ '; }
+  .figs, .figs.five { grid-template-columns: repeat(5, minmax(0, 1fr)); row-gap: 0; margin-top: 4px; } .fig, .fig:nth-child(odd) { padding: 0 4px; border-left: 1px solid var(--line); } .fig:first-child { border-left: none; }
+  .fig-v { font-size: 19px; } .fig-l { font-size: 10px; min-height: 0; margin: 1px 0 4px; } .figs .stamp { font-size: 7.5px; letter-spacing: .3px; padding: 1px 3px 0; }
+  .mbox-side { display: flex; margin: 12px 0 0; } .mbox-side button { flex: 1 1 0; }
+  /* news: one block an item, the date leading the line */
+  .news li, .news li .when { display: block; } .news li { padding: 4px 0; font-size: 12px; line-height: 1.35; }
+  .news li .when { display: inline; font-size: 10.5px; margin-right: 6px; padding: 0; }
+  .news li > span:last-child { display: inline; }
+  /* trade: one list at a time */
+  .mtr-top { display: flex; gap: 4px; margin-bottom: 4px; } .mtr-top select { flex: 1 1 auto; min-width: 0; } .mtr-top select + select { flex: 0 0 82px; }
+  .mtr-tabs { display: flex; margin-bottom: 6px; } .mtr-tabs button { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mtr { padding: 4px 8px; } .mtr .scroll { max-height: none; }
+  .check-row { gap: 5px; min-height: 30px; padding: 2px 0; font-size: 12.5px; }
+  .check-row input[type="checkbox"] { flex: none; margin: 0; }
+  .check-row .ck-pos { width: 34px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; color: var(--muted); }
+  .check-row .grow .link { font-weight: 600; }
+  .check-row .ck-tier { display: none; }
+  .check-row .ck-c { width: 66px; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .check-row .ck-c .pill { display: none; }
+  .mtr-foot { position: sticky; bottom: calc(90px + env(safe-area-inset-bottom)); z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 14px rgba(10, 14, 24, .18); font-size: 12.5px; font-weight: 600; }
+  /* the dock */
+  .mgo { padding: 4px 8px; gap: 8px; }
+  .mgo button { min-height: 32px; }
+  .mnav button { min-height: 42px; padding: 4px 2px 3px; font-size: 10px; }
+  .mnav button i { font-size: 17px; }
+  /* popups */
+  .modal-card { padding: calc(8px + env(safe-area-inset-top)) 9px calc(18px + env(safe-area-inset-bottom)); }
+  .modal-x { width: 34px; height: 34px; min-height: 34px; font-size: 22px; }
+}
