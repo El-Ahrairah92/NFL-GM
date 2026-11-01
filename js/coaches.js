@@ -283,7 +283,7 @@ function familiarityPenalty(t, side) {
 function fireCoach(tid, role) {
   const t = T(tid), c = C(t[role.toLowerCase()]);
   if (!c) return;
-  t.staffDead = round2((t.staffDead || 0) + owedIfFired(c)); if (role === 'HC') t.hcFired = (t.hcFired || 0) + 1; delete c.prom; delete c.sal;
+  t.staffDead = round2((t.staffDead || 0) + owedIfFired(c)); if (role === 'HC') { t.hcFired = (t.hcFired || 0) + 1; if (typeof gmHcFired === 'function') gmHcFired(tid, c); delete c.gmBy; } delete c.prom; delete c.sal;
   c.tid = -1; t[role.toLowerCase()] = null; TEND_VER++;
   addNews(`${t.abbr} fired ${role === 'SC' ? 'S&C coach' : role} ${cname(c)}.`, [tid], 'coach');
 }
@@ -292,6 +292,7 @@ function hireCoach(tid, cid, quiet) {
   if (c.tid >= 0) return false;
   if (t[key]) C(t[key]).tid = -1;
   t[key] = c.id; c.tid = tid;
+  if (c.role === 'HC') { if (t.gm != null && tid !== state.userTid) c.gmBy = t.gm; else delete c.gmBy; } // his GM's hire: it counts for or against the GM
   const hc = C(t.hc);
   if (hc && c.role !== 'HC' && !c.mentors.includes(hc.id)) c.mentors.push(hc.id);
   if (c.role === 'HC') for (const r of ['oc', 'dc', 'stc', 'sc']) { const a = C(t[r]); if (a && !a.mentors.includes(c.id)) a.mentors.push(c.id); }

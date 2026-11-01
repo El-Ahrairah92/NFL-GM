@@ -2,7 +2,7 @@
 // =====================================================================
 //  DEVELOPMENT — growth is earned, not scheduled (DESIGN §24)
 //  Every young player has growth available each year in four areas: explosive (E), power (P),
-//  technique (T) and mental (M). The body matures in the offseason (strength staff + work habits).
+//  technique (T) and mental (M). The body matures in the offseason (strength staff + his passion and ambition).
 //  Technique and mental growth are paid out through the year at checkpoints, scaled by what he
 //  earned: game snaps, practice, his position coach, first-team reps. Half of what he does not earn
 //  is gone for good. Rare surges, collapses and late bloomers sit on top; decline is per player.
@@ -55,7 +55,7 @@ function genDecline(p) {
   return p.dc;
 }
 function declStart(p, g) { const dc = p.dc || genDecline(p); return dc.a + DECL_OFFSET[g] + (dc.t === 'a' ? 3 : 0); }
-function declRate(p) { return DECL_RATE[(p.dc || genDecline(p)).t] * clamp(1.16 - (((p.h && p.h.work) || 55) / 350), 0.88, 1.15); }
+function declRate(p) { return DECL_RATE[(p.dc || genDecline(p)).t] * clamp(1.16 - (((p.h && p.h.pas) || 55) / 350), 0.88, 1.15); } // passion keeps him at it
 // growth window for an area (a late bloomer's window reopens)
 function growPeak(p, g) { const pk = peakAge(p, g); return (g === 'T' || g === 'M') && p.lateTo ? Math.max(pk, p.lateTo) : pk; }
 // total points an area has lost by a given age (used to age a generated veteran)
@@ -92,12 +92,12 @@ function nCoach(p) {
   const v = ROOM_COACH[p.pos] ? roomDevVal(tid, p.pos) : knob(C(T(tid).stc), 'tech');
   return clamp(0.15 + (v - 35) / 38, 0.15, 1.3); // a great teacher is worth a lot more than a poor one
 }
-function nWork(p) { return clamp(0.25 + (((p.h && p.h.work) || 55) - 30) / 55, 0.2, 1.2); }
+function nWork(p) { const h = p.h || {}; return clamp(0.25 + (((h.pas || 55) + (h.amb || 55)) / 2 - 30) / 55 + (p.offLift !== undefined ? (p.offLift - ROOM_AVG.work) * 0.25 : 0), 0.2, 1.2); } // offseason training: passion and ambition, and a leader who drives his room's program
 function nStrength(p) { const tid = devTid(p); if (tid < 0) return 0.45; const sc = C(T(tid).sc); return clamp(0.25 + (knob(sc, 'ath') - 35) / 50, 0.2, 1.2); }
 function pracAvg(p) {
   if (p.pa && p.pa[1]) return p.pa[0] / p.pa[1];
   const h = (p.pracH || []); if (h.length) return h.reduce((s, x) => s + x, 0) / h.length;
-  const c = p.h || {}; return 46 + ((c.work || 55) - 55) * 0.42 + ((c.disc || 55) - 55) * 0.28; // what his habits would produce
+  const c = p.h || {}; return 46 + ((c.pas || 55) - 55) * 0.42 + ((c.disc || 55) - 55) * 0.28; // what his habits would produce
 }
 function nPractice(p) { return devTid(p) < 0 ? 0.4 : clamp(0.72 + (pracAvg(p) - 46) / 42, 0.2, 1.2) * clamp(1 + ((p.prac && p.prac.rf !== undefined ? p.prac.rf : 1) - 1) * 0.3, 0.75, 1.2); } // a good week, and enough reps in it to matter
 function nReps(p) { return repShare(p); } // his share of the week's reps: the head coach's practice decides how much reaches the second and third team
@@ -132,7 +132,7 @@ function earnRate(p, g, kind, weeks) {
 function progressPlayer(p) {
   const old = p.ovr, age = p.age;
   if (!p.dc) genDecline(p);
-  if (!p.h.work) ensureCharacter(p);
+  ensureCharacter(p);
   if (p.pos === 'RB' && p.dcW !== state.season) { const c = (p.career || [])[p.career.length - 1]; if (c && (c.rushA || 0) >= 280) { p.dc.a = round1(p.dc.a - 0.35); p.dcW = state.season; } } // heavy seasons add up
   const tid = devTid(p), dev = tid >= 0 ? teamDev(tid, p.pos) : null;
   // rare events first: they change what is available

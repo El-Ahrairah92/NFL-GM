@@ -91,6 +91,8 @@ function chemOf(p) {
 }
 function chemPair(rec, qb) { if (!rec || !qb) return CH_START; const tid = chemTid(rec); return rec.cq && rec.cq.t === tid && rec.cq.q[qb.id] !== undefined ? rec.cq.q[qb.id] : CH_START; }
 function chemCap(tid, pos) { const c = pos === 'K' || pos === 'P' ? null : posCoach(tid, pos); return clamp(55 + (c ? c.coh : pos === 'K' || pos === 'P' ? knob(C(T(tid).stc), 'kop') : 38) * 0.5, 55, 100); }
+// a new man settles in faster when he is adaptable (the first stretch only: the last of it is time together)
+function chemAdapt(p) { return clamp(1 + (((p.h && p.h.adapt) || 55) - 55) / 120, 0.65, 1.35); }
 function chemStep(v, share, lvl, fast, cap) {
   if (v < lvl) return Math.min(lvl, v + fast * Math.sqrt(Math.max(0.35, share)));
   const slow = v < cap ? 1 : Math.max(0.03, 1 - (v - cap) / 6);
@@ -99,14 +101,14 @@ function chemStep(v, share, lvl, fast, cap) {
 function chemWeek(tid) {
   const t = T(tid), tb = knob(C(t.hc), 'tb'), lvl = 35 + tb * 0.4, fast = 4 + tb / 20;
   const all = [...rosterOf(tid), ...psOf(tid)].filter(p => !p.injury);
-  for (const p of all) if (CH_UNIT[p.pos]) { const v = chemOf(p); p.ch.v = round1(chemStep(v, CH_UNIT[p.pos] === 'KB' ? 1 : repShare(p), lvl, fast, chemCap(tid, p.pos))); }
+  for (const p of all) if (CH_UNIT[p.pos]) { const v = chemOf(p); p.ch.v = round1(chemStep(v, CH_UNIT[p.pos] === 'KB' ? 1 : repShare(p), lvl, fast * chemAdapt(p), chemCap(tid, p.pos))); }
   // each quarterback with every man he throws to: the quarterbacks coach sets how fast they find each other, the receiver's own coach how far it goes
   const qbs = repsOrder(tid, 'QB').filter(p => !p.injury), qc = posCoach(tid, 'QB'), qFast = 2.5 + (qc ? qc.coh : 38) / 20 + tb / 40;
   qbs.forEach((qb, i) => { const qs = i === 0 ? 1 : i === 1 ? 0.4 : 0.12;
     for (const p of all) { if (!['RB', 'WR', 'TE'].includes(p.pos)) continue;
       if (!p.cq || p.cq.t !== tid) p.cq = { t: tid, q: {} };
       const v = p.cq.q[qb.id] !== undefined ? p.cq.q[qb.id] : CH_START;
-      p.cq.q[qb.id] = round1(chemStep(v, qs * repShare(p), lvl, qFast * qs, chemCap(tid, p.pos))); } });
+      p.cq.q[qb.id] = round1(chemStep(v, qs * repShare(p), lvl, qFast * qs * chemAdapt(p), chemCap(tid, p.pos))); } });
   const here = new Set([...rosterOf(tid), ...psOf(tid)].filter(p => p.pos === 'QB').map(p => p.id));
   for (const p of all) if (p.cq && p.cq.t === tid) for (const id in p.cq.q) if (!here.has(+id)) delete p.cq.q[id]; // quarterbacks who have gone (a hurt one keeps what he has built)
 }
@@ -145,7 +147,7 @@ function gameChem(g) { // set once a game for the things that are about the whol
 // ---------- the green dot ----------
 // One defender gets the call from the sideline and makes the checks. How good he is at it is who he is: what he sees, how well
 // he knows the system, and whether the others listen. The club names him; the staff does if it has not.
-function dotScore(p) { return p && p.a ? (p.a.prec || 40) * 0.55 + pbOf(p) * 0.2 + ((p.h && p.h.lead) || 50) * 0.25 : 0; }
+function dotScore(p) { if (p && p.h) ensureCharacter(p); return p && p.a ? (p.a.prec || 40) * 0.55 + pbOf(p) * 0.2 + (p.h ? condVoice(p) : 50) * 0.25 : 0; } // the others have to listen to him
 function dotPool(tid) { return rosterOf(tid).filter(p => p.pos === 'LB' && p.a && !p.injury); } // a linebacker: the man in the middle who does not leave the field
 function greenDot(tid) {
   const t = T(tid), pool = dotPool(tid);

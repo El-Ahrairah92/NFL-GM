@@ -77,7 +77,7 @@ function seasonHonors(awards) {
   if (back) { const last = (back[0].career || []).find(x => x.season === season - 1); give('cpoy', back[0], { note: last ? `played ${last.gp || 0} game${last.gp === 1 ? '' : 's'} last season` : 'out of the league last season' }); }
   const up = all.filter(p => p.per && p.per.s0 !== undefined && (p.stats.gs || 0) >= 8 && p.exp >= 1 && rate(p) >= 0.4).map(p => [p, perOvr(p) - p.per.s0 + rate(p) * 5]).filter(x => x[1] >= 5).sort((a, b) => b[1] - a[1])[0]; // a real player now, not just a better backup
   if (up) give('mip', up[0], { note: `now viewed as ${/^[AEIOU]/.test(tierOf(up[0])) ? 'an' : 'a'} ${tierOf(up[0])}` });
-  const man = all.filter(p => p.exp >= 4 && (p.stats.gs || 0) >= 10 && p.h && p.h.lead !== undefined).map(p => [p, p.h.lead * 0.5 + p.h.work * 0.25 + p.h.disc * 0.25 + Math.min(p.exp, 10) * 1.5 + rate(p) * 12]).sort((a, b) => b[1] - a[1])[0];
+  const man = all.filter(p => p.exp >= 4 && (p.stats.gs || 0) >= 10 && p.h && p.h.lead !== undefined).map(p => [p, (workVoice(p) + condVoice(p)) / 2 * 0.45 + p.h.pas * 0.2 + p.h.disc * 0.15 + p.h.cond * 0.2 + Math.min(p.exp, 10) * 1.5 + rate(p) * 12]).sort((a, b) => b[1] - a[1])[0];
   if (man) give('moy', man[0], { note: 'for leadership and the way he goes about his work' });
   // coaches and front offices: the biggest step forward, weighted by where the club finished
   const hadPrev = state.teams.some(t => (state.teamHist[t.id] || []).length), since = (t, word) => hadPrev ? `, ${word} ${Math.round(prevW(t))} wins a year ago` : '';
@@ -182,12 +182,14 @@ function startOffseason() {
   const retired = [];
   const devBefore = {};
   for (const id in state.players) { const p = state.players[id]; if (p.tid >= 0 && p.age <= 26) devBefore[id] = p.ovr; }
+  for (const t of state.teams) for (const pos in PRAC_SIDE) { const rs = roomState(t.id, pos); rs.room.forEach(p => p.offLift = roomEffectOn(p, rs)); } // each room's leader drives its offseason program
   for (const id in state.players) {
     const p = state.players[id];
     if (p.tid === -2) continue;
     offseasonExpectation(p);
     comfortOffseason(p);
     progressPlayer(p); // the real change stays hidden; camp reports and film reveal it
+    delete p.offLift;
     offseasonApply(p);
     p.wear = 0;
     if (p.injury) { p.injury.weeks -= 20; if (p.injury.weeks <= 0) p.injury = null; else p.injury.fresh = false; }
@@ -207,6 +209,7 @@ function startOffseason() {
   ensureDraftClass(year, true);
   state.carSnap = carouselSnap(); // who held every coaching job before anyone was fired or retired
   chemOffseason();
+  gmOffseason(year); // the front office settles first: a new GM is in place before the coaching carousel
   coachOffseason();
   state.phase = 'COACHES';
   startCarousel();
@@ -368,7 +371,7 @@ function advanceFA() {
   faAdvanceDay();
   if (state.fa.day === 3 || state.fa.day === 6) aiFreeAgencyWave(2); // the bottom of the roster gets filled while the market runs
   state.faWave = state.fa.day;
-  if (state.fa.over) { state.phase = 'DRAFT'; addNews(`The ${state.draft.year} draft is on the clock.`); }
+  if (state.fa.over) { setQbOutlooks(); state.phase = 'DRAFT'; addNews(`The ${state.draft.year} draft is on the clock.`); }
 }
 
 // ---------- draft ----------
@@ -398,7 +401,8 @@ function draftPlayer(pid) {
   d.idx++;
   if (d.idx >= d.order.length) finishDraft();
 }
-function teamNeedsQB(tid) { const q = rosterOf(tid).filter(p => p.pos === 'QB').sort((a, b) => viewOvr(b, tid) - viewOvr(a, tid))[0]; return !q || viewOvr(q, tid) < th(q).mid || q.age >= 34; }
+// the room is not the answer: nobody, a bridge, or an old answer with nobody developing behind him
+function teamNeedsQB(tid) { const o = qbOutlook(tid); return o.v === 'none' || o.v === 'bridge' || (o.v === 'window' && !o.succ); }
 // A specialist arrives close to what he will ever be, so on a board built for raw rookies he reads like an instant starter.
 // Clubs know better: kickers and punters are late-round picks, and only for a club that needs one.
 const DRAFT_SPEC = { K: -22, P: -24 };
@@ -501,6 +505,7 @@ function finishDraft() {
     else delete state.players[p.id]; rostersDirty();
   });
   state.picks = state.picks.filter(pk => pk.season !== state.draft.year);
+  setQbOutlooks(); // the rookies are in the room
   state.phase = 'UDFA';
   startUdfa();
   addNews(`The ${state.draft.year} draft is complete. The race for undrafted rookies is on.`);
@@ -737,6 +742,7 @@ function resolveWaivers() {
   refreshPerception();
   seasonStartSnapshot();
   practiceWeekAll(); // the week before the opener
+  setQbOutlooks(); gmSeasonStart(); // what each roster is expected to do this year
   addNews(`The ${state.season} regular season is underway.`);
   return out;
 }

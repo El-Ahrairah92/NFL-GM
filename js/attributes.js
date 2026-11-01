@@ -243,11 +243,12 @@ function genComfort(p) {
   if (rand() < 0.06) { const two = (SPOT_NEIGHBORS[pick(SPOT_NEIGHBORS[p.spot].length ? SPOT_NEIGHBORS[p.spot] : [p.spot])] || []).filter(s => s !== p.spot && !cf[s]); if (two.length) cf[pick(two)] = Math.round(clamp(gauss(40, 15), 10, 80)); }
   p.cf = cf;
 }
-// how fast he picks up a new spot: hidden Adaptability, football IQ, youth, and his coaches
-function learnRate(p) {
-  const iq = Math.max(p.a.proc || 0, p.a.prec || 0, p.a.bawr || 0, 50);
+// how fast he picks up a new spot: hidden Adaptability and Intelligence, football IQ, youth, and his coaches.
+// book: the playbook instead, which is Intelligence alone
+function learnRate(p, book) {
+  const iq = Math.max(p.a.proc || 0, p.a.prec || 0, p.a.bawr || 0, 50), h = p.h || {}, int = h.int === undefined ? 55 : h.int;
   const dev = p.tid >= 0 && typeof teamDev === 'function' ? teamDev(p.tid, p.pos) : null;
-  return clamp((0.55 + ((p.h && p.h.adapt) || 55) / 100) * (1 + (iq - 60) * 0.006) * (p.age <= 24 ? 1.1 : p.age >= 31 ? 0.75 : 1) * (dev ? dev.grow('prec') : 1), 0.35, 1.9);
+  return clamp((0.55 + (book ? int : ((h.adapt === undefined ? 55 : h.adapt) + int) / 2) / 100) * (1 + (iq - 60) * 0.006) * (p.age <= 24 ? 1.1 : p.age >= 31 ? 0.75 : 1) * (dev ? dev.grow('prec') : 1), 0.35, 1.9);
 }
 // add comfort points (slower as he nears Natural); returns true if his level changed
 function learnSpot(p, s, pts) {
@@ -325,10 +326,23 @@ function fatTail(sd, p, mult) { return gauss(0, sd) * (rand() < p ? mult : 1); }
 // One offseason of development lives in develop.js (progressPlayer): growth is earned there.
 
 // ---------- generation ----------
-// character: how he works, how he follows his assignments, and whether a room follows him
+// character (DESIGN section 5): the traits overlap on purpose, so no one number is the whole man
+//   pas  Passion        practice, offseason training, the combine, how long he holds off decline
+//   amb  Ambition       offseason training, the playbook, the combine
+//   disc Discipline     penalties, blown assignments, a little of practice
+//   int  Intelligence   the playbook, new spots, blown assignments
+//   lead Leadership     the tone of his room: he spreads his own habits
+//   temp Temperament    after-the-whistle fouls (high is even-keeled)
+//   cond Conduct        the dirty fouls (high is clean)
+//   ego  Ego            (high is a big one; nothing uses it yet)
 function genCharacter() {
-  const work = clamp(gauss(56, 17), 5, 99);
-  return { work: Math.round(work), disc: Math.round(clamp(0.35 * work + 0.65 * gauss(56, 17), 5, 99)), lead: Math.round(clamp(gauss(45, 20), 5, 99)) };
+  // (a trait that leans on another keeps its own full spread: rho is how far it leans)
+  const r = (m, sd) => clamp(gauss(m, sd), 5, 99), lean = (x, m, sd, xm, xsd, rho) => clamp(m + sd * (rho * (x - xm) / xsd + Math.sqrt(1 - rho * rho) * gauss(0, 1)), 5, 99);
+  const pas = r(56, 17), amb = lean(pas, 56, 17, 56, 17, 0.35), temp = r(56, 17);
+  return {
+    pas: Math.round(pas), amb: Math.round(amb), disc: Math.round(clamp(0.35 * pas + 0.65 * gauss(56, 17), 5, 99)), int: Math.round(r(55, 18)),
+    lead: Math.round(r(45, 20)), temp: Math.round(temp), cond: Math.round(lean(temp, 56, 17, 56, 17, 0.45)), ego: Math.round(lean(amb, 45, 20, 56, 17, 0.3)),
+  };
 }
 function genHidden() {
   return {
@@ -336,7 +350,7 @@ function genHidden() {
     cons: Math.round(clamp(gauss(55, 18), 5, 99)),
     stam: Math.round(clamp(gauss(60, 15), 10, 99)),
     curve: weightedPick(['early', 'normal', 'late'], [2, 6, 2]),
-    adapt: Math.round(clamp(gauss(55, 18), 5, 99)), // learns new positions / schemes
+    adapt: Math.round(clamp(gauss(55, 18), 5, 99)), // handles change: a new spot, a new system, a new club, the pro game
     ...genCharacter(),
   };
 }
@@ -352,7 +366,7 @@ function genAging() {
 }
 function fmtHeight(inches) { return `${Math.floor(inches / 12)}'${inches % 12}"`; }
 // ---------- the workout ----------
-// Each drill has a raw mark set by what it tests (per: the drill's units per rating point). Work ethic sets how far above the raw mark he can go
+// Each drill has a raw mark set by what it tests (per: the drill's units per rating point). Passion and Ambition set how far above the raw mark he can go
 // (the ceiling: two months of rehearsed starts and turns), consistency how far below it (the floor). The result is drawn from inside that range,
 // so a workout lies downward more easily than upward: a slow man cannot fake a fast time, but a fast man can run a bad one.
 const DRILLS = {
@@ -379,7 +393,7 @@ function drillRaw(p, k) {
   return r;
 }
 function drillRange(p, k) {
-  const D = DRILLS[k], h = p.h || {}, wq = clamp(((h.work === undefined ? 56 : h.work) - 20) / 70, 0, 1), cq = clamp(((h.cons === undefined ? 55 : h.cons) - 20) / 70, 0, 1);
+  const D = DRILLS[k], h = p.h || {}, wq = clamp((((h.pas === undefined ? 56 : h.pas) + (h.amb === undefined ? 56 : h.amb)) / 2 - 20) / 70, 0, 1), cq = clamp(((h.cons === undefined ? 55 : h.cons) - 20) / 70, 0, 1);
   return { up: D.up[0] + (D.up[1] - D.up[0]) * wq, dn: D.dn[1] - (D.dn[1] - D.dn[0]) * cq, cq };
 }
 // day: how his whole day is going (shared by every drill he runs)

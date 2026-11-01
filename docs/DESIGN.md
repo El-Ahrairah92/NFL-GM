@@ -109,7 +109,7 @@ Post-Phase-6 modifications (round 1):
   - Levels: Natural 85+, Comfortable 60+, Decent 30+, Raw, Unfamiliar.
   - The penalty on technique and mental attributes at a spot is 16·(1−c/100)^1.6: Decent about −6 to −9, Raw about −12 to −16.
   - Histories favor close pairs (DT/DE/NT, G/G, LT/RT, MLB/WLB, FS/SS, X/Z, Y/H, CB/NCB).
-  - Learning comes from game reps (0.015 per snap), weekly practice when listed on the depth chart (1.4/week), and training camp (+30). Each is scaled by the hidden Adaptability trait, football IQ, age and coaching, so a comfort level takes roughly a camp to a season. Unused spots fade 4/yr.
+  - Learning comes from game reps (0.015 per snap), weekly practice when listed on the depth chart (1.4/week), and training camp (+30). Each is scaled by hidden Adaptability and Intelligence, football IQ, age and coaching, so a comfort level takes roughly a camp to a season. Unused spots fade 4/yr.
   - AI teams weigh spot-level needs (front-aware) in free agency and the draft, and cross-train thin spots in camp. Only about 2–3% of starters are Raw or Unfamiliar.
 - **Depth chart** (`js/depthchart.js`): a base chart by slot plus package overrides (passing-down back, short-yardage back, 4-man rush unit) and K/P/returner. Per-slot rotation shares give the No. 2 discretionary snaps (RBs by series, others by play). Each unit can be set to auto (staff) or manual. Kneels, spikes and the play-caller's QB read all follow the chart.
 - **Player card:** a header with ★ stars, tier and upside, season grade and recent form.
@@ -210,7 +210,19 @@ Shared pools per side of the ball (every defender has every defensive attribute,
 - **Kicker:** Kick Consistency · Comfort Range · Range Falloff · Trajectory
 - **Punter:** Punt Distance · Directional Placement · Hang Time · Spin Control
 - **Trenches:** assignment-based (count → assign 1v1/double/combo-climb/unblocked → resolve); see PLAYBOOK_SPEC 0a
-- **Hidden traits:** Durability · Consistency · Stamina · Development Curve · Ceiling
+- **Hidden traits:** Durability · Consistency · Stamina · Development Curve · Ceiling · Adaptability
+- **Character (hidden, `p.h`):** the traits overlap on purpose, so no one number is the whole man and personalities vary.
+  - **Passion** (`pas`): practice performance, offseason training, the combine, how long he holds off decline.
+  - **Ambition** (`amb`): offseason training, learning the playbook, the combine. Later: coming to camp in shape, contracts.
+  - **Discipline** (`disc`): pre-snap fouls, holding, pass interference and illegal contact; blown assignments; a smaller part of practice. Later: coming to camp in shape.
+  - **Intelligence** (`int`): learning the playbook; with Adaptability, learning a new spot or cross-training; blown assignments.
+  - **Adaptability** (`adapt`): handling change. A new spot or cross-training (with Intelligence), the rookie jump to the pro game, how much of the old playbook carries over when a new system comes in, how fast a new man builds chemistry.
+  - **Consistency** (`cons`): week-to-week swings and the floor of his practice weeks.
+  - **Leadership** (`lead`): two voices in his room, each only a lift. His work voice (Leadership plus some Passion) lifts the room's practice and its offseason program. His conduct voice (Leadership minus some Ego) pulls the room's hotheads toward calm on the after-the-whistle and dirty fouls, and makes him the green dot. Man of the Year reads both. Later: the conduct voice also limits scuffles, off-field and locker-room trouble.
+  - **Temperament** (`temp`, high is even-keeled): after-the-whistle fouls (unnecessary roughness, unsportsmanlike conduct, taunting). Later: scuffles in practice and games, some of the off-field and locker-room trouble.
+  - **Conduct** (`cond`, high is clean): joins Temperament on the dirty fouls (roughing the passer, the face mask, the horse-collar). Later: off-field incidents.
+  - **Ego** (`ego`, high is a big one): nothing yet. Later: contract and usage disputes, locker-room issues.
+  - Generated with leanings (Ambition with Passion, Discipline with Passion, Conduct with Temperament, Ego with Ambition), each keeping its full spread. Saves from before the rework keep Discipline and Leadership; Work Ethic becomes Passion and the rest are rolled fresh.
 - Individual matchups by alignment (OT vs EDGE, G vs 3-tech, C vs NT; CB vs WR in man, zone areas otherwise).
 
 ## 6. Coaches
@@ -346,10 +358,10 @@ Games were decided by 16.9 on average (NFL 11.3) with 21% decided by 28+. Talent
 - The game wrap shows a snap report: snaps, grade, preseason total and who is still short of film. No bonus for playing starters: the gains are film and positional reps, the cost is injury exposure.
 
 ## 18. Practice, playbook knowledge and character
-- **Hidden traits** (`p.h.work`, `disc`, `lead`): Work Ethic, Discipline, Leadership. The user's staff reads them as labels that sharpen with weeks in the building (`p.seenW`); nothing is shown for the first two weeks.
-- **Practice week** (`practiceTeam`, every week including preseason): grade = Work Ethic and Discipline, plus the room's tone, plus playbook knowledge and head-coach culture, plus noise whose downside shrinks with Consistency. Game-day form is now the practice result (about ±1 rating point typically, ±3 at most) plus a smaller unseen roll.
-- **Room tone:** each veteran's influence is Leadership × seniority relative to that room's median experience; what he spreads is his own habits (Work Ethic + Discipline), so a respected veteran with bad habits drags younger players down.
-- **Playbook knowledge** (`p.pb`, 0-100): arrivals start at 26-44 (more if they ran the same system elsewhere), learn a share of what is left each week (faster with Work Ethic, learning speed and first-team reps; slower at QB, OL, LB, S), and camp is worth five weeks. A new coordinator with a new system cuts a unit to roughly half. Replaces the old team-wide familiarity penalty.
+- **Hidden traits** (`p.h.pas`, `disc`, `lead`; the full set is in section 5): Passion, Discipline, Leadership. The user's staff reads them as labels that sharpen with weeks in the building (`p.seenW`); nothing is shown for the first two weeks.
+- **Practice week** (`practiceTeam`, every week including preseason): grade = Passion and (less) Discipline, plus the room's tone, plus playbook knowledge and head-coach culture, plus noise whose downside shrinks with Consistency. Game-day form is now the practice result (about ±1 rating point typically, ±3 at most) plus a smaller unseen roll.
+- **Room leaders** (`roomState`): a man's voice counts once it is past an ordinary level, times his seniority against the room's median experience. The room gets its best voice and a third of the next one; a leader does not lead himself. Nothing spreads: a room without a leader is just the men in it, and its bad habits stay each man's own. Two voices, read separately: work (`workVoice` = Leadership + 0.35 × (Passion − 55)) for practice, playbook learning and offseason training (`p.offLift`, read before the offseason moves anyone); conduct (`condVoice` = Leadership − 0.35 × (Ego − 45)) for Temperament and Conduct fouls (`calmLift`: the lower his trait, the more the leader pulls it up). All of them are read against the league's average room (`ROOM_AVG`, measured from the traits: about a third of rooms have no clear leader and a third a strong one), so league practice grades, development and foul rates stay where they were. The practice report names who sets the work and who keeps the room in line.
+- **Playbook knowledge** (`p.pb`, 0-100): arrivals start at 26-44 (more if they ran the same system elsewhere), learn a share of what is left each week (faster with Ambition, Intelligence and first-team reps; slower at QB, OL, LB, S), and camp is worth five weeks. A new coordinator with a new system cuts a unit to roughly half. Replaces the old team-wide familiarity penalty.
 - **Soft gate:** every call has a complexity (`offNeed`, `defNeed`, 35-80). A player below it is passed over for the snap when a teammate knows it, and may bust (large one-play penalty; less likely for disciplined players) when he has to play. A quarterback still learning gets a simpler menu.
 - **Reps:** the user orders each position group on the Practice page; first-team reps teach fastest, and playing without them costs a little, most at QB and OL.
 
@@ -419,7 +431,7 @@ Code: `js/develop.js`. Nothing about a player's future is decided by where he is
 
 **Earning it.** Each year's slice is offered in three periods: the offseason (40%), camp and preseason (15%), and the regular season (45%, paid at checkpoints). What he earns goes onto his ratings; half of what he does not earn is lost for good.
 
-| Area | Game snaps | First-team reps | Position coach | Practice | Work ethic | Strength staff |
+| Area | Game snaps | First-team reps | Position coach | Practice | Passion + Ambition | Strength staff |
 |---|---|---|---|---|---|---|
 | Mental | 40% | 10% | 25% | 25% | | |
 | Technique | 35% | | 35% | 30% | | |
@@ -433,7 +445,7 @@ Snap credit is a straight line: 60% of his unit's snaps is full credit. Exhibiti
 
 **Prospects.** About 15% have far less growth in them than their tools suggest and about 8% have far more. Nobody can see which on draft day; the truth comes out over a year or two of checkpoints. Fog is heavier at quarterback, receiver and corner.
 
-**Aging.** Each player has an age his decline starts (around a position norm: RB 27, CB 28, WR/edge/LB 29, TE/S/DT 30, OL 31, QB 33, K/P 36) and a type: gradual (65%), cliff (20%), ageless (15%). The legs go first, the mind last. Work habits and the strength staff slow it; heavy seasons bring a running back's forward.
+**Aging.** Each player has an age his decline starts (around a position norm: RB 27, CB 28, WR/edge/LB 29, TE/S/DT 30, OL 31, QB 33, K/P 36) and a type: gradual (65%), cliff (20%), ageless (15%). The legs go first, the mind last. Passion and the strength staff slow it; heavy seasons bring a running back's forward.
 
 **What you see.**
 - The upside pill is the staff's expected outcome. It is sticky between checkpoints, needs to clear a line by a margin to move, and cannot reverse for two checkpoints. A ▲ or ▼ marks a move until the next checkpoint.
@@ -1173,7 +1185,7 @@ What decides a ball in the air is catch radius: height, arm length and how high 
 
 ## 54. The workout
 
-**A range, not a number.** Each drill has a raw mark set by what it tests: the 40 is speed with some burst, the 10-yard split burst with some strength, the vertical leaping with some burst, the broad jump leaping, burst and strength (long legs help), the 3-cone agility with some burst (a tall man bends worse), the shuttle agility and burst about evenly, the bench strength (long arms cost about a rep an inch, mass helps). Around the raw mark is a range. Work ethic sets the ceiling, how far better than raw he can go after two months of rehearsing these drills; consistency sets the floor, how far worse. The result is drawn from inside the range, usually near the middle. A slip is the one way to land under the floor. The coachable drills (bench, 3-cone) have the tallest ceilings and the jumps the lowest, so the jumps are the most honest numbers on a sheet. A workout lies downward more easily than upward: a great number is strong evidence, a poor one weak.
+**A range, not a number.** Each drill has a raw mark set by what it tests: the 40 is speed with some burst, the 10-yard split burst with some strength, the vertical leaping with some burst, the broad jump leaping, burst and strength (long legs help), the 3-cone agility with some burst (a tall man bends worse), the shuttle agility and burst about evenly, the bench strength (long arms cost about a rep an inch, mass helps). Around the raw mark is a range. Passion and Ambition set the ceiling, how far better than raw he can go after two months of rehearsing these drills; consistency sets the floor, how far worse. The result is drawn from inside the range, usually near the middle. A slip is the one way to land under the floor. The coachable drills (bench, 3-cone) have the tallest ceilings and the jumps the lowest, so the jumps are the most honest numbers on a sheet. A workout lies downward more easily than upward: a great number is strong evidence, a poor one weak.
 
 **Not every drill.** A prospect may be hurt (the sheet says so, and which drills it cost him). One at the top of the class may stand on his tape and not run, and may run his 40 at his pro day instead. One may skip the drill that is worst against the rest of his own workout, most often the one his position is judged on. The sheet reads "did not run" for both of the last two. Men outside the invited group have pro day numbers only, some missing, taken on a home track with a friendly stopwatch. Quarterbacks and specialists do not bench. The athletic score needs four drills.
 
@@ -1385,3 +1397,36 @@ A coach audit (the attribute audit's method for coaching: one club's coach +15 o
 - **Punters.** Camps carried two kickers but one punter, so a retiring punter was replaced by a weak street rookie, and starting punters slid from 79 to 71. A second leg in camp and a deeper street list (`CAMP_TARGET.P` 2, `STREET_KEEP.P` 10) bring them back part of the way.
 - **Checked.** Calibrated over four rounds of variants, 12-16 leagues each, 14 seasons. Over 20 seasons the 85+ players now go 77, peak near 90, and end near 74; 85+ quarterbacks hold at 4-5. Draft outcomes by round are unchanged (round 1: 91% start as rookies, 70% become four-year starters, real 91% and 71%).
 - **Not fixed here.** Seasons are still a little too even (about 6 clubs a year with 12+ wins, real 7), and franchises still converge over 20 years (2.4 clubs with 3 or fewer playoff trips, real 7). Equal front offices are the rest of that. The weakest quarter of starters still creeps up 2-3 points at every position.
+
+## 71. General managers
+
+Equal front offices are the rest of why franchises converge (section 70). Every other club now has a general manager, and over the next steps his leanings will drive its roster decisions. Built so far: the people and their firing (`js/gms.js`), and the QB outlook (`budget.js`); none of their roster decisions are wired in yet.
+
+- **What a GM is.** A name, an age, a career, and 25 hidden leanings, each a "willingness to..." from 0 to 100 with a cost at both ends. He hires the head coach (who builds his own staff) and makes the roster and money calls. He never touches the coaching. Every club scouts equally well; a GM changes what is done with the read, not how good it is. Your club has none: you are it.
+- **The leanings.**
+  - Valuation, in every channel: bet on upside, take on injury risk, spend on non-premium positions, take chances on character, reach for need. Loves a workout warrior is the draft only.
+  - Draft: get his guy, trade back. Free agency: top dollar for proven talent, pay his own. Trades: trade for stars, sells vets, goes all in (future picks, deadline buying, keeping veterans a year more).
+  - Money: spends to the cap, extends early, frontloads when possible, leverages future cap in windows.
+  - Direction: patience, willingness to tear it down.
+  - Hiring the head coach: an offense-or-defense lean, established coach or hot coordinator, develops QBs (overrides the lean for a developing young QB), promotes from within, spends on staff (sets the staff budget and whether raids are matched).
+  - Firing the head coach: standards, with patience as the clock.
+- **Generation.** Each leaning is drawn wide around the middle (sd 22), independently: a typical GM has about seven strong leanings and is near neutral on the rest. A new league starts every GM 1-8 years into the job, about a quarter of them on a second job, with a few fired GMs waiting for openings.
+- **Turnover.** Each offseason, before the coaching carousel: everyone ages; retirement starts at 65 and some keep going into their 70s; a fired GM sits out the next hiring cycle, then stays in the running for three more. An opening goes to one of four first-timers from other clubs' front offices or a fired GM (each a candidate 40% of the time), as it falls. No club hires back a GM it fired.
+- **Firing.** One rule for every club, with no owners. After each season, a GM's standing moves: last year's carries over at 0.6, plus this season's verdict in wins.
+  - *Early (through year 3), against what he inherited:* wins against what the preseason roster should have won (1.55 wins per standard deviation of roster strength). A club that is building (rebuild or rising, or a young QB developing) counts its record at half, and earns about 4.6 wins' worth for each standard deviation its roster climbed over the year. A contender is not charged when an ageing roster slips.
+  - *Late (from year 5), against an absolute bar:* 10 wins. Between years 3 and 5 the two blend.
+  - Both get playoff credit: 1 for getting in, 1 per win (a bye is not a win), 2 for the title.
+  - Penalties: no answer at quarterback from his second year (1.5 a season); each first-round QB he drafted who is not the answer three years on (2, once); each head coach he hired who is fired (2 for the first, 4 after).
+  - He is let go when his standing, with a little noise, falls below -6. Never after a single season.
+  - The new GM looks at the coach he inherits. One who looks outside the building is likelier to bring his own man, and the chance is halved when the last GM retired rather than was fired. Until head-coach firing is built from the GM's standards and patience, the coach's record is judged only in the coaching carousel.
+  - In 6 leagues of 11 seasons: about 3.7 GMs fired a year (1-8), 6.5 years into the job on average, 7% after two years, none after two straight 10-win seasons; the head coach went too about four times in five.
+- **The QB outlook.** Every club gives its quarterback room one verdict, from its own staff's read. The lines are the league's own QB tiers, so they move with its quarterbacks.
+  - *Franchise:* reads at least halfway between a mid-level starter and a high-end one (about 77), and is 32 or younger. *Window:* the same, at 33 or older.
+  - *Developing:* in his first three seasons in the league (experience, not age: an older rookie gets his years too, and his age already shows in how much growth the staff sees), plus up to two more for a patient GM. He has to be still growing, and his ceiling has to reach franchise level; a GM who bets on upside counts the ceiling for more. From his second year he needs a floor of about 62.
+  - *Bridge:* a starter (about 68) who is not the answer. *None:* the rest.
+  - The room takes its best verdict; a developing QB behind a window QB is his successor.
+  - A man's verdict changes only when the read is 2 points past the line. Verdicts are set at the league-year turn, after free agency, after the draft and at the opener.
+  - It decides whether a club is hunting (none, or a window QB with no successor: more for a free-agent QB, a lean on the board) and whether it needs a QB on the draft board (also a bridge). It also feeds the club's direction (an answer for all in and contend, a bridge for contend, developing for rising) and GM firing (a season with no answer costs 1.5, with a bridge 0.75; a first-round QB he drafted is a bust if he is not the answer three years on, unless a patient GM is still developing him).
+  - In 6 leagues of 11 seasons: about 9 franchise, 3 window, 3 developing, 13 bridge and 4 none at each opener; about 4 QBs drafted in the first round a year, none by a club with an answer or a developing QB; about two in five developing rooms have the answer three years later. Against the old checks: slightly fewer clubs retooling (11.8 from 12.8) and more contending (8.8 from 7.3).
+- **What you see.** Only on another club's page: his name, age, career, and what he is known for (his two or three strongest leanings, in words).
+- **Still to build, in order:** the QB plan comparison (built with the channels it uses), the draft, free agency and money, trades, restricted free agency, then hiring and firing the head coach (replacing the carousel's dice roll and the new GM's review). A GM on the hot seat will act as if he has a window once trades are in.

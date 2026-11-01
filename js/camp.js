@@ -48,10 +48,10 @@ function campBias(c, p) {
   switch (c.style) {
     case 'Teacher': return p.exp <= 2 ? 2 : -0.5;
     case 'Old school': return p.exp >= 6 ? 2.5 : p.exp === 0 && !p.draft ? -1.5 : 0;
-    case 'Demanding': return ((h.disc || 55) - 55) / 12 + ((h.work || 55) - 55) / 15;
+    case 'Demanding': return ((h.disc || 55) - 55) / 12 + ((h.pas || 55) - 55) / 15;
     case "Players' coach": return ((h.lead || 45) - 45) / 15;
     case 'Innovator': return (ath - 70) / 6;
-    case 'Motivator': return ((h.work || 55) - 55) / 10;
+    case 'Motivator': return ((h.pas || 55) - 55) / 10;
   }
   return 0;
 }
@@ -84,7 +84,7 @@ function campTraits(p) {
   const alt = p.cf ? Object.keys(p.cf).filter(s => s !== p.spot && p.cf[s] >= 75 && SPOTS[s]) : [];
   if (alt.length) out.push(['Also plays ' + alt.slice(0, 2).map(s => SPOTS[s].l).join(', '), '']);
   if ((h.stam || 60) <= 40) out.push(['Tires in team periods', 'bad']);
-  if ((h.work || 55) >= 82) out.push(['First in, last out', 'good']); else if ((h.work || 55) <= 30) out.push(['Coasts through drills', 'bad']);
+  if ((h.pas || 55) >= 82) out.push(['First in, last out', 'good']); else if ((h.pas || 55) <= 30) out.push(['Coasts through drills', 'bad']);
   return out;
 }
 // ---- drills ----
@@ -469,7 +469,7 @@ function coachBrief(tid, role) {
   }
   // ---------- strength and conditioning ----------
   else if (role === 'SC') {
-    const key = ro.filter(p => cat(p, 'lock', 'likely', 'bubble')), gas = key.filter(p => (p.h.stam || 60) <= 45).sort((a, b) => a.h.stam - b.h.stam), old = key.filter(p => p.age >= 31).sort((a, b) => b.age - a.age), ready = key.filter(p => (p.h.work || 55) >= 80), hurt = rosterOf(tid).filter(p => p.injury);
+    const key = ro.filter(p => cat(p, 'lock', 'likely', 'bubble')), gas = key.filter(p => (p.h.stam || 60) <= 45).sort((a, b) => a.h.stam - b.h.stam), old = key.filter(p => p.age >= 31).sort((a, b) => b.age - a.age), ready = key.filter(p => (p.h.pas || 55) >= 80), hurt = rosterOf(tid).filter(p => p.injury);
     sec(on ? 'How they are holding up' : 'Coming into camp', [ready.length ? `${briefList(ready, 4)} came back in the best shape on the team.` : null, gas.length ? `${briefList(gas, 4)} ${gas.length === 1 ? 'wears' : 'wear'} down. Watch the late periods and the second halves.` : 'Nobody worries me from a conditioning standpoint.',
       old.length ? `I want to manage the load on ${briefList(old, 3)}. They do not need every rep to be ready.` : null, hurt.length ? `Not practicing: ${briefList(hurt, 5)}.` : 'Everybody is on the field.']);
   }

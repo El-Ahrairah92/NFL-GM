@@ -46,7 +46,41 @@ function stanceOf(tid) {
   return t.stance;
 }
 function stanceCfg(tid) { return STANCE[stanceOf(tid)]; }
-function qbHunt(tid) { stanceOf(tid); return !!T(tid).qbHunt; }
+// ---------- the QB outlook: what the club has at quarterback, as its own staff reads it ----------
+// One verdict on the room: franchise (the answer), window (the answer, 33 or older), developing (a young one the club waits on),
+// bridge (a starter who is not the answer) or none. The lines are the league's own, so they move with its quarterbacks.
+const QB_RANK = { franchise: 0, window: 0, developing: 1, bridge: 2, none: 3 };
+const QB_MARGIN = 2; // a man's verdict only changes when the read is this far past the line
+function qbLines() { const h = th(null, 'QB'); return { fr: (h.mid + h.hi) / 2, st: h.starter, floor: (h.rotation + h.starter) / 2 }; }
+// one quarterback read at level v. Developing runs on seasons in the league, not age (an older rookie gets his years too; his age
+// already shows in how much growth the staff sees): his first three, more for a patient GM, while he is still growing and his
+// ceiling reaches the answer (a GM who bets on upside counts the ceiling for more). A rookie needs no floor.
+function qbVerdictAt(q, tid, v, L) {
+  if (v >= L.fr) return q.age >= 33 ? 'window' : 'franchise';
+  const g = viewGrowth(q, tid), up = 0.7 + 0.6 * gmTrait(tid, 'upside') / 100, yrs = 3 + Math.round(clamp((gmTrait(tid, 'patience') - 50) / 25, 0, 2)), exp = q.exp || 0;
+  if (exp < yrs && g >= 2 && v + g * up >= L.fr && (exp === 0 || v >= L.floor)) return 'developing';
+  return v >= L.st ? 'bridge' : 'none';
+}
+// the clear margin: a man the club already had a verdict on keeps it until the read is well past the line
+function qbVerdict(q, tid, prev, L) {
+  const v = viewOvr(q, tid), now = qbVerdictAt(q, tid, v, L);
+  if (!prev || QB_RANK[now] === QB_RANK[prev]) return now;
+  return qbVerdictAt(q, tid, v + (QB_RANK[now] > QB_RANK[prev] ? QB_MARGIN : -QB_MARGIN), L);
+}
+// the room: its best answer, and a young one developing behind an old answer is his successor
+function qbOutlookRead(tid) {
+  const t = T(tid), L = qbLines(), was = (t.qbOut && t.qbOut.by) || {}, by = {};
+  const qs = rosterOf(tid).filter(p => p.pos === 'QB').sort((a, b) => viewOvr(b, tid) - viewOvr(a, tid)).slice(0, 3);
+  for (const q of qs) by[q.id] = qbVerdict(q, tid, was[q.id], L);
+  const pick = k => qs.find(q => by[q.id] === k), lead = pick('franchise') || pick('window') || pick('developing') || pick('bridge') || qs[0];
+  const succ = lead && by[lead.id] === 'window' ? pick('developing') : null;
+  return { v: lead ? by[lead.id] : 'none', id: lead ? lead.id : null, succ: succ ? succ.id : null, by };
+}
+// set at the league-year turn, after free agency, after the draft and at the opener (or when the man it was about is gone)
+function setQbOutlooks() { for (const t of state.teams) t.qbOut = qbOutlookRead(t.id); }
+function qbOutlook(tid) { const t = T(tid), o = t.qbOut; if (!o || (o.id != null && (!P(o.id) || P(o.id).tid !== tid))) t.qbOut = qbOutlookRead(tid); return t.qbOut; }
+// no answer, or an old answer with nobody behind him: the club is hunting
+function qbHunt(tid) { const o = qbOutlook(tid); return o.v === 'none' || (o.v === 'window' && !o.succ); }
 // how good a roster is, as its own front office sees it: the best at each job the club fields, the passer counted twice
 function clubStrength(tid) {
   const ro = rosterOf(tid).filter(p => !(p.ir && p.ir.season)), by = {}; ro.forEach(p => (by[p.pos] = by[p.pos] || []).push(viewOvr(p, tid)));
@@ -59,8 +93,8 @@ function setStance(tid, midSeason) {
   const recs = standings(), r = recs.find ? recs.find(x => x.tid === tid) : recs[tid], g = r ? r.w + r.l + r.t : 0, win = g >= 4 ? (r.w + r.t * 0.5) / g : 0.5;
   const score = 0.65 * rk + 0.35 * win;
   const top = rosterOf(tid).slice().sort((a, b) => viewOvr(b, tid) - viewOvr(a, tid)).slice(0, 15), coreAge = top.reduce((s, p) => s + p.age, 0) / Math.max(1, top.length);
-  const q = rosterOf(tid).filter(p => p.pos === 'QB').sort((a, b) => viewOvr(b, tid) - viewOvr(a, tid))[0], qv = q ? viewOvr(q, tid) : 0;
-  const qbGood = !!q && qv >= 74 && q.age <= 32, qbOk = !!q && qv >= 68 && q.age <= 33, qbYoung = !!q && q.age <= 26 && qv >= 66, hc = C(t.hc), fresh = !!hc && (hc.yrs || 0) === 0;
+  const q = rosterOf(tid).filter(p => p.pos === 'QB').sort((a, b) => viewOvr(b, tid) - viewOvr(a, tid))[0];
+  const qo = qbOutlook(tid).v, qbGood = qo === 'franchise' || qo === 'window', qbOk = qbGood || qo === 'bridge', qbYoung = qo === 'developing', hc = C(t.hc), fresh = !!hc && (hc.yrs || 0) === 0;
   const prev = t.stance;
   if (midSeason) { // at the deadline the record speaks
     if ((prev === 'allin' || prev === 'contend') && g >= 6 && win <= 0.3) t.stance = 'retool';
@@ -70,11 +104,11 @@ function setStance(tid, midSeason) {
   else if (score >= 0.3 && (coreAge <= 27 || qbYoung)) t.stance = 'rising';
   else if (score < 0.2 || (score < 0.34 && !qbOk && (coreAge >= 27.6 || fresh))) t.stance = 'rebuild';
   else t.stance = 'retool';
-  t.qbHunt = !q || qv < 66 || q.age >= 33 || (q.contract && q.contract.yrs <= 1 && q.age >= 31 && !rosterOf(tid).some(x => x.pos === 'QB' && x !== q && x.age <= 25 && viewCeil(x, tid) >= 72));
+  delete t.qbHunt; // (now read from the QB outlook)
   if (tid === u && !isAI(u)) { t.stance = null; } // yours is yours
   BUDGET_CACHE.key = null; PLAN_CACHE.key = null;
 }
-function setStances(midSeason) { for (const t of state.teams) if (isAI(t.id)) setStance(t.id, midSeason); }
+function setStances(midSeason) { if (!midSeason) setQbOutlooks(); for (const t of state.teams) if (isAI(t.id)) setStance(t.id, midSeason); }
 
 // ---------- room plans ----------
 const PLAN_BAR = { QB: 70, RB: 66, WR: 67, TE: 65, OL: 66, DL: 66, LB: 65, CB: 66, S: 65, K: 66, P: 64 }; // what a starter has to be, as the club sees it

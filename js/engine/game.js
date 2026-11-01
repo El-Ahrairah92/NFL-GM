@@ -281,16 +281,28 @@ function runPlay(g, oc, dc) {
 // Flags follow discipline: the players on the field, the position coach who runs their room, and the head coach's culture.
 // Per-play chances for a team of average discipline.
 const PEN = { offPre: 0.026, defPre: 0.015, holdRun: 0.018, holdPass: 0.025, defHold: 0.02, dpi: 0.066, rough: 0.011, lateDef: 0.0095, lateOff: 0.0022 };
-function discFactor(g, side, entries) {
+// which trait a foul comes from: Discipline (before the snap, holding, grabbing in coverage), Temperament (after the
+// whistle), or the dirty ones, where Conduct joins Temperament (roughing the passer, the face mask, the horse-collar)
+function penTrait(p, k) { const h = p.h; return k === 'temp' ? h.temp : k === 'dirty' ? (h.temp + h.cond) / 2 : h.disc; }
+// a room with a leader who keeps it in line pulls its hotheads toward calm (read once a game, room by room)
+function calmLift(g, p, k) {
+  const tid = p.tid >= 0 ? p.tid : p.psTid;
+  if (!ROOM_AVG[k] || !PRAC_SIDE[p.pos] || tid === undefined || tid < 0) return 0;
+  const c = g.calmC || (g.calmC = {}), key = tid + p.pos;
+  if (!c[key]) c[key] = roomState(tid, p.pos).calm.slice(0, 3).map(v => [v.p.id, v.w]);
+  const o = c[key].filter(v => v[0] !== p.id), calm = o.length ? Math.min(1.5, o[0][1] + (o[1] ? o[1][1] * 0.35 : 0)) : 0;
+  return calm * Math.max(0, 75 - penTrait(p, k)) * 0.3;
+}
+function discFactor(g, side, entries, k) {
   const ps = entries.map(e => e.p).filter(p => p && p.h);
   if (!ps.length) return 1;
-  ps.forEach(p => { if (p.h.disc === undefined) ensureCharacter(p); });
-  const tid = g.tids[side], own = ps.reduce((s, p) => s + p.h.disc, 0) / ps.length;
+  ps.forEach(ensureCharacter);
+  const tid = g.tids[side], own = ps.reduce((s, p) => s + penTrait(p, k) + calmLift(g, p, k), 0) / ps.length - (ROOM_AVG[k] || 0);
   const room = ps.reduce((s, p) => s + (ROOM_COACH[p.pos] ? roomDisc(tid, p.pos) : 52), 0) / ps.length;
   return clamp(1 + (56 - (0.65 * own + 0.35 * room)) / 28, 0.45, 2.2) * clamp(1.2 - knob(C(T(tid).hc), 'acc') / 250, 0.8, 1.2);
 }
-// who the flag is on: the least disciplined are the likeliest
-function flagOn(entries) { const es = entries.filter(e => e.p && e.p.h); return es.length ? weightedPick(es, es.map(e => Math.max(30, 125 - (e.p.h.disc === undefined ? 55 : e.p.h.disc)))) : null; }
+// who the flag is on: the likeliest is the man lowest in the trait the foul comes from
+function flagOn(entries, k) { const es = entries.filter(e => e.p && e.p.h); es.forEach(e => ensureCharacter(e.p)); return es.length ? weightedPick(es, es.map(e => Math.max(30, 125 - penTrait(e.p, k)))) : null; }
 // walk it off. onOffense: against the team with the ball. Returns the yards actually marked.
 function assessPenalty(g, onOffense, yards, name, who, opts = {}) {
   const o = g.poss, side = onOffense ? o : 1 - o, dd = g.pbp ? `${ordinal(g.down)} & ${g.ydl + g.togo >= 100 ? 'Goal' : g.togo} at ${spotTxt(g)}` : '';
@@ -324,9 +336,9 @@ function preSnapPenalty(g, off, def, oc) {
 function lateFoul(g, res, off, def) {
   if (res.kind !== 'run' && res.kind !== 'comp' && res.kind !== 'scramble') return;
   const o = g.poss, d = 1 - o, r = rand();
-  const near = [res.tackler, res.assist].filter(Boolean), pD = PEN.lateDef * discFactor(g, d, near.length ? near : def);
-  if (r < pD) { const k = rand(); assessPenalty(g, false, 15, k < 0.4 ? 'Unnecessary roughness' : k < 0.75 ? 'Face mask' : k < 0.9 ? 'Horse-collar tackle' : 'Unsportsmanlike conduct', near.length && k < 0.9 ? pick(near) : flagOn(def), { autoFirst: true, noPlay: false }); return; }
-  if (r < pD + PEN.lateOff * discFactor(g, o, off)) { const k = rand(); assessPenalty(g, true, 15, k < 0.55 ? 'Unnecessary roughness' : k < 0.8 ? 'Unsportsmanlike conduct' : 'Taunting', flagOn(off.filter(e => e.slot !== 'QB')), { noPlay: false }); }
+  const near = [res.tackler, res.assist].filter(Boolean), pD = PEN.lateDef * discFactor(g, d, near.length ? near : def, 'dirty');
+  if (r < pD) { const k = rand(); assessPenalty(g, false, 15, k < 0.4 ? 'Unnecessary roughness' : k < 0.75 ? 'Face mask' : k < 0.9 ? 'Horse-collar tackle' : 'Unsportsmanlike conduct', near.length && k < 0.9 ? pick(near) : flagOn(def, 'temp'), { autoFirst: true, noPlay: false }); return; }
+  if (r < pD + PEN.lateOff * discFactor(g, o, off, 'temp')) { const k = rand(); assessPenalty(g, true, 15, k < 0.55 ? 'Unnecessary roughness' : k < 0.8 ? 'Unsportsmanlike conduct' : 'Taunting', flagOn(off.filter(e => e.slot !== 'QB'), 'temp'), { noPlay: false }); }
 }
 // during the play. Returns true when the play is wiped out and the penalty has been marked off.
 function liveBallPenalty(g, res, oc, dc, off, def) {
@@ -354,8 +366,8 @@ function liveBallPenalty(g, res, oc, dc, off, def) {
     }
     // roughing the passer wipes out an incompletion, a sack or an interception
     const home = (res.rushers || []).map(a => a.e).filter(Boolean);
-    if (home.length && (res.kind === 'inc' || res.kind === 'int' || res.kind === 'sack') && rand() < PEN.rough * discFactor(g, d, home)) {
-      waste(); assessPenalty(g, false, 15, 'Roughing the passer', flagOn(home), { autoFirst: true }); return true;
+    if (home.length && (res.kind === 'inc' || res.kind === 'int' || res.kind === 'sack') && rand() < PEN.rough * discFactor(g, d, home, 'dirty')) {
+      waste(); assessPenalty(g, false, 15, 'Roughing the passer', flagOn(home, 'dirty'), { autoFirst: true }); return true;
     }
   }
   return false;

@@ -34,6 +34,7 @@ function newLeague(userTid) {
     genStaff(t);
   }
   fillCoachPool(9);
+  seedGMs();
   updateSystems();
   for (const t of state.teams) { t.sys.O.yrs = 1; t.sys.D.yrs = 1; } // existing staffs: systems already installed
   for (let i = 0; i < 70; i++) {
@@ -52,6 +53,7 @@ function newLeague(userTid) {
   seedStaffKnow(state, true); state.skV = 1; // a new league: every club already knows the men it has
   state.lvl = 1.3; // from here the market pays what a full cap buys
   practiceWeekAll();
+  setQbOutlooks(); gmSeasonStart(); // what each roster is expected to do this year
   addNews(`Welcome to the ${START_SEASON} season. You are the GM of the ${teamName(userTid)}.`, [userTid]);
   return state;
 }
@@ -71,7 +73,8 @@ function migrateState(st) {
   st._needWeb = st.teams.some(t => t.staffBud === undefined);
   if (st.teams.some(t => !t.asst) && st.coaches && Object.keys(st.coaches).length) { for (const t of st.teams) ensureAssistants(t, true); fillAsstPool(3); for (const c of Object.values(st.coaches)) updateCoachOvr(c); addNews('League updated: every staff now has specialists and position coaches. Player development has moved from the coordinators to the position coaches.'); }
   if (st.coaches) for (const c of Object.values(st.coaches)) migrateCoach(c, st.teams, st.coaches); // coach ratings rebuilt (DESIGN section 52)
-  for (const id in st.players) { const p = st.players[id]; if (p.h && p.h.work === undefined) { ensureCharacter(p); if (p.tid >= 0) { p.pbTid = p.tid; p.pb = p.exp === 0 ? 80 : 96; p.seenW = p.tid === st.userTid ? 16 : 0; } } }
+  for (const id in st.players) { const p = st.players[id]; if (p.h && p.h.work === undefined && p.h.pas === undefined) { ensureCharacter(p); if (p.tid >= 0) { p.pbTid = p.tid; p.pb = p.exp === 0 ? 80 : 96; p.seenW = p.tid === st.userTid ? 16 : 0; } } }
+  for (const id in st.players) ensureCharacter(st.players[id]); // the character rework: the new traits, work ethic carried over as passion
   if (st.version === 2) {
     // v3: five-coach staffs with knobs & tendencies — regenerate all coaches
     st.coaches = {}; st.nextCid = 1;
@@ -104,6 +107,7 @@ function migrateState(st) {
   if (st._needWeb) { ensureCoachContracts(); seedWeb(); } delete st._needWeb;
   if (st.phase === 'COACHES' && !st.car) startCarousel();
   if (st.teams.some(t => !t.pkSnap)) snapPlaybooks();
+  if (!st.gms) seedGMs(); // saves from before general managers: every other club gets one already in the job
   if (st.version === SAVE_VERSION && (st.phase === 'REG' || st.phase === 'PLAYOFFS' || st.phase === 'RECAP')) ensureDraftClass(st.season + 1);
   // positional comfort & adaptability for saves that predate them
   if (st.version === SAVE_VERSION) for (const id in st.players) { const p = st.players[id]; if (!p.a) continue; if (p.h && p.h.adapt === undefined) p.h.adapt = Math.round(clamp(gauss(55, 18), 5, 99)); if (!p.cf) { genComfort(p); updateRatings(p); } }

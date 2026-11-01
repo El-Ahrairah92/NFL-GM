@@ -866,6 +866,11 @@ function rosterGamesHTML(p) {
     : `<div class="small muted" style="padding:6px 2px">No games yet this season.${prev && prev.gp ? ` Last season: ${prev.gp} games, ${prev.gs || 0} starts${line(prev) ? ', ' + esc(line(prev)) : ''}.` : ''}</div>`;
   return `<div class="ros-x">${head}${body}</div>`;
 }
+// another club's GM, on its page: who he is, his career, what he is known for (your own club has none: you are it)
+function gmLineHTML(tid) {
+  const g = typeof gmOf === 'function' && tid !== state.userTid ? gmOf(tid) : null; if (!g) return '';
+  return `<div class="small" style="margin-bottom:8px"><span class="muted">General manager</span> <b>${esc(gmName(g))}</b> <span class="muted">(${g.age})</span> · ${esc(gmCareer(g))} <span class="muted">${esc(gmSummary(g))}</span></div>`;
+}
 function rosterHTML() {
   const tid = ui.rosterTid == null ? state.userTid : ui.rosterTid;
   const mine = tid === state.userTid;
@@ -877,6 +882,7 @@ function rosterHTML() {
     <span class="spacer"></span>${mine && state.phase === 'RESIGN' ? '<button data-action="resignAll">Re-sign all affordable starters</button>' : ''}
     ${mine && rosterOf(tid).length > ROSTER_MAX && state.phase === 'PRESEASON' ? `<button data-action="autoCut">Auto-cut to ${ROSTER_MAX}</button>` : ''}</div>
     <div class="muted small" style="margin-bottom:8px">Cap ${fmtMoney(state.cap)}${T(tid).carry ? ` + ${fmtMoney(T(tid).carry)} carryover` : ''} · Payroll ${fmtMoney(payroll(tid))} · Cap space <b>${fmtMoney(capRoom(tid))}</b>${T(tid).dead ? ` · Dead money ${fmtMoney(T(tid).dead)}` : ''} · Next year committed ${fmtMoney(payrollNext(tid))} · ${rosterCount(tid)}/${rosterLimit()} players${state.phase === 'REG' ? ' (IR excluded)' : ''} · PS ${psOf(tid).length}/${PS_MAX}</div>
+    ${gmLineHTML(tid)}
     <div class="subtabs">${famTabs(ui.rosterPos || 'ALL', 'rosterPos')}</div>`;
   if (mine && state.phase === 'RESIGN') html += decisionsHTML(tid);
   const rOpen = ui.rosOpen || {};
@@ -1788,7 +1794,7 @@ function pracRoomInfo(u, pos) {
   const rs = roomState(u, pos), order = repsOrder(u, pos), squad = psOf(u).filter(p => p.pos === pos);
   const graded = order.filter(p => p.prac && p.prac.g != null && !p.prac.dnp), avg = graded.length ? graded.reduce((a, p) => a + p.prac.g, 0) / graded.length : null;
   const pb = order.length ? order.reduce((a, p) => a + pbOf(p), 0) / order.length : null;
-  const tone = rs.tone > 0.3 ? ['Strong room', 'good'] : rs.tone < -0.2 ? ['Bad habits spreading', 'bad'] : ['Neutral room', ''];
+  const tone = rs.tone >= 0.7 ? ['Strong leadership', 'good'] : rs.tone >= 0.25 ? ['Has a leader', ''] : ['No clear leader', 'muted'];
   const best = graded.slice().sort((a, b) => b.prac.g - a.prac.g)[0];
   return { pos, rs, order, squad, graded, avg, pb, tone, best, coach: posCoach(u, pos) };
 }
@@ -1800,7 +1806,7 @@ function practiceHTML() {
   const rooms = PRAC_ORDER.map(pos => pracRoomInfo(u, pos)).filter(r => r.order.length || r.squad.length);
   const all = rooms.flatMap(r => r.graded);
   let html = `<div class="row" style="margin-bottom:10px"><h2 style="margin:0">Practice report <span class="small muted" style="font-weight:400">· ${when}</span></h2><span class="spacer"></span></div>
-    <details class="fold" ${foldAttr(`prachelp`)} style="margin-bottom:14px"><summary>How practice works</summary><div class="small muted" style="margin-top:6px">A strong week is a small edge on game day and a poor one a small drag. Work Ethic and Discipline drive it, the veterans in each room set the tone (for better or worse), and Consistency keeps a player from having bad weeks.
+    <details class="fold" ${foldAttr(`prachelp`)} style="margin-bottom:14px"><summary>How practice works</summary><div class="small muted" style="margin-top:6px">A strong week is a small edge on game day and a poor one a small drag. Passion drives it, Discipline a little, a respected veteran who works lifts his whole room, and Consistency keeps a player from having bad weeks. A room's leaders also drive its offseason program and keep its tempers in check.
     Players learn the playbook through reps: inside a room, use the arrows to set who gets the first-team reps. A player who does not know a call loses that snap to someone who does when possible, and can blow the assignment when he has to play it.
     <b>Working at</b> sets the spot a player practices at. A second spot takes a share of his reps and is where his comfort grows (weeks to months, quicker for nearby jobs and quick learners).</div></details>`;
   // the week's standouts
@@ -1829,13 +1835,13 @@ function practiceHTML() {
   if (!sel) return html + '<div class="muted small" style="margin-top:14px">Click a room for its full report: reps order, playbook knowledge, cross-training and character reads.</div>';
   // the open room
   const i = rooms.indexOf(sel), prev = rooms[(i + rooms.length - 1) % rooms.length], next = rooms[(i + 1) % rooms.length], pos = sel.pos, order = sel.order;
-  const known = v => (v.p.seenW || 0) >= 2, lead = sel.rs.voices[0], drag = sel.rs.voices.filter(v => v.a < -0.15).sort((a, b) => a.w * a.a - b.w * b.a)[0];
+  const known = v => (v.p.seenW || 0) >= 2, lead = sel.rs.work.find(v => v.w >= 0.2), calm = sel.rs.calm.find(v => v.w >= 0.2);
   html += `<div class="card" id="pracDetail" style="margin-top:16px"><div class="row" style="margin-bottom:8px">
       <button class="sm" data-action="pracRoom" data-pos="${prev.pos}" title="${ROOM_NAME[prev.pos]}">◀ ${ROOM_NAME[prev.pos]}</button>
       <span class="spacer"></span><h2 style="margin:0">${ROOM_NAME[pos]}</h2>${pracRating(sel.avg)}<span class="pill ${sel.tone[1]}">${sel.tone[0]}</span><span class="spacer"></span>
       <button class="sm" data-action="pracRoom" data-pos="${next.pos}" title="${ROOM_NAME[next.pos]}">${ROOM_NAME[next.pos]} ▶</button></div>
     <div class="small muted" style="margin-bottom:10px">${sel.coach ? `Coach: ${coachNameLink(sel.coach)} · ${esc(sel.coach.style)} · develops ${wordPill(asstWord(sel.coach, 'dev'))} discipline ${wordPill(asstWord(sel.coach, 'disc'))}` : 'No position coach'}
-      · ${lead && known(lead) ? `Sets the tone: ${playerLink(lead.p, true)}${lead.a < -0.15 ? ' <span class="bad">(not a good example)</span>' : ''}` : sel.rs.voices.length ? 'Your staff is still learning who runs this room' : 'No veteran voice in this room'}${drag && lead && drag.p !== lead.p && known(drag) ? ` · dragging it down: ${playerLink(drag.p, true)}` : ''}</div>` +
+      · ${lead || calm ? [lead && known(lead) ? `Sets the work: ${playerLink(lead.p, true)}` : '', calm && known(calm) ? `Keeps it in line: ${playerLink(calm.p, true)}` : ''].filter(Boolean).join(' · ') || 'Your staff is still learning who runs this room' : 'No veteran voice in this room'}</div>` +
     table('prac' + pos, [
       { k: 'ord', l: 'Reps', f: p => p.tid === -3 ? '<span class="muted small">Practice squad</span>' : `<span class="small">#${repsOrder(state.userTid, p.pos).indexOf(p) + 1}</span> <button class="link small" data-action="repsGo" data-k="${(typeof repsJobsOf === 'function' && repsJobsOf(p.id)[0] || {}).k || ''}" data-pid="${p.id}" title="Practice order is set on Snap counts">set</button>` },
       { k: 'n', l: 'Name', f: p => playerLink(p) + ' ' + statusPills(p) },
@@ -1847,7 +1853,7 @@ function practiceHTML() {
       { k: 'pb', l: 'Playbook', f: p => `${pbBar(pbOf(p))} <span class="small muted">${pbLabel(pbOf(p))}</span>` },
       { k: 'xt', l: 'Working at', f: p => crossTrainSelect(p), title: 'The spot he practices at. A second spot takes a share of his reps, and a spot that is new to him is where his comfort grows.' },
       { k: 'rg', l: 'Grades', f: p => rowGrades(p) },
-      { k: 'we', l: 'Work ethic', f: p => charPill(p, 'work') },
+      { k: 'we', l: 'Passion', f: p => charPill(p, 'pas') },
       { k: 'di', l: 'Discipline', f: p => charPill(p, 'disc') },
       { k: 'le', l: 'Leadership', f: p => charPill(p, 'lead') },
     ], [...order, ...sel.squad], { nosort: 1 }) + '</div>';
@@ -3525,7 +3531,7 @@ function cardContractHTML(p) {
 function cardManageHTML(p) {
   const u = state.userTid; let left = '';
   if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && p.a && workSpots(p).length > 1) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Where he is working <span title="Sets the room he sits in during camp, the drills he takes, what the reports say about him, and where his comfort at a new spot grows.">ⓘ</span></div>${crossTrainSelect(p, true)}</div>`;
-  if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && PRAC_SIDE[p.pos]) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">In the building${p.seenW ? ` · ${p.seenW} week${p.seenW === 1 ? '' : 's'} with your staff` : ''}</div><div class="small" style="margin-bottom:4px">Playbook ${pbBar(pbOf(p))} <span class="muted">${pbLabel(pbOf(p))}</span> · this week ${pracChip(p)}</div><div class="row small" style="gap:6px">${charPill(p, 'work')}${charPill(p, 'disc')}${charPill(p, 'lead')}</div>${p.tid === u && crossTrainSpots(p).length ? `<div class="small" style="margin-top:6px">Cross-train at ${crossTrainSelect(p).replace('data-pid=', 'data-card="1" data-pid=')}${p.xt ? ` <span class="muted">now ${comfortLabel(comfortOf(p, p.xt)).toLowerCase()} (${Math.round(comfortOf(p, p.xt))}/100)</span>` : ''}</div>` : ''}</div>`;
+  if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && PRAC_SIDE[p.pos]) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">In the building${p.seenW ? ` · ${p.seenW} week${p.seenW === 1 ? '' : 's'} with your staff` : ''}</div><div class="small" style="margin-bottom:4px">Playbook ${pbBar(pbOf(p))} <span class="muted">${pbLabel(pbOf(p))}</span> · this week ${pracChip(p)}</div><div class="row small" style="gap:6px">${charPill(p, 'pas')}${charPill(p, 'disc')}${charPill(p, 'lead')}</div>${p.tid === u && crossTrainSpots(p).length ? `<div class="small" style="margin-top:6px">Cross-train at ${crossTrainSelect(p).replace('data-pid=', 'data-card="1" data-pid=')}${p.xt ? ` <span class="muted">now ${comfortLabel(comfortOf(p, p.xt)).toLowerCase()} (${Math.round(comfortOf(p, p.xt))}/100)</span>` : ''}</div>` : ''}</div>`;
   if (p.tid === u && state.phase === 'PRESEASON' && state.prePlan && p.pos !== 'K' && p.pos !== 'P') { const pl = state.prePlan, cur = pl.feat[p.id] ? 'feat' : pl.hold[p.id] ? 'hold' : ''; left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Preseason playing time${p.preS ? ` · ${p.preS.snp} snaps so far` : ''}</div><span class="seg">${[['', 'Normal'], ['feat', 'Feature'], ['hold', 'Hold out']].map(([k, l]) => `<button class="sm ${cur === k ? 'on' : ''}" data-action="preFeat" data-card="1" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span></div>`; }
   return left;
 }
