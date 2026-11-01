@@ -1095,6 +1095,11 @@ input, textarea, select, .selectable { -webkit-user-select: text; user-select: t
 @media (max-width: 760px) { .figs { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; } .fig:nth-child(odd) { border-left: none; padding-left: 2px; } }
 /* the scouting page: three columns of a typed report */
 .sc-grid { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr) minmax(0, 0.92fr); }
+.sc-grid.pr2 { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); } /* the scout report prototype */
+.pr-tbl { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pr-tbl th { text-align: right; white-space: nowrap; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.pr-tbl td { text-align: right; white-space: nowrap; padding: 5px 6px; border-bottom: 1px solid var(--line2); }
+.pr-tbl th:nth-child(-n+2), .pr-tbl td:nth-child(-n+2) { text-align: left; }
 .sc-col { padding: 0 20px; border-left: 1px solid var(--line); min-width: 0; } .sc-col:first-child { border-left: none; padding-left: 2px; } .sc-col:last-child { padding-right: 2px; }
 .sc-col .ds-rule { margin: 11px 0 8px; }
 .sc-read { font-size: 16px; line-height: 1.45; }
@@ -1117,7 +1122,7 @@ input, textarea, select, .selectable { -webkit-user-select: text; user-select: t
 .ph-r span { color: var(--muted); } .ph-r b { font-variant-numeric: tabular-nums; text-align: right; } .ph-r b.muted { color: var(--muted); font-weight: 600; font-size: 11.5px; } .ph-r b em { font-style: normal; font-weight: 600; color: var(--accent); margin-left: 6px; font-size: 11.5px; }
 .ph-r i { font-style: normal; justify-self: end; }
 .sc-manage .terms { margin: 0 0 6px; padding: 6px 8px; } .sc-col .line-strip { margin: 4px 0; }
-@media (max-width: 860px) { .sc-grid { grid-template-columns: minmax(0, 1fr); } .sc-col { border-left: none; padding: 0 2px 12px; } }
+@media (max-width: 860px) { .sc-grid, .sc-grid.pr2 { grid-template-columns: minmax(0, 1fr); } .sc-col { border-left: none; padding: 0 2px 12px; } }
 .sw-i span { color: var(--text); } .sw-i.rel span { color: var(--muted); }
 .sc-col .line-strip, .sc-spots, .sc-ras, .ph-r { clear: both; } .sc-col .line-strip { width: 100%; margin: 6px 0; }
 

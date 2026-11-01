@@ -3558,9 +3558,9 @@ function cardButtonsHTML(p) {
 function playerModal(pid, replace) {
   const p = P(pid);
   if (!p) return;
-  const prospect = p.tid === -2, tabs = CARD_TABS.filter(([k]) => !prospect || k === 'over' || k === 'scout');
+  const prospect = p.tid === -2, tabs = [...CARD_TABS.filter(([k]) => !prospect || k === 'over' || k === 'scout'), ...(prospect && typeof protoReportHTML === 'function' ? [['proto', 'New report (prototype)']] : [])];
   const tab = tabs.some(([k]) => k === ui.cardTab) ? ui.cardTab : 'over';
-  const body = tab === 'scout' ? cardScoutHTML(p) : tab === 'stats' ? cardStatsHTML(p) : tab === 'adv' ? cardAdvHTML(p) : tab === 'contract' ? cardContractHTML(p) : cardOverHTML(p);
+  const body = tab === 'proto' ? protoReportHTML(p) : tab === 'scout' ? cardScoutHTML(p) : tab === 'stats' ? cardStatsHTML(p) : tab === 'adv' ? cardAdvHTML(p) : tab === 'contract' ? cardContractHTML(p) : cardOverHTML(p);
   const btn = prospect ? cardButtonsHTML(p) : '';
   openModal(`<div class="dossier">${cardHeadHTML(p)}<div class="ds-tabs">${tabs.map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="cardTab" data-v="${k}" data-pid="${p.id}">${l}</button>`).join('')}</div>
     <div class="ds-body">${body}</div>${btn ? `<div class="ds-foot row">${btn}</div>` : ''}</div>`, replace);
@@ -4135,6 +4135,7 @@ const actions = {
   schedPart: d => { ui.schedPart = d.part; ui.schedWeekA = 1; render(); },
   cardScope: d => { ui.cardScope = d.v; playerModal(+d.pid, true); },
   cardTab: d => { ui.cardTab = d.v; playerModal(+d.pid, true); },
+  protoDepth: d => { ui.protoDepth = +d.v; playerModal(+d.pid, true); },
   preTab: d => { ui.preTab = d.v; render(); },
   meetRole: d => { ui.meetRole = d.v; render(); },
   meetAll: d => { const u = state.userTid, room = d.v; for (const a of repsAdvice(u)) { const p = P(a.pid); if (!p) continue; const rk = preRoomOf(p); if (rk === room) repsToString(a.k, a.pid, a.cs); } save(); render(); },
