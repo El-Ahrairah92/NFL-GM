@@ -475,11 +475,10 @@ function repPenalty(p) { const t = p.prac ? p.prac.t : 0; return !t ? 0 : (p.pos
 // ---- call complexity: how much of the playbook a snap asks for ----
 function offNeed(oc) {
   let n = 35;
-  for (const t of ['PA', 'BOOT', 'RPO', 'RUB', 'MOTION']) if (oc.tags && oc.tags.has(t)) n += 10;
+  for (const t of ['PA', 'BOOT', 'RPO', 'MOTION']) if (oc.tags && oc.tags.has(t)) n += 10;
   n = Math.min(n, 60);
   n += { DEEP: 8, OPTION: 15, GADGET: 30, JET: 10, RBSCR: 10, WRSCR: 10, DRAW: 5 }[oc.type] || 0;
   n += (oc.trips ? 4 : 0) + (oc.bunch ? 8 : 0) + (oc.tight ? 3 : 0) + (oc.counter ? 8 : 0) + (oc.duo ? 4 : 0) + (oc.optrt ? 15 : 0) + (oc.maxp ? 4 : 0) + (oc.nohud ? 6 : 0);
-  if (oc.tags && oc.tags.has('TRICK')) n += 20;
   return Math.min(80, n);
 }
 function defNeed(dc) {

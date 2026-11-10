@@ -75,7 +75,7 @@ function resolveRun(g, off, def, oc, dc) {
   const qb = off.find(e => e.slot === 'QB');
   let carrierSlot = oc.carrier || 'RB';
   if (oc.type === 'SNEAK') return sneak(g, off, def, oc, res, qb);
-  if (oc.type === 'JET') carrierSlot = oc.mv && off.some(e => e.slot === oc.mv.slot) ? oc.mv.slot : ['SLOT', 'Z', 'SLOT2', 'X'].find(s => off.some(e => e.slot === s)) || 'RB';
+  if (jetAction(oc)) carrierSlot = oc.mv && off.some(e => e.slot === oc.mv.slot) ? oc.mv.slot : ['SLOT', 'Z', 'SLOT2', 'X'].find(s => off.some(e => e.slot === s)) || 'RB';
   // option: QB reads the unblocked edge defender and gives or keeps
   let readRemoved = null;
   if (oc.type === 'OPTION') {
@@ -110,9 +110,9 @@ function resolveRun(g, off, def, oc, dc) {
   if (readRemoved) { const r = blk.find(r => r.e === readRemoved); if (r) { r.state = 'blocked'; r.win = 0; } }
   // draws: rushers who rush upfield take themselves out unless they read it
   const draw = oc.type === 'DRAW';
-  // misdirection: a reverse/trick lives or dies on the defense reading it
+  // misdirection: a reverse lives or dies on the defense reading it
   let trickHit = null;
-  if (oc.tags.has('TRICK')) {
+  if (oc.gadget === 'reverse') {
     const keyD = def.filter(e => e.depth === 0 && Math.sign(e.x) === -oc.side)[0] || def[0];
     trickHit = !bites(g, keyD, 0.1) ? 'read' : 'fooled';
   }
@@ -191,7 +191,7 @@ function resolveRun(g, off, def, oc, dc) {
   levels.sort((a, b) => a.at - b.at);
   if (trickHit === 'read') levels.unshift({ e: lineMen(def)[0], at: -randInt(3, 7) });
   const pursuit = def.filter(e => e.slot === 'CB' || e.slot === 'FS' || e.slot === 'SS' || e.slot === 'NCB');
-  const r = runToContact(g, carrier, levels, { pursuit, vis: ea(g, carrier, 'vis'), fumbleMult: carrierSlot === 'QB' ? 1.2 : 1, afterBase: (carrierSlot === 'QB' ? 1.6 : TUNE.runAfter + (oc.type === 'JET' ? 2.4 : 0)) + (outside && g.hash ? (Math.sign(target) === -g.hash ? TUNE.hashRun : -TUNE.hashRun) : 0), // an outside run to the wide side has more grass before the sideline than one into the boundary
+  const r = runToContact(g, carrier, levels, { pursuit, vis: ea(g, carrier, 'vis'), fumbleMult: carrierSlot === 'QB' ? 1.2 : 1, afterBase: (carrierSlot === 'QB' ? 1.6 : TUNE.runAfter + (jetAction(oc) ? 2.4 : 0)) + (outside && g.hash ? (Math.sign(target) === -g.hash ? TUNE.hashRun : -TUNE.hashRun) : 0), // an outside run to the wide side has more grass before the sideline than one into the boundary
     tackleBonus: 0.14 + (g.down >= 3 && g.togo <= 2 ? 0.45 : 0) + (100 - g.ydl <= 3 ? 0.5 : 100 - g.ydl <= 8 ? 0.2 : 0) * TUNE.goalStand }); // no room behind the defense at the goal line
   return { r, lane }; };
   if (carrierSlot === 'RB' || carrierSlot === 'FB') { const am = avgEnt(g, carrier); if (am) { const cap = 100 - g.ydl; let t = 0; for (let i = 0; i < TUNE.xN; i++) t += Math.min(finish(am, false).r.yds, cap); res.xYds = t / TUNE.xN; } }
@@ -217,7 +217,7 @@ function sneak(g, off, def, oc, res, qb) {
 }
 function runDesc(oc, carrier, res, lane) {
   const dir = oc.side > 0 ? 'right' : 'left';
-  const kind = oc.type === 'DRAW' ? 'draw' : oc.type === 'OPTION' ? 'option' : oc.type === 'JET' ? (oc.tags.has('TRICK') ? 'reverse' : 'jet sweep') :
+  const kind = oc.type === 'DRAW' ? 'draw' : oc.type === 'OPTION' ? 'option' : oc.gadget === 'reverse' ? 'reverse' : oc.type === 'JET' ? 'jet sweep' :
     oc.dir === 'OUT' ? (oc.scheme === 'ZONE' ? 'outside zone' : 'toss') : (oc.scheme === 'ZONE' ? 'inside zone' : 'power');
   return `${pshort(carrier.p)} ${kind} ${lane === 'cutback' ? 'cutback' : dir}`;
 }
@@ -258,7 +258,23 @@ const CONCEPTS = {
   'Smash': { f: 'DROP', w: 0.11, r: [['X', 'S', 'IN', [5, 6], 1.5, 2], ['Z', 'S', 'IN', [5, 6], 1.5, 2], ['SLOT', 'I', 'OUT', [12, 18], 2.2, 1], ['SLOT2', 'I', 'OUT', [12, 18], 2.2, 1], ['Y', 'I', 'OUT', [10, 14], 2.1, 2], ...RTE_TAIL.DROP], vs: { C2: 0.26, T2: 0.14, C6: 0.06, C2M: 0.02, C1: 0, C3: -0.14, C4: -0.2, C0: 0 }, d: 'A hitch underneath and a corner route over it: high-low on a squatting corner. The play for Cover 2.' },
   'Post-dig': { f: 'DEEP', w: 0.6, r: ROUTES.DEEP, vs: { C1: 0.1, C3: 0.06, C0: 0.12, C2: -0.04, C4: -0.14, C6: -0.08, T2: -0.06, C2M: -0.06 }, d: 'A deep post with a dig under it. Takes a shot at a single deep safety.' },
   'Sail shot': { f: 'DEEP', w: 0.4, r: [['X', 'D', 'VERT', [22, 34], 2.7, 1], ['Z', 'D', 'OUT', [18, 26], 2.6, 1], ['SLOT', 'I', 'OUT', [10, 14], 2.2, 2], ['SLOT2', 'D', 'VERT', [20, 30], 2.6, 2], ['Y', 'I', 'IN', [12, 16], 2.3, 2], ['H', 'S', 'OUT', [3, 6], 1.9, 3], ['RB', 'S', 'OUT', [-1, 2], 2.3, 3], ['FB', 'S', 'OUT', [0, 2], 2.3, 3]], vs: { C3: 0.12, C2: 0.1, C6: 0.04, C1: -0.02, C4: -0.1, T2: 0, C2M: -0.1, C0: 0 }, d: 'A go route and a deep out on the same side. Attacks the sideline behind a corner.' },
+  // more of the league's staples. rz: how much more (or less) a play caller reaches for it inside the 20, where the field is short;
+  // fld: how much between the 20s (a red-zone call is carried by most books and thrown mostly down there)
+  'Snag': { f: 'QUICK', w: 0.25, rz: 1.6, r: [['X', 'S', 'IN', [4, 7], 1.2, 2], ['Z', 'I', 'OUT', [10, 14], 1.8, 1], ['SLOT', 'S', 'IN', [4, 6], 1.25, 1], ['SLOT2', 'S', 'OUT', [3, 5], 1.2, 2], ['Y', 'S', 'OUT', [1, 3], 1.3, 2], ...RTE_TAIL.QUICK], vs: { C3: 0.14, C2: 0.08, C4: 0.08, C6: 0.06, T2: 0.04, C1: -0.08, C2M: -0.12, C0: -0.06 }, d: 'A snag sitting inside, a corner route over it and a flat route under it: a triangle on one side. Puts the flat and curl defenders in a bind.' },
+  'Hitch-seam': { f: 'QUICK', w: 0.22, rz: 0.5, r: [['X', 'S', 'VERT', [5, 6], 1.2, 2], ['Z', 'S', 'VERT', [5, 6], 1.2, 2], ['SLOT', 'I', 'VERT', [12, 18], 1.9, 1], ['SLOT2', 'I', 'VERT', [12, 18], 1.9, 1], ['Y', 'I', 'VERT', [12, 18], 2.0, 1], ...RTE_TAIL.QUICK], vs: { C3: 0.18, C0: 0.08, C2: 0.04, C1: -0.04, C2M: -0.06, C6: -0.08, T2: -0.12, C4: -0.16 }, d: 'Hitches outside, seams inside. The outside men sit down under corners bailing to their thirds while the inside men split the deep zones.' },
+  'Fade': { f: 'QUICK', w: 0.22, rz: 3, fld: 0.3, r: [['X', 'D', 'VERT', [12, 24], 1.9, 1], ['Z', 'D', 'VERT', [12, 24], 1.9, 1], ['SLOT', 'S', 'OUT', [2, 5], 1.2, 2], ['SLOT2', 'S', 'IN', [4, 7], 1.2, 2], ['Y', 'S', 'IN', [4, 6], 1.3, 2], ...RTE_TAIL.QUICK], vs: { C1: 0.14, C0: 0.12, C2: 0.04, T2: 0.04, C3: -0.04, C2M: -0.06, C6: -0.06, C4: -0.12 }, d: 'A fade or back-shoulder throw to the man outside, a slant and a flat inside him. One-on-one on the boundary; the first call in the red zone against man.' },
+  'Drive': { f: 'DROP', w: 0.2, rz: 0.8, r: [['X', 'I', 'IN', [10, 13], 2.0, 1], ['Z', 'D', 'VERT', [18, 28], 2.5, 2], ['SLOT', 'S', 'IN', [2, 5], 1.5, 1], ['SLOT2', 'S', 'OUT', [4, 7], 1.6, 2], ['Y', 'S', 'IN', [5, 7], 1.7, 2], ...RTE_TAIL.DROP], vs: { C1: 0.16, C0: 0.14, C2M: 0.12, C3: 0.06, C4: 0, C6: 0, C2: -0.04, T2: -0.08 }, d: 'A shallow cross under a dig. The shallow drags his man through traffic; against zone the dig settles in behind the linebacker it pulled up.' },
+  'Y-cross': { f: 'DROP', w: 0.16, rz: 0.5, r: [['X', 'D', 'VERT', [18, 28], 2.5, 2], ['Z', 'I', 'OUT', [12, 15], 2.2, 2], ['SLOT', 'S', 'OUT', [3, 6], 1.7, 2], ['SLOT2', 'I', 'IN', [12, 16], 2.2, 2], ['Y', 'I', 'IN', [14, 18], 2.3, 1], ...RTE_TAIL.DROP], vs: { C3: 0.16, C1: 0.08, C4: 0.06, C0: 0.06, C6: 0.04, C2: 0.02, C2M: -0.04, T2: -0.1 }, d: 'The tight end runs a deep crosser under a post. Built for three-deep: he comes open behind the hook defenders and under the deep third.' },
+  'Double move': { f: 'DEEP', w: 0.3, r: [['X', 'D', 'VERT', [24, 36], 2.9, 1], ['Z', 'S', 'IN', [4, 7], 1.4, 2], ['SLOT', 'I', 'IN', [10, 14], 2.1, 2], ['SLOT2', 'S', 'OUT', [4, 7], 1.7, 2], ['Y', 'I', 'VERT', [12, 18], 2.3, 2], ['H', 'S', 'OUT', [3, 6], 1.9, 3], ['RB', 'S', 'OUT', [-1, 2], 2.3, 3], ['FB', 'S', 'OUT', [0, 2], 2.3, 3]], vs: { C0: 0.14, C1: 0.12, C3: 0.08, T2: -0.04, C2: -0.06, C6: -0.06, C2M: -0.08, C4: -0.12 }, d: 'A slant or hitch fake, then up the field. Punishes a corner who jumps the short route; it needs time to come open.' },
+  // play-action: the run fake is the point. These are thrown only off a fake (PA) or a bootleg (BOOT)
+  'Yankee': { f: 'PA', w: 0.4, rz: 0.3, r: [['X', 'D', 'IN', [22, 32], 2.7, 1], ['Z', 'I', 'IN', [15, 22], 2.5, 1], ['SLOT', 'I', 'VERT', [12, 18], 2.3, 2], ['SLOT2', 'S', 'OUT', [4, 8], 1.9, 3], ['Y', 'S', 'OUT', [2, 5], 2.0, 3], ['H', 'S', 'IN', [3, 6], 2.0, 3], ['RB', 'S', 'OUT', [-2, 1], 2.4, 3], ['FB', 'S', 'OUT', [0, 2], 2.3, 3]], vs: { C3: 0.16, C4: 0.12, C1: 0.08, C0: 0.08, C6: 0.06, C2: 0, C2M: -0.08, T2: -0.1 }, d: 'A deep over route under a post, off a hard run fake. The middle safety has to choose; built for a single safety in the middle of the field.' },
+  'Drift': { f: 'PA', w: 0.35, rz: 0.9, r: [['X', 'D', 'VERT', [18, 28], 2.5, 2], ['Z', 'I', 'OUT', [10, 14], 2.1, 2], ['SLOT', 'I', 'IN', [10, 14], 2.0, 1], ['SLOT2', 'I', 'IN', [10, 14], 2.1, 2], ['Y', 'I', 'IN', [9, 13], 2.0, 1], ['H', 'S', 'OUT', [2, 5], 2.0, 3], ['RB', 'S', 'OUT', [-1, 2], 2.2, 3], ['FB', 'S', 'OUT', [0, 2], 2.2, 3]], vs: { C3: 0.1, C4: 0.08, C2: 0.06, C6: 0.04, C0: 0, C1: -0.04, C2M: -0.06, T2: -0.06 }, d: 'An inside receiver drifts into the space the linebackers leave when they step up for the run. The easy completion of the play-action game.' },
+  'Post-wheel': { f: 'PA', w: 0.25, rz: 0.6, r: [['X', 'I', 'IN', [12, 16], 2.3, 2], ['Z', 'D', 'IN', [18, 26], 2.5, 1], ['SLOT', 'D', 'VERT', [18, 30], 2.7, 1], ['SLOT2', 'S', 'OUT', [4, 7], 1.9, 3], ['Y', 'I', 'VERT', [12, 18], 2.4, 2], ['H', 'S', 'OUT', [2, 5], 2.0, 3], ['RB', 'S', 'OUT', [-1, 2], 2.3, 3], ['FB', 'S', 'OUT', [0, 2], 2.3, 3]], vs: { C3: 0.14, C1: 0.12, C0: 0.1, C6: 0.02, C2M: -0.04, T2: -0.06, C2: -0.08, C4: -0.1 }, d: 'A post with a wheel up the sideline under it, off a run fake. The flat defender bites on the run and the man on the wheel is behind him.' },
+  'Boot flood': { f: 'BOOT', w: 0.6, rz: 1, r: ROUTES.BOOT, vs: { C3: 0.14, C4: 0.06, C0: 0.04, C6: 0.04, C1: -0.02, T2: -0.04, C2: -0.06, C2M: -0.06 }, d: 'The quarterback rolls out off the fake with three men on the same side: one deep, one across, one in the flat. Run or throw on the edge.' },
+  'Leak': { f: 'BOOT', w: 0.4, rz: 1.3, r: [['X', 'I', 'IN', [14, 20], 2.4, 2], ['Z', 'D', 'VERT', [20, 30], 2.6, 2], ['SLOT', 'S', 'OUT', [4, 8], 1.8, 2], ['SLOT2', 'S', 'OUT', [3, 6], 1.8, 3], ['Y', 'I', 'IN', [8, 14], 2.3, 1], ['H', 'S', 'IN', [3, 8], 2.1, 1], ['RB', 'S', 'OUT', [-1, 1], 2.1, 3], ['FB', 'S', 'OUT', [0, 2], 2.1, 3]], vs: { C4: 0.1, C3: 0.06, C2: 0.06, C1: 0.04, C6: 0.04, T2: -0.04, C2M: -0.04, C0: -0.06 }, d: 'The tight end blocks for a count, then slips out behind a defense flowing to the bootleg. Deadliest near the goal line.' },
 };
+// how much of a concept breaks toward the sideline: in the two-minute drill a play caller reaches for these, and the men who catch them get out of bounds
+for (const k in CONCEPTS) { const c = CONCEPTS[k], main = c.r.filter(r => r[5] < 3); c.side = main.length ? main.filter(r => r[2] === 'OUT').length / main.length : 0; }
 // centre every concept on what the league actually plays, so the average call into an unknown coverage is worth nothing
 const COV_MIX = { C3: 0.31, C1: 0.2, C4: 0.17, C2: 0.14, C2M: 0.06, C6: 0.05, T2: 0.04, C0: 0.03 };
 for (const k in CONCEPTS) { const c = CONCEPTS[k]; let m = 0; for (const v in COV_MIX) m += COV_MIX[v] * (c.vs[v] || 0); for (const v in COV_MIX) c.vs[v] = Math.round(((c.vs[v] || 0) - m) * 1000) / 1000; }
@@ -330,7 +346,7 @@ function resolvePass(g, off, def, oc, dc) {
   const qb = off.find(e => e.slot === 'QB');
   const res = { kind: 'pass', qb, yds: 0 };
   if (oc.type === 'RBSCR' || oc.type === 'WRSCR') return screen(g, off, def, oc, dc, res, qb);
-  const pa = oc.tags.has('PA') || oc.type === 'GADGET', boot = oc.tags.has('BOOT');
+  const pa = oc.tags.has('PA') || oc.type === 'GADGET', boot = oc.tags.has('BOOT'); // a flea flicker is the biggest run fake there is
   // Play-action is believed when the run game has earned it: how well it has run today, once it has run enough to count, and how much
   // of the offense the run has been. And a defense whose pass staff adjusts well stops biting on a fake it has already seen.
   const runN = g.runY ? g.runY[g.poss][1] : 0, allN = g.ts && g.ts[g.poss] ? g.ts[g.poss].plays || 0 : 0;
@@ -395,7 +411,7 @@ function resolvePass(g, off, def, oc, dc) {
   const rlist = routes.filter(rt => receivers.some(e => e.slot === rt[0])).map(rt => {
     const e = receivers.find(x => x.slot === rt[0]);
     const depth = randInt(rt[3][0], rt[3][1]);
-    const dir = oc.tags.has('SIDE') && rt[2] === 'IN' && rand() < 0.6 ? 'OUT' : rt[2];
+    const dir = rt[2];
     const endX = dir === 'OUT' ? e.x + Math.sign(e.x || 1) * 2.2 : dir === 'IN' ? (Math.abs(e.x) > 1.5 ? Math.sign(e.x) * 0.9 : -Math.sign(e.x || 1) * 1.2) : (Math.abs(e.x) > 3 ? e.x : e.x * 1.1);
     const role = e === prim ? 1 : rt[5] === 1 ? 2 : rt[5];
     return { e, band: rt[1], dir, depth, tb: rt[4], role, endX };
@@ -438,7 +454,6 @@ function resolvePass(g, off, def, oc, dc) {
       const fs = mm.free.find(x => x.slot === 'FS' || x.slot === 'SS');
       if (dc.cov === 'C1' && fs && (deep || r.band === 'I') && Math.abs(r.endX) < 3) { ha = 0.45 * clamp((ea(g, fs, 'zone') * 0.55 + ea(g, fs, 'spd') * 0.45) / 75, 0.6, 1.3); help -= ha; hb = fs; } // range is as much speed as it is eyes
       if (dc.cov === 'C2M' && deep) { help -= 0.55; const sf = mm.free.filter(x => x.slot === 'FS' || x.slot === 'SS').sort((a, b) => Math.abs(a.x - r.endX) - Math.abs(b.x - r.endX))[0]; if (sf) { hb = sf; ha = 0.55; } } // the half-field safety on his side
-      if (oc.tags.has('RUB') && r.dir === 'IN' && r.band !== 'D') w += 0.55;
       if (e.moved && e.moved !== 'insert') w += TUNE.motionMan * (e.moved === 'jet' ? 1.3 : 1); // his man is chasing him across the formation, or playing through a stack
       if (defE && r.band !== 'D') w += (ea(g, e, 'rel') - ea(g, defE, 'prs')) * 0.011; // hand fighting through the stem, press or not
       // press at the line
@@ -713,7 +728,7 @@ function throwBall(g, off, def, oc, dc, res, qb, r, hurry, onRun, covID) {
     { const am = avgEnt(g, e); if (am) { let t = 0; for (let i = 0; i < TUNE.xN; i++) t += Math.min(Math.max(airY, runToContact(g, am, levels, yo).yds), yardsToGoal) - airY; res.xYac = t / TUNE.xN; } }
     const rr = runToContact(g, e, levels, yo);
     let yds = Math.max(airY, rr.yds);
-    if (oc.tags.has('SIDE') && r.dir === 'OUT') { yds = Math.min(yds, airY + randInt(0, 3)); res.oob = rand() < 0.75; }
+    if (oc.twoMin && r.dir === 'OUT') { yds = Math.min(yds, airY + randInt(0, 3)); res.oob = rand() < 0.75; } // the two-minute drill: catch it and get out of bounds
     else res.oob = r.dir === 'OUT' && rand() < 0.38;
     Object.assign(res, { kind: 'comp', yds, yac: yds - airY, tackler: rr.tackler, assist: rr.assist, fumble: rr.fumble, missed: rr.missed, tk: rr.tk, desc: tag });
     res.involved = [e.p, rr.tackler && rr.tackler.p];

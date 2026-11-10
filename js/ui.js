@@ -1324,9 +1324,9 @@ function dcMiniCard(p, key, spot) {
 }
 // ---------- playbook (view only) ----------
 const PERS_LABEL = { '10': '10 (1 RB, 0 TE, 4 WR)', '11': '11 (1 RB, 1 TE, 3 WR)', '12': '12 (1 RB, 2 TE, 2 WR)', '13': '13 (1 RB, 3 TE, 1 WR)', '21': '21 (2 RB, 1 TE, 2 WR)', '22': '22 (2 RB, 2 TE, 1 WR)', JUMBO: 'Jumbo (6 OL)' };
-const TYPE_LABEL = { RUN: 'Designed runs', DRAW: 'Draws', OPTION: 'Option', SNEAK: 'QB sneak', JET: 'Jet sweep', QUICK: 'Quick game', DROP: 'Dropback', DEEP: 'Deep shots', RBSCR: 'RB screen', WRSCR: 'WR screen', GADGET: 'Gadget' };
+const TYPE_LABEL = { RUN: 'Designed runs', DRAW: 'Draws', OPTION: 'Option', SNEAK: 'QB sneak', JET: 'Jet sweep', QUICK: 'Quick game', DROP: 'Dropback', DEEP: 'Deep shots', RBSCR: 'RB screen', WRSCR: 'WR screen', GADGET: 'Gadgets (reverse, flea flicker)' };
 const FORM_LABEL = { SG: 'Shotgun', UC: 'Under center', PI: 'Pistol', EMP: 'Empty' };
-const TAG_LABEL = { PA: 'Play-action', MOTION: 'Motion', RPO: 'RPO', BOOT: 'Bootleg', SIDE: 'Sideline concepts', RUB: 'Rub/pick routes', TRICK: 'Trick plays' };
+const TAG_LABEL = { PA: 'Play-action', MOTION: 'Motion', RPO: 'RPO', BOOT: 'Bootleg' };
 const SIT_LABEL = { '1st': '1st down', '2L': '2nd & long (7+)', '2S': '2nd & short', '3S': '3rd/4th & 1–2', '3M': '3rd & 3–6', '3L': '3rd & 7+' };
 const COV_LABEL = { C0: 'Cover 0', C1: 'Cover 1 (man-free)', C2: 'Cover 2', C2M: '2-Man', C3: 'Cover 3', C4: 'Quarters', T2: 'Tampa 2', C6: 'Cover 6' };
 const PRES_LABEL = { FOUR: '4-man rush', BLITZ: 'Man blitz', FZ: 'Fire zone', SIM: 'Simulated pressure', THREE: '3-man rush' };
@@ -1334,7 +1334,7 @@ const PKG_LABEL = { BASE: 'Base', NICKEL: 'Nickel', DIME: 'Dime', GL: 'Goal line
 function tendBar(label, v, hint) { return `<div class="glance knob" title="${esc(hint || '')}"><span class="gl-l">${label}</span><span class="gl-bar"><i style="width:${Math.round(v * 100)}%;background:var(--accent)"></i></span><span class="gl-v small">${Math.round(v * 100)}%</span></div>`; }
 // usage & results for keys with a prefix (self-scout)
 function scoutTable(id, a, prefix, labels, opts = {}) {
-  const keys = Object.keys(a).filter(k => k.startsWith('u_' + prefix)).map(k => k.slice(2 + prefix.length));
+  const keys = Object.keys(a).filter(k => k.startsWith('u_' + prefix)).map(k => k.slice(2 + prefix.length)).filter(k => labels[k]); // a call that no longer exists (an old save's tags) is not listed
   const total = opts.total || keys.reduce((s, k) => s + a['u_' + prefix + k], 0);
   if (!keys.length || !total) return '<div class="muted small">No snaps yet.</div>';
   const rows = keys.map(k => ({ k, n: a['u_' + prefix + k], e: a['e_' + prefix + k] / a['u_' + prefix + k], s: (a['s_' + prefix + k] || 0) / a['u_' + prefix + k] }));
@@ -1485,7 +1485,7 @@ function offBookHTML(tid, pers, fmCur) {
   return `<div class="card" style="margin-top:16px"><h3>Formations and pass concepts · ${oc ? esc(cname(oc)) + "'s book" : 'the book'}</h3>
     <div class="small muted" style="margin-bottom:6px">How he lines up ${esc(PERS_LABEL[pers] || pers)}, and how often. Pick another grouping on the field above. What a formation does comes from where it puts people: the defense lines up to it, and the strong side is the ${ft.strR >= 0.55 ? 'right more often than the left' : ft.strR <= 0.47 ? 'left more often than the right' : 'right and the left about equally'}.${ft.move ? ' He moves his best receiver around the formation to find a matchup.' : ''}</div>
     <div class="look-row">${tiles}</div>
-    ${fam('QUICK', 'Quick game')}${fam('DROP', 'Dropback')}${fam('DEEP', 'Deep shots')}
+    ${fam('QUICK', 'Quick game')}${fam('DROP', 'Dropback')}${fam('DEEP', 'Deep shots')}${fam('PA', 'Play-action')}${fam('BOOT', 'Bootleg')}
     <div class="small muted" style="margin-top:6px">He carries these and no others. A sharp play caller leans on the ones that beat what a defense keeps playing, and a quarterback who reads the coverage can get to a better one at the line.</div></div>`;
 }
 function formationViewerHTML(tid) {

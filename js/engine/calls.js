@@ -5,12 +5,16 @@
 //  docs/PLAYBOOK_SPEC.md §2-§5, §7 · docs/DESIGN.md §6d-§6e
 // =====================================================================
 const RUN_TYPES = new Set(['RUN', 'DRAW', 'OPTION', 'SNEAK', 'JET']);
-const PASS_TYPES = new Set(['QUICK', 'DROP', 'DEEP', 'RBSCR', 'WRSCR', 'GADGET']);
-// tags allowed per play type (spec §7a)
+// A gadget is one call with two kinds: a reverse (a run off jet motion, handed back the other way) or a flea flicker (a pass off the
+// biggest run fake there is). Which kind decides whether it is a run or a pass.
+function jetAction(oc) { return oc.type === 'JET' || (oc.type === 'GADGET' && oc.gadget === 'reverse'); }
+function isRunCall(oc) { return RUN_TYPES.has(oc.type) || (oc.type === 'GADGET' && oc.gadget === 'reverse'); }
+// tags allowed per play type (spec §7a). Rubs live in the concepts (mesh, drive, bunch releases), not in a tag; getting out of
+// bounds is how the two-minute drill plays (call.twoMin), not something a play caller puts on the sheet.
 const TAG_OK = {
-  RUN_RB_IN: ['MOTION', 'RPO'], RUN_RB_OUT: ['MOTION', 'TRICK', 'RPO'], RUN_QB: ['MOTION'], RUN_FB: [],
-  DRAW: ['MOTION'], OPTION: ['MOTION'], SNEAK: [], JET: ['MOTION', 'TRICK'],
-  QUICK: ['MOTION', 'BOOT', 'RUB', 'SIDE'], DROP: ['MOTION', 'PA', 'BOOT', 'RUB', 'SIDE'], DEEP: ['MOTION', 'TRICK', 'PA', 'BOOT', 'SIDE'],
+  RUN_RB_IN: ['MOTION', 'RPO'], RUN_RB_OUT: ['MOTION', 'RPO'], RUN_QB: ['MOTION'], RUN_FB: [],
+  DRAW: ['MOTION'], OPTION: ['MOTION'], SNEAK: [], JET: ['MOTION'],
+  QUICK: ['MOTION', 'BOOT'], DROP: ['MOTION', 'PA', 'BOOT'], DEEP: ['MOTION', 'PA', 'BOOT'],
   RBSCR: ['MOTION'], WRSCR: ['MOTION'], GADGET: ['MOTION'],
 };
 function downBucket(g) {
@@ -51,6 +55,14 @@ function newSeen() { return { n: 0, blitz: 0, man: 0, sl0: 0, sl1: 0, twist: 0, 
 function seenCov(g, s) { const f = g.dSeen && g.dSeen[s], out = {}, W = 10 * (g.cx ? seenWeight(g, s) : 1), fm = g.cx ? T(g.tids[s]).dfilm : null, pt = fm && fm.s === state.season && fm.n > 0 ? planTrust(g, s) : 0;
   for (const k in COV_MIX) { const prior = pt ? filmCov(g, s, k, COV_MIX[k]) : COV_MIX[k]; out[k] = ((f ? f.cov[k] || 0 : 0) + prior * W) / ((f ? f.n : 0) + W); } return out; }
 function conceptEdge(name, mix) { const c = CONCEPTS[name]; let e = 0; for (const k in mix) e += mix[k] * (c.vs[k] || 0); return e; }
+// The concept: from the coach's own book, leaning (as far as the play caller is sharp) toward what beats this defense's habits;
+// inside the 20 toward what works on a short field; in the two-minute drill toward routes that break to the sideline.
+function pickConcept(g, o, d, book, sit, rg) {
+  const mix = seenCov(g, d), cw = {}, vC = variety(g, o, 'O'), top = Object.keys(book).sort((a, b) => book[b] - book[a])[0];
+  for (const k in book) { const c = CONCEPTS[k]; if (!c) continue;
+    cw[k] = book[k] * (k === top ? 1 : vC) * Math.exp(conceptEdge(k, mix) * TUNE.conceptPlan * rg) * (sit.red ? c.rz || 1 : c.fld || 1) * (sit.needClock ? Math.exp((c.side - 0.3) * TUNE.clockSide) : 1); }
+  return wpick(cw) || null;
+}
 function recordSeen(g, s, dc) {
   const f = g.dSeen && g.dSeen[s]; if (!f) return;
   const pl = dc.plan || {};
@@ -129,8 +141,10 @@ function offenseCall(g) {
     const fastWR = Math.max(...['WRZ', 'SLOT', 'WRX'].map(sp => T_.depth[sp][0] && T_.depth[sp][0].p.a ? T_.depth[sp][0].p.a.spd : 0));
     if (!sit.gl && fastWR >= 86) w.JET = ot.motion * 0.12;
     if (PERSONNEL[call.pers].includes('FB') && g.togo <= 2) w.RUN_FB = 0.18;
+    if (!sit.gl) w.GADGET = (ot.trick || 0) * 0.25; // a reverse: as often as the old trick-tagged jets and tosses together
     let t = wpick(w) || 'RUN';
     call.type = t === 'RUN_QB' || t === 'RUN_FB' ? 'RUN' : t;
+    if (call.type === 'GADGET') call.gadget = 'reverse';
     call.carrier = t === 'RUN_QB' ? 'QB' : t === 'RUN_FB' ? 'FB' : 'RB';
     call.scheme = rand() < ot.zone ? 'ZONE' : 'GAP';
     // which zone, which gap play: wide zone stretches the edge; counter and duo are the gap team's changeups
@@ -138,7 +152,7 @@ function offenseCall(g) {
     const wide = call.scheme === 'ZONE' && rand() < (ot.wz !== undefined ? ot.wz : 0.4);
     if (plain && call.scheme === 'GAP') { if (rand() < (ot.counter || 0)) call.counter = true; else if (rand() < (ot.duo || 0)) call.duo = true; }
     if (plain && call.scheme === 'ZONE') call.wide = wide;
-    call.dir = call.type === 'JET' ? 'OUT' : call.carrier === 'FB' || call.type === 'SNEAK' || call.duo ? 'IN' : rand() < (call.scheme === 'ZONE' ? (wide ? 0.72 : 0.32) : call.counter ? 0.5 : 0.36) ? 'OUT' : 'IN';
+    call.dir = jetAction(call) ? 'OUT' : call.carrier === 'FB' || call.type === 'SNEAK' || call.duo ? 'IN' : rand() < (call.scheme === 'ZONE' ? (wide ? 0.72 : 0.32) : call.counter ? 0.5 : 0.36) ? 'OUT' : 'IN';
     call.side = rand() < 0.6 ? 1 : -1;
   } else {
     const blitzy = seenShare(g, d, 'blitz', 0.25);
@@ -156,25 +170,21 @@ function offenseCall(g) {
     // a defense that has been coming all day gets the ball out quick and the screen; one that never comes gets tested deep
     { const b = clamp(blitzy - 0.25, -0.2, 0.6) * rg; w.QUICK *= 1 + b * 1.6; w.RBSCR *= 1 + b * 2.4; w.WRSCR *= 1 + b * 1.2; w.DEEP *= Math.max(0.3, 1 - b * 0.9); }
     call.type = wpick(w) || 'DROP';
-    // the concept: from the coach's own book, leaning (as far as the play caller is sharp) toward what beats this defense's habits
-    { const book = cx.cb && cx.cb[call.type]; if (book) { const mix = seenCov(g, d), cw = {}, vC = variety(g, o, 'O'), top = Object.keys(book).sort((a, b) => book[b] - book[a])[0]; for (const k in book) cw[k] = book[k] * (k === top ? 1 : vC) * Math.exp(conceptEdge(k, mix) * TUNE.conceptPlan * rg); call.cpt = wpick(cw) || null; } }
+    if (call.type === 'GADGET') call.gadget = 'flea';
+    { const book = cx.cb && cx.cb[call.type]; if (book) call.cpt = pickConcept(g, o, d, book, sit, rg); }
   }
-  // --- tags (spec §7a compatibility; Motion + one other, PA+Boot, Rub+Sideline)
+  // --- tags (spec §7a compatibility; Motion + one other, PA+Boot)
   const key = call.type === 'RUN' ? (call.carrier === 'QB' ? 'RUN_QB' : call.carrier === 'FB' ? 'RUN_FB' : call.dir === 'IN' ? 'RUN_RB_IN' : 'RUN_RB_OUT') : call.type;
   const ok = new Set(TAG_OK[key] || []);
-  const manRate = seenShare(g, d, 'man', 0.35);
   const vO = variety(g, o, 'O'); // how much of the book the unit can run
   if (ok.has('MOTION') && rand() < Math.min(0.85, ot.motion * (sit.hurry ? 0.25 : 1.25)) * vO) call.tags.add('MOTION');
-  if (call.type === 'JET') call.tags.add('MOTION');
+  if (jetAction(call)) call.tags.add('MOTION');
   if (ok.has('PA') && !sit.hurry && (g.down <= 2 || g.togo <= 3) && call.form !== 'EMP' && rand() < ot.pa * (call.form === 'SG' ? 3.8 : 6.0) * Math.exp(clamp(adv.PA || 0, -1, 1) * 0.3 * pcF)) call.tags.add('PA');
   if (ok.has('BOOT') && !sit.hurry && call.form !== 'EMP' && rand() < ot.boot * (call.tags.has('PA') ? 1.8 : 0.4)) call.tags.add('BOOT');
   if (ok.has('RPO') && call.form !== 'UC' && rand() < ot.rpo * 1.3) call.tags.add('RPO');
-  if (ok.has('RUB') && rand() < 0.06 + (manRate - 0.3) * 0.5 * rg + (sit.red ? 0.12 : 0)) call.tags.add('RUB');
-  if (ok.has('SIDE') && sit.needClock && rand() < 0.65) call.tags.add('SIDE');
-  if (ok.has('TRICK') && rand() < ot.trick * (call.type === 'JET' ? 2.5 : 0.35)) call.tags.add('TRICK');
   // enforce allowed stacks
   const t = [...call.tags].filter(x => x !== 'MOTION');
-  if (t.length > 1 && !(t.length === 2 && ((t.includes('PA') && t.includes('BOOT')) || (t.includes('RUB') && t.includes('SIDE'))))) {
+  if (t.length > 1 && !(t.length === 2 && t.includes('PA') && t.includes('BOOT'))) {
     call.tags = new Set(call.tags.has('MOTION') ? ['MOTION', t[0]] : [t[0]]);
   }
   // formation and concept packages (only if they are on the sheet)
@@ -196,9 +206,13 @@ function offenseCall(g) {
   }
   if (!sit.milk && !(g.q >= 3 && sit.diff >= 9) && rand() < (ot.nohud || 0)) call.nohud = true;
   // a quarterback who is still learning the playbook gets a simpler menu
-  { const qbP = starterQB(g, o); if (qbP && qbP.a) { const k = pbOf(qbP), need = offNeed(call); if (k < need && rand() < clamp((need - k) / 35, 0, 1)) { call.tags = new Set(); if (call.type === 'DEEP' || call.type === 'GADGET') call.type = 'DROP'; else if (call.type === 'OPTION' || call.type === 'JET') call.type = 'RUN'; call.simple = true; call.fm = FORM_HOME[call.pers]; for (const f of ['trips', 'bunch', 'tight', 'optrt', 'maxp', 'nohud', 'counter', 'duo']) delete call[f]; } } }
-  call.isRun = RUN_TYPES.has(call.type);
+  { const qbP = starterQB(g, o); if (qbP && qbP.a) { const k = pbOf(qbP), need = offNeed(call); if (k < need && rand() < clamp((need - k) / 35, 0, 1)) { call.tags = new Set(); if (call.type === 'GADGET') { call.type = call.gadget === 'reverse' ? 'RUN' : 'DROP'; delete call.gadget; } else if (call.type === 'DEEP') call.type = 'DROP'; else if (call.type === 'OPTION' || call.type === 'JET') call.type = 'RUN'; call.simple = true; call.fm = FORM_HOME[call.pers]; for (const f of ['trips', 'bunch', 'tight', 'optrt', 'maxp', 'nohud', 'counter', 'duo']) delete call[f]; } } }
+  call.isRun = isRunCall(call);
   trimOffCall(g, call, sit);
+  // play-action and bootlegs have concepts of their own: off a fake he throws one of those, not the dropback he started from
+  if (!call.isRun && call.type !== 'GADGET') { const fam = call.tags.has('BOOT') ? 'BOOT' : call.tags.has('PA') ? 'PA' : null, book = fam && cx.cb && cx.cb[fam]; if (book) call.cpt = pickConcept(g, o, d, book, sit, rg); }
+  // the two-minute drill: the clock is the opponent, so a man who catches the ball near the sideline gets out of bounds
+  if (sit.needClock) call.twoMin = true;
   return call;
 }
 
@@ -310,7 +324,7 @@ function holeCount(off, def, oc, side) {
 }
 function preSnap(g, oc, dc, off, def) {
   const o = g.poss, d = 1 - o, qb = off.find(e => e.slot === 'QB');
-  if (!qb || !qb.p.a || oc.simple || oc.type === 'SNEAK' || oc.type === 'GADGET' || oc.tags.has('TRICK')) return;
+  if (!qb || !qb.p.a || oc.simple || oc.type === 'SNEAK' || oc.type === 'GADGET') return;
   const sit = situation(g), proc = ea(g, qb, 'proc'), L = boxLook(off, def, dc);
   // what he sees: a disguised shell fools him unless he reads through it, and a poor processor miscounts now and then
   const fooled = dc.disg && rand() >= lgt((proc - 72) * 0.07 - 0.2);
@@ -340,10 +354,10 @@ function preSnap(g, oc, dc, off, def) {
       { const a = holeCount(off, def, oc, 1), b = holeCount(off, def, oc, -1); oc.side = a < b ? 1 : b < a ? -1 : rand() < 0.5 ? 1 : -1; } keepTags();
       for (const k of ['optrt', 'maxp', 'sawBlitz', 'cpt']) delete oc[k];
       oc.checked = 'run';
-    } else if (oc.cpt && CONCEPTS[oc.cpt] && g.cx[o].cb && g.cx[o].cb[oc.type]) {
+    } else if (oc.cpt && CONCEPTS[oc.cpt] && g.cx[o].cb && g.cx[o].cb[CONCEPTS[oc.cpt].f]) {
       // he reads the coverage he is shown (the wrong shell if the disguise fooled him) and, if his concept is drawn up for something else, gets to a better one in his book
       const FAKE = { C3: 'C4', C4: 'C3', C1: 'C2M', C2M: 'C1', C2: 'C3', T2: 'C3', C6: 'C3', C0: 'C1' }, shown = fooled ? FAKE[dc.cov] || dc.cov : dc.cov;
-      const book = g.cx[o].cb[oc.type], best = Object.keys(book).sort((a, b) => (CONCEPTS[b].vs[shown] || 0) - (CONCEPTS[a].vs[shown] || 0))[0];
+      const book = g.cx[o].cb[CONCEPTS[oc.cpt].f], best = Object.keys(book).sort((a, b) => (CONCEPTS[b].vs[shown] || 0) - (CONCEPTS[a].vs[shown] || 0))[0];
       if (best !== oc.cpt && (CONCEPTS[oc.cpt].vs[shown] || 0) < -0.08 && rand() < lic * 0.5) { oc.cpt = best; oc.checked = 'concept'; }
     }
   }

@@ -83,6 +83,7 @@ const TUNE = {
   tightIn: 0.05, tightDeep: 0.22, tightOut: 0.14, // tight splits: crossers gain, deep balls and out-breakers lose
   concept: 1,           // how much a pass concept gains or loses against each coverage (0 switches concepts off)
   conceptPlan: 9,       // how hard a good play caller leans toward concepts that beat what this defense has been playing
+  clockSide: 2,         // in the two-minute drill, how hard he leans toward concepts that break to the sideline
   slotMix: 0.2,         // how often the slot is in the mix when receivers trade routes (the outside two trade the rest of the time)
   slotTwoWay: 0.22, slotSpace: 1.6, teSpace: 1.2, zFree: 0.18, // the slot's two-way release, and the extra room he has after a catch made on the move
   zoneCarry: 0.6,       // how much of an outside receiver's route a zone corner owns when it ends in a linebacker's area
@@ -254,7 +255,7 @@ function sendMotion(off, def, oc, dc, g) {
   const sg = e => Math.sign(e.x || 1), skill = off.filter(e => !OL_SLOTS.includes(e.slot) && !['QB', 'RB', 'FB', 'OL6'].includes(e.slot));
   const taken = (x, me) => skill.some(o => o !== me && Math.abs(o.x - x) < 0.7), spot = (s, me, list) => list.map(v => v * s).find(x => !taken(x, me));
   let who = null, kind = null, to = null;
-  if (oc.type === 'JET') { who = ['SLOT', 'Z', 'SLOT2'].map(s => off.find(e => e.slot === s)).find(Boolean); kind = 'jet'; }
+  if (jetAction(oc)) { who = ['SLOT', 'Z', 'SLOT2'].map(s => off.find(e => e.slot === s)).find(Boolean); kind = 'jet'; }
   else if (oc.isRun) {
     const side = oc.side || 1, h = off.find(e => e.slot === 'H' && sg(e) !== side), wr = ['SLOT', 'Z', 'SLOT2'].map(s => off.find(e => e.slot === s)).find(Boolean);
     if (h && rand() < 0.6) { who = h; kind = 'insert'; to = spot(side, h, [2.9, 3.4, 3.9]); }

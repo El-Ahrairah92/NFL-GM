@@ -56,7 +56,8 @@ function trimOffCall(g, call, sit) {
   if (need <= U + 4) return;
   const must = (sit && (sit.hurry || g.down >= 3)) || (g.q >= 4 && g.score[g.poss] < g.score[1 - g.poss]);
   if (rand() < (must ? 0.35 : 0.8)) {
-    for (const k of ['TRICK', 'RPO', 'BOOT', 'RUB', 'PA', 'MOTION']) { if (need <= U + 4) break; if (call.tags.has(k) && !(k === 'MOTION' && call.type === 'JET')) { call.tags.delete(k); need = offNeed(call); } }
+    if (call.type === 'GADGET') { call.type = call.gadget === 'reverse' ? 'JET' : 'DEEP'; delete call.gadget; need = offNeed(call); } // the trick comes out first: a plain jet sweep, a plain shot
+    for (const k of ['RPO', 'BOOT', 'PA', 'MOTION']) { if (need <= U + 4) break; if (call.tags.has(k) && !(k === 'MOTION' && jetAction(call))) { call.tags.delete(k); need = offNeed(call); } }
     for (const k of ['optrt', 'counter', 'nohud', 'duo', 'maxp']) { if (need <= U + 4) break; if (call[k]) { call[k] = false; need = offNeed(call); } }
     call.trimmed = true;
   }

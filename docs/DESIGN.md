@@ -188,11 +188,12 @@ Calls are fully automatic, driven by OC/DC tendencies. The GM builds the roster;
 1. **Personnel + Formation** — 10/11/12/13/21/22/Jumbo · Under center / Shotgun / Pistol / Empty · RB-out / TE-detached
 2. **Play type** (defined by mechanics: blocking & timing, defenders stressed, yardage shape, counters)
    - Runs: **Base Run** = Carrier (RB / QB / WR) × Direction (Inside / Outside); plus **Draw · Option · QB Sneak · Jet Sweep**
-   - Pass: **Quick · Dropback · Deep Shot · RB Screen · WR Screen · Gadget Pass** (HB/WR pass, flea flicker)
+   - Pass: **Quick · Dropback · Deep Shot · RB Screen · WR Screen**
+   - **Gadget** (one call): a reverse (a run) or a flea flicker (a pass)
    - Situational (triggered by game state): **Hail Mary · Spike · Kneel**
    - Pass depth emerges from the QB's read vs. coverage (no Short/Intermediate split); OC style weights the read.
 3. **Required dimension** — Runs: **Zone / Gap** (gap = power, counter, trap). Pass: protection implied by play type.
-4. **Optional tags** — Motion · Trickery · Play-Action · Bootleg · Rub · RPO (runs) · Sideline (auto in 2-minute)
+4. **Optional tags** — Motion · Play-Action · Bootleg · RPO (runs). Rubs live in concepts; the two-minute drill is how the offense plays when the clock is short, not a tag (section 72)
 5. **Defense** — Package · Front · Coverage (Cover 0/1 man, Cover 2/3/4 zone) · Pressure (4-man, 5-man blitz, sim pressure)
 
 Target selection is a separate layer: concept role (primary/secondary/checkdown) × coverage (man: matchup win; zone: concept soft spot) × QB processing. Designed-touch plays (screens, jet, gadget) have a fixed primary.
@@ -1024,7 +1025,7 @@ Two flaws it found, both fixed: a breather (rotation, fatigue, planned rest) cou
 
 **Pass concepts.** Every pass used to be one of a few fixed route sets. There are now twelve named concepts, each a set of routes drawn up for a kind of coverage: Stick, Slant-flat and Spacing in the quick game; Curl-flat, Levels, Four verticals, Mesh, Flood, Dagger and Smash on dropbacks; Post-dig and a Sail shot deep. Each is a little more open against the coverages it beats and a little less against the ones that take it away (Smash against Cover 2, Mesh against man, Four verticals against three-deep and not against quarters). The edges are centred on the league's mix of coverages, so a concept called blind is worth nothing extra.
 
-**A coach carries some concepts and not others**: two quick, five dropback, both deep shots, weighted by his own taste. Every book has an answer to man coverage.
+**A coach carries some concepts and not others**: two quick, five dropback, both deep shots, weighted by his own taste. Every book has an answer to man coverage. (Since section 72: 23 concepts, and a book holds three quick, five dropback, two deep, two play-action and one bootleg.)
 
 **How concepts meet the rest of the play-calling.**
 - The play caller leans, as far as he is sharp, toward the concepts in his book that beat what this defense has been playing today. A defense that mixes its coverages gives him nothing to lean on.
@@ -1430,3 +1431,29 @@ Equal front offices are the rest of why franchises converge (section 70). Every 
   - In 6 leagues of 11 seasons: about 9 franchise, 3 window, 3 developing, 13 bridge and 4 none at each opener; about 4 QBs drafted in the first round a year, none by a club with an answer or a developing QB; about two in five developing rooms have the answer three years later. Against the old checks: slightly fewer clubs retooling (11.8 from 12.8) and more contending (8.8 from 7.3).
 - **What you see.** Only on another club's page: his name, age, career, and what he is known for (his two or three strongest leanings, in words).
 - **Still to build, in order:** the QB plan comparison (built with the channels it uses), the draft, free agency and money, trades, restricted free agency, then hiring and firing the head coach (replacing the carousel's dice roll and the new GM's review). A GM on the hot seat will act as if he has a window once trades are in.
+
+## 72. Tags sorted, and play-action gets its own concepts
+
+From the playbook audit (formations, looks, concepts and tags against the 2024 league). Two of its items, built.
+
+**Tags.** A tag is something a play caller puts on a play. Three of the seven were not:
+- *Sideline* was the two-minute drill wearing a tag. It is now how the offense plays when the clock is short (the last 2:30 of a half; in the fourth quarter only when not ahead): the caller leans toward concepts that break to the sideline (each concept's share of out-breaking routes), and a man who catches an out-breaker gets out of bounds about 3 times in 4, giving up most of his run after the catch. Routes are no longer rewritten.
+- *Rub* added a flat bonus against man to in-breakers on any pass, on top of Mesh and bunch, which already beat man. Rubs now live only in the concepts built on them (Mesh, Drive) and in bunch.
+- *Trick* and the *Gadget* pass were two homes for trick plays. There is one Gadget call with two kinds: a reverse (a run off jet motion, read by the backside defender) and a flea flicker (a pass off the biggest fake there is). The kind decides whether it is a run or a pass. A unit that does not know enough of the book runs the plain version (a jet sweep, a deep shot).
+- Left: Motion, Play-action, Bootleg, RPO. Old saves' self-scout rows for the removed tags are not shown.
+
+**Concepts, 12 to 23.**
+- Staples: Snag, Hitch-seam and Fade in the quick game; Drive and Y-cross on dropbacks; Double move deep.
+- Play-action used to throw one fixed route set whatever the caller had in mind. It now has its own family: Yankee, Drift and Post-wheel off a fake, Boot flood (the old bootleg routes) and Leak off a bootleg. When a pass is tagged play-action or bootleg the concept comes from that family, and a quarterback checking at the line checks within it.
+- Each concept has a red-zone weight and some a between-the-20s weight: Fade is carried by about a third of books and thrown mostly inside the 20 (8.5% of red-zone concept calls); Snag, Leak and Boot flood go up there, Yankee, Hitch-seam and Y-cross go down.
+- Every edge is centred on the league's coverage mix, as before.
+- A book holds three quick, five dropback, two deep, two play-action and one bootleg; every one still has an answer to man (Slant-flat; Mesh or Drive). All 32 clubs carry a different book (before, most carried nearly the same nine).
+
+**Checked: 8 leagues, the same league run on the old and the new code** (the harness seeds the random numbers; one season each):
+- Scoring 22.9 to 22.3 points a team-game (paired difference -0.59, standard error 0.25). For scale, the old code run twice on the same four leagues differed by 0.57: a single season moves a lot.
+- Where it comes from: two-minute passes -0.19 yards a play (every out-breaker in the drill now goes out of bounds, not 65% of them); other passes -0.12 (the new staples are a little less productive than the concepts they displaced, and the rub bonus is gone); play-action -0.26 (the old fixed route set made three of its routes, 10 to 30 yards down the field, primaries; play-action is still about 2.4 yards a play better than other passes). Runs unchanged.
+- Tried and dropped: making the quarterback look to the sideline first in the two-minute drill. More completions went out of bounds (40% against 38% before), but the outs were short and it cost another 0.4 points a game.
+- Trick plays: 93 a season (76 reverses, 17 flea flickers) against 108 before.
+
+Not built: concept books tied to the caller's scheme (taste is still a fixed hash of the man, so Four verticals, the lightest of ten dropback concepts, now makes almost no book); the other audit items (personnel and package rates, detached tight ends in 12, Nub, empty from more groupings, Bear and Under as looks, duo for zone teams).
+

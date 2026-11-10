@@ -206,13 +206,15 @@ function fillCoachPool(n = 9) {
 function offCaller(t) { const hc = C(t.hc); return hc && hc.t.caller === 'O' ? hc : C(t.oc); }
 function defCaller(t) { const hc = C(t.hc); return hc && hc.t.caller === 'D' ? hc : C(t.dc); }
 function offTend(t) { return blendedTend(t, 'O'); }
-// The pass concepts a play caller carries: two of the quick-game concepts, five of the dropback ones, both deep shots, weighted by
-// how common each is and by his own taste. Read from who he is, like his formation habits.
+// The pass concepts a play caller carries: three of the quick-game concepts, five of the dropback ones, two deep shots, two play-action
+// concepts and one bootleg, weighted by how common each is and by his own taste. Read from who he is, like his formation habits.
+const BOOK_KEEP = { QUICK: 3, DROP: 5, DEEP: 2, PA: 2, BOOT: 1 };
+// every book has an answer to man coverage: nobody gets to sit in it all afternoon for free
+const BOOK_MAN = { QUICK: ['Slant-flat'], DROP: ['Mesh', 'Drive'] };
 function conceptBook(t) {
-  const c = offCaller(t), out = {}, keep = { QUICK: 2, DROP: 5, DEEP: 2 };
-  for (const f in keep) { const all = Object.keys(CONCEPTS).filter(k => CONCEPTS[k].f === f).map(k => [k, CONCEPTS[k].w * (0.5 + coachTrait(c, 'cp' + k) * 1.5)]).sort((a, b) => b[1] - a[1]).slice(0, keep[f]);
-    // every book has an answer to man coverage: nobody gets to sit in it all afternoon for free
-    const must = f === 'QUICK' ? 'Slant-flat' : f === 'DROP' ? 'Mesh' : null; if (must && !all.some(x => x[0] === must)) all[all.length - 1] = [must, all[all.length - 1][1]];
+  const c = offCaller(t), out = {}, taste = k => CONCEPTS[k].w * (0.5 + coachTrait(c, 'cp' + k) * 1.5);
+  for (const f in BOOK_KEEP) { const all = Object.keys(CONCEPTS).filter(k => CONCEPTS[k].f === f).map(k => [k, taste(k)]).sort((a, b) => b[1] - a[1]).slice(0, BOOK_KEEP[f]);
+    const must = BOOK_MAN[f]; if (must && !all.some(x => must.includes(x[0]))) all[all.length - 1] = [must.slice().sort((a, b) => taste(b) - taste(a))[0], all[all.length - 1][1]];
     const tot = all.reduce((s, x) => s + x[1], 0) || 1; out[f] = {}; for (const [k, v] of all) out[f][k] = round2(v / tot); }
   return out;
 }

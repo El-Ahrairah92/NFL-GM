@@ -102,8 +102,8 @@ All hidden (1–99). Each side of the ball shares one pool, so every defender ha
 | **Block Shedding** | Beating run blocks at the point of attack; setting the edge; holding up vs. double teams (with Strength) |
 | **Tackling** | Form/finishing: missed-tackle rate, wrapping up, limiting yards after contact |
 | **Ball Stripping** | Punch-outs and strips: forced-fumble chance on every tackle, strip-sacks for rushers. Independent of Tackling |
-| **Play Recognition** | Diagnosing run/pass/misdirection. The universal counter to Play-Action, Draw, Screens, RPO, Option, Trickery, Bootleg contain, Gadget; also jumping routes |
-| **Man Coverage** | Mirroring a receiver (Cover 0/1); what Rub routes attack |
+| **Play Recognition** | Diagnosing run/pass/misdirection. The universal counter to Play-Action, Draw, Screens, RPO, Option, reverses, Bootleg contain, Gadget; also jumping routes |
+| **Man Coverage** | Mirroring a receiver (Cover 0/1); what rub concepts (Mesh, Drive) attack |
 | **Zone Coverage** | Spacing, depth, and passing off routes (Cover 2/3/4); safety range with Speed |
 | **Press** | Jamming at the line (vs. Release): disrupts Quick game and WR Screens |
 | **Ball Skills** | INTs and pass breakups; contested-catch defense (with Size) |
@@ -293,8 +293,8 @@ All pass plays run the same steps; each play type weights them differently.
 - **Beats:** off coverage, Cover 3/4 with soft corners, light numbers outside. **Dies to:** press, Cover 2 corners, high-Play Recognition DBs.
 - **Target shape:** ~90% comp, ~5.5 Y/A, low variance.
 
-#### 3.11 Gadget Pass (HB pass, WR pass, flea flicker)
-- **What:** handoff/pitch, non-QB throws (or pitches back to QB for flea flicker). Only callable if a non-QB with real Arm Strength is on the field, or as a flea flicker.
+#### 3.11 Gadget (reverse, flea flicker)
+- **What:** one call, two kinds. A **reverse** is a run: jet motion, then the ball goes back the other way; it lives or dies on the backside defender reading it. A **flea flicker** is a pass: the handoff and pitch back to the quarterback are the biggest run fake there is, then a shot. The kind decides whether it counts as a run or a pass. (Non-QB passers are not built.)
 - **Trenches:** long-developing → protection must hold (Pass Block vs. Pass Rush).
 - **O:** passer Arm Strength + Short/Deep Accuracy; deep target Speed + Release; carrier Ball Security (exchange).
 - **D:** CB/S **Play Recognition** (key), Zone Coverage, Ball Skills.
@@ -324,12 +324,14 @@ Up to **2 tags** per play. Stacking allowed only where the compatibility matrix 
 | Tag | Effect | O attributes | D attributes (counter) |
 |---|---|---|---|
 | **Motion** | Reveals man vs. zone → QB read (+); moving receiver gets leverage/separation (+) on the snap; gives Jet Sweep and fake-jet looks. Fake-jet effect grows once the team has actually run Jet Sweeps that game | QB Processing; motion player Speed/Agility | Play Recognition (disguise holds) |
-| **Trickery** | Misdirection (reverse, fake reverse, counter look). If the defense bites: big edge (+); if not: slow play, big loss risk (−). Amplifies variance | Carrier Speed + Elusiveness + Ball Security | **Play Recognition** decides it |
 | **Play-Action** | Fake handoff pulls LBs/S up → bigger windows behind them (+). Strength scales with the offense's **actual run success that game/season** and Under center (+). Costs: longer drop, back to the defense → pressure risk (−) | QB Pocket Presence; OL Pass Block | LB/S **Play Recognition** (don't bite) |
 | **Bootleg** | QB moves the pocket: half-field read (Processing demand (−)), avoids interior rush, adds run option. Unblocked backside EDGE is the danger | QB **Throw on the Run** + Speed + Agility | EDGE **Play Recognition** (contain) + Speed |
-| **Rub** | Pick/rub concepts: big separation (+) vs. **man coverage**, nothing vs. zone. Red-zone favorite | Receiver Route Running + Agility | Man Coverage + Play Recognition (fight through) |
 | **RPO** | Run play with an attached quick throw; QB picks post-snap by reading a conflict defender (LB/S). Effectively lets the offense pick the better of the run and a Quick throw | QB **Processing** + Decision-Making + Short Accuracy | Conflict defender **Play Recognition** |
-| **Sideline** | Auto in 2-minute drill. Targets outside-breaking routes: clock stops on ~70% of completions; YAC (−); tighter throw (Arm Strength + Accuracy); INT risk on outs vs. zone corners | QB Arm Strength + Accuracy | CB Zone Coverage + Ball Skills |
+
+Not tags:
+- **Rubs** are part of the concepts that are built on them (Mesh, Drive) and of bunch formations. There is no rub tag.
+- **Trick plays** are the Gadget call (3.11). There is no trick tag.
+- **The two-minute drill** is how the offense plays when the clock is short (last 2:30 of a half, and in the fourth quarter only when not ahead), not something on the sheet: the play caller leans toward concepts that break to the sideline, and a man who catches an out-breaking route gets out of bounds (about 3 in 4 times, giving up most of his run after the catch).
 
 ---
 
@@ -354,7 +356,7 @@ Up to **2 tags** per play. Stacking allowed only where the compatibility matrix 
 ### 5c. Coverage
 | Coverage | Type | Strong vs. | Weak vs. | Key D attributes |
 |---|---|---|---|---|
-| **Cover 0** | All man, no deep help (always paired with blitz) | Quick (if pressed), runs (extra box defender) | Deep Shot, Rub, RB Screen, any missed tackle = TD | Man Coverage, Press, Speed |
+| **Cover 0** | All man, no deep help (always paired with blitz) | Quick (if pressed), runs (extra box defender) | Deep Shot, rub concepts, RB Screen, any missed tackle = TD | Man Coverage, Press, Speed |
 | **Cover 1** | Man + single-high FS | Runs (8-man box), Quick vs. good press | Rub/crossers, Deep vs. slow CBs, mismatches (RB/TE on LB) | Man Coverage, Press; FS Speed + Zone |
 | **Cover 2** | 2 deep halves, 5 under; corners squat | Quick outs/flats, WR Screen, outside runs (corners support) | Deep middle/seams, Dropback intermediate holes, inside runs | CB Press + Tackling; S Zone + Speed |
 | **Cover 3** | 3 deep, 4 under; single-high | Runs (8-man box), Deep outside | Flats/seams, Quick, WR Screen, curl-flat Dropback | CB Zone + Speed; FS range |
@@ -377,7 +379,7 @@ Up to **2 tags** per play. Stacking allowed only where the compatibility matrix 
 | **Kickoff** | K Comfort Range (depth/touchback rate) + Trajectory (hang time); coverage unit (depth players) Speed + Tackling | Returner Vision + Burst + Elusiveness + Speed + Ball Security; return blockers Run Block | Touchback → 35 (current rule) |
 | **Punt** | P Punt Distance (gross), Hang Time (vs. outkicking coverage), Directional Placement (OOB/coffin corner/away from returner), Spin Control (touchback avoidance, hard to field); coverage Speed + Tackling | Returner as above + Hands (muffs) | Fair catch when coverage arrives first |
 | **Field Goal / PAT** | K Kick Consistency (inside comfort range) + Comfort Range + Range Falloff (beyond it) + Trajectory (range, block avoidance); OL Pass Block | DL/EDGE Pass Rush + Size (block chance, reduced by Trajectory) | |
-| **2-point try** | Uses normal plays from the 2 (Quick, Dropback, Base Run Inside, Option, Rub tag) | Normal defense (Goal Line or Nickel) | |
+| **2-point try** | Uses normal plays from the 2 (Quick, Dropback, Base Run Inside, Option; red-zone concepts such as Fade and Snag) | Normal defense (Goal Line or Nickel) | |
 | **Onside kick, fakes** | *Deferred* | | |
 
 ---
@@ -385,24 +387,25 @@ Up to **2 tags** per play. Stacking allowed only where the compatibility matrix 
 ## 7. Compatibility
 
 ### 7a. Play type × tag (✓ allowed · ● built in · — not allowed)
-| Play | Motion | Trickery | Play-Action | Bootleg | Rub | RPO | Sideline |
-|---|---|---|---|---|---|---|---|
-| Base Run — RB Inside | ✓ | — | — | — | — | ✓ | — |
-| Base Run — RB Outside | ✓ | ✓ | — | — | — | ✓ | — |
-| Base Run — QB (either) | ✓ | — | — | — | — | — | — |
-| Draw | ✓ | — | — | — | — | — | — |
-| Option | ✓ | — | — | — | — | — | — |
-| QB Sneak | — | — | — | — | — | — | — |
-| Jet Sweep | ● | ✓ (= reverse) | — | — | — | — | — |
-| Quick | ✓ | — | — | ✓ (sprint-out) | ✓ | — | ✓ |
-| Dropback | ✓ | — | ✓ | ✓ | ✓ | — | ✓ |
-| Deep Shot | ✓ | ✓ (fake reverse) | ✓ | ✓ | — | — | ✓ |
-| RB Screen | ✓ | — | — | — | — | — | — |
-| WR Screen | ✓ | — | — | — | — | — | — |
-| Gadget Pass | ✓ | ● | ● | — | — | — | — |
-| Hail Mary / Spike / Kneel | — | — | — | — | — | — | — |
+| Play | Motion | Play-Action | Bootleg | RPO |
+|---|---|---|---|---|
+| Base Run — RB Inside | ✓ | — | — | ✓ |
+| Base Run — RB Outside | ✓ | — | — | ✓ |
+| Base Run — QB (either) | ✓ | — | — | — |
+| Draw | ✓ | — | — | — |
+| Option | ✓ | — | — | — |
+| QB Sneak | — | — | — | — |
+| Jet Sweep | ● | — | — | — |
+| Quick | ✓ | — | ✓ (sprint-out) | — |
+| Dropback | ✓ | ✓ | ✓ | — |
+| Deep Shot | ✓ | ✓ | ✓ | — |
+| RB Screen | ✓ | — | — | — |
+| WR Screen | ✓ | — | — | — |
+| Gadget (reverse) | ● | — | — | — |
+| Gadget (flea flicker) | ✓ | ● | — | — |
+| Hail Mary / Spike / Kneel | — | — | — | — |
 
-Allowed stacks: Motion + any one other tag; Play-Action + Bootleg; Rub + Sideline. No other pairs.
+Allowed stacks: Motion + any one other tag; Play-Action + Bootleg. No other pairs.
 
 ### 7b. Formation restrictions
 | Play/Tag | Formations |
@@ -435,9 +438,9 @@ Each eligible receiver gets a weight = **concept role** × **coverage leverage**
 | Agility | Zone blocking, pulling, Screens (OL release), route breaks, Man Coverage mirroring, speed rush bend & pass-pro vs. speed, Bootleg, scrambles, penetrating DL vs. Zone |
 | Strength | Gap blocking, QB Sneak (both sides), pass-pro anchor vs. power, power rush, Block Shedding/double teams, Contact Balance, forced fumbles |
 | Size | Contested catches, Hail Mary, Block Shedding, QB Sneak, batted balls/FG blocks, position fit |
-| Short Accuracy | Quick, Dropback, Screens, RPO, Gadget, Sideline |
+| Short Accuracy | Quick, Dropback, Screens, RPO, Gadget, two-minute outs |
 | Deep Accuracy | Dropback (deep reads), Deep Shot, Gadget |
-| Arm Strength | Deep Shot, Hail Mary, Sideline, tight windows (Dropback), Gadget passer |
+| Arm Strength | Deep Shot, Hail Mary, two-minute outs, tight windows (Dropback), flea flicker |
 | Processing | Dropback, Quick, Option, RPO, Motion bonus, vs. blitz/sim pressure, sack avoidance (time to throw) |
 | Decision-Making | INT risk on all passes, target forcing, RPO, throwaways |
 | Pocket Presence | Sack/throwaway/scramble conversion under pressure on all passes; Play-Action; Hail Mary |
@@ -446,7 +449,7 @@ Each eligible receiver gets a weight = **concept role** × **coverage leverage**
 | Elusiveness | Outside runs, Jet Sweep, Option, YAC, Screens, returns |
 | Contact Balance | Inside/Gap runs, QB Sneak, YAC after contact |
 | Ball Security | All carries, catches, sacks (QB), option pitches, returns |
-| Route Running | All non-screen passes (separation, target share), Rub |
+| Route Running | All non-screen passes (separation, target share) |
 | Release | Quick, Deep Shot, vs. Press everywhere |
 | Hands | All catches (drops), punt returns (muffs) |
 | Contested Catch | Deep Shot, Dropback tight windows, red zone, Hail Mary |
@@ -457,9 +460,9 @@ Each eligible receiver gets a weight = **concept role** × **coverage leverage**
 | Block Shedding | All runs (point of attack, edge setting), QB Sneak |
 | Tackling | All runs & catches (missed tackles, yards after contact), Screens, special teams coverage |
 | Ball Stripping | Forced fumbles on every tackle, strip-sacks |
-| Play Recognition | Draw, Option, RPO, Screens, Play-Action, Bootleg, Trickery, Gadget, jumped routes, Zone gap discipline, Cover 4 run support |
-| Man Coverage | Cover 0/1 (and man-matched Nickel/Dime), vs. Rub, RB/TE split-out mismatches |
-| Zone Coverage | Cover 2/3/4, Sideline INTs, sim-pressure droppers, S range |
+| Play Recognition | Draw, Option, RPO, Screens, Play-Action, Bootleg, Gadget (reverse read, flea flicker fake), jumped routes, Zone gap discipline, Cover 4 run support |
+| Man Coverage | Cover 0/1 (and man-matched Nickel/Dime), vs. rub concepts (Mesh, Drive), RB/TE split-out mismatches |
+| Zone Coverage | Cover 2/3/4, INTs on outs, sim-pressure droppers, S range |
 | Press | Quick, WR Screen, Release battles, Cover 0/1/2 |
 | Ball Skills | INTs & PDs on all passes, Hail Mary, contested catches |
 | Kick Consistency | FG inside comfort range, PAT |
@@ -478,7 +481,7 @@ Each eligible receiver gets a weight = **concept role** × **coverage leverage**
 ---
 
 ## 10. Known gaps / decisions flagged in this draft
-1. **Jet Sweep vs. "WR carrier" in Base Run** — resolved here: Base Run carriers are RB/FB and QB only; WR runs live in Jet Sweep (+ Trickery = reverse).
+1. **Jet Sweep vs. "WR carrier" in Base Run** — resolved here: Base Run carriers are RB/FB and QB only; WR runs live in Jet Sweep and the Gadget reverse.
 2. **FB** — carrier on Inside Base Run only; otherwise lead blocker/receiver in 21/22.
 3. **Aging groups (1i)** — proposed, pending approval.
 4. **Deferred:** penalties/Discipline, onside kicks, fake punts/FGs, spy/robber coverages, no-huddle tempo, weather/wind (Trajectory will matter more once wind exists).
