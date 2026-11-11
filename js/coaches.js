@@ -49,7 +49,9 @@ const DEV_OWNER = { dQB: 'OC', dBC: 'OC', dREC: 'OC', dOL: 'OC', dPR: 'DC', dRD:
 const ATTR_DEV = {};
 for (const k in DEV_GROUPS) for (const a of DEV_GROUPS[k]) ATTR_DEV[a] = k;
 
-// ---------- scheme archetypes ----------
+// ---------- traditions ----------
+// What a coach draws his playbook from. No coach is one of these: see newMix below. The labels here are never shown for
+// a coach; what a playbook is called is read off what is on it (offSheetLabel, defSheetLabel).
 const OFF_ARCH = {
   WZ: { l: 'Wide Zone / Boot', t: { pers: { 11: 45, 12: 30, 21: 15, 13: 5, 22: 5 }, uc: 0.55, pass: 0.54, zone: 0.8, quick: 0.25, deep: 0.2, pa: 0.3, motion: 0.6, rpo: 0.05, boot: 0.12, screen: 0.06, trick: 0.03, qbRun: 0.03, rb1: 0.65 } },
   SPREAD: { l: 'Spread / Air Raid', t: { pers: { 11: 70, 10: 15, 12: 12, 13: 3 }, uc: 0.1, pass: 0.62, zone: 0.55, quick: 0.42, deep: 0.13, pa: 0.1, motion: 0.35, rpo: 0.25, boot: 0.03, screen: 0.12, trick: 0.03, qbRun: 0.06, rb1: 0.7 } },
@@ -70,6 +72,54 @@ function jitterTend(base) {
   for (const k in t) if (typeof t[k] === 'number') t[k] = round2(clamp(t[k] * Math.exp(gauss(0, 0.12)), 0, 0.95));
   if (t.pers) for (const k in t.pers) t.pers[k] = Math.max(0, Math.round(t.pers[k] * Math.exp(gauss(0, 0.15))));
   return t;
+}
+// ---------- a coach's own playbook ----------
+// A new coach learned from two traditions (now and then just one). Each part of his playbook leans to one of the two: on
+// offense the run game (with the play-action and bootlegs that ride on it), the pass game, and how he lines up; on
+// defense the front, the coverage and the pressure. So a power run game can sit beside an Air Raid passing attack.
+const OFF_PARTS = { run: ['zone', 'qbRun', 'rpo', 'pa', 'boot', 'wz', 'counter', 'duo', 'pistol'], pass: ['pass', 'quick', 'deep', 'screen', 'trick', 'optrt', 'maxp'],
+  form: ['pers', 'uc', 'motion', 'rb1', 'trips', 'bunch', 'tight', 'empty', 'nohud'] };
+function newMix(side) {
+  const ks = Object.keys(side === 'O' ? OFF_ARCH : DEF_ARCH), a = pick(ks), b = rand() < 0.15 ? a : pick(ks.filter(k => k !== a));
+  const lean = () => { const x = rand() * 0.35; return rand() < 0.5 ? x : 1 - x; };
+  return { a, b, u: side === 'O' ? { run: lean(), pass: lean(), form: lean() } : { front: lean(), cover: lean(), rush: lean() } };
+}
+function pureMix(arch, side) { return { a: arch, b: arch, u: side === 'O' ? { run: 0, pass: 0, form: 0 } : { front: 0, cover: 0, rush: 0 } }; }
+// a coach from an older save still carries the tradition he was rolled from
+function mixOf(c, side) { const A = side === 'O' ? OFF_ARCH : DEF_ARCH; return c && A[c.arch] ? pureMix(c.arch, side) : newMix(side); }
+function genOffSheet(mix) {
+  const src = k => Object.assign({}, OFF_ARCH[k].t, OFF_NEW_TEMPLATE[k]), A = src(mix.a), B = src(mix.b), t = {};
+  for (const part in OFF_PARTS) { const u = mix.u[part];
+    for (const k of OFF_PARTS[part]) {
+      if (k !== 'pers') { t[k] = (A[k] || 0) * (1 - u) + (B[k] || 0) * u; continue; }
+      t.pers = {}; for (const p of new Set([...Object.keys(A.pers), ...Object.keys(B.pers)])) t.pers[p] = (A.pers[p] || 0) * (1 - u) + (B.pers[p] || 0) * u; } }
+  const out = jitterTend(t);
+  // the newer looks: a coach may not carry one his traditions use, and now and then carries one they do not
+  for (const k of OFF_NEW_FIELDS) { let v = t[k] || 0; if (k !== 'wz') { if (v && rand() < 0.3) v = 0; else if (!v && rand() < 0.08) v = 0.15; } out[k] = round2(clamp(v * Math.exp(gauss(0, 0.25)), 0, 0.9)); }
+  return out;
+}
+function genDefSheet(mix) {
+  const A = DEF_ARCH[mix.a].t, B = DEF_ARCH[mix.b].t, u = mix.u, L = (k, w) => A[k] * (1 - w) + B[k] * w;
+  const t = jitterTend({ front: u.front < 0.5 ? A.front : B.front, base: L('base', u.front), man: L('man', u.cover), high: L('high', u.cover), blitz: L('blitz', u.rush), sim: L('sim', u.rush), stunt: L('stunt', u.front) });
+  return { t, pk: genDefPk(mix, t.front) };
+}
+function sheetSide(s) { return !s ? null : s.front !== undefined ? 'D' : 'O'; }
+// a coach's own playbook for one side of the ball (a head coach keeps the one he had as a coordinator), or null
+function sheetOf(c, side) { if (!c) return null; const s = c.role === 'HC' ? c.ct : c.role === (side === 'O' ? 'OC' : 'DC') ? c.t : null; return sheetSide(s) === side ? s : null; }
+// a man who learned his playbook under another coach starts from that coach's, a little of it his own
+function deriveSheet(from, side) {
+  const s = sheetOf(from, side);
+  if (side === 'O') { ensureOffSheet(s, from.arch); return { t: jitterTend(s) }; }
+  const pk0 = from.pk || genDefPk(mixOf(from, 'D'), s.front), jit = o => { const r = {}; for (const k in o) r[k] = o[k] * Math.exp(gauss(0, 0.15)); return normShares(r); };
+  return { t: jitterTend(s), pk: { fr: Object.assign({}, pk0.fr), sh: jit(pk0.sh), pr: jit(pk0.pr), stunt: round2(clamp(pk0.stunt * Math.exp(gauss(0, 0.12)), 0, 0.5)), disg: round2(clamp(pk0.disg * Math.exp(gauss(0, 0.12)), 0, 0.6)),
+    lib: pk0.lib ? JSON.parse(JSON.stringify(pk0.lib)) : genDefLib(mixOf(from, 'D'), s.front) } };
+}
+// give a coach his playbook for one side: learned from `from` when there is one, otherwise his own mix of traditions
+function giveSheet(c, side, from) {
+  const got = sheetOf(from, side) ? deriveSheet(from, side) : side === 'O' ? { t: genOffSheet(newMix('O')) } : genDefSheet(newMix('D'));
+  if (c.role === 'HC') c.ct = got.t; else c.t = got.t;
+  if (got.pk) c.pk = got.pk; else if (side === 'O') delete c.pk;
+  c.arch = null;
 }
 
 // ---------- generation ----------
@@ -94,14 +144,13 @@ function genCoach(role, opts = {}) {
   if (pool[1] && rand() < 0.6) c.k[pool[1]] += randInt(6, 14);
   if (pool[2] && rand() < 0.7) c.k[pool[2]] -= randInt(8, 16);
   for (const k in c.k) c.k[k] = Math.round(clamp(c.k[k], 15, 97));
-  if (role === 'OC') { c.arch = opts.arch || pick(Object.keys(OFF_ARCH)); c.t = jitterTend(OFF_ARCH[c.arch].t); }
-  if (role === 'DC') { c.arch = opts.arch || pick(Object.keys(DEF_ARCH)); c.t = jitterTend(DEF_ARCH[c.arch].t); }
+  if (role === 'OC' || role === 'DC') giveSheet(c, role === 'OC' ? 'O' : 'D', opts.from);
   if ((role === 'OC' || role === 'DC') && rand() < 0.6) noteCalled(c, state.season - randInt(0, 3)); // most coordinators on the market have called plays somewhere
   if (role === 'HC') {
     c.t.aggr = round2(clamp(gauss(0.5, 0.17), 0.05, 0.95));
     c.t.clock = round2(clamp(gauss(0.5, 0.17), 0.05, 0.95));
     c.t.bg = opts.bg || weightedPick(['O', 'D', 'ST'], [45, 45, 10]);
-    makeCaller(c, opts.callerArch);
+    makeCaller(c);
     if (c.t.caller || (c.t.bg !== 'ST' && rand() < 0.6)) noteCalled(c, state.season - (c.t.caller ? 0 : randInt(1, 6)));
   }
   c.rv = 3; updateCoachOvr(c);
@@ -109,14 +158,9 @@ function genCoach(role, opts = {}) {
   return c;
 }
 // some head coaches call plays for their side of the ball
-function makeCaller(c, arch) {
+function makeCaller(c) {
   c.t.caller = null; delete c.ct;
-  if ((c.t.bg === 'O' && rand() < 0.5) || (c.t.bg === 'D' && rand() < 0.3)) {
-    c.t.caller = c.t.bg;
-    c.arch = arch || pick(Object.keys(c.t.bg === 'O' ? OFF_ARCH : DEF_ARCH));
-    if (!(c.t.bg === 'O' ? OFF_ARCH : DEF_ARCH)[c.arch]) c.arch = pick(Object.keys(c.t.bg === 'O' ? OFF_ARCH : DEF_ARCH));
-    c.ct = jitterTend((c.t.bg === 'O' ? OFF_ARCH : DEF_ARCH)[c.arch].t);
-  }
+  if ((c.t.bg === 'O' && rand() < 0.5) || (c.t.bg === 'D' && rand() < 0.3)) { c.t.caller = c.t.bg; giveSheet(c, c.t.bg); }
 }
 function noteCalled(c, season) { c.called = season; c.seen = { pc: c.k.pc }; }
 // 'now' he calls plays for his club, 'past' he has before, null he never has
@@ -187,7 +231,7 @@ function genStaff(t) {
   const hc = genCoach('HC');
   hireCoach(t.id, hc.id, true);
   for (const role of ['OC', 'DC', 'STC', 'SC']) {
-    const c = genCoach(role, { arch: role === 'OC' && hc.t.caller === 'O' ? hc.arch : role === 'DC' && hc.t.caller === 'D' ? hc.arch : undefined });
+    const c = genCoach(role, { from: (role === 'OC' && hc.t.caller === 'O') || (role === 'DC' && hc.t.caller === 'D') ? hc : undefined }); // a head coach who calls plays brought up his coordinator
     hireCoach(t.id, c.id, true);
     c.rec.w = 0;
   }
@@ -208,11 +252,17 @@ function defCaller(t) { const hc = C(t.hc); return hc && hc.t.caller === 'D' ? h
 function offTend(t) { return blendedTend(t, 'O'); }
 // The pass concepts a play caller carries: three of the quick-game concepts, five of the dropback ones, two deep shots, two play-action
 // concepts and one bootleg, weighted by how common each is and by his own taste. Read from who he is, like his formation habits.
+// His taste follows his playbook: a caller who throws deep a lot leans to the deeper concepts of each family (Four verticals
+// over Mesh, Yankee over Drift), one who lives underneath to the shorter ones. Each yard a concept's routes run past its
+// family's average multiplies his taste for it by e^(his deep share - 0.18).
 const BOOK_KEEP = { QUICK: 3, DROP: 5, DEEP: 2, PA: 2, BOOT: 1 };
 // every book has an answer to man coverage: nobody gets to sit in it all afternoon for free
 const BOOK_MAN = { QUICK: ['Slant-flat'], DROP: ['Mesh', 'Drive'] };
-function conceptBook(t) {
-  const c = offCaller(t), out = {}, taste = k => CONCEPTS[k].w * (0.5 + coachTrait(c, 'cp' + k) * 1.5);
+function conceptBook(t) { return conceptBookOf(offCaller(t)); }
+function conceptBookOf(c) {
+  const s = sheetOf(c, 'O'), dd = s ? (s.deep || 0) - 0.18 : 0, out = {}, fam = {};
+  for (const k in CONCEPTS) { const f = CONCEPTS[k].f; fam[f] = fam[f] || [0, 0]; fam[f][0] += CONCEPTS[k].dep; fam[f][1]++; }
+  const taste = k => CONCEPTS[k].w * (0.5 + coachTrait(c, 'cp' + k) * 1.5) * Math.exp(dd * (CONCEPTS[k].dep - fam[CONCEPTS[k].f][0] / fam[CONCEPTS[k].f][1]));
   for (const f in BOOK_KEEP) { const all = Object.keys(CONCEPTS).filter(k => CONCEPTS[k].f === f).map(k => [k, taste(k)]).sort((a, b) => b[1] - a[1]).slice(0, BOOK_KEEP[f]);
     const must = BOOK_MAN[f]; if (must && !all.some(x => must.includes(x[0]))) all[all.length - 1] = [must.slice().sort((a, b) => taste(b) - taste(a))[0], all[all.length - 1][1]];
     const tot = all.reduce((s, x) => s + x[1], 0) || 1; out[f] = {}; for (const [k, v] of all) out[f][k] = round2(v / tot); }
@@ -227,8 +277,6 @@ function formTraits(t) {
 }
 
 function defTend(t) { return blendedTend(t, 'D'); }
-function offArch(t) { const c = offCaller(t); return c ? c.arch : null; }
-function defArch(t) { const c = defCaller(t); return c ? c.arch : null; }
 
 // ---------- development (offseason) ----------
 // Returns per-attribute multipliers: grow (how much of a player's growth is realized) and decl (how fast decline hits)
@@ -265,15 +313,12 @@ function weeklyRecovery() {
 function wearPenalty(p) { return Math.min(4, (p.wear || 0) * 0.2); }
 
 // ---------- scheme familiarity ----------
-// first season under a new play-caller's system: a small, fading penalty
+// first season with a new playbook: a small, fading penalty. Whether a playbook is new is how much of the old one carries
+// over (systemChangeKnowledge), not what it is called; each new season is one more year in it.
 function updateSystems() {
   for (const t of state.teams) {
-    t.sys = t.sys || { O: { arch: null, yrs: 0 }, D: { arch: null, yrs: 0 } };
-    for (const [side, fn] of [['O', offArch], ['D', defArch]]) {
-      const a = fn(t);
-      if (a && a === t.sys[side].arch) t.sys[side].yrs++;
-      else t.sys[side] = { arch: a, yrs: 0 };
-    }
+    t.sys = t.sys || { O: { yrs: -1 }, D: { yrs: -1 } };
+    for (const side of ['O', 'D']) { t.sys[side].yrs++; delete t.sys[side].arch; }
   }
 }
 function familiarityPenalty(t, side) {
@@ -308,8 +353,8 @@ function hireScore(t, c) {
   const hc = C(t.hc);
   if (hc && c.role !== 'HC') {
     if (c.mentors.includes(hc.id) || hc.mentors.includes(c.id)) s += 5;
-    if (c.role === 'OC' && hc.t.bg === 'O' && hc.arch === c.arch) s += 4;
-    if (c.role === 'DC' && hc.t.bg === 'D' && hc.arch === c.arch) s += 4;
+    const side = c.role === 'OC' ? 'O' : c.role === 'DC' ? 'D' : null, mine = side && hc.t.bg === side ? coachBook(hc, side) : null, his = mine && coachBook(c, side);
+    if (his) s += bookPref(pkOverlap(mine, his)); // a head coach wants a coordinator who thinks like him
   }
   if (c.age > 64) s -= 3;
   return s;
@@ -451,15 +496,22 @@ const LEANS = {
 };
 const COACH_STYLES = ['Demanding', "Players' coach", 'Teacher', 'Old school', 'Innovator', 'Motivator'];
 function leanLabel(c) { const r = SPEC_ROLES.includes(c.role) ? c.role : SPEC_OVER[c.role]; return c.lean && LEANS[r] && LEANS[r][c.lean] ? LEANS[r][c.lean][0] : ''; }
-function bgLabel(c) { const a = ASST_SIDE[c.role] === 'O' ? OFF_ARCH[c.bg] : DEF_ARCH[c.bg]; return a ? a.l.replace(/ \(.*\)/, '') : ''; }
+// whose playbook an assistant has been learning: his club's play-caller on his side, or the last coach he worked under who had one
+function rootsOf(c) {
+  const side = c && ASST_SIDE[c.role]; if (!side) return null;
+  if (c.tid >= 0) { const t = T(c.tid), k = side === 'O' ? offCaller(t) : defCaller(t); if (sheetOf(k, side)) return k; }
+  for (let i = (c.mentors || []).length - 1; i >= 0; i--) { const m = C(c.mentors[i]); if (sheetOf(m, side)) return m; }
+  return null;
+}
+// what that playbook is called: the system he would start from if he were promoted
+function bgLabel(c) { const m = rootsOf(c), side = c && ASST_SIDE[c.role]; if (!m) return ''; const s = sheetOf(m, side); if (side === 'O') return offSheetLabel(s); ensureDefPk(m); return m.pk ? defSheetLabel(s.front, m.pk) : ''; }
 function isAsst(c) { return !!c && ASST_ROLES.includes(c.role); }
 function genAssistant(role, opts = {}) {
-  const [first, last] = randomName(), spec = SPEC_ROLES.includes(role), side = ASST_SIDE[role];
+  const [first, last] = randomName(), spec = SPEC_ROLES.includes(role);
   const q = opts.q !== undefined ? opts.q : gauss(0, 1), r = () => Math.round(clamp(gauss(54 + q * 8, 11), 15, 97));
-  const archs = Object.keys(side === 'O' ? OFF_ARCH : DEF_ARCH);
   const c = { id: state.nextCid++, first, last, role, tid: -1, tier: spec ? 3 : 4, age: clamp(Math.round(gauss(spec ? 45 : 40, 7)), 27, 68),
     k: {}, t: {}, arch: null, rec: { w: 0, l: 0, t: 0, titles: 0 }, mentors: [], hist: [], yrs: 0,
-    style: pick(COACH_STYLES), bg: opts.bg && archs.includes(opts.bg) ? opts.bg : pick(archs), lean: pick(Object.keys(LEANS[spec ? role : SPEC_OVER[role]])) };
+    style: pick(COACH_STYLES), lean: pick(Object.keys(LEANS[spec ? role : SPEC_OVER[role]])) };
   if (spec) { c.cre = r(); c.adj = r(); } else { c.dev = opts.dev !== undefined ? Math.round(clamp(opts.dev, 15, 97)) : r(); c.coh = r(); }
   c.rv = 3; updateCoachOvr(c);
   state.coaches[c.id] = c;
@@ -489,9 +541,9 @@ function ensureAssistants(t, seed) {
   t.asst = t.asst || {};
   for (const role of ASST_ROLES) {
     if (asst(t, role)) continue;
-    const side = ASST_SIDE[role], coord = C(side === 'O' ? t.oc : t.dc), bg = side === 'O' ? offArch(t) : defArch(t);
+    const side = ASST_SIDE[role], coord = C(side === 'O' ? t.oc : t.dc);
     const old = seed && coord && coord.k[DEV_HANDOFF[role]] !== undefined ? coord.k[DEV_HANDOFF[role]] + gauss(0, 6) : undefined;
-    setAsst(t, role, genAssistant(role, { bg: rand() < 0.75 ? bg : undefined, dev: old }), true);
+    setAsst(t, role, genAssistant(role, { dev: old }), true);
     asst(t, role).yrs = seed ? randInt(1, 5) : 0;
   }
 }
@@ -502,24 +554,19 @@ function fillAsstVacancies() {
   fillAsstPool(3);
   for (const t of shuffle([...state.teams])) for (const role of ASST_ROLES) {
     if (asst(t, role)) continue;
-    const side = ASST_SIDE[role], bg = side === 'O' ? offArch(t) : defArch(t);
-    const pool = Object.values(state.coaches).filter(c => c.tid < 0 && c.role === role).sort((a, b) => b.ovr + (b.bg === bg ? 4 : 0) + gauss(0, 4) - a.ovr - (a.bg === bg ? 4 : 0));
-    setAsst(t, role, pool[0] || genAssistant(role, { bg }), true);
+    const side = ASST_SIDE[role], mine = pkVector(t, side), sc = {};
+    for (const c of Object.values(state.coaches)) if (c.tid < 0 && c.role === role) sc[c.id] = c.ovr + knowsBook(c, side, mine) + gauss(0, 4); // a man who already knows a playbook like ours
+    const pool = Object.values(state.coaches).filter(c => sc[c.id] !== undefined).sort((a, b) => sc[b.id] - sc[a.id]);
+    setAsst(t, role, pool[0] || genAssistant(role), true);
   }
 }
-// a new coordinator brings some of his own people: about half the assistants on his side turn over
-function bringStaff(t, side, coord) {
-  if (!t.asst) return;
-  let n = 0;
-  for (const role of ASST_ROLES) {
-    if (ASST_SIDE[role] !== side) continue;
-    const cur = asst(t, role);
-    if (cur && cur.bg === coord.arch && rand() < 0.8) continue; // already speaks his language
-    if (cur && rand() < 0.5) continue;
-    setAsst(t, role, genAssistant(role, { bg: coord.arch, q: gauss((coord.ovr - 55) / 25, 0.9) }), true); n++;
-  }
-  if (n && t.id === state.userTid) addNews(`${cname(coord)} brought ${n} of his own assistant${n === 1 ? '' : 's'} with him. You can replace any of them on the Staff page.`, [t.id], 'coach');
-}
+// How alike two playbooks are beyond the basics every club runs: 0 for two that overlap no more than two clubs' books usually
+// do (0.4, the median pair in a new league on either side of the ball), 1 from about what the two most alike clubs in a league
+// share (0.75). A head coach's pull toward a coordinator who thinks like him, a club's toward an assistant who knows its
+// playbook, and what an arriving player already knows all read it.
+function bookLike(ov) { return clamp((ov - 0.4) / 0.35, 0, 1); }
+function bookPref(ov) { return 4 * bookLike(ov); }
+function knowsBook(c, side, book) { const m = rootsOf(c), b = m && coachBook(m, side); return b ? bookPref(pkOverlap(b, book)) : 0; }
 // ---- what the lower tiers do ----
 // development: mostly the position coach, with the head coach's culture and the specialist over the room
 function roomDevVal(tid, pos) {
@@ -579,18 +626,18 @@ function promoteToSpecialist(c) {
   c.yrs = 0; updateCoachOvr(c); TEND_VER++;
   return c;
 }
-// the keywords become a system: his background is the scheme, his lean is baked into the tendencies
-function promoteToCoordinator(c) {
-  const side = ASST_SIDE[c.role], from = c.role, role = side === 'O' ? 'OC' : 'DC', A = side === 'O' ? OFF_ARCH : DEF_ARCH;
+// his playbook becomes his own: the one he learned under (his club's, or the last coach he worked for who had one), with his
+// lean baked in and his packages on top. A man who never learned one draws his own from two traditions.
+function promoteToCoordinator(c, roots) {
+  const side = ASST_SIDE[c.role], from = c.role, role = side === 'O' ? 'OC' : 'DC';
   const base = c.cre !== undefined ? (c.cre + c.adj) / 2 : (c.dev + c.coh) / 2;
-  c.arch = A[c.bg] ? c.bg : pick(Object.keys(A));
-  c.t = jitterTend(A[c.arch].t);
+  giveSheet(c, side, roots === undefined ? rootsOf(c) : roots); delete c.bg;
   if (LEANS[from]) applyLean(c.t, from, c.lean, 0.22);
   c.k = {}; for (const k of [...KNOBS[role], ...CALL_KNOBS]) c.k[k] = Math.round(clamp(gauss(base - 3, 9), 15, 95)); // a good assistant is a good bet, not a sure thing
   const boost = { PGC: ['passD', 'protD'], RGC: ['runD'], DPC: ['covD', 'presD'], DRC: ['frontD'] }[from] || [];
   for (const k of boost) c.k[k] = Math.round(clamp(c.k[k] + 7, 15, 97));
-  if (role === 'DC') { c.pk = genDefPk(c.arch); for (const id of c.pks || []) { if (SHELLS[id]) c.pk.sh[id] = (c.pk.sh[id] || 0) + 0.15; else if (PRESSURES[id]) c.pk.pr[id] = (c.pk.pr[id] || 0) + 0.12; else if (id === 'DISG') c.pk.disg = Math.min(0.6, c.pk.disg + 0.25); else if (id === 'STUNT') c.pk.stunt = Math.min(0.5, c.pk.stunt + 0.1); } normShares(c.pk.sh); normShares(c.pk.pr); }
-  if (role === 'OC') { ensureOffSheet(c.t, c.arch); c.t.pers = Object.assign({}, c.t.pers); for (const id of c.pks || []) if (OFF_PK[id]) OFF_PK[id][2](c.t, 0.15); for (const k in c.t) if (typeof c.t[k] === 'number') c.t[k] = round2(clamp(c.t[k], 0, 0.95)); }
+  if (role === 'DC') { for (const id of c.pks || []) { if (SHELLS[id]) c.pk.sh[id] = (c.pk.sh[id] || 0) + 0.15; else if (PRESSURES[id]) c.pk.pr[id] = (c.pk.pr[id] || 0) + 0.12; else if (id === 'DISG') c.pk.disg = Math.min(0.6, c.pk.disg + 0.25); else if (id === 'STUNT') c.pk.stunt = Math.min(0.5, c.pk.stunt + 0.1); } normShares(c.pk.sh); normShares(c.pk.pr); }
+  if (role === 'OC') { c.t.pers = Object.assign({}, c.t.pers); for (const id of c.pks || []) if (OFF_PK[id]) OFF_PK[id][2](c.t, 0.15); for (const k in c.t) if (typeof c.t[k] === 'number') c.t[k] = round2(clamp(c.t[k], 0, 0.95)); }
   delete c.pks;
   c.role = role; c.tier = 2; delete c.cre; delete c.adj; delete c.dev; delete c.coh; delete c.called; delete c.seen; c.promoted = state.season;
   updateCoachOvr(c); TEND_VER++;
@@ -598,13 +645,13 @@ function promoteToCoordinator(c) {
 }
 // a coordinator becomes a head coach: he keeps his side of the ball and often the play sheet; a special teams man runs the building and leaves the calls to his coordinators
 function promoteToHead(c) {
-  const from = c.role, side = from === 'OC' ? 'O' : from === 'DC' ? 'D' : 'ST', arch = c.arch, st = side === 'ST';
+  const from = c.role, side = from === 'OC' ? 'O' : from === 'DC' ? 'D' : 'ST', own = c.t, st = side === 'ST';
   const num = (v, m, sd) => v !== undefined ? v : Math.round(clamp(gauss(m, sd), 20, 90));
   c.role = 'HC';
   { const r0 = (m, sd) => Math.round(clamp(gauss(m, sd), 20, 92)); c.k = { prac: r0(st ? 56 : 51, 11), gm: r0(st ? 55 : 50, 10), acc: r0(st ? 56 : 52, 11), tb: r0(52, 11), pc: num(c.k.pc, 42, 8) }; }
   c.t = { aggr: round2(clamp(gauss(0.5, 0.17), 0.05, 0.95)), clock: round2(clamp(gauss(0.5, 0.17), 0.05, 0.95)), bg: side };
   if (st) { c.t.caller = null; delete c.ct; c.arch = null; delete c.pk; }
-  else { makeCaller(c, arch); if (!c.t.caller && rand() < 0.5) { c.t.caller = side; c.arch = arch; c.ct = jitterTend((side === 'O' ? OFF_ARCH : DEF_ARCH)[arch].t); } }
+  else { c.ct = own; c.t.caller = rand() < (side === 'O' ? 0.75 : 0.65) ? side : null; } // his playbook comes with him, called or not
   c.promoted = state.season; updateCoachOvr(c); TEND_VER++;
   return c;
 }
@@ -625,7 +672,7 @@ function userPromote(cid) { // from the Staff page: move one of your own assista
   if (SPEC_ROLES.includes(c.role)) {
     const key = ASST_SIDE[c.role] === 'O' ? 'oc' : 'dc';
     if (t[key]) return 'Fire your coordinator first';
-    const name = cname(c); t.asst[c.role] = null; c.tid = -1; promoteToCoordinator(c); hireCoach(t.id, c.id, true);
+    const name = cname(c), roots = rootsOf(c); t.asst[c.role] = null; c.tid = -1; promoteToCoordinator(c, roots); hireCoach(t.id, c.id, true);
     addNews(`${t.abbr} promoted ${name} to ${ROLE_LABEL[c.role].toLowerCase()} (${schemeLabel(c)}).`, [t.id], 'coach');
   } else {
     const up = SPEC_OVER[c.role];
@@ -652,8 +699,9 @@ function asstOffseason(recs, rank, pf, pa) {
     if (!isAsst(c) || c.age >= 62) continue;
     const mine = c.tid === state.userTid && !isAI(state.userTid);
     if (SPEC_ROLES.includes(c.role) && (c.cre + c.adj) / 2 >= 66 && (c.yrs || 0) >= 2 && rand() < 0.14) {
+      const roots = rootsOf(c);
       if (c.tid >= 0) { if (mine) addNews(`${ASST_LABEL[c.role]} ${cname(c)} is leaving to interview for coordinator jobs.`, [c.tid], 'coach'); vacateCoach(c); }
-      promoteToCoordinator(c);
+      promoteToCoordinator(c, roots);
     } else if (POS_ROLES.includes(c.role) && (c.dev + c.coh) / 2 >= 64 && (c.yrs || 0) >= 2 && rand() < 0.1) {
       if (c.tid >= 0) { if (mine) addNews(`${ASST_LABEL[c.role]} ${cname(c)} is leaving for a bigger job elsewhere.`, [c.tid], 'coach'); vacateCoach(c); }
       promoteToSpecialist(c);
@@ -826,8 +874,9 @@ function interview(cid, role) { // the job you are interviewing him for is the o
 function coachKnown(c) { return !state.car || c.tid === state.userTid || !!state.car.iv[c.id]; }
 // ---- putting a man in a job ----
 function placeCoach(t, role, c, quiet) {
+  const roots = isAsst(c) ? rootsOf(c) : null;
   if (c.tid >= 0 && c.tid !== t.id) vacateCoach(c);
-  if (c.role !== role) { if (POS_ROLES.includes(c.role) && SPEC_ROLES.includes(role)) promoteToSpecialist(c); else if (SPEC_ROLES.includes(c.role)) promoteToCoordinator(c); else if (role === 'HC' && ['OC', 'DC', 'STC'].includes(c.role)) promoteToHead(c); }
+  if (c.role !== role) { if (POS_ROLES.includes(c.role) && SPEC_ROLES.includes(role)) promoteToSpecialist(c); else if (SPEC_ROLES.includes(c.role)) promoteToCoordinator(c, roots); else if (role === 'HC' && ['OC', 'DC', 'STC'].includes(c.role)) promoteToHead(c); }
   c.hiredS = state.season;
   const cur = staffCoach(t, role);
   if (cur && cur !== c) dismissCoach(t, cur, quiet);
@@ -846,7 +895,7 @@ function setCaller(t) { // play-calling follows the promises; without one the he
   const hc = C(t.hc); if (!hc) return;
   for (const side of ['O', 'D']) { const co = C(side === 'O' ? t.oc : t.dc);
     if (co && co.prom && co.prom.call === side && hc.t.caller === side) { hc.t.caller = null; }
-    if (hc.prom && hc.prom.call === side && hc.t.caller !== side) { hc.t.caller = side; if (!hc.ct || !hc.arch) { const A = side === 'O' ? OFF_ARCH : DEF_ARCH; hc.arch = A[hc.arch] ? hc.arch : pick(Object.keys(A)); hc.ct = jitterTend(A[hc.arch].t); } } }
+    if (hc.prom && hc.prom.call === side && hc.t.caller !== side) { hc.t.caller = side; if (!sheetOf(hc, side)) giveSheet(hc, side); } }
   TEND_VER++;
 }
 // you and the candidate have a deal
@@ -914,7 +963,7 @@ function aiHireRoles(roles) {
     const boss = BOSS[role] ? staffCoach(t, BOSS[role]) : null;
     const sc = c => (c.role === role ? c.ovr : c.ovr - 4) + (boss ? linkOf(boss, c) * 14 : 0) + (COACH_ROLES.includes(role) && c.role === role ? hireScore(t, c) - c.ovr : 0) + gauss(0, 3);
     pool.sort((a, b) => sc(b) - sc(a));
-    const c = pool[0] || (COACH_ROLES.includes(role) ? genCoach(role) : genAssistant(role, { bg: ASST_SIDE[role] === 'O' ? offArch(t) : defArch(t) }));
+    const c = pool[0] || (COACH_ROLES.includes(role) ? genCoach(role) : genAssistant(role));
     placeCoach(t, role, c, true);
     if (ROLE_TIER[role] <= 2 || t.id === state.userTid) addNews(`${t.abbr} hired ${roleName(role).toLowerCase()} ${cname(c)}${schemeLabel(c) ? ' (' + schemeLabel(c) + ')' : ''}.`, [t.id], 'coach');
     if (ROLE_TIER[role] <= 3) bringNetwork(t, c, role);
@@ -1060,12 +1109,18 @@ const DEF_PK_TEMPLATE = {
   TWOGAP: { sh: { C3: 0.28, C2: 0.2, C4: 0.17, C1: 0.22, C2M: 0.08, T2: 0.05 }, pr: { FOUR: 0.56, FZ: 0.18, BLITZ: 0.13, SIM: 0.1, THREE: 0.03 }, disg: 0 },
 };
 function normShares(o) { const s = Object.values(o).reduce((a, b) => a + b, 0) || 1; for (const k in o) o[k] = round2(o[k] / s); return o; }
-function genDefPk(arch) {
-  const T_ = DEF_PK_TEMPLATE[arch] || DEF_PK_TEMPLATE.C3, jit = o => { const r = {}; for (const k in o) r[k] = o[k] * Math.exp(gauss(0, 0.25)); return r; };
+// a coach's packages from his two traditions (see newMix): the shells follow his coverage lean, the pressures his pressure lean,
+// the stunts his front. `mix` may be a tradition's key (one tradition); `front` is the front on his own sheet.
+function genDefPk(mix, front) {
+  if (typeof mix === 'string') mix = pureMix(DEF_ARCH[mix] ? mix : 'C3', 'D');
+  const TA = DEF_PK_TEMPLATE[mix.a] || DEF_PK_TEMPLATE.C3, TB = DEF_PK_TEMPLATE[mix.b] || DEF_PK_TEMPLATE.C3, u = mix.u, jit = o => { const r = {}; for (const k in o) r[k] = o[k] * Math.exp(gauss(0, 0.25)); return r; };
+  const blend = (a, b, w) => { const r = {}; for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) r[k] = (a[k] || 0) * (1 - w) + (b[k] || 0) * w; return r; };
   const top = (o, n, keep) => { const e = Object.entries(o).sort((a, b) => b[1] - a[1]); const r = {}; e.forEach(([k, v], i) => { if (i < n || k === keep) r[k] = v; }); return normShares(r); };
-  const odd = DEF_ARCH[arch] && ['3-4', 'Tite'].includes(DEF_ARCH[arch].t.front);
+  front = front || DEF_ARCH[mix.a].t.front;
+  const odd = ['3-4', 'Tite'].includes(front), stunt = DEF_ARCH[mix.a].t.stunt * (1 - u.front) + DEF_ARCH[mix.b].t.stunt * u.front, disg = (TA.disg || 0) * (1 - u.cover) + (TB.disg || 0) * u.cover;
   const fr = { UNDER: !odd && rand() < 0.5 ? round2(0.1 + rand() * 0.25) : 0, BEAR: rand() < (odd ? 0.4 : 0.3) ? round2(0.05 + rand() * 0.14) : 0, BIGN: rand() < 0.35 ? round2(0.12 + rand() * 0.28) : 0 };
-  return { fr, sh: top(jit(T_.sh), 4), pr: top(jit(T_.pr), 3, 'FOUR'), stunt: round2(clamp((DEF_ARCH[arch] ? DEF_ARCH[arch].t.stunt : 0.15) * Math.exp(gauss(0, 0.2)), 0, 0.5)), disg: round2(T_.disg ? clamp(T_.disg * Math.exp(gauss(0, 0.2)), 0, 0.6) : rand() < 0.15 ? 0.2 : 0) };
+  return { fr, sh: top(jit(blend(TA.sh, TB.sh, u.cover)), 4), pr: top(jit(blend(TA.pr, TB.pr, u.rush)), 3, 'FOUR'), stunt: round2(clamp(stunt * Math.exp(gauss(0, 0.2)), 0, 0.5)),
+    disg: round2(disg >= 0.05 ? clamp(disg * Math.exp(gauss(0, 0.2)), 0, 0.6) : rand() < 0.15 ? 0.2 : 0), lib: genDefLib(mix, front) };
 }
 // ---------- a coach's own fronts ----------
 // A look is one sound way to line the front up: where each lineman puts his hand down ('S3' = strong side, 3 technique).
@@ -1096,15 +1151,17 @@ const LOOKS = {
 const LOOK_HOME = { '4-3': 'Over', 'Wide-9': 'Wide', '3-4': 'Okie', 'Tite': 'Tite' };
 // What a coach carries: his home look and a few changeups in base and in sub, how often his line slants and which way,
 // which twist he likes, and how often he walks linebackers up into the gaps. Generated once and kept with him.
-function genDefLib(arch) {
-  const A_ = DEF_ARCH[arch] || DEF_ARCH.C3, front = A_.t.front, fam = front === '3-4' || front === 'Tite' ? 'odd' : 'even';
+// (slants follow his front's tradition, walking linebackers up his pressure's, a corner who travels his coverage's)
+function genDefLib(mix, front) {
+  if (typeof mix === 'string') mix = pureMix(DEF_ARCH[mix] ? mix : 'C3', 'D');
+  front = front || DEF_ARCH[mix.a].t.front; const fam = front === '3-4' || front === 'Tite' ? 'odd' : 'even';
   const menu = (table, home, n) => { const rest = Object.keys(table).filter(k => k !== home); shuffle(rest); const w = 0.52 + rand() * 0.25, pick = rest.slice(0, n), ws = pick.map(() => 0.3 + rand());
     const tot = ws.reduce((a, b) => a + b, 0) || 1; return [[home, round2(w)], ...pick.map((k, i) => [k, round2((1 - w) * ws[i] / tot)])]; };
-  const j = (m, s) => m * Math.exp(gauss(0, s));
-  const sl = { TWOHIGH: 0.06, C3: 0.08, WIDE9: 0.1, MANBLITZ: 0.12, TWOGAP: 0.04 }[arch] || 0.07, mug = { TWOHIGH: 0.1, MANBLITZ: 0.12 }[arch] || 0.03;
+  const j = (m, s) => m * Math.exp(gauss(0, s)), by = (o, d, w) => (o[mix.a] !== undefined ? o[mix.a] : d) * (1 - w) + (o[mix.b] !== undefined ? o[mix.b] : d) * w;
+  const sl = by({ TWOHIGH: 0.06, C3: 0.08, WIDE9: 0.1, MANBLITZ: 0.12, TWOGAP: 0.04 }, 0.07, mix.u.front), mug = by({ TWOHIGH: 0.1, MANBLITZ: 0.12 }, 0.03, mix.u.rush);
   const sd = normShares({ S: 0.2 + rand(), W: 0.2 + rand(), P: 0.1 + rand() * 0.6 });
   return { fam, base: menu(LOOKS[fam], LOOK_HOME[front] || Object.keys(LOOKS[fam])[0], 1 + randInt(0, 2)), sub: menu(LOOKS.sub, front === 'Wide-9' ? 'Wide' : 'Even', 1 + randInt(0, 2)),
-    travel: rand() < (arch === 'MANBLITZ' ? 0.45 : 0.15) ? 1 : 0, sl: round2(clamp(j(sl, 0.45), 0, 0.3)), sd, tt: round2(clamp(0.2 + rand() * 0.6, 0, 1)), mug: rand() < 0.3 ? 0 : round2(clamp(j(mug, 0.5), 0, 0.25)) };
+    travel: rand() < by({ MANBLITZ: 0.45 }, 0.15, mix.u.cover) ? 1 : 0, sl: round2(clamp(j(sl, 0.45), 0, 0.3)), sd, tt: round2(clamp(0.2 + rand() * 0.6, 0, 1)), mug: rand() < 0.3 ? 0 : round2(clamp(j(mug, 0.5), 0, 0.25)) };
 }
 // a pass defense coordinator's own packages, by what he believes in
 const SPEC_PK_POOL = { PRESSURE: ['FZ', 'BLITZ', 'SIM', 'C0', 'STUNT'], MAN: ['C1', 'C2M', 'C0', 'BLITZ'], SHELL: ['T2', 'C6', 'C4', 'C2', 'DISG', 'BIGN'], PENETRATE: ['STUNT', 'UNDER'], TWOGAP: ['BEAR', 'BIGN'] };
@@ -1119,8 +1176,9 @@ function floorDefPk(pk) {
 function ensureDefPk(c) {
   if (c && c.pk) floorDefPk(c.pk);
   if (!c) return;
-  if ((c.role === 'DC' || (c.role === 'HC' && c.t && c.t.caller === 'D')) && !c.pk) c.pk = genDefPk(c.arch);
-  if (c.pk && !c.pk.lib) c.pk.lib = genDefLib(c.arch);
+  const own = c.role === 'DC' || (c.role === 'HC' && c.t && c.t.caller === 'D'), s = sheetOf(c, 'D'); // a coach from an older save, built before his packages were
+  if (own && !c.pk) { c.pk = genDefPk(mixOf(c, 'D'), s && s.front); }
+  if (c.pk && !c.pk.lib) c.pk.lib = genDefLib(mixOf(c, 'D'), s && s.front);
   if ((c.role === 'DPC' || c.role === 'DRC') && !c.pks) c.pks = genSpecPk(c);
 }
 // the call sheet a team actually carries: the caller's packages (with the coordinator's when the head coach calls it),
@@ -1232,11 +1290,22 @@ function defSheetLabel(front, pk) {
 }
 function teamSchemeLabel(t, side) { const tn = blendedTend(t, side); return side === 'O' ? offSheetLabel(tn) : defSheetLabel(tn.front, tn.pk); }
 // ---- how much of a playbook carries over ----
-function pkVector(t, side) {
-  const tn = blendedTend(t, side), v = {};
-  if (side === 'O') for (const k of offInstalled(tn)) v[k] = 1;
+// An offense is its packages and its pass concepts (each family's concepts weigh 1 between them); a defense its shells,
+// pressures and front.
+function bookVector(tn, side, caller) {
+  const v = {};
+  if (side === 'O') { for (const k of offInstalled(tn)) v[k] = 1; const cb = conceptBookOf(caller); for (const f in cb) for (const k in cb[f]) v['cp:' + k] = cb[f][k]; }
   else { for (const k in tn.pk.sh) v[k] = tn.pk.sh[k] * 4; for (const k in tn.pk.pr) v[k] = tn.pk.pr[k] * 3; v['F_' + tn.front] = 2; if (tn.pk.disg) v.DISG = 1; for (const k of ['UNDER', 'BEAR', 'BIGN']) if (tn.pk.fr && tn.pk.fr[k]) v[k] = 0.5; }
   return v;
 }
+function pkVector(t, side) { return bookVector(blendedTend(t, side), side, side === 'O' ? offCaller(t) : null); }
+// one coach's own playbook, for comparing two men (null if he has none on that side)
+function coachBook(c, side) {
+  const s = sheetOf(c, side); if (!s) return null;
+  if (side === 'O') { ensureOffSheet(s, c.arch); return bookVector(s, 'O', c); }
+  ensureDefPk(c); return c.pk ? bookVector(Object.assign({}, s, { pk: c.pk }), 'D') : null;
+}
+// a snapshot from an older save has no concepts in it: compare like with like
+function pkOverlapSnap(prev, cur) { if (Object.keys(prev).some(k => k.startsWith('cp:'))) return pkOverlap(prev, cur); const c = {}; for (const k in cur) if (!k.startsWith('cp:')) c[k] = cur[k]; return pkOverlap(prev, c); }
 function pkOverlap(a, b) { let mn = 0, mx = 0; for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) { mn += Math.min(a[k] || 0, b[k] || 0); mx += Math.max(a[k] || 0, b[k] || 0); } return mx ? mn / mx : 1; }
 function snapPlaybooks() { for (const t of state.teams) t.pkSnap = { O: pkVector(t, 'O'), D: pkVector(t, 'D') }; }

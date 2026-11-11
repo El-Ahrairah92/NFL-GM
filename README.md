@@ -26,7 +26,7 @@ Coaching carousel → Re-sign players → Free agency (3 waves) → Draft (7 rou
 | `js/perception.js` | The fog: scouting estimates, hype, tiers/upside labels, trait tags, training camp reports |
 | `js/contracts.js` | Cap growth & market, guarantees/dead money, rookie scale & 5th-year options, franchise tag, extensions, restructures, practice squad, IR, game-day actives |
 | `js/depthchart.js` | Your depth chart: slots, package overrides, rotation shares, practice reps that teach new positions |
-| `js/coaches.js` | Five-coach staffs, knobs, scheme archetypes & tendencies, coaching trees, development by skill group, S&C wear, carousel |
+| `js/coaches.js` | Five-coach staffs, knobs, each coach's own playbook (drawn from traditions or learned under a mentor), coaching trees, development by skill group, S&C wear, carousel |
 | `js/engine/depth.js` | Engine tuning constants (`TUNE`), personnel groupings, defensive packages by front, depth charts, fatigue & rotation |
 | `js/engine/calls.js` | Offensive & defensive play calling: tendencies, situation, film, play-calling quality, predictability |
 | `js/engine/trench.js` | Assignment-based pass protection and run blocking |

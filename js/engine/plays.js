@@ -273,8 +273,10 @@ const CONCEPTS = {
   'Boot flood': { f: 'BOOT', w: 0.6, rz: 1, r: ROUTES.BOOT, vs: { C3: 0.14, C4: 0.06, C0: 0.04, C6: 0.04, C1: -0.02, T2: -0.04, C2: -0.06, C2M: -0.06 }, d: 'The quarterback rolls out off the fake with three men on the same side: one deep, one across, one in the flat. Run or throw on the edge.' },
   'Leak': { f: 'BOOT', w: 0.4, rz: 1.3, r: [['X', 'I', 'IN', [14, 20], 2.4, 2], ['Z', 'D', 'VERT', [20, 30], 2.6, 2], ['SLOT', 'S', 'OUT', [4, 8], 1.8, 2], ['SLOT2', 'S', 'OUT', [3, 6], 1.8, 3], ['Y', 'I', 'IN', [8, 14], 2.3, 1], ['H', 'S', 'IN', [3, 8], 2.1, 1], ['RB', 'S', 'OUT', [-1, 1], 2.1, 3], ['FB', 'S', 'OUT', [0, 2], 2.1, 3]], vs: { C4: 0.1, C3: 0.06, C2: 0.06, C1: 0.04, C6: 0.04, T2: -0.04, C2M: -0.04, C0: -0.06 }, d: 'The tight end blocks for a count, then slips out behind a defense flowing to the bootleg. Deadliest near the goal line.' },
 };
-// how much of a concept breaks toward the sideline: in the two-minute drill a play caller reaches for these, and the men who catch them get out of bounds
-for (const k in CONCEPTS) { const c = CONCEPTS[k], main = c.r.filter(r => r[5] < 3); c.side = main.length ? main.filter(r => r[2] === 'OUT').length / main.length : 0; }
+// how much of a concept breaks toward the sideline: in the two-minute drill a play caller reaches for these, and the men who catch them get out of bounds;
+// and how deep its routes run on average, which a caller's taste for it follows (conceptBookOf)
+for (const k in CONCEPTS) { const c = CONCEPTS[k], main = c.r.filter(r => r[5] < 3); c.side = main.length ? main.filter(r => r[2] === 'OUT').length / main.length : 0;
+  c.dep = main.length ? main.reduce((s, r) => s + (r[3][0] + r[3][1]) / 2, 0) / main.length : 0; }
 // centre every concept on what the league actually plays, so the average call into an unknown coverage is worth nothing
 const COV_MIX = { C3: 0.31, C1: 0.2, C4: 0.17, C2: 0.14, C2M: 0.06, C6: 0.05, T2: 0.04, C0: 0.03 };
 for (const k in CONCEPTS) { const c = CONCEPTS[k]; let m = 0; for (const v in COV_MIX) m += COV_MIX[v] * (c.vs[v] || 0); for (const v in COV_MIX) c.vs[v] = Math.round(((c.vs[v] || 0) - m) * 1000) / 1000; }

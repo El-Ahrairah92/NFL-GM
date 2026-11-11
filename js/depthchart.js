@@ -349,13 +349,13 @@ function pbOf(p) { return p.pb === undefined ? 96 : p.pb; }
 function pbLabel(k) { return k >= 85 ? 'Full playbook' : k >= 68 ? 'Most of it' : k >= 50 ? 'Core calls' : k >= 35 ? 'Base package' : 'Just arrived'; }
 // a new arrival: how much of this system does he walk in knowing?
 function pbArrive(p, tid) {
-  const side = PRAC_SIDE[p.pos], t = T(tid);
+  const side = PRAC_SIDE[p.pos], t = T(tid), from = p.pbTid;
   p.pbTid = tid;
   if (!side || !t) { p.pb = 100; return; }
-  const arch = side === 'O' ? offArch(t) : defArch(t), inSeason = state.phase === 'REG' || state.phase === 'PLAYOFFS';
+  const inSeason = state.phase === 'REG' || state.phase === 'PLAYOFFS', was = from >= 0 && from !== tid ? T(from) : null;
   let v = (inSeason ? 26 : 36) + rand() * 8 + (p.exp >= 3 ? 6 : 0);
-  if (p.pbArch && arch && p.pbArch === arch) v += 28; // he ran this system somewhere else
-  p.pb = Math.round(clamp(v, 10, 100)); p.pbArch = arch;
+  if (was) v += 28 * bookLike(pkOverlap(pkVector(was, side), pkVector(t, side))); // he ran a playbook like this one at his last club
+  p.pb = Math.round(clamp(v, 10, 100)); delete p.pbArch;
   delete p.xt; // a new club has its own plans for him
 }
 // a bigger book takes longer to learn: every look past a coach's home ones, and the more his line moves and his linebackers walk up
@@ -376,16 +376,16 @@ function pbLearn(p, reps, room, weeks) {
 function systemChangeKnowledge() {
   for (const t of state.teams) {
     if (!t.sys) continue;
-    for (const [side, fn] of [['O', offArch], ['D', defArch]]) {
-      const a = fn(t), cur = pkVector(t, side), prev = t.pkSnap && t.pkSnap[side];
+    for (const side of ['O', 'D']) {
+      const cur = pkVector(t, side), prev = t.pkSnap && t.pkSnap[side];
       (t.pkSnap = t.pkSnap || {})[side] = cur;
       if (!prev) continue;
-      const ov = pkOverlap(prev, cur);
+      const ov = pkOverlapSnap(prev, cur);
       if (ov >= 0.97) continue; // same book
       // players keep what carries over and relearn the rest; an adaptable man carries more of it over
-      for (const p of [...rosterOf(t.id), ...psOf(t.id)]) if (PRAC_SIDE[p.pos] === side) { const o = 1 - (1 - ov) * clamp(1 + (55 - ((p.h && p.h.adapt) || 55)) / 100, 0.6, 1.4); p.pb = Math.round(clamp(pbOf(p) * (0.45 + 0.55 * o) + 10 * (1 - o), 10, 100)); p.pbArch = a; }
+      for (const p of [...rosterOf(t.id), ...psOf(t.id)]) if (PRAC_SIDE[p.pos] === side) { const o = 1 - (1 - ov) * clamp(1 + (55 - ((p.h && p.h.adapt) || 55)) / 100, 0.6, 1.4); p.pb = Math.round(clamp(pbOf(p) * (0.45 + 0.55 * o) + 10 * (1 - o), 10, 100)); }
       const added = Object.keys(cur).filter(k => !prev[k] && PK_NAME[k]).map(k => PK_NAME[k]);
-      if (ov < 0.6) { t.sys[side].arch = a; t.sys[side].yrs = -1; }
+      if (ov < 0.6) t.sys[side].yrs = -1;
       if (t.id === state.userTid) addNews(ov < 0.6 ? `A new ${side === 'O' ? 'offense' : 'defense'} in ${t.region}: only about ${Math.round(ov * 100)}% of the old playbook carries over.` : `${t.region}'s ${side === 'O' ? 'offensive' : 'defensive'} playbook changed (${Math.round(ov * 100)}% carries over)${added.length ? ': new this year: ' + added.slice(0, 4).join(', ') : ''}.`, [t.id]);
     }
   }

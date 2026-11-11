@@ -279,16 +279,17 @@ No generic "execution" bonus — design works through play mechanics, so effects
 - Players in their first season in a system get a small, fading penalty to mental attributes (Processing, Play Recognition, Blocking Awareness) → continuity has value.
 - Scheme **fit** is not a bonus; it emerges because schemes call plays that use certain attributes. Fit is shown as a label and used in AI valuation (per-scheme attribute weights from calibration).
 
-### 6g. Scheme archetypes (generation presets; each coach varies within)
+### 6g. Traditions (ingredients of a coach's own playbook; see section 73)
 - Offense: Wide Zone/Boot · Spread/Air Raid · Power/Gap · West Coast · Vertical · RPO/QB Run
 - Defense: Two-High/Fangio · Cover 3/Seattle · Wide-9 Attack · Man-Blitz · 3-4 Two-Gap
+- No coach is one of these. A new coach draws from two, part by part; what a playbook is called is read off it.
 
 ### 6h. Impact targets (calibration)
 Game Management ≈ 0.5 wins/season elite vs. poor · Play Calling ≈ 1–1.5 · whole staff ≈ 2–3. Players stay the main driver.
 
 ### 6i. Play-calling HC & coaching trees
 - An HC may call plays for one side: he then has Play Calling + Adaptability and his tendencies drive that side; the coordinator keeps his Design and Development knobs.
-- Coaching trees: HCs lean toward hiring coordinators from their scheme family / former assistants; promoted assistants carry their mentor's scheme.
+- Coaching trees: HCs lean toward hiring coordinators whose playbooks overlap their own, and toward former assistants; a promoted assistant starts from the playbook he learned under.
 
 ## 7. Aging
 | Group | Attributes | League-typical curve |
@@ -362,17 +363,17 @@ Games were decided by 16.9 on average (NFL 11.3) with 21% decided by 28+. Talent
 - **Hidden traits** (`p.h.pas`, `disc`, `lead`; the full set is in section 5): Passion, Discipline, Leadership. The user's staff reads them as labels that sharpen with weeks in the building (`p.seenW`); nothing is shown for the first two weeks.
 - **Practice week** (`practiceTeam`, every week including preseason): grade = Passion and (less) Discipline, plus the room's tone, plus playbook knowledge and head-coach culture, plus noise whose downside shrinks with Consistency. Game-day form is now the practice result (about ±1 rating point typically, ±3 at most) plus a smaller unseen roll.
 - **Room leaders** (`roomState`): a man's voice counts once it is past an ordinary level, times his seniority against the room's median experience. The room gets its best voice and a third of the next one; a leader does not lead himself. Nothing spreads: a room without a leader is just the men in it, and its bad habits stay each man's own. Two voices, read separately: work (`workVoice` = Leadership + 0.35 × (Passion − 55)) for practice, playbook learning and offseason training (`p.offLift`, read before the offseason moves anyone); conduct (`condVoice` = Leadership − 0.35 × (Ego − 45)) for Temperament and Conduct fouls (`calmLift`: the lower his trait, the more the leader pulls it up). All of them are read against the league's average room (`ROOM_AVG`, measured from the traits: about a third of rooms have no clear leader and a third a strong one), so league practice grades, development and foul rates stay where they were. The practice report names who sets the work and who keeps the room in line.
-- **Playbook knowledge** (`p.pb`, 0-100): arrivals start at 26-44 (more if they ran the same system elsewhere), learn a share of what is left each week (faster with Ambition, Intelligence and first-team reps; slower at QB, OL, LB, S), and camp is worth five weeks. A new coordinator with a new system cuts a unit to roughly half. Replaces the old team-wide familiarity penalty.
+- **Playbook knowledge** (`p.pb`, 0-100): arrivals start at 26-44 (up to 28 more when the playbook at their last club overlaps this one well past what any two share; section 73), learn a share of what is left each week (faster with Ambition, Intelligence and first-team reps; slower at QB, OL, LB, S), and camp is worth five weeks. A new coordinator with a new system cuts a unit to roughly half. Replaces the old team-wide familiarity penalty.
 - **Soft gate:** every call has a complexity (`offNeed`, `defNeed`, 35-80). A player below it is passed over for the snap when a teammate knows it, and may bust (large one-play penalty; less likely for disciplined players) when he has to play. A quarterback still learning gets a simpler menu.
 - **Reps:** the user orders each position group on the Practice page; first-team reps teach fastest, and playing without them costs a little, most at QB and OL.
 
 ## 19. Staff hierarchy
-- **Tiers:** head coach and coordinators (full cards) · four specialists per team (pass game, run game, pass defense, run defense coordinators: a lean, an expertise rating, a personality) · eight position coaches (QB, RB, WR, TE, OL, DL, LB, DB: Development and Discipline, a personality, and keywords for system background and lean). Assistants live in `t.asst` and `state.coaches` with `tier` 3 or 4.
+- **Tiers:** head coach and coordinators (full cards) · four specialists per team (pass game, run game, pass defense, run defense coordinators: a lean, an expertise rating, a personality) · eight position coaches (QB, RB, WR, TE, OL, DL, LB, DB: Development and Discipline, a personality, and a lean; their background is the playbook they have been learning). Assistants live in `t.asst` and `state.coaches` with `tier` 3 or 4.
 - **Influence:** the play-caller's tendencies are the base; when the head coach calls plays the coordinator supplies 30%; each specialist's lean shifts its fields by 8-18% (more when his position coaches share the lean). `blendedTend` caches this per team. Design ratings are 75% coordinator, 25% specialist (`designKnob`).
 - **Development** moved off the coordinators (their dev ratings are gone): 70% position coach, 15% head-coach culture, 15% the specialist over the room. Strength and special teams are unchanged. Position coach Discipline feeds practice grades, softens a bad-attitude veteran, and lowers bust rate; both coaches speed playbook learning.
 - **Ratings are shown as words** and are rougher for coaches you have not worked with; they firm up over about three seasons on your staff.
 - **Hiring:** a new coordinator replaces about half his side's assistants with his own people; open jobs are filled when the carousel closes. The user may replace or promote any assistant during the carousel.
-- **Ladder:** strong position coaches become specialists, strong specialists become coordinators (league-wide each offseason, or by the user into an open job). On promotion the background keyword becomes the system, the lean is baked into the tendencies, and ratings are rolled around his old level with real variance.
+- **Ladder:** strong position coaches become specialists, strong specialists become coordinators (league-wide each offseason, or by the user into an open job). On promotion he starts from the playbook he learned under (his club's, or the last coach he worked for who had one), the lean is baked into the tendencies, and ratings are rolled around his old level with real variance.
 
 ## 20. The coaching search
 - **The web:** every coach has ties (`c.links`) to men he has worked with. A season on the same staff strengthens them (most along the chain of command); time apart fades them. A coach's "people" (`guysOf`) are his strongest ties who could take a job under him: free coaches in that job, or coaches a tier below for whom it is a promotion. Nobody leaves a club for a sideways move.
@@ -395,7 +396,7 @@ Games were decided by 16.9 on average (NFL 11.3) with 21% decided by 28+. Talent
 - **Offense** (`OFF_PK`): the caller's sheet is still a set of rates, and a package is a named piece of it. The pass game and run game coordinators install three each. New looks exist only if someone brought them: **trips** (isolates the back-side receiver), **bunch** (beats press and man), **tight splits** (crossers and edge blocking, at the cost of outside throws), **wide zone** vs inside zone, **counter** (fools linebackers), **duo** (double teams, linebackers left for the back), **option routes** (as good as the quarterback and receiver are smart), **max protect** (time for the shot, fewer routes), **no-huddle** (faster clock, the defense tires).
 - **Fronts and sub packages:** an **Under** or **Bear** front as a base changeup and a **big nickel** (third safety in the slot), each with a share; the run defense coordinator can bring them.
 - **Install cost** is by overlap: the old and new sheets are compared package by package and players keep that share of what they knew. Under 60% overlap counts as a new system.
-- **The system name is read off the sheet** (`offSheetLabel`, `defSheetLabel`): Shanahan Wide Zone, West Coast, Air Coryell, Erhardt-Perkins, Air Raid, Spread, Power / Gap, RPO / QB Run, Pro-Style; Fangio Two-High, Cover 3, Tampa 2, Quarters / Match, Wide-9 Attack, Man-Pressure, 3-4 Zone Blitz, 3-4 Two-Gap, Multiple. The stored archetype is now only the school a coach was generated from.
+- **The system name is read off the sheet** (`offSheetLabel`, `defSheetLabel`): Shanahan Wide Zone, West Coast, Air Coryell, Erhardt-Perkins, Air Raid, Spread, Power / Gap, RPO / QB Run, Pro-Style; Fangio Two-High, Cover 3, Tampa 2, Quarters / Match, Wide-9 Attack, Man-Pressure, 3-4 Zone Blitz, 3-4 Two-Gap, Multiple. Coaches no longer have a school at all (section 73).
 - Outside runs were about a yard worse than inside runs; the force corner no longer makes every outside run, which brought wide zone level with the rest.
 
 ## 22. Depth chart by package
@@ -1457,3 +1458,24 @@ From the playbook audit (formations, looks, concepts and tags against the 2024 l
 
 Not built: concept books tied to the caller's scheme (taste is still a fixed hash of the man, so Four verticals, the lightest of ten dropback concepts, now makes almost no book); the other audit items (personnel and package rates, detached tight ends in 12, Nub, empty from more groupings, Bear and Under as looks, duo for zone teams).
 
+
+## 73. Every coach his own playbook
+
+Scheme umbrellas are gone. The engine never read a coach's school: every call reads the play-caller's own numbers, and the name on a staff card was already read off them. But each new coordinator was copied from one of six offensive or five defensive templates and nudged about 12%, so 86-97% of the difference between two coordinators on any tendency (all but the run/pass mix) was which template he came from. The league ran six offenses with noise. The school also decided four things by name: the first season under a new system, what an arriving player already knew, a head coach's pick of coordinator, and an assistant's background.
+
+**A coach's playbook** (`newMix`, `genOffSheet`, `genDefSheet`, `giveSheet` in `coaches.js`):
+- A new coach learned from two traditions (one, 15% of the time). Each part of his playbook leans 65-100% to one of them: on offense the run game (with the play-action and bootlegs that ride on it), the pass game, and personnel and formations; on defense the front (with its stunts, slants and base personnel), the coverage shells and the pressures. A power run game can sit next to an Air Raid passing game, a Tite front next to man-blitz pressures.
+- A man who learned under someone starts from that playbook, slightly changed. A head coach who calls plays brought up his coordinator; a promoted assistant starts from his club's play-caller's playbook (or the last coach he worked for who had one), then his lean and his packages go on top. A coordinator promoted to head coach keeps his own playbook, whether or not he calls plays.
+- What a playbook is called is read off it, as before. An assistant's background is now the playbook he has been learning ("Learned his playbook under Quinton Smith (Shanahan Wide Zone)"); a player's scheme fit shows each club's own name for its playbook.
+
+**Name checks became overlap.** The overlap of two playbooks now counts each pass concept as well as the packages (a family's concepts weigh 1 between them). `bookLike` puts it on a scale: 0 at 0.4, about what two clubs' books share (the median pair in a new league, either side of the ball), 1 at 0.75, about what the two most alike clubs in a league share.
+- The first-season penalty comes only from the overlap check that already ran when a club changed coordinators (under 60% carried over); a new coordinator with a different school but a similar playbook no longer resets it.
+- An arriving player knows up to 28 more of the playbook by how alike his last club's playbook is (it was +28 for the same school, 0 otherwise). Over three offseasons, new arrivals averaged 43.6-45.6 known against 42.8-45.0 before.
+- A head coach's pull toward a coordinator, and a club's toward a free-agent assistant, is up to 4 by how alike the playbooks are (it was 4 for the same school).
+
+**Concept taste follows the playbook.** Each yard a concept's routes run past its family's average multiplies a caller's taste for it by e^(his deep share − 0.18). A caller who throws deep leans to Four verticals, Yankee and Post-dig; one who lives underneath to Mesh, Drift and Double move. Four verticals is back in 10 books (none after section 72).
+
+**Checked:**
+- New league: each club's offense is further from its closest twin (median 0.26 against 0.22 on the eleven main tendencies), and the spread of each tendency across the league is about what it was, a little narrower on some (blending pulls toward the middle; two-high shells most, a standard deviation of 0.17 to 0.12). Over four seasons with offseasons it stays there; promoted coordinators kept 52-94% of their mentors' playbooks.
+- Scoring: 16 leagues, one season each, 22.04 against 21.66 points a team-game (+0.38, standard error 0.35). The first eight showed +0.89 and 0.33 more yards a pass; the next eight showed -0.14 and 0.03 fewer. Because coaches are drawn differently, the rest of the league is drawn differently too, so the old and new leagues are no longer the same league. These pairs measure differences between leagues, not the change itself. Mixes of coverage, pressure, play type and concept are unchanged.
+- A save from the old code loads and plays two more seasons; its coaches keep the school they were rolled from as their only tradition until they are replaced.

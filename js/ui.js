@@ -2745,7 +2745,7 @@ function assistantsHTML(t, mine, canHire) {
         { k: 'l', l: 'Leans', f: r => r.c ? `<span class="pill on">${esc(leanLabel(r.c))}</span>` : '' },
         { k: 'p', l: 'Brings', f: r => { if (!r.c) return ''; ensureDefPk(r.c); ensureOffPk(r.c); return r.c.pks && r.c.pks.length ? `<span class="small">${r.c.pks.map(id => PK_NAME[id]).join(', ')}</span>` : '<span class="small muted">—</span>'; } },
         { k: 'e', l: 'Expertise', f: r => r.c ? wordPill(asstWord(r.c, 'exp')) : '' },
-        { k: 'k', l: 'Background', f: r => r.c ? `<span class="small muted">${esc(bgLabel(r.c))} · ${esc(r.c.style)}</span>` : '' },
+        { k: 'k', l: 'Background', f: r => r.c ? `<span class="small muted">${esc([bgLabel(r.c), r.c.style].filter(Boolean).join(' · '))}</span>` : '' },
         { k: 't', l: 'Track record', f: r => r.c ? `<span class="small muted">${asstTrack(r.c)}</span>` : '' },
         { k: 'ct', l: 'Contract', f: r => r.c && r.c.sal !== undefined ? `<span class="small">${fmtMoney(r.c.sal)} × ${r.c.cyrs}</span>` : '' },
         { k: 'x', l: '', f: r => act(r.role, r.c) },
@@ -2788,7 +2788,7 @@ function asstModal(c) {
     ensureDefPk(c); ensureOffPk(c);
     h += `<div class="section-title" style="margin-top:0">What he brings</div><div class="small">Leans <b>${esc(L[0])}</b>${c.pks && c.pks.length ? `<div style="margin-top:6px">${c.pks.map(id => `<span class="pill on">${PK_NAME[id]}</span>`).join(' ')}</div>` : ''}</div>
       <p class="small muted" style="margin-top:8px">${t ? tendInfluences(t, ASST_SIDE[c.role]).filter(x => x.includes(cname(c))).map(esc).join(' ') : 'More creativity means more for an opponent to prepare for, and more for your own players to learn.'}</p>`;
-  } else h += `<div class="section-title" style="margin-top:0">Background</div><div class="small">${esc(bgLabel(c))} background · ${esc(c.style)}</div><p class="small muted" style="margin-top:8px">If he is ever promoted, his keywords become his system and tendencies.</p>`;
+  } else h += `<div class="section-title" style="margin-top:0">Background</div><div class="small">${rootsOf(c) ? `Learned his playbook under ${esc(cname(rootsOf(c)))} (${esc(bgLabel(c))})` : 'No playbook of his own yet'} · ${esc(c.style)}</div><p class="small muted" style="margin-top:8px">${rootsOf(c) ? 'If he is ever promoted, he starts from that playbook and makes it his own.' : 'If he is ever promoted, he draws up his own.'}</p>`;
   h += `</div></div>`;
   h += `<p class="small muted">${c.tid === state.userTid ? ((c.yrs || 0) >= 3 ? 'Your staff knows him well: these reads are reliable.' : 'He is still new to your staff: these reads will firm up over a couple of seasons.') : 'You have not worked with him: treat these reads as rough.'}</p>`;
   const mentors = c.mentors.map(id => C(id)).filter(Boolean);
@@ -2959,7 +2959,7 @@ function staffSelHTML(t, c, role, mine, canHire) {
   } else if (spec) {
     const L = LEANS[role][c.lean];
     b += `<div class="ss-l">Ratings</div>` + ratingBarsHTML(c);
-    b += sec('Leans', esc(L ? L[0] : '—') + ` <span class="small muted">· ${esc(bgLabel(c))} background · ${esc(c.style)}</span>`);
+    b += sec('Leans', esc(L ? L[0] : '—') + ` <span class="small muted">· ${esc([bgLabel(c) && bgLabel(c) + ' background', c.style].filter(Boolean).join(' · '))}</span>`);
     if (c.pks && c.pks.length) b += sec('Brings', c.pks.map(id => `<span class="pill on">${PK_NAME[id]}</span>`).join(' '));
     if (L) b += `<div class="ss-l">Effect on the call sheet</div>` + Object.entries(L[1]).map(([k, v]) => `<div class="ss-row"><span>${LEAN_WORD[k] || k}</span><span class="${v > 0 ? 'good' : 'bad'}">${v > 0 ? (v >= 1.5 ? 'Much more' : 'More') : (v <= -1.5 ? 'Much less' : 'Less')} ${v > 0 ? '▲' : '▼'}</span></div>`).join('');
   } else {
@@ -3529,7 +3529,7 @@ function scWhereHTML(p) {
     ${cf.map(([s, c]) => { const l = comfortLabel(c); return `<div class="sc-kv" title="${trueOn() ? Math.round(c) : ''}"><span>${esc(JOB_NAME[s] || SPOTS[s].l)}</span><b class="cf-${CF_PIPS[l]}">${l}</b></div>`; }).join('')}`;
   const side = SPOTS[p.spot].side, fitTeams = [...new Set([p.tid >= 0 ? p.tid : null, u].filter(t => t !== null && t >= 0))];
   const rows = [];
-  if (side === 'off' || side === 'def') for (const t of fitTeams) { const f = schemeFit(p, t), sk = side === 'off' ? offArch(T(t)) : defArch(T(t)), lab = sk ? (side === 'off' ? OFF_ARCH : DEF_ARCH)[sk].l : '—';
+  if (side === 'off' || side === 'def') for (const t of fitTeams) { const f = schemeFit(p, t), lab = teamSchemeLabel(T(t), side === 'off' ? 'O' : 'D') || '—';
     rows.push(`<div class="sc-kv"><span>${T(t).abbr} · ${esc(lab)}</span><b class="${f >= 1 ? 'good' : f <= -1 ? 'bad' : ''}">${fitLabel(f)}${trueOn() ? ` ${f > 0 ? '+' : ''}${f}` : ''}</b></div>`); }
   if (p.tid >= 0 && (CH_UNIT[p.pos] || ['RB', 'WR', 'TE'].includes(p.pos))) { ensureChem(); const qb = repsOrder(p.tid, 'QB')[0], v = CH_UNIT[p.pos] ? chemOf(p) : chemPair(p, qb);
     rows.push(`<div class="sc-kv"><span>Chemistry ${CH_UNIT[p.pos] ? 'with the ' + CH_NAME[CH_UNIT[p.pos]].toLowerCase() : qb ? 'with ' + esc(pshort(qb)) : 'with his quarterback'}</span><b class="${v >= 70 ? 'cf-4' : v < 50 ? 'cf-1' : ''}">${chemWord(v)}</b></div>`); }
