@@ -353,6 +353,12 @@ Not tags:
 | **Tite** | 0-tech NT + two 4i DE | Inside & Gap runs (−) for offense, forces runs outside; pairs with two-high shells |
 | **Wide-9** | EDGEs aligned very wide | Speed rush (+) (EDGE Pass Rush + Burst + Speed); inside runs and Draws (+) for offense |
 
+**Looks and seats.** Each coach carries a home look and a few changeups for his front (Over, Weak shade, G, Wide, Double 3 for a 4-3; Okie, Tite, Eagle, Heavy, Wide for a 3-4), plus **Under** and **Bear** at his own share of base snaps. A look moves the same eleven men to other techniques; only the package (base, nickel, dime, goal line) changes who is on the field.
+- **Under** (4-3): the line slides weak, the nose shades the center strong, the Sam walks up over the tight end. From 3-4 personnel the weak outside backer goes down at a 5 and the strong one stands over the tight end.
+- **Bear** (the 46): the center and both guards covered, the strong end pinched to a 3, a linebacker on the line outside the tight end (the Sam in a 4-3, the strong outside backer in a 3-4).
+- **Seats** (the depth chart's jobs on the line): 4-3 nose, 3-technique, weak end, strong end · 3-4 nose, weak end, strong end, weak and strong outside linebackers · nickel and dime two tackles, weak edge, strong edge (wide on a 9).
+- **More men on the line than rush** (five on a four-man rush): the stand-up man drops, a linebacker walked up on the line first, then the 3-4's strong outside linebacker.
+
 ### 5c. Coverage
 | Coverage | Type | Strong vs. | Weak vs. | Key D attributes |
 |---|---|---|---|---|

@@ -12,7 +12,7 @@ const CHART_SECTIONS = [
     ['FB', 'Fullback (21/22)'], ['SLOT2', '4th receiver (10 pers.)'], ['Y2', 'Extra blocking tight end (13)'], ['OL6', '6th lineman (jumbo)'],
   ] },
   { unit: 'def', title: 'Defense', rows: [
-    ['NOSE', 'Nose'], ['SHADE', 'Shade'], ['T3', '3-technique'], ['END', 'End'], ['WIDE', 'Wide end'], ['OLB', 'Edge linebacker'],
+    ['NOSE', 'Nose'], ['T3', '3-technique'], ['WE', 'Weak end'], ['SE', 'Strong end'], ['WOLB', 'Weak outside linebacker'], ['SOLB', 'Strong outside linebacker'], ['DT', 'Nickel tackle'], ['WEDGE', 'Weak edge (nickel)'], ['SEDGE', 'Strong edge (nickel)'],
     ['MLB', 'Mike linebacker'], ['WLB', 'Will linebacker'], ['SAM', 'Sam linebacker'], ['CB', 'Corner'], ['NCB', 'Nickel'], ['DIME', 'Dime back'], ['FS', 'Free safety'], ['SS', 'Strong safety'],
   ] },
   { unit: 'off', title: 'Offensive packages', pkg: true, rows: [['RB3D', 'Passing-down back (3rd & long, 2-minute)'], ['RBSY', 'Short-yardage / goal-line back'], ['Y3D', 'Passing-down tight end (3rd & long, 2-minute)']] },
@@ -20,13 +20,13 @@ const CHART_SECTIONS = [
   { unit: 'st', title: 'Special teams', rows: [['K', 'Kicker'], ['P', 'Punter'], ['KR', 'Kick returner'], ['PRET', 'Punt returner']] },
   { unit: 'st', title: 'Special teams units', pkg: true, rows: [['KO', 'Kickoff coverage'], ['KRU', 'Kick return blockers'], ['PU', 'Punt team (first two are the gunners)'], ['PRU', 'Punt return (first two hold up the gunners)']] },
 ];
-const CHART_DEPTH = { RB: 5, RB3D: 3, RBSY: 3, Y: 4, H: 4, Y2: 4, FB: 3, MLB: 5, WLB: 5, SAM: 5, FS: 4, SS: 4, NCB: 4, DIME: 4, T3: 4, END: 4, WIDE: 4, OLB: 4, CB: 5, WLBP: 2, NCBP: 2, RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, Y3D: 2, K: 1, P: 1, KR: 2, PRET: 2, KO: 10, KRU: 10, PU: 10, PRU: 10 };
-const ROT_KEYS = new Set(['RB', 'X', 'Z', 'SLOT', 'Y', 'H', 'NOSE', 'SHADE', 'T3', 'END', 'WIDE', 'OLB', 'MLB', 'WLB', 'CB', 'NCB', 'FS', 'SS']);
+const CHART_DEPTH = { RB: 5, RB3D: 3, RBSY: 3, Y: 4, H: 4, Y2: 4, FB: 3, MLB: 5, WLB: 5, SAM: 5, FS: 4, SS: 4, NCB: 4, DIME: 4, NOSE: 4, T3: 4, WE: 4, SE: 4, WOLB: 4, SOLB: 4, DT: 4, WEDGE: 4, SEDGE: 4, CB: 5, WLBP: 2, NCBP: 2, RUSHE: 3, RUSHI: 3, RB3D: 2, RBSY: 2, Y3D: 2, K: 1, P: 1, KR: 2, PRET: 2, KO: 10, KRU: 10, PU: 10, PRU: 10 };
+const ROT_KEYS = new Set(['RB', 'X', 'Z', 'SLOT', 'Y', 'H', 'NOSE', 'T3', 'WE', 'SE', 'WOLB', 'SOLB', 'DT', 'WEDGE', 'SEDGE', 'MLB', 'WLB', 'CB', 'NCB', 'FS', 'SS']);
 // How much of a spot's work goes to the next man up: [least, usual, most]. Your setting moves inside the band and no further:
 // nobody plays every snap on a defensive line, no back carries a whole offense, and a starting corner does not sit a third of the game.
 const ROT_BAND = {
   RB: [0.2, 0.35, 0.5], X: [0, 0.03, 0.15], Z: [0, 0.03, 0.15], SLOT: [0, 0.06, 0.25], Y: [0, 0.08, 0.3], H: [0, 0.08, 0.3],
-  WIDE: [0.1, 0.2, 0.4], OLB: [0.1, 0.2, 0.4], T3: [0.15, 0.25, 0.45], END: [0.15, 0.25, 0.45], SHADE: [0.15, 0.25, 0.45], NOSE: [0.15, 0.25, 0.5],
+  WEDGE: [0.1, 0.2, 0.4], SEDGE: [0.1, 0.2, 0.4], WOLB: [0.1, 0.2, 0.4], SOLB: [0.1, 0.2, 0.4], WE: [0.15, 0.25, 0.45], SE: [0.15, 0.25, 0.45], T3: [0.15, 0.25, 0.45], DT: [0.15, 0.25, 0.45], NOSE: [0.15, 0.25, 0.5],
   MLB: [0, 0, 0.1], WLB: [0, 0, 0.2], CB: [0, 0, 0.1], NCB: [0, 0, 0.2], FS: [0, 0, 0.08], SS: [0, 0, 0.1],
 };
 function rotOf(c, key) { const b = ROT_BAND[key]; if (!b) return 0; const v = c && c.rot && c.rot[key] !== undefined ? c.rot[key] : b[1]; return clamp(v, b[0], b[2]); }
@@ -53,7 +53,7 @@ function staffGuard(p, spot) {
   if (g === 'RB' && p.pos === 'TE') v += 8;
   return v;
 }
-function chartAx(key) { return LINE_ROLE_AX[key] !== undefined ? LINE_ROLE_AX[key] : key === 'RUSHI' ? 1.35 : key === 'RUSHE' ? 3 : null; }
+function chartAx(key) { return RUSH_AX[key] !== undefined ? RUSH_AX[key] : null; }
 // how the staff grades a man at one of its jobs (L: this week's lean toward the young, if any)
 // a club gives its own high picks rope at a close call: it wants to see what it drafted (a first-rounder most, and less each year)
 const DRAFT_ROPE = { 1: [2, 1], 2: [1, 0.5], 3: [0.5, 0] };
@@ -65,8 +65,11 @@ function staffRead(p, tid, key, L, spot) {
   // the specialists' skills count for the men from that room (a passing-down back is a back who catches, not a receiver)
   const spec = key === 'RB3D' && p.pos === 'RB' ? ((a('hnd') + a('pbk') + a('rte')) / 3 - 60) * 0.9 : key === 'RBSY' && (p.pos === 'RB' || p.spot === 'FB') ? ((a('str') + a('bal')) / 2 - 70) * 1.6 : key === 'Y3D' && p.pos === 'TE' ? ((a('rte') + a('hnd')) / 2 - 60) * 0.6 : 0;
   const se = staffErr(p, tid); // the staff grades its own men as well as it knows them
-  if (ax !== null) return lineSlotRating(p, ax) + (key === 'RUSHI' || key === 'RUSHE' ? ((p.a.prsh || 40) - 60) * 0.35 : 0) - (p.pos === 'DL' ? 0 : p.pos === 'LB' ? 4 : 8) + yb + se;
-  return slotRating(p, spot) - staffGuard(p, spot) + spec + yb + se;
+  if (ax !== null) return lineSlotRating(p, ax) + ((p.a.prsh || 40) - 60) * 0.35 - (p.pos === 'DL' ? 0 : p.pos === 'LB' ? 4 : 8) + yb + se; // the pass-down rushers
+  // a seat on defense: how he grades where the coach lines that seat up, look by look
+  const sg = CHART_UNIT(key) === 'def' && tid >= 0 ? seatGrade(p, T(tid), key) : null;
+  if (sg !== null && LINE_SEATS.has(key)) return sg - (p.pos === 'DL' ? 0 : p.pos === 'LB' ? (STAND_SEATS.has(key) ? 0 : 4) : 8) + yb + se;
+  return (sg !== null ? sg : slotRating(p, spot)) - staffGuard(p, spot) + spec + yb + se;
 }
 // the staff's chart, as the game uses it for a club the staff runs: rebuilt each week (and whenever the roster changes)
 const STAFF_CHART = { key: null, m: {} };
@@ -80,28 +83,30 @@ function staffChart(tid) {
 // every job its own step, so the chart and the club's model always seat men in the same order
 const PERS_KEYS = new Set(['FB', 'SLOT2', 'Y2', 'OL6']);
 const CHART_PRI = { QB: 10, LT: 9, RT: 8.5, C: 8, LG: 7.6, RG: 7.5, RB: 7.2, X: 7.1, Z: 7, Y: 6.5, SLOT: 6, H: 5, FB: 4, SLOT2: 3.5, Y2: 3, OL6: 2.9,
-  MLB: 9, WLB: 8.5, CB: 8, FS: 7.6, SS: 7.5, SAM: 6, NCB: 5, DIME: 4 };
+  MLB: 9, WOLB: 8.9, WE: 8.8, WLB: 8.5, SE: 8.3, SOLB: 8.2, T3: 8.1, CB: 8, NOSE: 7.9, FS: 7.6, SS: 7.5, SAM: 6, WEDGE: 5.5, SEDGE: 5.4, DT: 5.3, NCB: 5, DIME: 4 };
 // the staff's recommended chart (they know who's really better)
 function defaultChart(tid, healthy) { // healthy: this week's chart for the game, the injured left off
   const ro = rosterOf(tid).filter(p => p.a && !onIR(p) && !(healthy && p.injury));
-  const lists = {}, starters = { off: new Set(), def: new Set(), st: new Set() }, L = typeof youthLeanOf === 'function' ? youthLeanOf(tid) : null, YB = p => L && L.lean ? youthBoost(p, tid, L) : 0;
+  const lists = {}, starters = { off: new Set(), def: new Set(), st: new Set(), sub: new Set() }, L = typeof youthLeanOf === 'function' ? youthLeanOf(tid) : null, YB = p => L && L.lean ? youthBoost(p, tid, L) : 0;
+  let J = { n: {} }; try { J = defJobs(T(tid)); } catch (e) { J = { n: {} }; }
   // the staff seats its starters where they matter most first (the quarterback and the tackles, the corners and safeties before the
   // nickel and dime), so a sub-package job does not take a man the base defense needs; lists come out in the usual order
   for (const [sec, key] of CHART_SECTIONS.flatMap(sec => sec.rows.map(r => [sec, r[0]])).sort((a, b) => (CHART_PRI[b[1]] || 0) - (CHART_PRI[a[1]] || 0))) {
     const spot = chartSpotFor(tid, key), n = CHART_DEPTH[key] || 3;
     if (ST_UNIT[key]) { lists[key] = stStaffUnit(ro.filter(p => !p.injury), key, stStarters(ro)).map(p => p.id); continue; } // the staff's ten: the job each man does, less the risk to a starter
     const isRet = key === 'KR' || key === 'PRET';
-    const ax = LINE_ROLE_AX[key] !== undefined ? LINE_ROLE_AX[key] : key === 'RUSHI' ? 1.35 : key === 'RUSHE' ? 3 : null, rush = key === 'RUSHI' || key === 'RUSHE';
+    const ax = chartAx(key);
+    if (sec.unit === 'def' && !sec.pkg && J.n && Object.keys(J.n).length && !J.n[key]) { lists[key] = []; continue; } // a seat his looks never use
     const ranked = ro.filter(p => SPOTS[p.spot].side === SPOTS[spot].side || isRet).map(p => [p, staffRead(p, tid, key, L, spot)])
       .sort((a, b) => b[1] - a[1]).map(x => x[0]);
     if (!ranked.length) { lists[key] = []; continue; }
     // starters are unique within a unit (packages may reuse anyone)
-    // line jobs overlap by design (the same tackle is your 3-technique in one look and your shade in another), so each is simply the best men for it
+    // the pass-down rushers are simply the best men for it; the seats on the line are men, unique in base (the nickel's line may be the same men)
     if (ax !== null || key === 'WLBP' || key === 'NCBP') { lists[key] = key === 'WLBP' || key === 'NCBP' ? [] : ranked.slice(0, n).map(p => p.id); continue; }
-    const need = key === 'CB' ? 2 : 1, firsts = [];
-    for (const p of ranked) { if (firsts.length >= need) break; if (sec.pkg || !starters[sec.unit].has(p.id)) firsts.push(p); }
+    const need = key === 'CB' ? 2 : LINE_SEATS.has(key) ? Math.max(1, J.n[key] || 1) : 1, firsts = [], set = SUB_SEATS.has(key) ? starters.sub : starters[sec.unit];
+    for (const p of ranked) { if (firsts.length >= need) break; if (sec.pkg || !set.has(p.id)) firsts.push(p); }
     if (!firsts.length) firsts.push(ranked[0]);
-    if (!sec.pkg && !PERS_KEYS.has(key)) for (const p of firsts) starters[sec.unit].add(p.id); // the personnel-only jobs (fullback, fourth receiver, third tight end, sixth lineman) never share the field, so they do not block each other
+    if (!sec.pkg && !PERS_KEYS.has(key)) for (const p of firsts) set.add(p.id); // the personnel-only jobs (fullback, fourth receiver, third tight end, sixth lineman) never share the field, so they do not block each other
     lists[key] = [...firsts, ...ranked.filter(p => !firsts.includes(p))].slice(0, n).map(p => p.id);
   }
   return lists;
@@ -114,22 +119,37 @@ const chartName = k => CHART_NAME[baseKey(k)] || baseKey(k);
 function teamFront(tid) { const t = T(tid); return t && typeof defTend === 'function' ? defTend(t).front : '4-3'; }
 function chartSpotFor(tid, key0) {
   const key = baseKey(key0);
-  if (CHART_SPOT[key]) return CHART_SPOT[key]; // a job is the same job whatever front the coach runs
-  const front = teamFront(tid);
-  for (const pkg of ['BASE', 'NICKEL', 'DIME', 'GL']) { const row = packageLayout(front, pkg).find(l => (DEF_CHART_KEY[l[0]] || l[0]) === key); if (row) return DEF_SLOT[row[1]][0]; }
+  if (LINE_SEATS.has(key)) { const t = tid >= 0 ? T(tid) : null, pl = t ? seatPlaces(t)[key] : null; if (pl && pl.length) return DEF_SLOT[pl[0].slot][0]; } // a 4-3 end is an edge, a 3-4 end a 5-technique
   return CHART_SPOT[key];
+}
+// ---- seats: where the coach lines each one up, look by look, and how a man grades there ----
+// A seat's grade is his fit at each of its placements (rowFit), weighted by how often the coach is in that package and that look.
+const PKG_W = { BASE: 0.35, NICKEL: 0.45, DIME: 0.15, GL: 0.05 };
+const SEAT_CACHE = { st: null, v: -1, m: {} };
+function seatPlaces(t) {
+  if (SEAT_CACHE.st !== state || SEAT_CACHE.v !== TEND_VER) { SEAT_CACHE.st = state; SEAT_CACHE.v = TEND_VER; SEAT_CACHE.m = {}; }
+  if (SEAT_CACHE.m[t.id]) return SEAT_CACHE.m[t.id];
+  const out = {};
+  for (const L of defLookList(t)) for (const [name, slot, x, depth] of packageLayout(L.front, L.pkg, lookTOf(L))) {
+    const k = defRoleKey(name, slot, x, depth, L.front, L.pkg); (out[k] = out[k] || []).push({ L, name, slot, x, depth, w: (PKG_W[L.pkg] || 0.1) * (L.share === undefined ? 1 : L.share), seat: seatKey(name, L.front, L.pkg) }); }
+  return (SEAT_CACHE.m[t.id] = out);
+}
+function seatGrade(p, t, key) {
+  const pl = t ? seatPlaces(t)[key] : null; if (!pl || !pl.length) return null;
+  const high = defTend(t).high; let s = 0, n = 0;
+  for (const q of pl) { s += q.w * rowFit(p, q.slot, q.x, q.depth, q.seat, high); n += q.w; }
+  return n ? s / n : null;
 }
 // the views of a depth chart: every look the play caller carries on defense, every personnel grouping on offense
 function defLookList(t) {
   const dt = defTend(t), lib = dt.pk && dt.pk.lib, fr = (dt.pk && dt.pk.fr) || {}, fam = dt.front === '3-4' || dt.front === 'Tite' ? 'odd' : 'even';
-  const base = (lib && lib.fam === fam ? lib.base : [[LOOK_HOME[dt.front] || 'Over', 1]]).filter(x => LOOKS[fam][x[0]]), sub = (lib ? lib.sub : [['Even', 1]]).filter(x => LOOKS.sub[x[0]]);
-  const out = [];
-  for (const [k, w] of base) out.push({ id: 'BASE|' + k, pkg: 'BASE', front: dt.front, fam, look: k, label: k, group: dt.front + ' base', share: w });
+  const base = (lib && lib.fam === fam ? lib.base : [[LOOK_HOME[dt.front] || 'Over', 1]]).filter(x => LOOKS[fam][x[0]] && !LOOKS[fam][x[0]].fr), sub = (lib ? lib.sub : [['Even', 1]]).filter(x => LOOKS.sub[x[0]]);
+  const out = [], keep = clamp(1 - (fr.BEAR || 0) - (fr.UNDER || 0), 0.2, 1); // Under and Bear take their share of his base snaps
+  for (const [k, w] of base) out.push({ id: 'BASE|' + k, pkg: 'BASE', front: dt.front, fam, look: k, label: k, group: dt.front + ' base', share: round2(w * keep) });
+  for (const k of ['Under', 'Bear']) if (fr[k.toUpperCase()]) out.push({ id: 'BASE|' + k, pkg: 'BASE', front: dt.front, fam, look: k, label: k, group: dt.front + ' base', share: fr[k.toUpperCase()] });
   for (const [k, w] of sub) out.push({ id: 'NICKEL|' + k, pkg: 'NICKEL', front: dt.front, fam: 'sub', look: k, label: k, group: 'Nickel', share: w });
   out.push({ id: 'DIME|' + sub[0][0], pkg: 'DIME', front: dt.front, fam: 'sub', look: sub[0][0], label: 'Dime', group: 'Other' });
   out.push({ id: 'GL|', pkg: 'GL', front: dt.front, look: '', label: 'Goal line', group: 'Other' });
-  if (fr.UNDER) out.push({ id: 'UNDER|', pkg: 'BASE', front: 'Under', look: '', label: 'Under front', group: 'Other' });
-  if (fr.BEAR) out.push({ id: 'BEAR|', pkg: 'BASE', front: 'Bear', look: '', label: 'Bear front', group: 'Other' });
   return out;
 }
 function defLookOf(t, vid) { const l = defLookList(t); return l.find(x => x.id === vid) || l[0]; }
@@ -151,7 +171,7 @@ const OFF_BOX = { X: [1, 1], OL6: [2, 1], LT: [3, 1], LG: [4, 1], C: [5, 1], RG:
 const OFF_HOME = { H: '12', FB: '21', SLOT2: '10', Y2: '13', OL6: 'JUMBO' }, DEF_HOME = { NCB: 'NICKEL', DIME: 'DIME', BIGN: 'BIGN' };
 function homeView(tab, key) { return tab === 'off' ? OFF_HOME[key] || '11' : DEF_HOME[key] || 'BASE'; }
 // where everyone lines up in a view: [{ key, name, spot, col, row, label }]
-const JOB_SHORT = { NOSE: 'NOSE', SHADE: 'SHADE', T3: '3-TECH', END: 'END', WIDE: 'WIDE', OLB: 'EDGE', MLB: 'MIKE', WLB: 'WILL', SAM: 'SAM', CB: 'CB', NCB: 'NICKEL', DIME: 'DIME', FS: 'FS', SS: 'SS', RUSHE: 'RUSH', RUSHI: 'RUSH', WLBP: 'WILL', NCBP: 'NICKEL' };
+const JOB_SHORT = { NOSE: 'NOSE', T3: '3-TECH', WE: 'W END', SE: 'S END', WOLB: 'W OLB', SOLB: 'S OLB', DT: 'DT', WEDGE: 'W EDGE', SEDGE: 'S EDGE', SHADE: 'SHADE', END: 'END', WIDE: 'WIDE', OLB: 'EDGE', MLB: 'MIKE', WLB: 'WILL', SAM: 'SAM', CB: 'CB', NCB: 'NICKEL', DIME: 'DIME', FS: 'FS', SS: 'SS', RUSHE: 'RUSH', RUSHI: 'RUSH', WLBP: 'WILL', NCBP: 'NICKEL' };
 function dcLayout(t, tab, vid, pass) {
   if (tab === 'off') { const c = t.dch, own = c && !c.auto.off, oneTE = PERSONNEL[vid].includes('Y') && !PERSONNEL[vid].includes('H');
     // on a passing down or in short yardage the package job has the spot, if you have named one
@@ -159,9 +179,9 @@ function dcLayout(t, tab, vid, pass) {
     return ['QB', ...OL_SLOTS, ...PERSONNEL[vid]].map(s => ({ key: jobOf(s), name: s, spot: OFF_SLOT[s][0], type: s, col: OFF_BOX[s][0], row: OFF_BOX[s][1], label: chartName(jobOf(s)) })); }
   const L = defLookOf(t, vid), c = t.dch;
   const rows = packageLayout(L.front, L.pkg, lookTOf(L)).map(([name, type, x, depth]) => {
-    let key = defRoleKey(name, type, x, depth, L.front, L.pkg); const pk = pass ? defPassKey(name, type, x, depth) : null;
+    let key = defRoleKey(name, type, x, depth, L.front, L.pkg); const pk = pass ? defPassKey(name, type) : null;
     if (pk && (!c || c.auto.def || hasList(c, pk))) key = pk; // on a passing down the pass-down job has him, if one is named
-    return { name, type, x, depth, key, baseKey: defRoleKey(name, type, x, depth, L.front, L.pkg), passKey: pk, spot: CHART_SPOT[key], label: JOB_SHORT[key] || key, tech: depth === 0 ? techOf(x) : '',
+    return { name, type, x, depth, key, baseKey: defRoleKey(name, type, x, depth, L.front, L.pkg), passKey: pk, spot: chartSpotFor(t.id, key), label: JOB_SHORT[key] || key, tech: depth < ON_LINE || (depth < 2 && Math.abs(x) >= 2.4) ? techOf(x) : '',
       row: depth === 0 ? 4 : DEF_SLOT[type][1] === 'LB' ? 3 : type === 'FS' || type === 'SS' ? 1 : 2 }; });
   for (const r of [1, 2, 3, 4]) { const used = new Set(); for (const b of rows.filter(x => x.row === r).sort((a, b) => a.x - b.x)) { let c2 = clamp(Math.round(5 + b.x * 1.05), 1, 9); while (used.has(c2) && c2 < 9) c2++; while (used.has(c2) && c2 > 1) c2--; used.add(c2); b.col = c2; } }
   return rows;
@@ -206,11 +226,11 @@ function setOverride(tid, tab, vid, pass, name, pid) {
 }
 function ensureChart(tid) {
   const t = T(tid);
-  if (!t.dch) t.dch = { auto: { off: true, def: true, st: true }, lists: defaultChart(tid), rot: {}, ov: {}, jv: 3 }; // a spot with no setting plays its usual rotation
+  if (!t.dch) t.dch = { auto: { off: true, def: true, st: true }, lists: defaultChart(tid), rot: {}, ov: {}, jv: 4 }; // a spot with no setting plays its usual rotation
   const c = t.dch;
   // older saves: the defense was a list per position per package, the offense a list per position per grouping. Now each side is a set of jobs
   // filled once, with overrides for single looks. The old order carries over; a starter who differed in one grouping becomes an override there.
-  if (c.jv !== 2 && c.jv !== 3) {
+  if (!(c.jv >= 2)) {
     const L = c.lists, uniq = a => [...new Set(a)], zip = (a, b) => { const o = []; for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i] !== undefined) o.push(a[i]); if (b[i] !== undefined) o.push(b[i]); } return uniq(o); };
     // when you ran the old chart, the order you kept lived in the per-package lists; the plain list could be long out of date
     const VO = ['BASE', 'NICKEL', 'BIGN', 'DIME', 'GL', 'UNDER', 'BEAR'], here = new Set(rosterOf(tid).map(p => p.id));
@@ -232,6 +252,21 @@ function ensureChart(tid) {
   }
   // a chart converted before that fix can have a job left empty: the staff's order fills it once
   if (c.jv === 2) { const def = defaultChart(tid), here = new Set(rosterOf(tid).map(p => p.id)); for (const k in def) if (CHART_UNIT(k) !== 'st' && !['WLBP', 'NCBP', 'RUSHE', 'RUSHI', 'RB3D', 'RBSY', 'Y3D'].includes(k) && !(c.lists[k] || []).some(id => here.has(id))) c.lists[k] = def[k]; c.jv = 3; }
+  // the line's jobs became seats (DESIGN section 74): each old stretch of the line seeds the seats that sit on it, your order kept;
+  // overrides set for the old Under and Bear fronts are dropped (they are looks of the base men now)
+  if (c.jv === 3) {
+    const L = c.lists, odd = isOddFront(teamFront(tid)), here = new Set(rosterOf(tid).map(p => p.id)), uniq = a => [...new Set(a)].filter(id => here.has(id));
+    const two = (a, i) => uniq(i && a.length > 1 ? [a[1], a[0], ...a.slice(2)] : a), ends = odd ? (L.END || []) : (L.WIDE || []), wide = L.WIDE || [], olb = L.OLB || [];
+    const seed = { WE: two(ends, 0), SE: two(ends, 1), WOLB: two(olb, 0), SOLB: two(olb, 1), DT: uniq([...(L.T3 || []), ...(L.SHADE || [])]), WEDGE: two(wide, 0), SEDGE: two(wide, 1) };
+    const was = { WE: odd ? 'END' : 'WIDE', SE: odd ? 'END' : 'WIDE', WOLB: 'OLB', SOLB: 'OLB', DT: 'T3', WEDGE: 'WIDE', SEDGE: 'WIDE' };
+    if (!c.auto.def) { const def = defaultChart(tid); for (const k in seed) if (!(L[k] || []).length) L[k] = seed[k].length ? seed[k].slice(0, 4) : (def[k] || []); for (const k of ['NOSE', 'T3']) if (!(L[k] || []).length) L[k] = def[k] || [];
+      // the old jobs overlapped; seats in base are different men: each seat's first man is the first one not already first at another
+      const used = new Set(); for (const k of odd ? ['WOLB', 'SOLB', 'WE', 'SE', 'NOSE'] : ['WE', 'SE', 'T3', 'NOSE']) { const l = L[k] || [], i = l.findIndex(id => !used.has(id)); if (i > 0) l.unshift(l.splice(i, 1)[0]); if (i >= 0) used.add(l[0]); } }
+    if (c.rot) for (const k in was) if (c.rot[was[k]] !== undefined && c.rot[k] === undefined) c.rot[k] = c.rot[was[k]];
+    for (const k of ['SHADE', 'END', 'WIDE', 'OLB']) { delete L[k]; if (c.rot) delete c.rot[k]; }
+    for (const k in c.ov || {}) if (k.startsWith('BEAR|') || k.startsWith('UNDER|')) delete c.ov[k];
+    c.jv = 4;
+  }
   if (!c.ov) c.ov = {};
   return c;
 }
@@ -482,7 +517,7 @@ function offNeed(oc) {
   return Math.min(80, n);
 }
 function defNeed(dc) {
-  let n = 35 + ({ BLITZ: 12, SIM: 25, THREE: 8, FZ: 22 }[dc.pres] || 0) + (dc.stunt ? 10 : 0) + ({ C2M: 10, C4: 10, C0: 5, T2: 12, C6: 18 }[dc.cov] || 0) + (dc.subRush ? 5 : 0) + (dc.disg ? 8 : 0) + (dc.front === 'Bear' ? 10 : dc.front === 'Under' ? 4 : 0) + (dc.bign ? 5 : 0) + (dc.changeup ? 6 : 0) + (dc.plan && dc.plan.slant ? 8 : 0) + (dc.mug ? 8 : 0);
+  let n = 35 + ({ BLITZ: 12, SIM: 25, THREE: 8, FZ: 22 }[dc.pres] || 0) + (dc.stunt ? 10 : 0) + ({ C2M: 10, C4: 10, C0: 5, T2: 12, C6: 18 }[dc.cov] || 0) + (dc.subRush ? 5 : 0) + (dc.disg ? 8 : 0) + (dc.special === 'Bear' ? 10 : dc.special === 'Under' ? 4 : 0) + (dc.bign ? 5 : 0) + (dc.changeup ? 6 : 0) + (dc.plan && dc.plan.slant ? 8 : 0) + (dc.mug ? 8 : 0);
   return Math.min(80, n);
 }
 // after the huddle breaks: anyone on the field who does not know this call may blow his assignment

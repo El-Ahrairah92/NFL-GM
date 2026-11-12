@@ -58,14 +58,18 @@ function chooseRushers(g, def, dc) {
   const others = def.filter(e => e.depth >= ON_LINE);
   const prRate = e => ea(g, e, 'prsh') * 0.6 + ea(g, e, 'bur') * 0.4;
   let rush = line.slice(), drop = [];
+  // more men on the line than rush: the stand-up man drops first (a linebacker walked up on the line, then the 3-4's strong outside
+  // linebacker, then the weak one); only then the weakest rusher among the ends
+  const standUp = () => rush.find(e => DEF_SLOT[e.slot] && DEF_SLOT[e.slot][1] === 'LB') || rush.find(e => e.name === 'ROLB') || rush.find(e => e.name === 'LOLB');
+  const dropStand = () => { const w = standUp(); if (!w) return dropWeakEdge(); rush = rush.filter(e => e !== w); drop.push(w); };
   const dropWeakEdge = () => {
     const edges = rush.filter(e => e.slot === 'EDGE' || e.slot === 'DE'), pool = edges.length ? edges : rush; // no edge to drop: the weakest rusher on the line does
     if (!pool.length) return;
     const w = pool.slice().sort((a, b) => prRate(a) - prRate(b))[0];
     rush = rush.filter(e => e !== w); drop.push(w);
   };
-  while (rush.length > 4) dropWeakEdge();
-  if (dc.pres === 'THREE') dropWeakEdge();
+  while (rush.length > 4) dropStand();
+  if (dc.pres === 'THREE') dropStand();
   if (dc.pres === 'SIM' || dc.pres === 'FZ') dropWeakEdge(); // a lineman drops out: he is in coverage now
   const nBlitz = dc.pres === 'BLITZ' ? (dc.cov === 'C0' ? 2 : 1) : dc.pres === 'FZ' ? 2 : dc.pres === 'SIM' ? 1 : 0;
   const cands = others.filter(e => ['MLB', 'WLB', 'SAM', 'NCB', 'SS', 'DIME'].includes(e.slot));

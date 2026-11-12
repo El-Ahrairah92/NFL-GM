@@ -159,7 +159,12 @@ function spotRating(p, spot, a) {
 }
 
 // ---------- labels ----------
+// On defense a man is one of five positions, read off the spots he plays best: interior line (nose, 3-technique, 5-technique),
+// edge, linebacker, corner, safety. A tweener is a man whose best spots belong to two of them (a 5-technique who is as good at
+// the 9 is IDL/EDGE). Where along the line or in the secondary he fits best is on his card, spot by spot.
+const DEF_POSITION = { NT: 'IDL', DT: 'IDL', DE: 'IDL', EDGE: 'EDGE', MLB: 'LB', WLB: 'LB', CB: 'CB', NCB: 'CB', FS: 'S', SS: 'S' };
 function positionLabel(elig) {
+  if (DEF_POSITION[elig[0]]) return [...new Set(elig.map(s => DEF_POSITION[s]).filter(Boolean))].slice(0, 2).join('/');
   const has = s => elig.includes(s);
   const used = new Set(), tokens = [];
   const take = (spots, label) => { tokens.push(label); spots.forEach(s => used.add(s)); };
@@ -207,10 +212,11 @@ function comfortOf(p, s) { let c = comfortOwn(p, s); const n = CARRY_NEXT[s]; if
 function comfortLabel(c) { return c >= 85 ? 'Natural' : c >= 60 ? 'Comfortable' : c >= 30 ? 'Decent' : c > 0 ? 'Raw' : 'Unfamiliar'; }
 function comfortPen(p, s) { return Math.round(16 * Math.pow(1 - comfortOf(p, s) / 100, 1.6) * 10) / 10; }
 // ---------- the defensive line is one line ----------
-// Nose, 3-technique, 5-technique and wide edge are four points along it, not four positions. A man's rating and his comfort
+// Nose, 3-technique, 5-technique and 9-technique are four points along it, not four positions. A man's rating and his comfort
 // anywhere on the line are read between the points on either side: a 2i asks for some of what a nose does and some of what a
-// 3-technique does. ax is how far from the center he lines up (the same scale the fronts use).
-const LINE_ANCHORS = [['NT', 0.2], ['DT', 1.35], ['DE', 2.3], ['EDGE', 2.9]];
+// 3-technique does, and a 7 or a 6 over the tight end is the big end, part 5-technique and part edge. ax is how far from the
+// center he lines up (the same scale the fronts use); outside the 9 is all edge.
+const LINE_ANCHORS = [['NT', 0.2], ['DT', 1.35], ['DE', 2.3], ['EDGE', 3.3]];
 const LINE_SPOTS = new Set(LINE_ANCHORS.map(a => a[0]));
 function linePos(ax) {
   const A = LINE_ANCHORS; if (ax <= A[0][1]) return 0;

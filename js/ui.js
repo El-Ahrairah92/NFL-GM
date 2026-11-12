@@ -1070,14 +1070,15 @@ const CF_CLS = { Natural: 'good', Comfortable: '', Decent: 'warn', Raw: 'bad', U
 // ---------- depth chart: jobs you fill once, and a field that shows who plays where in every look ----------
 const THIN_TIERS = new Set(['Depth', 'Project', 'Fringe', 'Washed']), OK_TIERS = new Set(['Rotation', 'Backup']);
 const DC_GROUPS = {
-  def: [['Defensive line', ['NOSE', 'SHADE', 'T3', 'END', 'WIDE', 'OLB']], ['Linebackers', ['MLB', 'WLB', 'SAM']], ['Secondary', ['CB', 'NCB', 'DIME', 'FS', 'SS']], ['Passing downs', ['RUSHE', 'RUSHI', 'WLBP', 'NCBP']]],
+  def: [['Defensive line', ['WE', 'NOSE', 'T3', 'SE', 'WOLB', 'SOLB']], ['Nickel line', ['WEDGE', 'DT', 'SEDGE']], ['Linebackers', ['MLB', 'WLB', 'SAM']], ['Secondary', ['CB', 'NCB', 'DIME', 'FS', 'SS']], ['Passing downs', ['RUSHE', 'RUSHI', 'WLBP', 'NCBP']]],
   off: [['Backfield', ['QB', 'RB', 'FB', 'RB3D', 'RBSY']], ['Receivers', ['X', 'Z', 'SLOT', 'SLOT2']], ['Tight ends', ['Y', 'H', 'Y2', 'Y3D']], ['Offensive line', ['LT', 'LG', 'C', 'RG', 'RT', 'OL6']]],
   st: [['Kicking game', ['K', 'P', 'KR', 'PRET']], ['Coverage and return units', ['KO', 'KRU', 'PU', 'PRU']]],
 };
 const JOB_HELP = {
-  NOSE: 'Over the center (0 and 1 technique). Mass and strength: he holds the middle.', SHADE: 'Inside the guard (2i and 2). A nose who can move, or a tackle who can anchor.',
-  T3: 'Outside the guard. Burst and pass rush from the inside.', END: 'On the tackle (4i, 4 and 5). Length and strength to hold the edge of the line.',
-  WIDE: 'Outside the tackle with a hand down (7, 6, 9 and wide). Speed off the edge.', OLB: 'The stand-up edge in the base front. Rushes and sets the edge.',
+  NOSE: 'The nose: over the center in most looks. Mass and strength: he holds the middle.', T3: 'The 3-technique: outside a guard in most looks. Burst and pass rush from the inside.',
+  WE: 'The weak-side end: the same man in every base look, wherever the look puts him (the card shows where, and how he grades there).', SE: 'The strong-side end, over or outside the tight end side: in a 4-3 the big end, pinched to a 3 in the Bear.',
+  WOLB: 'The weak outside linebacker in the 3-4: the base rusher off the edge.', SOLB: 'The strong outside linebacker in the 3-4: sets the edge on the tight end and drops into coverage when four rush.',
+  DT: 'The two tackles in nickel and dime.', WEDGE: 'The weak-side edge in nickel and dime, wide on a 9: the pass rusher.', SEDGE: 'The strong-side edge in nickel and dime.',
   MLB: 'The middle of the defense: run fits and the calls.', WLB: 'Runs and covers. In nickel he is one of two linebackers left on the field.', SAM: 'The strong side in base, over the tight end.',
   CB: 'Outside corners, in order. The first two start; your coach decides whether the best one travels with their top receiver.', NCB: 'Covers the slot. A corner here is a nickel; a safety here is a big nickel.',
   DIME: 'The sixth defensive back.', FS: 'The deep safety: range and ball skills.', SS: 'The safety who comes down into the box.',
@@ -1087,15 +1088,20 @@ const JOB_HELP = {
   KR: 'Kick returner.', PRET: 'Punt returner.', KO: 'Ten men: the kickoff coverage team.', KRU: 'Ten men: blockers on kick returns.', PU: 'Ten men: the punt team. The first two are the gunners.', PRU: 'Ten men: punt return. The first two hold up the gunners.',
 };
 function jobLabel(k) { const r = CHART_SECTIONS.map(s => s.rows.find(x => x[0] === k)).find(Boolean); return r ? r[1].replace(/ \(.*\)$/, '') : k; }
-function jobAx(k) { return LINE_ROLE_AX[k] !== undefined ? LINE_ROLE_AX[k] : k === 'RUSHI' ? 1.35 : k === 'RUSHE' ? 3 : null; }
+function jobAx(k) { return RUSH_AX[k] !== undefined ? RUSH_AX[k] : null; }
+// a seat on defense: his grade where the coach lines it up, look by look (see seatGrade), and how at home he is across those spots
+function jobSeat(p, k) { return CHART_UNIT(k) === 'def' && !RUSH_AX[k] ? seatGrade(p, T(state.userTid), k) : null; }
+function seatComfort(p, k) { const pl = seatPlaces(T(state.userTid))[k]; if (!pl || !pl.length) return null; let s = 0, n = 0;
+  for (const q of pl) { const lw = rowReps(q.slot, q.x, q.depth, q.seat), c = lw ? lw.reduce((a, [sp, w]) => a + w * (LINE_SPOTS.has(sp) ? lineComfort(p, LINE_ANCHORS.find(x => x[0] === sp)[1]) : comfortOf(p, sp)), 0) : comfortOf(p, DEF_SLOT[q.slot][0]); s += q.w * c; n += q.w; }
+  return n ? s / n : null; }
 function jobSide(k) { return ST_UNIT[k] || ['K', 'P', 'KR', 'PRET'].includes(k) ? 'st' : CHART_UNIT(k); }
 // how your staff sees him at this job: his level, adjusted for how the job suits him and how well he knows it
 function jobValue(p, k) {
   if (ST_UNIT[k]) return ST_OK.has(p.spot) ? stSeen(p, stRole(p, k)) : 0;
   if (k === 'KR' || k === 'PRET') return returnScore(p);
-  const ax = jobAx(k); return ax !== null ? uOvr(p) + (lineSlotRating(p, ax) - p.ovr) : chartValue(p, CHART_SPOT[k]);
+  const ax = jobAx(k); if (ax !== null) return uOvr(p) + (lineSlotRating(p, ax) - p.ovr); const sg = jobSeat(p, k); return sg !== null ? uOvr(p) + (sg - p.ovr) : chartValue(p, CHART_SPOT[k]);
 }
-function jobComfort(p, k) { if (jobSide(k) === 'st') return 100; const ax = jobAx(k); return ax !== null ? lineComfort(p, ax) : comfortOf(p, CHART_SPOT[k]); }
+function jobComfort(p, k) { if (jobSide(k) === 'st') return 100; const ax = jobAx(k); if (ax !== null) return lineComfort(p, ax); const sc = CHART_UNIT(k) === 'def' ? seatComfort(p, k) : null; return sc !== null ? sc : comfortOf(p, CHART_SPOT[k]); }
 function jobTier(p, k) { return jobSide(k) === 'st' ? null : tierOf(p, jobValue(p, k)); }
 function dcDot(p, k) { const cf = comfortLabel(jobComfort(p, k)); return (cf !== 'Natural' && cf !== 'Comfortable' ? `<i class="dcd ${CF_CLS[cf]}" title="${cf} at this job"></i>` : '') + (p.injury ? `<i class="dcd inj" title="Out ${p.injury.weeks} week${p.injury.weeks === 1 ? '' : 's'}">✚</i>` : ''); }
 // one man on a job card
@@ -1118,7 +1124,22 @@ function dcJobCard(t, c, k, need, where, prob) {
   return `<div class="dcj ${on ? 'on' : ''} ${prob ? 'bad' : ''}" data-action="dcJob" data-key="${k}">
     <div class="dcj-h"><b>${esc(jobLabel(k))}</b>${need > 1 && !ST_UNIT[k] ? `<span class="dcj-tag two" title="This job has ${need} spots on the field at once: the first ${need} listed both start">top ${need} ${prac ? 'a string' : 'start'}</span>` : ''}${prac && c.own && c.own[k] ? `<span class="dcj-tag pr-own" title="You have set this job's practice order; it no longer follows the game order">yours</span>` : ''}${prob ? '<span class="dcj-tag bad">needs a man</span>' : ''}</div>
     <div class="dcj-list ${preTimeOn() && !prac && !ST_UNIT[k] ? 'has-dur' : ''}">${list.map((p, i) => (i === need && !ST_UNIT[k] ? `<div class="dcj-div"><span>${prac ? 'the twos' : 'next in line · 2nd unit'}</span></div>` : i === 2 * need && !ST_UNIT[k] ? `<div class="dcj-div"><span>${prac ? 'the threes' : '3rd unit'}</span></div>` : '') + dcChip(p, k, i, need)).join('')}${list.length < n ? `<div class="dcj-drop ${list.length ? 'more' : ''}" data-dcjob="${k}" data-dci="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div>` : ''}</div>
-    <details class="dcj-more" ${foldAttr('dcj' + k)}><summary>about this job</summary><div class="small muted">${esc(JOB_HELP[k] || '')}${where && where.length ? `<br><b>Plays in:</b> ${esc([...new Set(where)].join(', '))}` : ''}</div>${rot}</details></div>`;
+    ${seatCardHTML(t, k, list)}<details class="dcj-more" ${foldAttr('dcj' + k)}><summary>about this job</summary><div class="small muted">${esc(JOB_HELP[k] || '')}${where && where.length ? `<br><b>Plays in:</b> ${esc([...new Set(where)].join(', '))}` : ''}</div>${rot}</details></div>`;
+}
+// A seat's card: where the coach lines the seat up in each of his looks and how often, and how each man listed there grades in
+// each (the colour; his grade for the seat is these weighted by how often each look is called)
+function seatCardHTML(t, k, list) {
+  if (!LINE_SEATS.has(k) && k !== 'SAM') return '';
+  const pl = seatPlaces(t)[k]; if (!pl || !pl.length) return '';
+  const high = defTend(t).high, by = new Map();
+  for (const q of pl) { if (q.L.pkg === 'GL') continue; let e = by.get(q.L.id); if (!e) by.set(q.L.id, e = { lab: (q.L.pkg === 'NICKEL' && !LINE_SEATS.has(k) ? 'Nickel ' : '') + q.L.label, qs: [], w: q.w }); e.qs.push(q); }
+  const looks = [...by.values()].sort((a, b) => b.w - a.w), tot = looks.reduce((a, e) => a + e.w, 0) || 1; if (!looks.length) return '';
+  const tech = e => [...new Set(e.qs.map(q => q.depth >= 2 ? 'off' : techOf(q.x)))].join('/');
+  const lv = r => r >= 80 ? 4 : r >= 74 ? 3 : r >= 68 ? 2 : r >= 62 ? 1 : 0, men = list.slice(0, 4), cols = `grid-template-columns:minmax(0, 1fr) repeat(${men.length}, 22px)`;
+  const head = `<div class="stc-r stc-h" style="${cols}"><span></span>${men.map((p, i) => `<span title="${esc(pname(p))}">${i + 1}</span>`).join('')}</div>`;
+  const rows = looks.map(e => `<div class="stc-r" style="${cols}"><span class="stc-n" title="${esc(e.lab)}: the ${esc(tech(e))} technique, about ${Math.round(e.w / tot * 100)}% of this seat's snaps">${esc(e.lab)} <b>${esc(tech(e))}</b> <i>${Math.round(e.w / tot * 100)}%</i></span>${men.map(p => {
+    const r = uOvr(p) + e.qs.reduce((a, q) => a + rowFit(p, q.slot, q.x, q.depth, q.seat, high), 0) / e.qs.length - p.ovr; return `<span class="ls-c ls-${lv(r)}" title="${esc(p.last)} at the ${esc(tech(e))} in ${esc(e.lab)}"></span>`; }).join('')}</div>`).join('');
+  return `<details class="dcj-more" ${foldAttr('dcs' + k)}><summary>where he lines up</summary><div class="stc">${head}${rows}</div></details>`;
 }
 // the green dot: the defender who gets the call and makes the checks
 function greenDotHTML(t) {
@@ -1248,7 +1269,7 @@ function depthChartHTML() {
   // ---- the bench: everyone who could do the selected job, best first ----
   const sideOf = tab === 'st' ? null : tab, list = c.lists[job] || [];
   const all = ro.filter(p => ST_UNIT[job] ? ST_OK.has(p.spot) || ui.dchAll : job === 'KR' || job === 'PRET' ? returnScore(p) > -1e8 : ['K', 'P'].includes(job) ? comfortOf(p, job) > 0 || ui.dchAll : SPOTS[p.spot].side === SPOTS[CHART_SPOT[job]].side);
-  const fam = (FAMILIES.find(f => f[1].includes(CHART_SPOT[job])) || [null, []])[1];
+  const fam = LINE_SEATS.has(job) ? ['NT', 'DT', 'DE', 'EDGE', ...(STAND_SEATS.has(job) ? ['MLB', 'WLB'] : [])] : (FAMILIES.find(f => f[1].includes(CHART_SPOT[job])) || [null, []])[1];
   const near = all.filter(p => jobSide(job) === 'st' || jobComfort(p, job) >= 25 || fam.includes(p.spot));
   const bench = (ui.dchAll ? all : near).sort((a, b) => jobValue(b, job) - jobValue(a, job));
   const pickP = ui.dchPid && ro.some(p => p.id === ui.dchPid) ? P(ui.dchPid) : list.length && P(list[0]) ? P(list[0]) : bench[0] || null;
@@ -1290,7 +1311,7 @@ function dcPhoneHTML(o) {
       ${i > 1 ? mv(p, 0, 'Move to the top') : ''}${i > 0 ? mv(p, i - 1, 'Move up') : ''}${i < L.length - 1 ? mv(p, i + 1, 'Move down') : ''}${prac ? '' : `<button data-action="dcSit" data-pid="${p.id}">${sat ? 'Play him: stop sitting him' : 'Sit him: no snaps anywhere'}</button>`}<button class="danger" data-action="dcRemove" data-key="${job}" data-i="${i}">Take him off ${esc(jobLabel(job).toLowerCase())}</button>${prac ? '' : `<button data-action="dcOut" data-pid="${ui.dcOut === p.id ? 0 : p.id}">${ui.dcOut === p.id ? 'Back to the real lineup' : 'Show the field without him'}</button>`}</div>`; };
   h += `<div class="card mdc-card"><div class="mdc-h"><b>${esc(jobLabel(job))}</b>${n > 1 && !ST_UNIT[job] ? `<span class="dcj-tag two">top ${n} ${prac ? 'a string' : 'start'}</span>` : ''}${prac && c.own && c.own[job] ? '<span class="dcj-tag pr-own">yours</span>' : ''}${prob ? '<span class="dcj-tag bad">needs a man</span>' : ''}<span class="spacer"></span><span class="small muted">${L.length}${max < 99 ? ' of ' + max : ''}</span></div>
     <div class="mdc-list">${L.map(row).join('') || '<div class="small muted mdc-empty">Nobody yet: add him from the list below.</div>'}</div>
-    ${help || rotList.length > 1 ? `<details class="dcj-more" ${foldAttr('dcj' + job)}><summary>about this job</summary><div class="small muted">${esc(help)}${where && where.length ? `<br><b>Plays in:</b> ${esc([...new Set(where)].join(', '))}` : ''}</div>${!prac && ROT_KEYS.has(job) && rotList.length > 1 ? `<div class="dcj-rot"><span>Next man's snaps</span><select data-change="dchRot" data-key="${job}">${rotList.map(([v, l]) => `<option value="${v}" ${v === rotPick ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : ''}</details>` : ''}</div>`;
+    ${tab === 'def' && !prac ? seatCardHTML(t, job, L) : ''}${help || rotList.length > 1 ? `<details class="dcj-more" ${foldAttr('dcj' + job)}><summary>about this job</summary><div class="small muted">${esc(help)}${where && where.length ? `<br><b>Plays in:</b> ${esc([...new Set(where)].join(', '))}` : ''}</div>${!prac && ROT_KEYS.has(job) && rotList.length > 1 ? `<div class="dcj-rot"><span>Next man's snaps</span><select data-change="dchRot" data-key="${job}">${rotList.map(([v, l]) => `<option value="${v}" ${v === rotPick ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : ''}</details>` : ''}</div>`;
   // who could do it
   const fit = p => { const tr = jobTier(p, job), sw = !tr && stWord(p, ST_UNIT[job] ? job : null); return tr ? `<span class="pill ${TIER_CLS[tr]}">${tr}</span>` : sw ? `<span class="pill ${sw[1]}">${sw[0]}</span>` : ''; };
   h += `<div class="card mdc-card"><div class="mdc-h"><b>Best fits</b><span class="spacer"></span><label class="small muted"><input type="checkbox" data-change="dchAll" ${ui.dchAll ? 'checked' : ''}> everyone</label></div>
@@ -1408,6 +1429,8 @@ const LOOK_NOTE = {
   'Even': 'Two tackles outside the guards, two ends outside the tackles. Balanced.',
   'Tilt': 'One tackle shades the center. Firmer inside, a little less rush.',
   'Pinch': 'Both tackles inside the guards and the ends tight. Stops the inside run; gives up rush and the edge.',
+  'Under': 'The line slides weak, the nose shades the center to the strength and the Sam (or the strong outside linebacker) stands over the tight end. The same eleven as base.',
+  'Bear': 'The center and both guards covered, the strong end pinched to a 3 and a linebacker on the line outside the tight end: the 46. Built to stop the run.',
 };
 function lookFamily(front, pkg) { return pkg === 'BASE' ? (front === '3-4' || front === 'Tite' ? 'odd' : 'even') : 'sub'; }
 // the looks this caller carries for a package, home look first: [[name, share]]
@@ -1415,11 +1438,13 @@ function looksFor(tid, pkg) {
   const dt = defTend(T(tid)), lib = dt.pk && dt.pk.lib, fam = lookFamily(dt.front, pkg);
   if (pkg === 'GL') return { fam, list: [] };
   const list = lib ? (fam === 'sub' ? lib.sub : lib.fam === fam ? lib.base : null) : null;
-  return { fam, list: (list || [[fam === 'sub' ? 'Even' : LOOK_HOME[dt.front] || 'Over', 1]]).filter(x => LOOKS[fam][x[0]]) };
+  let out = (list || [[fam === 'sub' ? 'Even' : LOOK_HOME[dt.front] || 'Over', 1]]).filter(x => LOOKS[fam][x[0]] && !LOOKS[fam][x[0]].fr);
+  if (pkg === 'BASE') { const fr = (dt.pk && dt.pk.fr) || {}, keep = clamp(1 - (fr.BEAR || 0) - (fr.UNDER || 0), 0.2, 1); out = out.map(([k, v]) => [k, v * keep]); for (const k of ['Under', 'Bear']) if (fr[k.toUpperCase()]) out.push([k, fr[k.toUpperCase()]]); } // Under and Bear: his base men, moved
+  return { fam, list: out };
 }
 function lookSVG(front, pkg, fam, name) {
   const W = 232, H = 92, cx = W / 2, sx = 26, yo = 62, yd = 34;
-  const rows = lookRows(packageLayout0(front, pkg), { t: LOOKS[fam][name].t }).filter(r => r[3] === 0);
+  const rows = lookRows(packageLayout0(front, pkg), { t: LOOKS[fam][name].t }).filter(r => r[3] === 0 || (r[3] < 2 && Math.abs(r[2]) >= 2.4)); // the line, and a linebacker walked up on it
   let g = `<svg viewBox="0 0 ${W} ${H}" class="look" role="img" aria-label="${esc(name)} alignment">`;
   for (const [gx, l] of [[0.5, 'A'], [1.5, 'B'], [2.5, 'C']]) for (const s of [-1, 1]) g += `<text x="${cx + s * gx * sx}" y="${H - 4}" class="gap">${l}</text>`;
   for (let i = -2; i <= 2; i++) g += `<rect x="${cx + i * sx - 8}" y="${yo - 8}" width="16" height="16" rx="3" class="ol${i === 0 ? ' c' : ''}"/>`;
@@ -1548,7 +1573,7 @@ function playbookHTML() {
     ${tendBar('Screens', ot.screen)}${tendBar('Play-action', ot.pa)}${tendBar('Motion', ot.motion)}${tendBar('RPO', ot.rpo)}${tendBar('Bootlegs', ot.boot)}${tendBar('QB runs', ot.qbRun)}${tendBar('Lead back share', ot.rb1, 'How much the No. 1 back carries it')}
     <div class="section-title">Personnel mix</div><div class="row small">${Object.entries(ot.pers || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="pill">${k} · ${Math.round(100 * v / persTot)}%</span>`).join(' ')}</div></div>` + `<div>${insBar('O')}<div class="card" style="margin-top:14px"><h3>Chemistry</h3><div class="chm-col">${chemRow(['OL', 'QB'])}</div></div></div></div>`;
   if (tab === 'def') html += `<div class="grid g2"><div>${insBar('D')}<div class="card" style="margin-top:14px"><h3>Chemistry</h3><div class="chm-col">${chemRow(['DL', 'LB', 'DB', 'D'])}</div></div></div>` + `<div class="card"><h3>Defense · ${esc(teamSchemeLabel(t, 'D') || '—')}</h3><div class="small muted" style="margin-bottom:8px">Play caller: ${coachNameLink(dc)} ${dc ? `(${ROLE_SHORT[dc.role]})` : ''} · ${esc(dt.front || '')} front</div>
-    ${dt.pk ? `<div class="small" style="margin-bottom:8px"><b>Coverage packages:</b> ${Object.entries(dt.pk.sh).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${SHELLS[k]} ${Math.round(v * 100)}%${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join(' · ')}<br><b>Pressure packages:</b> ${Object.entries(dt.pk.pr).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${PRESSURES[k]} ${Math.round(v * 100)}%${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join(' · ')}${dt.pk.fr && (dt.pk.fr.UNDER || dt.pk.fr.BEAR || dt.pk.fr.BIGN) ? `<br><b>Front and sub packages:</b> ${dt.front} base${['UNDER', 'BEAR', 'BIGN'].filter(k => dt.pk.fr[k]).map(k => ` · ${PK_NAME[k]}${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join('')}` : ''}${dt.pk.disg ? `<br>Disguises the coverage on ${Math.round(dt.pk.disg * 100)}% of snaps${dt.pk.by.DISG && C(dt.pk.by.DISG) ? ` <span class="muted">(${esc(C(dt.pk.by.DISG).last)})</span>` : ''}` : ''}<br><span class="muted">Names in brackets are packages your specialists installed. The bars below are read off this sheet.</span></div>` : ''}
+    ${dt.pk ? `<div class="small" style="margin-bottom:8px"><b>Coverage packages:</b> ${Object.entries(dt.pk.sh).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${SHELLS[k]} ${Math.round(v * 100)}%${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join(' · ')}<br><b>Pressure packages:</b> ${Object.entries(dt.pk.pr).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${PRESSURES[k]} ${Math.round(v * 100)}%${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join(' · ')}${dt.pk.fr && (dt.pk.fr.UNDER || dt.pk.fr.BEAR || dt.pk.fr.BIGN) ? `<br><b>Front, looks and sub packages:</b> ${dt.front} base${['UNDER', 'BEAR', 'BIGN'].filter(k => dt.pk.fr[k]).map(k => ` · ${PK_NAME[k]}${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join('')}` : ''}${dt.pk.disg ? `<br>Disguises the coverage on ${Math.round(dt.pk.disg * 100)}% of snaps${dt.pk.by.DISG && C(dt.pk.by.DISG) ? ` <span class="muted">(${esc(C(dt.pk.by.DISG).last)})</span>` : ''}` : ''}<br><span class="muted">Names in brackets are packages your specialists installed. The bars below are read off this sheet.</span></div>` : ''}
     ${tendBar('Man coverage', dt.man)}${tendBar('Two-high shells', dt.high)}${tendBar('Blitz', dt.blitz)}${tendBar('Simulated pressure', dt.sim)}${tendBar('Stunts', dt.stunt)}${tendBar('Base personnel', dt.base, 'vs. nickel/dime')}</div></div>`;
   if (tab === 'field') html += formationViewerHTML(tid);
   // ---- self-scout ----
@@ -3300,17 +3325,26 @@ function strengthsHTML(p) {
   return `<div class="pp-sw"><div><div class="ds-lb">Strengths</div>${str.map(t => `<div class="sw-t good">${esc(t)}</div>`).join('')}${str.length < 2 ? best.map(t => `<div class="sw-t rel" title="Relative to the rest of his game, not to a starter">${esc(t)}</div>`).join('') : ''}${!str.length && !best.length ? '<div class="sc-note">Nothing that stands out.</div>' : ''}</div>
     <div><div class="ds-lb">Weaknesses</div>${weak.length ? weak.map(t => `<div class="sw-t bad">${esc(t)}</div>`).join('') : '<div class="sc-note">No glaring holes.</div>'}</div></div>`;
 }
-// where along the defensive line he can play: each spot against his own best one, with how at home he is there
-const LINE_POINTS = [['Nose', 0.1], ['Shade', 0.6], ['3-tech', 1.35], ['4i', 1.65], ['5-tech', 2.3], ['Wide', 3.3]];
-function lineStripHTML(p) {
-  if (!p.a || !SPOTS[p.spot] || SPOTS[p.spot].g !== 'DL') return '';
-  const v = LINE_POINTS.map(([l, ax]) => ({ l, r: lineSlotRating(p, ax), c: lineComfort(p, ax), m: lineMass(p, ax) })), top = Math.max(...v.map(x => x.r));
-  return `<div class="line-strip" title="How he plays at each spot on the line, against his own best spot. Comfort is what he has learned there; size is against what the spot asks for.">${v.map(x => { const d = Math.round(x.r - top), lv = d >= -1 ? 4 : d >= -4 ? 3 : d >= -8 ? 2 : d >= -13 ? 1 : 0;
-    return `<div class="ls-c ls-${lv}" title="${esc(comfortLabel(x.c))} there${x.m <= -1.5 ? ' · light for the spot' : x.m >= 1.5 ? ' · heavy for the spot' : ''}"><b>${x.l}</b><span>${d >= -1 ? 'best' : d}</span></div>`; }).join('')}</div>`;
+// Where he plays, in coaching terms: every technique along the line for a lineman, the box, space and the edge for a linebacker,
+// outside, slot, box and deep for a defensive back. Each against his own best, with how at home he is and his size for it.
+const TECH_POINTS = [['0', 0], ['1', 0.45], ['2i', 0.75], ['3', 1.35], ['4i', 1.65], ['5', 2.3], ['7', 2.6], ['6', 2.9], ['9', 3.3], ['W9', 3.8]];
+const BACK_POINTS = { LB: [['Box', 'MLB'], ['Space', 'WLB'], ['Edge', 'SAM']], DB: [['Outside', 'CB'], ['Slot', 'NCB'], ['Box', 'SS'], ['Deep', 'FS']] };
+function techPoints(p) {
+  const g = SPOTS[p.spot] && SPOTS[p.spot].g;
+  if (g === 'DL') return TECH_POINTS.map(([l, ax]) => ({ l, r: lineSlotRating(p, ax), c: lineComfort(p, ax), m: lineMass(p, ax) }));
+  const pts = g === 'LB' ? BACK_POINTS.LB : g === 'CB' || g === 'S' ? BACK_POINTS.DB : null; if (!pts) return null;
+  return pts.map(([l, sp]) => sp === 'SAM' ? { l, r: rowFit(p, 'SAM', 3.3, 1.5), c: comfortOf(p, 'WLB'), m: lineMass(p, 3.3) } : { l, r: slotRating(p, sp), c: comfortOf(p, sp), m: 0 }); // the edge: walked up on the tight end
+}
+function techStripHTML(p) {
+  if (!p.a || !SPOTS[p.spot]) return '';
+  const v = techPoints(p); if (!v) return '';
+  const top = Math.max(...v.map(x => x.r));
+  return `<div class="line-strip ${v.length > 6 ? 'many' : ''}" style="grid-template-columns:repeat(${v.length}, minmax(0, 1fr))" title="How he plays at each spot, against his own best one. Comfort is what he has learned there; size is against what the spot asks for.">${v.map(x => { const d = Math.round(x.r - top), lv = d >= -1 ? 4 : d >= -4 ? 3 : d >= -8 ? 2 : d >= -13 ? 1 : 0;
+    return `<div class="ls-c ls-${lv}" title="${esc(x.l)}: ${esc(comfortLabel(x.c))} there${x.m <= -1.5 ? ' · light for it' : x.m >= 1.5 ? ' · heavy for it' : ''}"><b>${esc(x.l)}</b><span>${d >= -1 ? (v.length > 6 ? '●' : 'best') : d}</span></div>`; }).join('')}</div>`;
 }
 function comfortHTML(p) {
   const cf = Object.entries(p.cf || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  return `<div class="pp-kv">${lineWordsHTML(p)}${cf.map(([s, c]) => { const l = comfortLabel(c); return `<div class="sc-kv" title="${trueOn() ? Math.round(c) : ''}"><span>${esc(JOB_NAME[s] || SPOTS[s].l)}</span><b class="cf-${CF_PIPS[l]}">${l}</b></div>`; }).join('')}
+  return `<div class="pp-kv">${techStripHTML(p)}${cf.map(([s, c]) => { const l = comfortLabel(c); return `<div class="sc-kv" title="${trueOn() ? Math.round(c) : ''}"><span>${esc(JOB_NAME[s] || SPOTS[s].l)}</span><b class="cf-${CF_PIPS[l]}">${l}</b></div>`; }).join('')}
     <div class="sc-fine">Learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an ordinary pace'}.</div></div>`;
 }
 // ---------- the player file: a bio header that never moves, and tabs under it ----------
@@ -3516,16 +3550,10 @@ function scTraitsHTML(p) {
   return `<div class="ds-lb">Strengths</div>${str.map(t => li(t, 'good')).join('') || (best.length ? '' : '<div class="sc-note">Nothing that stands out.</div>')}${str.length < 2 ? best.map(t => `<div class="sw-t rel" title="Relative to the rest of his game, not to a starter">${esc(t)}</div>`).join('') : ''}
     <div class="ds-lb" style="margin-top:14px">Weaknesses</div>${weak.map(t => li(t, 'bad')).join('') || '<div class="sc-note">No glaring holes.</div>'}`;
 }
-// along the defensive line, in a sentence
-function lineWordsHTML(p) {
-  if (!p.a || !SPOTS[p.spot] || SPOTS[p.spot].g !== 'DL') return '';
-  const v = LINE_POINTS.map(([l, ax]) => ({ l, r: lineSlotRating(p, ax) })), top = Math.max(...v.map(x => x.r)), best = v.filter(x => x.r >= top - 1).map(x => x.l), also = v.filter(x => x.r < top - 1 && x.r >= top - 5).map(x => x.l);
-  return `<div class="sc-note sc-line">Along the line he is best at <b>${best.join(' and ')}</b>${also.length ? `, and can play ${also.join(', ')}` : ''}.</div>`;
-}
 function scWhereHTML(p) {
   if (p.tid === -2) return '';
   const u = state.userTid, cf = Object.entries(p.cf || {}).sort((a, b) => b[1] - a[1]).slice(0, 5); let h = '';
-  if (cf.length) h += `<div class="ds-rule"></div><div class="ds-lb">Where he can play <span class="sc-lbr">learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an ordinary pace'}</span></div>${lineWordsHTML(p)}
+  if (cf.length) h += `<div class="ds-rule"></div><div class="ds-lb">Where he can play <span class="sc-lbr">learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an ordinary pace'}</span></div>${techStripHTML(p)}
     ${cf.map(([s, c]) => { const l = comfortLabel(c); return `<div class="sc-kv" title="${trueOn() ? Math.round(c) : ''}"><span>${esc(JOB_NAME[s] || SPOTS[s].l)}</span><b class="cf-${CF_PIPS[l]}">${l}</b></div>`; }).join('')}`;
   const side = SPOTS[p.spot].side, fitTeams = [...new Set([p.tid >= 0 ? p.tid : null, u].filter(t => t !== null && t >= 0))];
   const rows = [];

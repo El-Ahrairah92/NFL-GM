@@ -235,11 +235,13 @@ function defenseCall(g, oc) {
   else pkg = 'BASE';
   call.pkg = pkg;
   if (dt.pk && dt.pk.fr) { const fr = dt.pk.fr, heavy = ['12', '13', '21', '22', 'JUMBO'].includes(p);
-    if (pkg === 'BASE') { if (rand() < fr.BEAR * (sit.short || sit.gl ? 2.5 : heavy ? 1.6 : runEst > 0.55 ? 1.2 : 0.5)) call.front = 'Bear'; else if (rand() < fr.UNDER) call.front = 'Under'; }
+    if (pkg === 'BASE') { if (rand() < fr.BEAR * (sit.short || sit.gl ? 2.5 : heavy ? 1.6 : runEst > 0.55 ? 1.2 : 0.5)) call.special = 'Bear'; else if (rand() < fr.UNDER) call.special = 'Under'; }
     if (pkg === 'NICKEL' && rand() < fr.BIGN * (p === '12' ? 1.7 : runEst > 0.5 ? 1.2 : 0.8)) call.bign = true; }
   // the coach's own look for this snap: his home alignment most of the time, a changeup that suits what he expects otherwise
-  const lib = dt.pk && dt.pk.lib, odd = call.front === '3-4' || call.front === 'Tite';
-  if (lib && pkg !== 'GL' && call.front !== 'Bear' && call.front !== 'Under') {
+  // Under and Bear are his base men in another look (see LOOKS): the same eleven, moved
+  const lib = dt.pk && dt.pk.lib, odd = isOddFront(call.front);
+  if (call.special) { const L = LOOKS[odd ? 'odd' : 'even'][call.special]; call.look = call.special; call.lookT = { t: L.t, n: call.special }; }
+  else if (lib && pkg !== 'GL') {
     const fam = pkg === 'BASE' ? (odd ? 'odd' : 'even') : 'sub', list = fam === 'sub' ? lib.sub : lib.fam === fam ? lib.base : null;
     const vD = variety(g, d, 'D');
     if (list) { const w = {}; for (const [k, v] of list) { const L = LOOKS[fam][k]; if (L) w[k] = v * (k === list[0][0] ? 1 : vD) * (L.k === 'run' ? 0.4 + runEst * 1.4 : L.k === 'rush' ? (sit.passDown ? 2.2 : 1.3 - runEst) : 1); }
@@ -289,8 +291,8 @@ function defenseCall(g, oc) {
   call.runBlitz = (call.pres === 'BLITZ' || call.pres === 'FZ') && runEst > 0.55;
   // line games out of his library: a slant (to the strength, away from it, or both tackles pinching), and which twist when one is called
   if (lib && pkg !== 'GL') {
-    const base = pkg === 'BASE', bear = call.front === 'Bear', under = call.front === 'Under';
-    const N = !base ? { e: ['LE', 'RE'], i: ['DT1', 'DT2'] } : bear ? { e: ['LE', 'RE'], i: ['LT', 'RT'], n: 'NT' } : under ? { e: ['LE', 'RE'], i: ['DT', 'NT'] } : odd ? { e: ['LOLB', 'ROLB'], i: ['LDE', 'RDE'], n: 'NT' } : { e: ['LE', 'RE'], i: ['NT', 'DT'] };
+    const base = pkg === 'BASE';
+    const N = !base ? { e: ['LE', 'RE'], i: ['DT1', 'DT2'] } : odd ? { e: ['LOLB', 'ROLB'], i: ['LDE', 'RDE'], n: 'NT' } : { e: ['LE', 'RE'], i: ['NT', 'DT'] };
     const plan = {};
     if (rand() < lib.sl * variety(g, d, 'D') * (0.6 + runEst * 0.9)) { const d = wpick(lib.sd) || 'S';
       const sg = oc.str === -1 ? -1 : 1;

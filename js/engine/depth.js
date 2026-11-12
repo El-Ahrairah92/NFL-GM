@@ -322,13 +322,10 @@ const LINES = {
   'Wide-9': [lineEnds('W9')[0], ['NT', 'NT', 'W', '1'], ['DT', 'DT', 'S', '3'], lineEnds('W9')[1]],
   '3-4': [['LOLB', 'EDGE', 'W', '9'], ['LDE', 'DE', 'W', '5'], ['NT', 'NT', 'S', '0'], ['RDE', 'DE', 'S', '5'], ['ROLB', 'EDGE', 'S', '9']],
   'Tite': [['LOLB', 'EDGE', 'W', '9'], ['LDE', 'DE', 'W', '4i'], ['NT', 'NT', 'S', '0'], ['RDE', 'DE', 'S', '4i'], ['ROLB', 'EDGE', 'S', '9']],
-  // Bear: all three interior linemen covered, edges tight outside them
-  'Bear': [['LE', 'EDGE', 'W', '9'], ['LT', 'DT', 'W', '3'], ['NT', 'NT', 'S', '0'], ['RT', 'DT', 'S', '3'], ['RE', 'EDGE', 'S', '9']],
-  // Under: the line shifts to the weak side and the nose shades the center
-  'Under': [['LE', 'EDGE', 'W', '5'], ['DT', 'DT', 'W', '3'], ['NT', 'NT', 'S', '1'], ['RE', 'EDGE', 'S', '5']],
+  // (Bear and Under are looks now: the base men move, see LOOKS in coaches.js)
   'GL': [['LE', 'EDGE', 'W', '6'], ['LT', 'DT', 'W', '3'], ['NT', 'NT', 'S', '0'], ['RT', 'DT', 'S', '3'], ['RE', 'EDGE', 'S', '6']],
   // sub packages are a four-man line whatever the base front: two edges and two interior rushers playing tackle technique.
-  // (A 3-4 team's ends slide inside here as tackles; the job is DT, not base end.)
+  // (A 3-4 team's ends slide inside here as tackles; the job is DT, not base end.) The edges are the pass rushers, out on a 9.
   'SUB': t => [lineEnds(t)[0], ['DT1', 'DT', 'W', '3'], ['DT2', 'DT', 'S', '3'], lineEnds(t)[1]],
 };
 // The eleven for a front and package, as [name, job, x, depth]. A front can also be handed in whole as { rows: [...] }:
@@ -337,11 +334,13 @@ function packageLayout(front, pkg, look) {
   if (front && front.rows) return frontRows(front.rows);
   return lookRows(packageLayout0(front, pkg), look);
 }
-// a coach's look moves linemen to his techniques; walking the linebackers up puts them over the guards' inside gaps, a step off the ball
+// a coach's look moves linemen to his techniques; walking the linebackers up puts them over the guards' inside gaps, a step off the ball.
+// A look can also move a man off the ball to a technique and a depth (['S9', 1.5]: the Sam walked up over the tight end).
 function lookRows(rows, look) {
   if (!look) return rows;
   return rows.map(r => {
     const t = look.t && look.t[r[0]];
+    if (Array.isArray(t)) return [r[0], r[1], techX(t[0][0], t[0].slice(1)), t[1]];
     if (t && r[3] === 0) return [r[0], r[1], techX(t[0], t.slice(1)), 0];
     if (look.mug && (r[0] === 'MLB' || r[0] === 'WLB') && r[3] >= 4) return [r[0], r[1], r[0] === 'MLB' ? 0.55 : -0.55, 1.5];
     return r;
@@ -351,14 +350,10 @@ function packageLayout0(front, pkg) {
   const DB2 = [['CB1', 'CB', -4, 7], ['CB2', 'CB', 4, 7], ['FS', 'FS', -0.5, 13], ['SS', 'SS', 1.5, 9]];
   const odd = front === '3-4' || front === 'Tite';
   if (pkg === 'GL') return frontRows([...LINES.GL, ['WLB', 'WLB', -1.6, 3], ['MLB', 'MLB', 0, 3], ['SAM', 'SAM', 2.4, 3], ['CB1', 'CB', -4, 5], ['CB2', 'CB', 4, 5], ['SS', 'SS', 1, 6]]);
-  // Bear: two linebackers stacked behind the covered interior
-  if (pkg === 'BASE' && front === 'Bear') return frontRows([...LINES.Bear, ['WLB', 'WLB', -0.8, 4.5], ['MLB', 'MLB', 0.8, 4.5], ...DB2]);
-  // Under: the strong-side linebacker walks up over the tight end
-  if (pkg === 'BASE' && front === 'Under') return frontRows([...LINES.Under, ['WLB', 'WLB', -1.6, 5], ['MLB', 'MLB', 0.2, 5], ['SAM', 'SAM', 3.4, 1.5], ...DB2]);
-  if (front === 'Bear' || front === 'Under') front = '4-3';
+  if (front === 'Bear' || front === 'Under') front = '4-3'; // (a front name from before they were looks)
   if (pkg === 'BASE' && odd) return frontRows([...LINES[front], ['WLB', 'WLB', -0.9, 5], ['MLB', 'MLB', 0.9, 5], ...DB2]);
   if (pkg === 'BASE') return frontRows([...(LINES[front] || LINES['4-3']), ['WLB', 'WLB', -1.5, 5], ['MLB', 'MLB', 0, 5], ['SAM', 'SAM', 2.6, 4], ...DB2]);
-  const dl = LINES.SUB(odd ? '6' : front === 'Wide-9' ? 'W9' : '7');
+  const dl = LINES.SUB(front === 'Wide-9' ? 'W9' : '9');
   if (pkg === 'NICKEL') return frontRows([...dl, ['WLB', 'WLB', -1.2, 5], ['MLB', 'MLB', 0.8, 5], ...DB2, ['NCB', 'NCB', 2.4, 6]]);
   return frontRows([...dl, ['WLB', 'WLB', 0, 5], ...DB2, ['NCB', 'NCB', 2.4, 6], ['DIME', 'DIME', -2.4, 6]]); // DIME
 }
@@ -428,7 +423,7 @@ function resolveChart(g, s, T_, slots, table, opts, chart, listFor) {
   const avail = id => T_.roster.find(p => p.id === id), out = {}, taken = new Set();
   if (opts.ov) for (const [name] of slots) { const id = opts.ov(name), p = id !== undefined && id !== null ? avail(id) : null; if (p && !taken.has(p.id)) { out[name] = { p, why: 'ov' }; taken.add(p.id); } }
   const need = {}, all = slots.map(([name, slot, x, depth]) => { const key = opts.keyOf(name, slot, x, depth); need[key] = (need[key] || 0) + 1; return { name, slot, x, depth, key, list: listFor(key) || [], grp: table[slot][1], spot: table[slot][0] }; });
-  const rate = (q, p) => q.grp === 'DL' && !(q.depth > 0) && q.x !== undefined ? lineSlotRating(p, Math.abs(q.x)) : slotRating(p, q.spot);
+  const rate = (q, p) => opts.fit ? opts.fit(p, q.slot, q.x, q.depth, q.name) : q.grp === 'DL' && !(q.depth > 0) && q.x !== undefined ? lineSlotRating(p, Math.abs(q.x)) : slotRating(p, q.spot);
   // the lineup itself follows the lists and who is available; who is tired or due a series off is settled afterwards
   const ranked = (q, skip) => { const r = []; q.list.forEach((id, i) => { if (taken.has(id) || id === skip || pkgOnlyBlock(g, id, q.key)) return; const p = avail(id); if (p) r.push({ p, i }); }); return r; };
   let open = all.filter(q => !out[q.name]);
@@ -487,10 +482,13 @@ function fillSlots(g, s, slots, table, opts = {}) {
     const [spot, grp] = table[slot];
     let best = null, bs = -1e9;
     let cands = T_.depth[spot].length ? T_.depth[spot] : sameSide(spot).map(p => ({ p, r: 30 }));
-    // a man on the defensive line is judged at the spot he is actually lining up in, not by the name of the job
-    const ax = grp === 'DL' && !(depth > 0) && x !== undefined ? Math.abs(x) : null;
-    if (ax !== null) { const lc = T_.lc || (T_.lc = {}), k = ax.toFixed(2);
-      if (!lc[k]) { const seen = new Set(), all = []; for (const s of LINE_SPOTS) for (const c of T_.depth[s] || []) if (!seen.has(c.p.id)) { seen.add(c.p.id); all.push({ p: c.p, r: lineSlotRating(c.p, ax) + ((T_.yb && T_.yb[c.p.id]) || 0) }); } lc[k] = all.sort((a, b) => b.r - a.r); }
+    // a defender is judged where he actually lines up, not by the name of the job: on the line at his technique, a stand-up edge
+    // for his drops as well, the Sam between the box and space, the strong safety by how often the shell is two-high
+    const ax = grp === 'DL' && !(depth >= ON_LINE) && x !== undefined ? Math.abs(x) : null;
+    const byFit = opts.fit && (ax !== null || slot === 'SAM' || slot === 'SS' || slot === 'BIGN' || (grp === 'LB' && depth < 2 && Math.abs(x || 0) >= 2.4));
+    if (byFit) { const lc = T_.lc || (T_.lc = {}), k = slot + '|' + (x || 0).toFixed(2) + '|' + (depth || 0) + '|' + name;
+      if (!lc[k]) { const seen = new Set(), all = [], from = grp === 'DB' ? ['CB', 'NCB', 'FS', 'SS'] : ax !== null && grp === 'DL' && name !== 'ROLB' && name !== 'RE' && name !== 'LE' && name !== 'LOLB' ? [...LINE_SPOTS] : [...LINE_SPOTS, 'MLB', 'WLB'];
+        for (const s of from) for (const c of T_.depth[s] || []) if (!seen.has(c.p.id)) { seen.add(c.p.id); all.push({ p: c.p, r: opts.fit(c.p, slot, x, depth, name) + ((T_.yb && T_.yb[c.p.id]) || 0) }); } lc[k] = all.sort((a, b) => b.r - a.r); }
       if (lc[k].length) cands = lc[k]; }
     if (slot === 'QB' && !g.pre && !cands.some(c => c.p.pos === 'QB' && !used.has(c.p.id))) { let em = rosterOf(g.tids[s]).filter(p => p.pos === 'QB' && !p.injury && !onIR(p) && !T_.roster.includes(p)).sort((a, b) => b.ovr - a.ovr)[0];
       if (!em) { const sq = emergencySquadQB(g.tids[s]); if (sq) { sq.elev = { tid: g.tids[s], wk: state.week, emerg: true }; setTid(sq, g.tids[s]); em = sq; } } // no quarterback left on the 53: the squad's man comes up
@@ -540,7 +538,7 @@ function fillSlots(g, s, slots, table, opts = {}) {
     if (!best) { const pool = sameSide(spot).filter(p => !used.has(p.id) && p.pos !== 'K' && p.pos !== 'P' && (slot === 'QB' || p.pos !== 'QB')).sort((a, b) => (b.a ? slotRating(b, spot) : 20) - (a.a ? slotRating(a, spot) : 20)); best = { p: pool[0] || T_.roster.find(p => !used.has(p.id)) || T_.roster[0], r: 30 }; }
     used.add(best.p.id);
     const pen = best.p.a ? (ax !== null ? linePen(best.p, ax) : comfortPen(best.p, spot)) : 0; // how well he knows this spot; his own attributes do the rest
-    const ent = { p: best.p, slot, name, spot, grp, x, depth: depth || 0, pen, s }; if (ax !== null) ent.lw = lineBlend(ax);
+    const ent = { p: best.p, slot, name, spot, grp, x, depth: depth || 0, pen, s }; { const lw = opts.reps ? opts.reps(slot, x, depth, name) : ax !== null ? lineBlend(ax) : null; if (lw) ent.lw = lw; }
     if (plan) ent.why = pl ? pl.why : 'staff'; if (ax !== null) ent.ax = ax;
     out.push(ent); at.set(ent, oi);
   }
@@ -603,21 +601,63 @@ const DEF_CHART_KEY = { LE: 'EDGE1', LOLB: 'EDGE1', RE: 'EDGE2', ROLB: 'EDGE2', 
   NT: 'NT', WLB: 'WLB', MLB: 'MLB', SAM: 'SAM', CB1: 'CB1', CB2: 'CB2', NCB: 'NCB', DIME: 'DIME', FS: 'FS', SS: 'SS' };
 const CHART_SPOT = { QB: 'QB', RB: 'RB', RB3D: 'RB', RBSY: 'RB', Y3D: 'TEH', FB: 'FB', X: 'WRX', Z: 'WRZ', SLOT: 'SLOT', SLOT2: 'SLOT', Y: 'TEY', H: 'TEH', Y2: 'TEY', OL6: 'RT',
   LT: 'LT', LG: 'LG', C: 'C', RG: 'RG', RT: 'RT', EDGE1: 'EDGE', EDGE2: 'EDGE', IDL1: 'DT', IDL2: 'DT', NT: 'NT', RUSH: 'EDGE', MLB: 'MLB', WLB: 'WLB', SAM: 'WLB',
-  CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', NOSE: 'NT', SHADE: 'DT', T3: 'DT', END: 'DE', WIDE: 'EDGE', OLB: 'EDGE', CB: 'CB', WLBP: 'WLB', NCBP: 'NCB', K: 'K', P: 'P', KR: 'RB', PRET: 'RB', KO: 'SS', KRU: 'TEH', PU: 'SS', PRU: 'CB', RUSHE: 'EDGE', RUSHI: 'DT', BIGN: 'SS' };
-// ---- the jobs on a defensive chart ----
-// A job on the line is a stretch of it, not a named position: whoever is listed there plays it in every look that has one.
-const LINE_ROLE_AX = { NOSE: 0.2, SHADE: 0.75, T3: 1.35, END: 2.2, WIDE: 2.9, OLB: 3.3 };
-function lineRole(ax, slot, front, pkg) { if (slot === 'EDGE' && pkg === 'BASE' && (front === '3-4' || front === 'Tite')) return 'OLB'; return ax <= 0.5 ? 'NOSE' : ax < 1.1 ? 'SHADE' : ax < 1.5 ? 'T3' : ax < 2.45 ? 'END' : 'WIDE'; }
+  CB1: 'CB', CB2: 'CB', NCB: 'NCB', DIME: 'NCB', FS: 'FS', SS: 'SS', NOSE: 'NT', SHADE: 'DT', T3: 'DT', END: 'DE', WIDE: 'EDGE', OLB: 'EDGE', WE: 'DE', SE: 'DE', WOLB: 'EDGE', SOLB: 'EDGE', DT: 'DT', WEDGE: 'EDGE', SEDGE: 'EDGE', CB: 'CB', WLBP: 'WLB', NCBP: 'NCB', K: 'K', P: 'P', KR: 'RB', PRET: 'RB', KO: 'SS', KRU: 'TEH', PU: 'SS', PRU: 'CB', RUSHE: 'EDGE', RUSHI: 'DT', BIGN: 'SS' };
+// ---- the jobs on a defensive chart: seats ----
+// A seat is a man the coach keeps on the field in a package. Whatever look he calls, the same men line up, only at other
+// techniques: who is on the field changes with the package, not the look. Every pair on the line is weak and strong (the front
+// sets to the offense's strength). 4-3: nose, 3-technique, weak end, strong end · 3-4: nose, weak end, strong end, weak and
+// strong outside linebackers · nickel and dime: two tackles, weak edge, strong edge · goal line: the base men and a tackle.
+const SEAT_ROWS = {
+  even: { LE: 'WE', NT: 'NOSE', DT: 'T3', RE: 'SE' },
+  odd: { LOLB: 'WOLB', LDE: 'WE', NT: 'NOSE', RDE: 'SE', ROLB: 'SOLB' },
+  sub: { LE: 'WEDGE', DT1: 'DT', DT2: 'DT', RE: 'SEDGE' },
+  glEven: { LE: 'WE', LT: 'T3', NT: 'NOSE', RT: 'DT', RE: 'SE' },
+  glOdd: { LE: 'WOLB', LT: 'WE', NT: 'NOSE', RT: 'SE', RE: 'SOLB' },
+};
+const LINE_SEATS = new Set(['NOSE', 'T3', 'WE', 'SE', 'WOLB', 'SOLB', 'DT', 'WEDGE', 'SEDGE']), SUB_SEATS = new Set(['DT', 'WEDGE', 'SEDGE']);
+const STAND_SEATS = new Set(['WOLB', 'SOLB']); // the 3-4's stand-up edges
+const RUSH_AX = { RUSHI: 1.35, RUSHE: 3.3 }; // the pass-down rushers: a 3-technique inside, a 9 outside
+function isOddFront(front) { return front === '3-4' || front === 'Tite'; }
+function seatKey(name, front, pkg) {
+  const odd = isOddFront(front), m = pkg === 'NICKEL' || pkg === 'DIME' ? SEAT_ROWS.sub : pkg === 'GL' ? (odd ? SEAT_ROWS.glOdd : SEAT_ROWS.glEven) : odd ? SEAT_ROWS.odd : SEAT_ROWS.even;
+  return m[name] || null;
+}
 function defRoleKey(name, slot, x, depth, front, pkg) {
   const grp = DEF_SLOT[slot] ? DEF_SLOT[slot][1] : null;
-  if (grp === 'DL' && !(depth > 0)) return lineRole(Math.abs(x || 0), slot, front, pkg);
+  if (grp === 'DL') return seatKey(name, front, pkg) || 'DT';
   return slot === 'CB' ? 'CB' : slot === 'BIGN' ? 'NCB' : slot;
 }
-// the same job on a passing down, where you may want a different man
-function defPassKey(name, slot, x, depth) { const grp = DEF_SLOT[slot] ? DEF_SLOT[slot][1] : null; return grp === 'DL' && !(depth > 0) ? (Math.abs(x || 0) >= 2.45 ? 'RUSHE' : 'RUSHI') : slot === 'WLB' ? 'WLBP' : slot === 'NCB' ? 'NCBP' : null; }
-function defLookKey(front, pkg, look, pass) { return (front === 'Bear' ? 'BEAR' : front === 'Under' ? 'UNDER' : pkg) + '|' + ((look && look.n) || '') + '|' + (pass ? 'P' : 'R'); }
+// the same job on a passing down, where you may want a different man (nickel and dime only)
+function defPassKey(name, slot) { const grp = DEF_SLOT[slot] ? DEF_SLOT[slot][1] : null; return grp === 'DL' ? (name === 'LE' || name === 'RE' ? 'RUSHE' : 'RUSHI') : slot === 'WLB' ? 'WLBP' : slot === 'NCB' ? 'NCBP' : null; }
+function defLookKey(front, pkg, look, pass) { return pkg + '|' + ((look && look.n) || '') + '|' + (pass ? 'P' : 'R'); }
+// ---- how a man fits where he lines up ----
+// On the line he is read between its four points (lineSlotRating). A stand-up strong-side edge (the 3-4's strong outside
+// linebacker, a Sam walked up on the tight end) drops into coverage on most passing snaps, about half of all his snaps, and that
+// half reads as a Will (space). Off the ball a Mike is the box, a Will is space and a Sam half of each. Corners play outside or in
+// the slot; the free safety plays deep, and the strong safety plays the box except on the coach's two-high snaps, when he is deep
+// too. A big nickel (a safety in the slot) is half slot, half box.
+const DROP_SHARE = 0.5;
+function rowFit(p, slot, x, depth, seat, high) {
+  if (!p.a) return p.ovr || 40;
+  const grp = DEF_SLOT[slot] ? DEF_SLOT[slot][1] : null, ax = Math.abs(x || 0), d = depth || 0;
+  if (grp === 'DL' && d < ON_LINE) { const r = lineSlotRating(p, ax); return seat === 'SOLB' ? (1 - DROP_SHARE) * r + DROP_SHARE * slotRating(p, 'WLB') : r; }
+  if (grp === 'LB') {
+    if (d < 2 && ax >= 2.4) return (1 - DROP_SHARE) * (lineRating(p, ax) - comfortPen(p, 'WLB') - (p.rook || 0)) + DROP_SHARE * slotRating(p, 'WLB'); // walked up on the edge: the line's job in a linebacker's stance
+    return slot === 'SAM' ? (slotRating(p, 'MLB') + slotRating(p, 'WLB')) / 2 : slotRating(p, DEF_SLOT[slot][0]);
+  }
+  if (slot === 'BIGN') return (slotRating(p, 'NCB') + slotRating(p, 'SS')) / 2;
+  if (slot === 'SS') { const h = high === undefined ? 0.45 : clamp(high, 0, 1); return (1 - h) * slotRating(p, 'SS') + h * slotRating(p, 'FS'); }
+  return slotRating(p, DEF_SLOT[slot] ? DEF_SLOT[slot][0] : slot);
+}
+// which spots his snaps there teach (a stand-up edge's drops are linebacker work)
+function rowReps(slot, x, depth, seat) {
+  const grp = DEF_SLOT[slot] ? DEF_SLOT[slot][1] : null, ax = Math.abs(x || 0), d = depth || 0;
+  if (grp === 'DL' && d < ON_LINE) { const lw = lineBlend(ax); return seat === 'SOLB' ? [...lw.map(([k, w]) => [k, w * (1 - DROP_SHARE)]), ['WLB', DROP_SHARE]] : lw; }
+  if (grp === 'LB' && d < 2 && ax >= 2.4) return [...lineBlend(ax).map(([k, w]) => [k, w * (1 - DROP_SHARE)]), ['WLB', DROP_SHARE]];
+  return null;
+}
 const baseKey = k => { const i = k.indexOf(':'); return i < 0 ? k : k.slice(i + 1); }; // 'NICKEL:MLB' -> 'MLB'
-const CHART_UNIT = k0 => { const k = baseKey(k0); return ['K', 'P', 'KR', 'PRET', 'KO', 'KRU', 'PU', 'PRU'].includes(k) ? 'st' : ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'RUSH', 'RUSHE', 'RUSHI', 'MLB', 'WLB', 'SAM', 'CB1', 'CB2', 'NCB', 'DIME', 'FS', 'SS', 'BIGN', 'NOSE', 'SHADE', 'T3', 'END', 'WIDE', 'OLB', 'CB', 'WLBP', 'NCBP'].includes(k) ? 'def' : 'off'; };
+const CHART_UNIT = k0 => { const k = baseKey(k0); return ['K', 'P', 'KR', 'PRET', 'KO', 'KRU', 'PU', 'PRU'].includes(k) ? 'st' : ['EDGE1', 'EDGE2', 'IDL1', 'IDL2', 'NT', 'RUSH', 'RUSHE', 'RUSHI', 'MLB', 'WLB', 'SAM', 'CB1', 'CB2', 'NCB', 'DIME', 'FS', 'SS', 'BIGN', 'NOSE', 'SHADE', 'T3', 'END', 'WIDE', 'OLB', 'CB', 'WLBP', 'NCBP', 'WE', 'SE', 'WOLB', 'SOLB', 'DT', 'WEDGE', 'SEDGE'].includes(k) ? 'def' : 'off'; };
 // the QB the staff (or your chart) has under center
 function starterQB(g, s) {
   const p = chartFirst(g, s, 'QB') || (g.side[s].depth.QB[0] ? g.side[s].depth.QB[0].p : null);
@@ -628,7 +668,7 @@ function starterQB(g, s) {
 function hasList(chart, k) { return chart.lists[k] && chart.lists[k].length; }
 function userChart(g, s, unit) { if (g.scrim && g.scrim.chart) return g.scrim.chart[unit === 'st' ? 'none' : 'lists'] ? g.scrim.chart : null; const t = T(g.tids[s]);
   if (!(state.settings.autoUser && t.id === state.userTid) && t.dch && !t.dch.auto[unit]) return t.dch; // your own units
-  if (unit === 'st' || g.pre || g.preview || typeof staffChart !== 'function') return null;
+  if (unit === 'st' || g.pre || typeof staffChart !== 'function') return null; // (a preview shows the staff's chart too: what Sunday will look like)
   return staffChart(t.id); } // everyone else, and the units you leave to your staff: the staff's chart
 function chartFirst(g, s, key) {
   const chart = userChart(g, s, CHART_UNIT(key));
@@ -651,17 +691,20 @@ function defUnit(g, s, front, pkg, subRush, bign, look) {
   // coaches keep players in their own rooms: a safety is not a linebacker just because he grades out close
   const DB_POS = { CB: 1, S: 1 };
   const score = (p, slot) => { const grp = DEF_SLOT[slot][1]; return pkgRoleBias(p, slot, pkg) + (subRush && grp === 'DL' && p.a ? (ea0(p, 'prsh') - 60) * 0.35 : 0) - (grp === 'LB' && p.pos !== 'LB' ? 7 : grp === 'DB' && !DB_POS[p.pos] ? 7 : 0); };
+  // how each man fits where this look puts him (see rowFit)
+  let high = 0.45; try { high = g.cx && g.cx[s] && g.cx[s].dt ? g.cx[s].dt.high : defTend(T(g.tids[s])).high; } catch (e) { high = 0.45; }
+  const fit = (p, slot, x, depth, name) => rowFit(p, slot, x, depth, seatKey(name, front, pkg), high), reps = (slot, x, depth, name) => rowReps(slot, x, depth, seatKey(name, front, pkg));
   const chart = userChart(g, s, 'def');
-  if (!chart) return fix(fillSlots(g, s, layout, DEF_SLOT, { score }));
+  if (!chart) return fix(fillSlots(g, s, layout, DEF_SLOT, { score, fit, reps }));
   // your chart: every spot is a role you filled once. On passing downs in sub packages the pass-down version of a role takes over if you
   // named one. An override puts one man at one spot in one look.
   if (bign) { layout = packageLayout(front, pkg, look); } // on your chart a big nickel is whoever you put in the nickel role
   const lk = defLookKey(front, pkg, look, subRush);
   // a pass-down job with fewer men named than it has spots falls back on the regular job's order for the rest
   const lists = Object.create(chart.lists), ch = { lists, rot: chart.rot, ov: chart.ov, auto: chart.auto, staff: chart.staff };
-  return fix(fillSlots(g, s, layout, DEF_SLOT, { score, chart: ch, pkgKeys: [], rotKeyOf: () => '-', ov: name => chart.ov ? chart.ov[lk + ':' + name] : undefined,
+  return fix(fillSlots(g, s, layout, DEF_SLOT, { score, fit, reps, chart: ch, pkgKeys: [], rotKeyOf: () => '-', ov: name => chart.ov ? chart.ov[lk + ':' + name] : undefined,
     keyOf: (name, slot, x, depth) => { const role = defRoleKey(name, slot, x, depth, front, pkg);
-      if (subRush) { const k = defPassKey(name, slot, x, depth); if (k && hasList(chart, k)) { const kk = '~' + k + ':' + role; if (!lists[kk]) lists[kk] = [...chart.lists[k], ...(chart.lists[role] || []).filter(id => !chart.lists[k].includes(id))]; return kk; } }
+      if (subRush) { const k = defPassKey(name, slot); if (k && hasList(chart, k)) { const kk = '~' + k + ':' + role; if (!lists[kk]) lists[kk] = [...chart.lists[k], ...(chart.lists[role] || []).filter(id => !chart.lists[k].includes(id))]; return kk; } }
       return role; } }));
 }
 function kickUnitPlayer(g, s, spot) {

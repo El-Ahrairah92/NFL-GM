@@ -57,9 +57,10 @@ function foBaseFront(tid) {
   Object.assign(line, keysOf(L));
   for (const [pkg, share] of [['BASE', base], ['NICKEL', nick], ['DIME', dime]]) { const looks = list.filter(x => x.pkg === pkg && x.front === dt.front && x.group !== 'Other' || (pkg === 'DIME' && x.pkg === 'DIME')); const tot = looks.reduce((s, x) => s + (x.share || 1), 0) || 1;
     for (const X of looks) { const c = keysOf(X); for (const k in c) use[k] = (use[k] || 0) + share * (X.share || 1) / tot * Math.min(1, c[k] / Math.max(1, line[k] || c[k])); } }
-  // a sub-package job is usually the same man shifted (a 3-4 edge is the nickel's wide end, its end the 3-technique): credit the base job nearest in alignment
-  const ax = k => LINE_ROLE_AX[k] !== undefined ? LINE_ROLE_AX[k] : 2;
-  for (const k in use) { if (line[k]) continue; const b = Object.keys(line).sort((x, y) => Math.abs(ax(x) - ax(k)) - Math.abs(ax(y) - ax(k)))[0]; if (b) use[b] = (use[b] || 0) + use[k]; }
+  // a nickel seat is usually a base man (a 3-4's ends are the nickel's tackles and its outside backers the edges; a 4-3's ends are the
+  // edges and its tackles stay in): credit the base seats it draws from
+  const from = isOddFront(dt.front) ? { DT: ['WE', 'SE'], WEDGE: ['WOLB'], SEDGE: ['SOLB'] } : { DT: ['T3', 'NOSE'], WEDGE: ['WE'], SEDGE: ['SE'] };
+  for (const k in use) { if (line[k]) continue; const bs = (from[k] || []).filter(b => line[b]); for (const b of bs) use[b] = (use[b] || 0) + use[k] / bs.length; }
   return { line, use, sam: rows.some(r => r[1] === 'SAM') };
 }
 function foJobs(tid) {

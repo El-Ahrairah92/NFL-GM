@@ -379,7 +379,7 @@ function playText(oc, dc, res) {
   const cov = { C0: 'Cover 0', C1: 'Cover 1', C2: 'Cover 2', C2M: '2-Man', C3: 'Cover 3', C4: 'Quarters', T2: 'Tampa 2', C6: 'Cover 6' }[dc.cov] + (dc.disg ? ' (disguised)' : '');
   const pres = { FOUR: '4-man rush', THREE: '3-man rush', BLITZ: 'blitz', SIM: 'sim pressure', FZ: 'fire zone' }[dc.pres] + (dc.stunt ? ' + stunt' : '');
   const looks = [oc.fm && oc.fm !== FORM_HOME[oc.pers] && !['Trips', 'Bunch', 'Tight'].includes(oc.fm) && oc.fm.toLowerCase(), oc.trips && 'trips', oc.bunch && 'bunch', oc.tight && 'tight splits', oc.counter && 'counter', oc.duo && 'duo', oc.wide && 'wide zone', oc.optrt && 'option routes', oc.maxp && 'max protect', oc.nohud && 'no-huddle', oc.gadget === 'flea' && 'flea flicker', oc.checked && { pass: 'checks to a pass', run: 'checks to a run', flip: 'flips the run', hot: 'checks to a quick throw', concept: 'checks the routes' }[oc.checked]].filter(Boolean).join(', ');
-  const fr = dc.front === 'Bear' ? 'Bear ' : dc.front === 'Under' ? 'under ' : dc.look ? dc.look.toLowerCase() + ' ' : '';
+  const fr = dc.look ? (dc.look === 'Bear' ? 'Bear ' : dc.look.toLowerCase() + ' ') : '';
   const games = dc.plan ? (dc.plan.slant ? ', line slant' : '') : '';
   return { pre: `(${form}, ${oc.pers}${tags ? ', ' + tags : ''}${looks ? ', ' + looks : ''})`, post: `[${fr}${dc.bign ? 'big nickel' : dc.pkg.toLowerCase()}, ${cov}, ${pres}${games}${dc.mug ? ', linebackers walked up' : ''}${dc.answer ? ', adjusts to the check' : ''}]` };
 }

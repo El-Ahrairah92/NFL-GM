@@ -92,6 +92,8 @@ function migrateState(st) {
   if (st.version === SAVE_VERSION && !st.stCf) { const n = cleanSTComfort(st); st.stCf = 1; if (n) (st.news = st.news || []).unshift({ s: st.season, when: 'Staff', text: `Position comfort picked up only on the kicking units has been taken back (${n} spot${n === 1 ? '' : 's'}).`, tids: [st.userTid], type: 'prog' }); }
   const rv = typeof DERIVED !== 'undefined' ? DERIVED.version : 0;
   if (st.version === SAVE_VERSION && st.ratingsVer !== rv) { for (const id in st.players) if (st.players[id].a) updateRatings(st.players[id]); st.ratingsVer = rv; }
+  // defensive positions are read off the spots a man plays best (IDL, EDGE, LB, CB, S): relabel everyone once
+  if (st.version === SAVE_VERSION && !st.posV) { for (const id in st.players) { const p = st.players[id]; if (p.a && SPOTS[p.spot] && SPOTS[p.spot].side === 'def') updateRatings(p); } st.posV = 1; }
   // Phase 6: cap growth, guarantees, practice squads, IR stays
   if (st.version === SAVE_VERSION && !st.cap) {
     st.cap = BASE_CAP; syncEconomy();

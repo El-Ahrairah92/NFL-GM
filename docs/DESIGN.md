@@ -400,7 +400,7 @@ Games were decided by 16.9 on average (NFL 11.3) with 21% decided by 28+. Talent
 - Outside runs were about a yard worse than inside runs; the force corner no longer makes every outside run, which brought wide zone level with the rest.
 
 ## 22. Depth chart by package
-- The board is built from the scheme, not a fixed picture: defensive views come from `packageLayout` for the team's front (base, nickel, big nickel, dime, goal line, plus Under and Bear if installed), offensive views from each personnel grouping the play-caller uses. A 3-4 base shows OLB / DE / NT / DE / OLB and two inside linebackers.
+- The board is built from the scheme, not a fixed picture: defensive views come from `packageLayout` for the team's front (base, nickel, big nickel, dime, goal line, Under and Bear among the base looks since section 74), offensive views from each personnel grouping the play-caller uses. A 3-4 base shows OLB / DE / NT / DE / OLB and two inside linebackers.
 - A slot's position is front-aware (`chartSpotFor`): the "interior line" slots of a 3-4 team are graded as ends, not tackles.
 - Each box shows who the engine would line up there right now (`dcLineup`), and is tinted when that job is filled below starting level; a "thin in this look" line lists them.
 - **One chart per grouping, fully manual:** when the user runs a unit, every personnel grouping and defensive package has its own order at every spot (`lists['10:SLOT2']`, `lists['NICKEL:MLB']`). Taking control copies the staff's chart into every look once (clash-free); after that nothing is filled, moved or re-slotted. The board shows exactly what is listed. Empty spots and one man listed first at two spots in a look are flagged (`chartProblems`) and a game asks before being played that way; the engine covers the gap for that game only and never edits the chart. "Hand to the staff" discards the user's charts for that unit.
@@ -929,7 +929,7 @@ Not built yet: scouting text by technique, season film on a coach's habits, disg
 
 ## 46. The defensive line is one line
 
-Nose, defensive tackle, 3-4 end and edge used to be four positions a player had or had not learned. They are now four points along one line: nose over the center, 3-technique on the guard, 5-technique on the tackle, wide edge.
+Nose, defensive tackle, 3-4 end and edge used to be four positions a player had or had not learned. They are now four points along one line: nose over the center, 3-technique on the guard, 5-technique on the tackle, 9-technique outside the tight end (it was the 6 until section 74, which made the 6, the 9 and the wide 9 read alike).
 
 **Rating anywhere on the line** is read between the two points either side. A 2i asks for some of what a nose does and some of what a 3-technique does; no technique is its own position.
 
@@ -958,7 +958,7 @@ Not done: the four points still exist as labels in cross-training, scouting text
 **The idea.** You no longer set a list per position per package. Each side of the ball is a set of jobs, filled once. Whoever is listed first at a job plays it in every look or grouping that has that job; the rest are next in line. An override puts one man at one spot in one look.
 
 **Defensive jobs come from the coach's system.** The page reads his looks and lists only the jobs they contain.
-- Line: nose (0, 1), shade (2i, 2), 3-technique, end (4i, 4, 5), wide end (7, 6, 9, wide), and the stand-up edge of a 3-4 base. A job two men play at once (two 3-techniques in an even nickel line) starts the first two listed.
+- Line: seats since section 74 (nose, 3-technique, weak and strong end, the 3-4's two outside linebackers, the nickel's two tackles and two edges). Before that, stretches of the line (nose, shade, 3-technique, end, wide end, stand-up edge), which put a different man in when a look moved a technique.
 - Linebackers: Mike, Will, Sam. Secondary: corner (one ranked job, the first two start), nickel, dime, free and strong safety.
 - Passing downs: edge rusher, inside rusher, and optional pass-down versions of the Will and the nickel. Left empty, the regular man stays in; with fewer men named than spots, the regular job's order fills the rest.
 
@@ -1479,3 +1479,41 @@ Scheme umbrellas are gone. The engine never read a coach's school: every call re
 - New league: each club's offense is further from its closest twin (median 0.26 against 0.22 on the eleven main tendencies), and the spread of each tendency across the league is about what it was, a little narrower on some (blending pulls toward the middle; two-high shells most, a standard deviation of 0.17 to 0.12). Over four seasons with offseasons it stays there; promoted coordinators kept 52-94% of their mentors' playbooks.
 - Scoring: 16 leagues, one season each, 22.04 against 21.66 points a team-game (+0.38, standard error 0.35). The first eight showed +0.89 and 0.33 more yards a pass; the next eight showed -0.14 and 0.03 fewer. Because coaches are drawn differently, the rest of the league is drawn differently too, so the old and new leagues are no longer the same league. These pairs measure differences between leagues, not the change itself. Mixes of coverage, pressure, play type and concept are unchanged.
 - A save from the old code loads and plays two more seasons; its coaches keep the school they were rolled from as their only tradition until they are replaced.
+
+## 74. Defensive positions: seats, fits by placement, five positions
+
+**The holes (measured before the change).** A depth chart job on the line was a stretch of the line, not a man: when a coach's changeup moved his ends from a 7 to a 5, the "end" job's players came in for the "wide end" job's. The staff's lineup put a different man on the field in 44% of changeup looks (19 of 22 Bear fronts, 17 of 20 Under fronts, where a backup tackle came in for the Sam). Outside the 6 every technique read the same rating, the Sam was rated as a Will, a safety in the slot as a strong safety, safeties alike in every shell, and in 3-4 base the man who dropped on a four-man rush was the worst rusher among the ends (a 5-technique end most of the time).
+
+**Seats.** A seat is a man the coach keeps on the field in a package; a look moves the same men to other techniques, and only the package changes who plays (`SEAT_ROWS`, `seatKey` in engine/depth.js).
+- 4-3: nose, 3-technique, weak end, strong end. 3-4: nose, weak end, strong end, weak and strong outside linebackers. Nickel and dime: two tackles, weak edge, strong edge. Goal line: the base men and a tackle.
+- Every pair is weak and strong (the front already set to the offense's strength each snap; the names said left and right).
+- Base seats are different men; the nickel's line may be the same men.
+- **Under and Bear are looks** of the base men (`LOOKS`), called at the coach's own share as before. Under: the line slides weak, the nose shades strong, the Sam walks up over the tight end (from 3-4 personnel the weak outside backer goes down at a 5). Bear, the 46: center and guards covered, the strong end pinched to a 3, a linebacker on the line outside the tight end.
+- With the staff's chart, every look now puts the same eleven on the field (0% differ, from 44%).
+- **The drop.** With more men on the line than rush, the stand-up man drops: a linebacker walked up on the line, then the 3-4's strong outside linebacker, then the weak one; only then the weakest rusher among the ends. In 3-4 base the strong outside linebacker now drops on every four-man rush.
+
+**Fits by placement** (`rowFit`). Each man is judged where the look puts him:
+- On the line, between four points: nose, 3, 5 and now the **9** (it was the 6). The 7 and the 6 are the big end, part 5-technique and part edge; outside the 9 is all edge.
+- A stand-up strong-side edge (the 3-4's strong outside linebacker, a Sam walked up on the line) drops on most passing snaps, about half of all his snaps, and that half reads as a Will. His snaps there teach the Will spot as well.
+- Off the ball: the Mike is the box, the Will is space, the Sam half of each. The free safety plays deep; the strong safety plays the box except on the coach's two-high share, when he reads deep. A big nickel is half slot, half box.
+- A seat's grade is these fits across the coach's looks, weighted by how often he is in each package and look (`seatGrade`). The staff fills its seats by it; free-agent job offers read it for the club making them.
+- The nickel and dime edges now line up wide on a 9 (they were on a 7 or a 6): they are the pass rushers.
+
+**Five positions.** A defender's position is read off the spots he plays best: IDL (nose, 3-technique, 5-technique), EDGE, LB, CB, S. A tweener is a man whose best spots belong to two (EDGE/IDL, CB/S, S/LB). Old saves are relabelled once on load.
+
+**What you see.**
+- Depth chart: the line seats (and the nickel line as its own group). Each seat has a "where he lines up" card: the coach's looks down the side with the technique and how often, and each listed man's grade there across.
+- Player card: a strip of grades against his own best: every technique for a lineman (0, 1, 2i, 3, 4i, 5, 7, 6, 9, W9), box, space and edge for a linebacker, outside, slot, box and deep for a defensive back.
+- The playbook's front diagrams include Under and Bear with their shares, and show a linebacker walked up on the line.
+- The field preview of a unit the staff runs now shows the staff's chart, as Sunday will.
+
+**Old saves.** Your chart's old line jobs seed the seats in your order (wide end to the 4-3 ends and the nickel edges, end to the 3-4 ends, edge linebacker to the outside linebackers, 3-technique and shade to the nickel tackles), each base seat with its own first man; overrides set for the old Under and Bear fronts are dropped.
+
+**Checked, the same 8 leagues on the old code and the new** (league generation is unchanged, so the pairs are true pairs):
+- Scoring 22.38 to 22.65 points a team-game (+0.27, standard error 0.22).
+- Runs 4.36 to 4.48 a carry, most of it against nickel (+0.15) and dime (+0.31), where the edges now line up on a 9. Passes 6.37 to 6.28 yards; sacks 6.3% to 6.5% of dropbacks.
+- Four seasons with offseasons (the coaching carousel, promotions, free agency, camp) run clean.
+- Who plays: the 4-3 strong end went from an edge rusher 82% of base snaps to 48% (big ends and tackles the rest); nickel edges are edge rushers 86-92%; the 3-4 strong outside linebacker is a linebacker 24% of the time.
+- A save from the committed code loads, its manual chart converts, and it plays two seasons through the coaching carousel and free agency.
+
+Not decided: whether a coordinator should call a look less when his men grade poorly in it (he still calls his playbook as it is, and the seat card shows the cost).

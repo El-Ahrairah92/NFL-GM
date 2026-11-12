@@ -131,7 +131,7 @@ function hereNext(p) { const c = p.contract; return !!c && (c.yrs >= 2 || !!c.ne
 // club: a backup here may be a starter somewhere else. Most players have several roles: a starting job, package and
 // situational jobs, first man up at others, special teams.
 const ROLE_NAME = { QB: 'Quarterback', RB: 'Running back', RB2: 'Second back', SLOT2: 'Fourth receiver', Y2: 'Third tight end', OL6: 'Sixth lineman', Y3D: 'Passing-down tight end',
-  NOSE: 'Nose tackle', SHADE: 'Shade tackle', T3: '3-technique', END: 'Defensive end', WIDE: 'Wide end', OLB: 'Edge linebacker', WLBP: 'Passing-down Will', NCBP: 'Passing-down nickel', RB3D: 'Third-down back', RBSY: 'Short-yardage back', FB: 'Fullback',
+  NOSE: 'Nose tackle', T3: '3-technique', WE: 'Weak-side end', SE: 'Strong-side end', WOLB: 'Weak outside linebacker', SOLB: 'Strong outside linebacker', DT: 'Nickel tackle', WEDGE: 'Nickel edge', SEDGE: 'Nickel edge', SHADE: 'Shade tackle', END: 'Defensive end', WIDE: 'Wide end', OLB: 'Edge linebacker', WLBP: 'Passing-down Will', NCBP: 'Passing-down nickel', RB3D: 'Third-down back', RBSY: 'Short-yardage back', FB: 'Fullback',
   X: 'X receiver', Z: 'Z receiver', SLOT: 'Slot receiver', WR4: 'Fourth receiver', Y: 'Y tight end', H: 'Second tight end',
   LT: 'Left tackle', LG: 'Left guard', C: 'Center', RG: 'Right guard', RT: 'Right tackle',
   EDGE1: 'Edge rusher', EDGE2: 'Edge rusher', EDGE3: 'Rotational edge', RUSHE: 'Passing-down edge', RUSHI: 'Passing-down inside rusher',

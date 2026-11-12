@@ -1133,6 +1133,11 @@ const LOOKS = {
     'G': { k: 'run', t: { LE: 'W7', NT: 'W2i', DT: 'S3', RE: 'S7' } },
     'Wide': { k: 'rush', t: { LE: 'WW9', NT: 'W1', DT: 'S3', RE: 'SW9' } },
     'Double 3': { k: 'rush', t: { LE: 'W7', NT: 'W3', DT: 'S3', RE: 'S7' } },
+    // Under and Bear: called from the coach's own share of each (pk.fr), not his menu, with the same eleven. Under: the line shifts
+    // weak, the nose shades the center strong and the Sam walks up over the tight end. Bear (the 46): the center and both guards
+    // covered, the strong end pinched to a 3 and the Sam on the line outside the tight end.
+    'Under': { k: 'run', fr: 1, t: { LE: 'W5', DT: 'W3', NT: 'S1', RE: 'S5', SAM: ['S9', 1.5] } },
+    'Bear': { k: 'run', fr: 1, t: { LE: 'W9', DT: 'W3', NT: 'S0', RE: 'S3', SAM: ['S9', 0] } },
   },
   odd: { // 3-4 base: LOLB, LDE, NT, RDE, ROLB
     'Okie': { k: '', t: { LOLB: 'W9', LDE: 'W5', NT: 'S0', RDE: 'S5', ROLB: 'S9' } },
@@ -1140,6 +1145,10 @@ const LOOKS = {
     'Eagle': { k: 'rush', t: { LOLB: 'W9', LDE: 'W4i', NT: 'S1', RDE: 'S5', ROLB: 'S9' } },
     'Heavy': { k: 'run', t: { LOLB: 'W6', LDE: 'W4', NT: 'S0', RDE: 'S4', ROLB: 'S6' } },
     'Wide': { k: 'rush', t: { LOLB: 'WW9', LDE: 'W4i', NT: 'S0', RDE: 'S4i', ROLB: 'SW9' } },
+    // from 3-4 personnel: Under puts the weak outside backer down at a 5 and the strong one stands over the tight end as the Sam;
+    // Bear pinches the ends to 3s over the guards
+    'Under': { k: 'run', fr: 1, t: { LOLB: 'W5', LDE: 'W3', NT: 'S1', RDE: 'S5', ROLB: 'S9' } },
+    'Bear': { k: 'run', fr: 1, t: { LOLB: 'W9', LDE: 'W3', NT: 'S0', RDE: 'S3', ROLB: 'S9' } },
   },
   sub: { // nickel and dime: LE, DT1, DT2, RE
     'Even': { k: '', t: {} },
@@ -1155,7 +1164,7 @@ const LOOK_HOME = { '4-3': 'Over', 'Wide-9': 'Wide', '3-4': 'Okie', 'Tite': 'Tit
 function genDefLib(mix, front) {
   if (typeof mix === 'string') mix = pureMix(DEF_ARCH[mix] ? mix : 'C3', 'D');
   front = front || DEF_ARCH[mix.a].t.front; const fam = front === '3-4' || front === 'Tite' ? 'odd' : 'even';
-  const menu = (table, home, n) => { const rest = Object.keys(table).filter(k => k !== home); shuffle(rest); const w = 0.52 + rand() * 0.25, pick = rest.slice(0, n), ws = pick.map(() => 0.3 + rand());
+  const menu = (table, home, n) => { const rest = Object.keys(table).filter(k => k !== home && !table[k].fr); shuffle(rest); const w = 0.52 + rand() * 0.25, pick = rest.slice(0, n), ws = pick.map(() => 0.3 + rand());
     const tot = ws.reduce((a, b) => a + b, 0) || 1; return [[home, round2(w)], ...pick.map((k, i) => [k, round2((1 - w) * ws[i] / tot)])]; };
   const j = (m, s) => m * Math.exp(gauss(0, s)), by = (o, d, w) => (o[mix.a] !== undefined ? o[mix.a] : d) * (1 - w) + (o[mix.b] !== undefined ? o[mix.b] : d) * w;
   const sl = by({ TWOHIGH: 0.06, C3: 0.08, WIDE9: 0.1, MANBLITZ: 0.12, TWOGAP: 0.04 }, 0.07, mix.u.front), mug = by({ TWOHIGH: 0.1, MANBLITZ: 0.12 }, 0.03, mix.u.rush);
@@ -1232,7 +1241,7 @@ const OFF_PK = {
   NOHUD: ['No-huddle', 'Tempo', (t, b) => { t.nohud += b * 3; }, t => t.nohud >= 0.1, t => t.nohud],
 };
 for (const k in OFF_PK) PK_NAME[k] = OFF_PK[k][0];
-Object.assign(PK_NAME, { UNDER: 'Under front', BEAR: 'Bear front', BIGN: 'Big nickel' });
+Object.assign(PK_NAME, { UNDER: 'Under', BEAR: 'Bear (46)', BIGN: 'Big nickel' });
 const OFF_NEW_FIELDS = ['wz', 'counter', 'duo', 'trips', 'bunch', 'tight', 'optrt', 'maxp', 'nohud', 'empty', 'pistol'];
 // what each school installs of the newer looks (a coach may not carry all of them)
 const OFF_NEW_TEMPLATE = {

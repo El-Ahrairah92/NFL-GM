@@ -98,15 +98,16 @@ const FA_JOB_SHARE = { Y3D: 0.25, RB3D: 0.3, RBSY: 0.15, RUSHE: 0.4, RUSHI: 0.35
 const FA_JOB_ROWS = CHART_SECTIONS.filter(x => x.unit !== 'st').flatMap(x => x.rows).concat([['K', 'Kicker'], ['P', 'Punter']]);
 function faJobLabel(k) { const r = FA_JOB_ROWS.find(x => x[0] === k); return r ? r[1].replace(/ \(.*\)$/, '') : k; }
 function faJobSay(k) { const l = faJobLabel(k); return /^[A-Z] /.test(l) || /^\d/.test(l) || /^(Mike|Will|Sam) /.test(l) ? l : l[0].toLowerCase() + l.slice(1); } // mid-sentence: 'slot receiver', but 'Z receiver'
-function faJobAx(k) { return LINE_ROLE_AX[k] !== undefined ? LINE_ROLE_AX[k] : k === 'RUSHI' ? 1.35 : k === 'RUSHE' ? 3 : null; }
-function faJobSpot(k) { return k === 'K' || k === 'P' ? k : CHART_SPOT[k] || null; }
-function faJobComfort(p, k) { const ax = faJobAx(k); return ax !== null ? lineComfort(p, ax) : faJobSpot(k) ? comfortOf(p, faJobSpot(k)) : 0; }
-function faJobRate(p, k, base) { const ax = faJobAx(k), sp = faJobSpot(k); return base + (ax !== null ? lineSlotRating(p, ax) : sp ? slotRating(p, sp) : p.ovr) - p.ovr; }
+function faJobAx(k) { return RUSH_AX[k] !== undefined ? RUSH_AX[k] : null; }
+function faJobSpot(k, tid) { return k === 'K' || k === 'P' ? k : (tid !== undefined && LINE_SEATS.has(k) ? chartSpotFor(tid, k) : CHART_SPOT[k]) || null; }
+function faJobComfort(p, k, tid) { const ax = faJobAx(k); if (ax !== null) return lineComfort(p, ax); const sp = faJobSpot(k, tid); return sp ? comfortOf(p, sp) : 0; }
+function faJobRate(p, k, base, tid) { const ax = faJobAx(k); if (ax !== null) return base + lineSlotRating(p, ax) - p.ovr; const sg = tid !== undefined && CHART_UNIT(k) === 'def' ? seatGrade(p, T(tid), k) : null; // a seat on his defense: where that club lines it up
+  if (sg !== null) return base + sg - p.ovr; const sp = faJobSpot(k, tid); return base + (sp ? slotRating(p, sp) : p.ovr) - p.ovr; }
 // The jobs this club can name for him: the same jobs, under the same names and in the same order, as its depth chart shows for
 // his part of the team (only the ones its systems use), plus any job elsewhere that he is at least passable at.
 const FA_JOB_GROUPS = [
   [['QB', 'RB'], ['QB', 'RB', 'FB', 'RB3D', 'RBSY']], [['WR'], ['X', 'Z', 'SLOT', 'SLOT2']], [['TE'], ['Y', 'H', 'Y2', 'Y3D']], [['OL'], ['LT', 'LG', 'C', 'RG', 'RT', 'OL6']],
-  [['DL'], ['NOSE', 'SHADE', 'T3', 'END', 'WIDE', 'OLB', 'RUSHE', 'RUSHI']], [['LB'], ['MLB', 'WLB', 'SAM', 'OLB', 'WLBP', 'RUSHE']], [['CB', 'S'], ['CB', 'NCB', 'DIME', 'FS', 'SS', 'NCBP']], [['K'], ['K']], [['P'], ['P']],
+  [['DL'], ['WE', 'NOSE', 'T3', 'SE', 'WOLB', 'SOLB', 'WEDGE', 'DT', 'SEDGE', 'RUSHE', 'RUSHI']], [['LB'], ['MLB', 'WLB', 'SAM', 'SOLB', 'WOLB', 'WLBP', 'RUSHE']], [['CB', 'S'], ['CB', 'NCB', 'DIME', 'FS', 'SS', 'NCBP']], [['K'], ['K']], [['P'], ['P']],
 ];
 function faJobsFor(tid, p) {
   const t = T(tid), dj = defJobs(t).n, side = SPOTS[p.spot].side, onChart = k => {
@@ -114,19 +115,19 @@ function faJobsFor(tid, p) {
     const def = ax !== null || (sp && SPOTS[sp] && SPOTS[sp].side === 'def');
     return !def || dj[k] || ['RUSHE', 'RUSHI', 'WLBP', 'NCBP'].includes(k); }; // not every front has a nose or a Sam
   const own = (FA_JOB_GROUPS.find(g => g[0].includes(p.pos)) || [[], []])[1].filter(onChart);
-  if (p.pos === 'QB') return own.filter(k => k === 'QB'); if (p.pos === 'RB') return own.filter(k => k !== 'QB' && (k !== 'FB' || p.spot === 'FB' || faJobComfort(p, k) >= 30));
+  if (p.pos === 'QB') return own.filter(k => k === 'QB'); if (p.pos === 'RB') return own.filter(k => k !== 'QB' && (k !== 'FB' || p.spot === 'FB' || faJobComfort(p, k, tid) >= 30));
   const extra = FA_JOB_ROWS.map(x => x[0]).filter(k => !own.includes(k) && onChart(k) && k !== 'K' && k !== 'P' && faJobSpot(k) !== 'QB'
-    && (side === 'def') === (faJobAx(k) !== null || SPOTS[faJobSpot(k)].side === 'def') && faJobComfort(p, k) >= 30);
+    && (side === 'def') === (faJobAx(k) !== null || SPOTS[faJobSpot(k)].side === 'def') && faJobComfort(p, k, tid) >= 30);
   return [...own, ...extra];
 }
 // the job among those that suits him best: where an offer starts unless the club says otherwise
-function faBestJob(tid, p) { return faJobsFor(tid, p).slice().sort((a, b) => faJobRate(p, b, 0) + faJobComfort(p, b) * 0.05 - faJobRate(p, a, 0) - faJobComfort(p, a) * 0.05)[0] || null; }
+function faBestJob(tid, p) { return faJobsFor(tid, p).slice().sort((a, b) => faJobRate(p, b, 0, tid) + faJobComfort(p, b, tid) * 0.05 - faJobRate(p, a, 0, tid) - faJobComfort(p, a, tid) * 0.05)[0] || null; }
 // who is there now, and what naming this job means to the man being offered it (the league's view of everyone, as an agent sees it)
 function faJobStanding(tid, p, k) {
   const t = T(tid), ch = ensureChart(tid), n = (defJobs(t).n[k] || 1), here = (ch.lists[k] || []).map(id => P(id)).filter(q => q && q.tid === tid && !q.expiring && q.id !== p.id);
-  const mine = faJobRate(p, k, perOvr(p)), sorted = here.map(q => ({ q, r: faJobRate(q, k, perOvr(q)) })).sort((a, b) => b.r - a.r), bar = sorted[n - 1];
+  const mine = faJobRate(p, k, perOvr(p), tid), sorted = here.map(q => ({ q, r: faJobRate(q, k, perOvr(q), tid) })).sort((a, b) => b.r - a.r), bar = sorted[n - 1];
   const lvl = !bar || mine >= bar.r + 3 ? 'start' : mine >= bar.r - 3 ? 'compete' : 'depth';
-  return { lvl, who: bar ? bar.q : null, share: FA_JOB_SHARE[k] !== undefined ? FA_JOB_SHARE[k] : 1, comfort: faJobComfort(p, k) };
+  return { lvl, who: bar ? bar.q : null, share: FA_JOB_SHARE[k] !== undefined ? FA_JOB_SHARE[k] : 1, comfort: faJobComfort(p, k, tid) };
 }
 // one or two jobs named together: the better standing, the snaps of both
 function faJobsRead(tid, p, jobs) {
@@ -136,7 +137,7 @@ function faJobsRead(tid, p, jobs) {
 }
 function faEveryDown(p) { const r = p.career && p.career[p.career.length - 1]; return faProven(p) || !!(r && r.season >= state.season - 1 && (r.gs || 0) >= 8); }
 // some players have a job in mind, not just a place: the receiver who wants to play outside, the end who wants to stand up
-const FA_JOB_PREF = { WRX: ['X', 'Z'], WRZ: ['Z', 'X'], SLOT: ['SLOT'], EDGE: ['WIDE', 'OLB'], DE: ['END'], DT: ['T3'], NT: ['NOSE'], CB: ['CB'], NCB: ['NCB'], FS: ['FS'], SS: ['SS'], MLB: ['MLB'], WLB: ['WLB'], RB: ['RB'], TEY: ['Y'], TEH: ['H'] };
+const FA_JOB_PREF = { WRX: ['X', 'Z'], WRZ: ['Z', 'X'], SLOT: ['SLOT'], EDGE: ['WEDGE', 'WOLB'], DE: ['SE', 'WE'], DT: ['T3'], NT: ['NOSE'], CB: ['CB'], NCB: ['NCB'], FS: ['FS'], SS: ['SS'], MLB: ['MLB'], WLB: ['WLB'], RB: ['RB'], TEY: ['Y'], TEH: ['H'] };
 function faWantJob(p) { const l = FA_JOB_PREF[p.spot]; return l && faHash(p.id, 8) < 0.4 ? l[Math.floor(faHash(p.id, 9) * l.length)] : null; }
 
 // the share of the deal he expects guaranteed, and the length he has in mind once he knows the role
@@ -178,7 +179,7 @@ function faOfferValue(p, o) {
   // The job he has in mind. Being offered it is worth something; being told he will also play somewhere else takes that away and more:
   // a man who sees himself outside does not want to hear about the slot. And nobody likes a second job he cannot yet play.
   { const wj = faWantJob(p); if (wj && o.jobs) { v *= o.jobs.includes(wj) ? 1.03 : 0.98; if (o.jobs.some(k => k !== wj)) v *= 0.965; } }
-  if (o.jobs && o.jobs.length > 1 && faJobComfort(p, o.jobs[1]) < 55) v *= 0.985;
+  if (o.jobs && o.jobs.length > 1 && faJobComfort(p, o.jobs[1], o.tid) < 55) v *= 0.985;
   if (wants.includes('win')) v *= 1 + clamp((faWinPct(o.tid) - 0.5) * 0.22, -0.06, 0.08);
   if (wants.includes('home') && o.tid === p.lastTid) v *= 1.05;
   if (wants.includes('fit')) v *= 1 + clamp(schemeFit(p, o.tid) * 0.012, -0.04, 0.05);
