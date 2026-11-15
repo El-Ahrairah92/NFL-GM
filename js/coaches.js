@@ -54,11 +54,11 @@ for (const k in DEV_GROUPS) for (const a of DEV_GROUPS[k]) ATTR_DEV[a] = k;
 // a coach; what a playbook is called is read off what is on it (offSheetLabel, defSheetLabel).
 const OFF_ARCH = {
   WZ: { l: 'Wide Zone / Boot', t: { pers: { 11: 45, 12: 30, 21: 15, 13: 5, 22: 5 }, uc: 0.55, pass: 0.54, zone: 0.8, quick: 0.25, deep: 0.2, pa: 0.3, motion: 0.6, rpo: 0.05, boot: 0.12, screen: 0.06, trick: 0.03, qbRun: 0.03, rb1: 0.65 } },
-  SPREAD: { l: 'Spread / Air Raid', t: { pers: { 11: 70, 10: 15, 12: 12, 13: 3 }, uc: 0.1, pass: 0.62, zone: 0.55, quick: 0.42, deep: 0.13, pa: 0.1, motion: 0.35, rpo: 0.25, boot: 0.03, screen: 0.12, trick: 0.03, qbRun: 0.06, rb1: 0.7 } },
+  SPREAD: { l: 'Spread / Air Raid', t: { pers: { 11: 70, 10: 8, 12: 12, 13: 3 }, uc: 0.1, pass: 0.62, zone: 0.55, quick: 0.42, deep: 0.13, pa: 0.1, motion: 0.35, rpo: 0.25, boot: 0.03, screen: 0.12, trick: 0.03, qbRun: 0.06, rb1: 0.7 } },
   POWER: { l: 'Power / Gap', t: { pers: { 12: 35, 11: 35, 13: 12, 22: 10, 21: 8 }, uc: 0.55, pass: 0.5, zone: 0.3, quick: 0.25, deep: 0.25, pa: 0.26, motion: 0.3, rpo: 0.05, boot: 0.06, screen: 0.05, trick: 0.02, qbRun: 0.03, rb1: 0.6 } },
   WCO: { l: 'West Coast', t: { pers: { 11: 60, 12: 25, 21: 8, 13: 7 }, uc: 0.35, pass: 0.58, zone: 0.5, quick: 0.4, deep: 0.1, pa: 0.18, motion: 0.4, rpo: 0.08, boot: 0.06, screen: 0.12, trick: 0.02, qbRun: 0.03, rb1: 0.65 } },
-  VERT: { l: 'Vertical', t: { pers: { 11: 72, 12: 18, 10: 6, 13: 4 }, uc: 0.25, pass: 0.6, zone: 0.5, quick: 0.25, deep: 0.27, pa: 0.2, motion: 0.3, rpo: 0.05, boot: 0.05, screen: 0.06, trick: 0.03, qbRun: 0.03, rb1: 0.7 } },
-  RPO: { l: 'RPO / QB Run', t: { pers: { 11: 60, 10: 15, 12: 20, 13: 5 }, uc: 0.05, pass: 0.52, zone: 0.7, quick: 0.4, deep: 0.15, pa: 0.12, motion: 0.45, rpo: 0.35, boot: 0.04, screen: 0.08, trick: 0.04, qbRun: 0.18, rb1: 0.6 } },
+  VERT: { l: 'Vertical', t: { pers: { 11: 72, 12: 18, 10: 2, 13: 4 }, uc: 0.25, pass: 0.6, zone: 0.5, quick: 0.25, deep: 0.27, pa: 0.2, motion: 0.3, rpo: 0.05, boot: 0.05, screen: 0.06, trick: 0.03, qbRun: 0.03, rb1: 0.7 } },
+  RPO: { l: 'RPO / QB Run', t: { pers: { 11: 60, 10: 4, 12: 20, 13: 5 }, uc: 0.05, pass: 0.52, zone: 0.7, quick: 0.4, deep: 0.15, pa: 0.12, motion: 0.45, rpo: 0.35, boot: 0.04, screen: 0.08, trick: 0.04, qbRun: 0.18, rb1: 0.6 } },
 };
 const DEF_ARCH = {
   TWOHIGH: { l: 'Two-High (Fangio)', t: { front: 'Tite', base: 0.25, man: 0.25, high: 0.7, blitz: 0.18, sim: 0.15, stunt: 0.2 } },
@@ -273,7 +273,9 @@ function conceptBookOf(c) {
 function coachTrait(c, k) { let h = 2166136261; const s = (c ? c.id : 0) + '|' + k; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 10000) / 10000; }
 function formTraits(t) {
   const c = offCaller(t), h = k => coachTrait(c, k);
-  return { doubles: round2(0.08 + h('db') * 0.34), wing: round2(0.05 + h('wg') * 0.33), strR: round2(0.42 + h('sr') * 0.2), toField: round2(0.45 + h('tf') * 0.35), offI: round2(0.1 + h('oi') * 0.45), move: h('mv') < 0.25 ? 1 : 0 };
+  // yoff: how often he splits a tight end out of two-tight-end sets, nub: how often he puts three receivers away from a lone tight end (most a little, a few a lot)
+  return { doubles: round2(0.08 + h('db') * 0.34), wing: round2(0.05 + h('wg') * 0.33), strR: round2(0.42 + h('sr') * 0.2), toField: round2(0.45 + h('tf') * 0.35), offI: round2(0.1 + h('oi') * 0.45), move: h('mv') < 0.25 ? 1 : 0,
+    yoff: round2(0.03 + Math.pow(h('yo'), 2) * 0.5), nub: round2(Math.pow(h('nb'), 2) * 0.25) };
 }
 
 function defTend(t) { return blendedTend(t, 'D'); }
@@ -354,7 +356,7 @@ function hireScore(t, c) {
   if (hc && c.role !== 'HC') {
     if (c.mentors.includes(hc.id) || hc.mentors.includes(c.id)) s += 5;
     const side = c.role === 'OC' ? 'O' : c.role === 'DC' ? 'D' : null, mine = side && hc.t.bg === side ? coachBook(hc, side) : null, his = mine && coachBook(c, side);
-    if (his) s += bookPref(pkOverlap(mine, his)); // a head coach wants a coordinator who thinks like him
+    if (his) s += bookPref(pkOverlap(mine, his), side); // a head coach wants a coordinator who thinks like him
   }
   if (c.age > 64) s -= 3;
   return s;
@@ -561,12 +563,14 @@ function fillAsstVacancies() {
   }
 }
 // How alike two playbooks are beyond the basics every club runs: 0 for two that overlap no more than two clubs' books usually
-// do (0.4, the median pair in a new league on either side of the ball), 1 from about what the two most alike clubs in a league
-// share (0.75). A head coach's pull toward a coordinator who thinks like him, a club's toward an assistant who knows its
+// do (the median pair in a new league: 0.47 on offense, 0.4 on defense), 1 from about what the two most alike clubs in a league
+// share (0.78, 0.75). A head coach's pull toward a coordinator who thinks like him, a club's toward an assistant who knows its
 // playbook, and what an arriving player already knows all read it.
-function bookLike(ov) { return clamp((ov - 0.4) / 0.35, 0, 1); }
-function bookPref(ov) { return 4 * bookLike(ov); }
-function knowsBook(c, side, book) { const m = rootsOf(c), b = m && coachBook(m, side); return b ? bookPref(pkOverlap(b, book)) : 0; }
+// (an offense is compared by how much of each package it calls, so two unrelated offenses share more than two defenses do)
+const BOOK_ANCHORS = { O: [0.47, 0.78], D: [0.4, 0.75] };
+function bookLike(ov, side) { const A = BOOK_ANCHORS[side] || BOOK_ANCHORS.D; return clamp((ov - A[0]) / (A[1] - A[0]), 0, 1); }
+function bookPref(ov, side) { return 4 * bookLike(ov, side); }
+function knowsBook(c, side, book) { const m = rootsOf(c), b = m && coachBook(m, side); return b ? bookPref(pkOverlap(b, book), side) : 0; }
 // ---- what the lower tiers do ----
 // development: mostly the position coach, with the head coach's culture and the specialist over the room
 function roomDevVal(tid, pos) {
@@ -600,10 +604,10 @@ function blendedTend(t, side) {
   else tn = Object.assign({}, caller.t);
   if (side === 'O') { // the pass game and run game coordinators install their packages on top of the caller's sheet
     tn.pers = Object.assign({}, tn.pers); ensureOffSheet(tn, caller ? caller.arch : 'WCO'); tn.by = {};
-    for (const r of ['PGC', 'RGC']) { const sp = asst(t, r); if (!sp || !sp.pks) continue; const b = 0.06 + sp.cre / 1000; for (const id of sp.pks) { if (!OFF_PK[id]) continue; const had = OFF_PK[id][3](tn); OFF_PK[id][2](tn, b); if (!had && OFF_PK[id][3](tn)) tn.by[id] = sp.id; else if (!had) { OFF_PK[id][2](tn, b); if (OFF_PK[id][3](tn)) tn.by[id] = sp.id; } } }
+    for (const r of ['PGC', 'RGC']) { const sp = asst(t, r); if (!sp || !sp.pks) continue; const b = 0.06 + sp.cre / 1000; for (const id of sp.pks) { if (!OFF_PK[id]) continue; const had = OFF_PK[id][3](tn); OFF_PK[id][2](tn, b); if (!had && !OFF_PK[id][3](tn)) OFF_PK[id][2](tn, b); if (!tn.by[id]) tn.by[id] = sp.id; } } // he brought it: more of it, and his name on it
     for (const k in tn) if (typeof tn[k] === 'number') tn[k] = round2(clamp(tn[k], 0, 0.95));
   } else { const sp = asst(t, 'DRC'); if (sp) applyLean(tn, 'DRC', sp.lean, leanStrength(t, sp)); }
-  if (side === 'D') { const pk = teamDefPk(t); tn.pk = pk; tn.man = pkShare(pk.sh, MAN_SHELLS); tn.high = pkShare(pk.sh, HIGH_SHELLS); tn.blitz = pkShare(pk.pr, ['BLITZ', 'FZ']); tn.sim = pk.pr.SIM || 0; tn.stunt = pk.stunt; }
+  if (side === 'D') { const pk = teamDefPk(t); tn.pk = pk; tn.dime = pk.dime; tn.man = pkShare(pk.sh, MAN_SHELLS); tn.high = pkShare(pk.sh, HIGH_SHELLS); tn.blitz = pkShare(pk.pr, ['BLITZ', 'FZ']); tn.sim = pk.pr.SIM || 0; tn.stunt = pk.stunt; }
   TEND_CACHE[key] = { ver: TEND_VER, st: state, t: tn };
   return tn;
 }
@@ -1200,6 +1204,10 @@ function teamDefPk(t) {
   if (caller && caller.role === 'HC' && coord && coord.pk) { for (const cat of ['sh', 'pr']) { for (const k in pk[cat]) pk[cat][k] *= 0.7; for (const k in coord.pk[cat]) pk[cat][k] = (pk[cat][k] || 0) + coord.pk[cat][k] * 0.3; } pk.stunt = pk.stunt * 0.7 + coord.pk.stunt * 0.3; pk.disg = pk.disg * 0.7 + coord.pk.disg * 0.3; }
   for (const r of ['DPC', 'DRC']) { const sp = asst(t, r); if (!sp || !sp.pks) continue; const b = 0.06 + sp.cre / 1000;
     for (const id of sp.pks) { if (SHELLS[id]) pk.sh[id] = (pk.sh[id] || 0) + b; else if (PRESSURES[id]) pk.pr[id] = (pk.pr[id] || 0) + b; else if (id === 'STUNT') pk.stunt = Math.min(0.6, pk.stunt + b); else if (id === 'DISG') pk.disg = Math.min(0.7, pk.disg + b * 2); else if (pk.fr[id] !== undefined) pk.fr[id] = round2(Math.min(0.5, pk.fr[id] + b * (id === 'BEAR' ? 1 : 2))); pk.by[id] = sp.id; } }
+  // how readily the staff goes to six defensive backs: the caller's own lean (most coaches go sometimes, a few nearly never and a few
+  // at every chance), and a pass defense coordinator who believes in shells or in matching up pushes it further
+  { const own = c => 0.1 + 0.9 * Math.pow(coachTrait(c, 'dm'), 1.5); pk.dime = caller ? own(caller) : 0.45; if (caller && caller.role === 'HC' && coord) pk.dime = pk.dime * 0.7 + own(coord) * 0.3;
+    const dpc = asst(t, 'DPC'); if (dpc && (dpc.lean === 'SHELL' || dpc.lean === 'MAN')) pk.dime += (dpc.lean === 'SHELL' ? 0.12 : 0.06) + (dpc.cre || 50) / 600; pk.dime = round2(clamp(pk.dime, 0, 1)); }
   normShares(pk.sh); normShares(pk.pr); pk.stunt = round2(pk.stunt); pk.disg = round2(pk.disg);
   return pk;
 }
@@ -1240,14 +1248,48 @@ const OFF_PK = {
   MOTION: ['Pre-snap motion', 'Tempo', (t, b) => { t.motion += b * 2; }, t => t.motion >= 0.45, t => t.motion],
   NOHUD: ['No-huddle', 'Tempo', (t, b) => { t.nohud += b * 3; }, t => t.nohud >= 0.1, t => t.nohud],
 };
+// What a sheet calls, as shares, read the way offenseCall reads it over an ordinary spread of downs: run packages as shares of
+// runs, pass packages of passes (play-action and bootlegs of dropbacks), formations and tempo of snaps. A package is installed
+// when he calls it at least PK_MIN of the time: the page shows what he runs, and the size of the book and how much of it carries
+// over to a new staff read the same list.
+const PK_MIN = 0.05;
+function offPlan(tn) {
+  const g = k => tn[k] || 0, z = g('zone'), wz = tn.wz !== undefined ? tn.wz : 0.4, duo = g('duo'), cnt = g('counter'), uc = clamp(g('uc'), 0, 0.92);
+  const ucRun = clamp(uc + 0.15, 0, 0.92), ucPass = clamp(uc - 0.12, 0, 0.92);
+  // runs: the back's runs, his quarterback's, draws out of the gun, jet sweeps and reverses
+  const wq = g('qbRun') * 0.6, wd = 0.19 * (1 - ucRun), wj = g('motion') * 0.1, wr = g('trick') * 0.25, W = 1 + wq + wd + wj + wr, rb = 1 / W;
+  const run = { IZ: rb * z * (1 - duo) * (1 - wz), WZ: rb * z * (1 - duo) * wz, DUO: rb * (z * duo + (1 - z) * (1 - cnt) * duo), COUNTER: rb * (1 - z) * cnt, POWER: rb * (1 - z) * (1 - cnt) * (1 - duo),
+    OPTION: wq / W, DRAW: wd / W, JET: wj / W, REV: wr / W, RPO: rb * Math.min(1, g('rpo') * 1.3) * (1 - ucRun) };
+  // passes: quick, dropback, deep, screens and the flea flicker; play-action off the dropbacks and shots on early downs
+  const q = g('quick'), dp = g('deep'), wP = { QUICK: q * 1.15, DROP: Math.max(0.1, 1 - q - dp), DEEP: dp * 0.85, SCREEN: g('screen') * 1.6 * TUNE.screenW, FLEA: g('trick') * 0.06 }, WP = Object.values(wP).reduce((x, y) => x + y, 0) || 1;
+  const pass = {}; for (const k in wP) pass[k] = wP[k] / WP;
+  const paRate = Math.min(1, g('pa') * (ucPass * 6 + (1 - ucPass) * 3.8)) * 0.45; // on early downs and short yardage, not in a hurry
+  pass.PA = paRate * (pass.DROP + pass.DEEP); pass.BOOT = (pass.QUICK + pass.DROP + pass.DEEP) * g('boot') * (paRate * 1.8 + (1 - paRate) * 0.4) * 0.5;
+  pass.OPTRT = (pass.QUICK + pass.DROP) * g('optrt'); pass.MAXP = (pass.DEEP + pass.DROP * paRate) * g('maxp');
+  // formations, and the tempo
+  const PM = { 10: 1.45, 11: 1.05, 12: 0.8, 13: 0.85, 21: 0.8, 22: 0.8, JUMBO: 0.5 }, pers0 = tn.pers || { 11: 1 }, pers = {}; for (const k in pers0) pers[k] = pers0[k] * (PM[k] || 1); // hurry-up and third and long thin out the big sets
+  const pt = Object.values(pers).reduce((x, y) => x + y, 0) || 1, P = k => (pers[k] || 0) / pt, spread = (P(10) + P(11)) * (1 - uc);
+  const form = { FOURWIDE: P(10), TWOTE: P(12), HEAVY: P(13) + P(22), TWOBACK: P(21) + P(22), PISTOL: (1 - uc) * g('pistol'),
+    EMPTY: clamp(g('pass'), 0.3, 0.8) * (1 - uc - (1 - uc) * g('pistol')) * (P(10) + P(11) + P(12)) * Math.min(1, g('empty') + 0.04),
+    TRIPS: spread * g('trips'), BUNCH: spread * (1 - g('trips')) * g('bunch'), TIGHT: g('tight') * (1 - spread * (g('trips') + g('bunch'))), MOTION: Math.min(0.85, g('motion') * 1.25) * 0.9, NOHUD: g('nohud') };
+  const persShare = {}; for (const k in pers) persShare[k] = pers[k] / pt;
+  return { run, pass, form, uc, persShare, passRate: g('pass') };
+}
+// a package's share in that plan (of runs, passes or snaps, as its kind is)
+const PK_PLAN = { QUICK: ['pass', 'QUICK'], SHOT: ['pass', 'DEEP'], PA: ['pass', 'PA'], BOOT: ['pass', 'BOOT'], RPO: ['run', 'RPO'], SCREEN: ['pass', 'SCREEN'], OPTRT: ['pass', 'OPTRT'], MAXP: ['pass', 'MAXP'],
+  IZ: ['run', 'IZ'], WZ: ['run', 'WZ'], POWER: ['run', 'POWER'], COUNTER: ['run', 'COUNTER'], DUO: ['run', 'DUO'], OPTION: ['run', 'OPTION'],
+  TRIPS: ['form', 'TRIPS'], BUNCH: ['form', 'BUNCH'], TIGHT: ['form', 'TIGHT'], EMPTY: ['form', 'EMPTY'], PISTOL: ['form', 'PISTOL'], FOURWIDE: ['form', 'FOURWIDE'], TWOTE: ['form', 'TWOTE'], HEAVY: ['form', 'HEAVY'], TWOBACK: ['form', 'TWOBACK'],
+  MOTION: ['form', 'MOTION'], NOHUD: ['form', 'NOHUD'] };
+function offPkShare(tn, id) { const m = PK_PLAN[id]; if (!m || !tn) return 0; const p = offPlan(tn); return p[m[0]][m[1]] || 0; }
+for (const k in OFF_PK) { OFF_PK[k][3] = t => offPkShare(t, k) >= PK_MIN; OFF_PK[k][4] = t => offPkShare(t, k); }
 for (const k in OFF_PK) PK_NAME[k] = OFF_PK[k][0];
 Object.assign(PK_NAME, { UNDER: 'Under', BEAR: 'Bear (46)', BIGN: 'Big nickel' });
 const OFF_NEW_FIELDS = ['wz', 'counter', 'duo', 'trips', 'bunch', 'tight', 'optrt', 'maxp', 'nohud', 'empty', 'pistol'];
 // what each school installs of the newer looks (a coach may not carry all of them)
 const OFF_NEW_TEMPLATE = {
-  WZ: { wz: 0.72, tight: 0.3, duo: 0.1, counter: 0.05 }, SPREAD: { wz: 0.3, trips: 0.3, nohud: 0.25, bunch: 0.1, empty: 0.08, optrt: 0.06 },
-  POWER: { wz: 0.2, counter: 0.3, duo: 0.3, tight: 0.15, maxp: 0.2 }, WCO: { wz: 0.35, bunch: 0.25, optrt: 0.16, trips: 0.15, counter: 0.1 },
-  VERT: { wz: 0.3, maxp: 0.3, trips: 0.25, duo: 0.1, counter: 0.1 }, RPO: { wz: 0.4, trips: 0.2, nohud: 0.2, counter: 0.15, bunch: 0.1, pistol: 0.3 },
+  WZ: { wz: 0.72, tight: 0.3, duo: 0.15, counter: 0.05, pistol: 0.06, empty: 0.04 }, SPREAD: { wz: 0.3, trips: 0.3, nohud: 0.25, bunch: 0.1, empty: 0.3, optrt: 0.06, duo: 0.1, pistol: 0.03 },
+  POWER: { wz: 0.2, counter: 0.3, duo: 0.3, tight: 0.15, maxp: 0.2, pistol: 0.03, empty: 0.03 }, WCO: { wz: 0.35, bunch: 0.25, optrt: 0.16, trips: 0.15, counter: 0.1, duo: 0.12, empty: 0.12, pistol: 0.02 },
+  VERT: { wz: 0.3, maxp: 0.3, trips: 0.25, duo: 0.15, counter: 0.1, empty: 0.08, pistol: 0.02 }, RPO: { wz: 0.4, trips: 0.2, nohud: 0.2, counter: 0.15, bunch: 0.1, pistol: 0.25, duo: 0.1, empty: 0.1 },
 };
 function ensureOffSheet(tn, arch) { // fill in the newer fields on a play-caller's sheet (older saves, new coaches)
   if (!tn || tn.wz !== undefined) return tn;
@@ -1264,11 +1306,19 @@ function ensureOffPk(c) {
   if ((c.role === 'PGC' || c.role === 'RGC') && !c.pks) { const pool = (OFF_SPEC_POOL[c.lean] || []).slice(); shuffle(pool); c.pks = pool.slice(0, 3); }
 }
 function offInstalled(tn) { return Object.keys(OFF_PK).filter(k => OFF_PK[k][3](tn)); }
-function offPkHTML(tn) { // grouped, with who brought what
-  const by = tn.by || {}, out = [];
-  for (const cat of ['Formation', 'Run', 'Pass', 'Tempo']) { const ids = offInstalled(tn).filter(k => OFF_PK[k][1] === cat).sort((a, b) => OFF_PK[b][4](tn) - OFF_PK[a][4](tn));
-    if (ids.length) out.push(`<b>${cat === 'Formation' ? 'Formations' : cat === 'Tempo' ? 'Tempo' : cat + ' concepts'}:</b> ${ids.map(k => OFF_PK[k][0] + (by[k] && C(by[k]) ? ` <span class="muted">(${C(by[k]).last})</span>` : '')).join(' · ')}`); }
-  return out.join('<br>');
+// What he calls, as the share of his runs, his passes or his snaps, with who brought what. Anything under 5% is in grey: he has it,
+// but it is not part of the book his players have to learn.
+function offPkHTML(tn) {
+  const by = tn.by || {}, pl = offPlan(tn), pc = v => Math.round(v * 100) + '%';
+  const it = (k, l, v) => v < 0.005 ? '' : `<span class="${v >= PK_MIN ? '' : 'muted'}">${l} ${pc(v)}${k && by[k] && C(by[k]) ? ` <span class="muted">(${esc(C(by[k]).last)})</span>` : ''}</span>`;
+  const line = (title, items, note) => { const h = items.filter(x => x[2] >= 0.005).sort((a, b) => b[2] - a[2]).map(x => it(...x)).join(' · '); return h ? `<div class="pkl"><b>${title}</b> <span class="muted">${note}</span><br>${h}</div>` : ''; };
+  const r = pl.run, p = pl.pass, f = pl.form, ps = pl.persShare;
+  return line('Runs', [['IZ', 'Inside zone', r.IZ], ['WZ', 'Wide zone', r.WZ], ['POWER', 'Power', r.POWER], ['COUNTER', 'Counter', r.COUNTER], ['DUO', 'Duo', r.DUO], [null, 'Draws', r.DRAW], ['OPTION', 'QB runs', r.OPTION], [null, 'Jet sweeps', r.JET], [null, 'Reverses', r.REV]], 'of his runs')
+    + line('Passes', [['QUICK', 'Quick game', p.QUICK], [null, 'Dropback', p.DROP], ['SHOT', 'Shot plays', p.DEEP], ['SCREEN', 'Screens', p.SCREEN], [null, 'Flea flicker', p.FLEA]], 'of his passes')
+    + line('Off the pass game', [['PA', 'Play-action', p.PA], ['BOOT', 'Bootlegs', p.BOOT], ['OPTRT', 'Option routes', p.OPTRT], ['MAXP', 'Max protect', p.MAXP], ['RPO', 'Run-pass options', r.RPO]], 'of his passes (RPOs of his runs)')
+    + line('Personnel', Object.keys(ps).map(k => [{ 10: 'FOURWIDE', 12: 'TWOTE', 21: 'TWOBACK' }[k] || null, k === 'JUMBO' ? 'Jumbo' : k, ps[k]]), 'of his snaps')
+    + line('Formations', [[null, 'Under center', pl.uc], ['PISTOL', 'Pistol', f.PISTOL], ['EMPTY', 'Empty', f.EMPTY], ['TRIPS', 'Trips', f.TRIPS], ['BUNCH', 'Bunch', f.BUNCH], ['TIGHT', 'Tight splits', f.TIGHT]], 'of his snaps')
+    + line('Tempo', [['MOTION', 'Motion', f.MOTION], ['NOHUD', 'No-huddle', f.NOHUD]], 'of his snaps');
 }
 // ---- what a sheet is called: read off what is on it ----
 function offSheetLabel(t) {
@@ -1303,11 +1353,11 @@ function teamSchemeLabel(t, side) { const tn = blendedTend(t, side); return side
 // pressures and front.
 function bookVector(tn, side, caller) {
   const v = {};
-  if (side === 'O') { for (const k of offInstalled(tn)) v[k] = 1; const cb = conceptBookOf(caller); for (const f in cb) for (const k in cb[f]) v['cp:' + k] = cb[f][k]; }
+  if (side === 'O') { const pl = offPlan(tn); for (const k in PK_PLAN) { const x = pl[PK_PLAN[k][0]][PK_PLAN[k][1]] || 0; if (x > 0.005) v[k] = round2(x); } const cb = conceptBookOf(caller); for (const f in cb) for (const k in cb[f]) v['cp:' + k] = cb[f][k]; }
   else { for (const k in tn.pk.sh) v[k] = tn.pk.sh[k] * 4; for (const k in tn.pk.pr) v[k] = tn.pk.pr[k] * 3; v['F_' + tn.front] = 2; if (tn.pk.disg) v.DISG = 1; for (const k of ['UNDER', 'BEAR', 'BIGN']) if (tn.pk.fr && tn.pk.fr[k]) v[k] = 0.5; }
   return v;
 }
-function pkVector(t, side) { return bookVector(blendedTend(t, side), side, side === 'O' ? offCaller(t) : null); }
+function pkVector(t, side) { const v = bookVector(blendedTend(t, side), side, side === 'O' ? offCaller(t) : null); v._v = 2; return v; } // _v: installed means called 5% of the time (see PK_MIN)
 // one coach's own playbook, for comparing two men (null if he has none on that side)
 function coachBook(c, side) {
   const s = sheetOf(c, side); if (!s) return null;
@@ -1315,6 +1365,11 @@ function coachBook(c, side) {
   ensureDefPk(c); return c.pk ? bookVector(Object.assign({}, s, { pk: c.pk }), 'D') : null;
 }
 // a snapshot from an older save has no concepts in it: compare like with like
-function pkOverlapSnap(prev, cur) { if (Object.keys(prev).some(k => k.startsWith('cp:'))) return pkOverlap(prev, cur); const c = {}; for (const k in cur) if (!k.startsWith('cp:')) c[k] = cur[k]; return pkOverlap(prev, c); }
-function pkOverlap(a, b) { let mn = 0, mx = 0; for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) { mn += Math.min(a[k] || 0, b[k] || 0); mx += Math.max(a[k] || 0, b[k] || 0); } return mx ? mn / mx : 1; }
+function pkOverlapSnap(prev, cur) {
+  const cp = Object.keys(prev).some(k => k.startsWith('cp:')), c = {};
+  // a snapshot from before installed meant "called 5% of the time" counted fewer packages: compare only the ones it knew
+  for (const k in cur) { if (k.startsWith('cp:') ? !cp : (!prev._v && !(k in prev))) continue; c[k] = cur[k]; }
+  return pkOverlap(prev, c);
+}
+function pkOverlap(a, b) { let mn = 0, mx = 0; for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) { if (k[0] === '_') continue; mn += Math.min(a[k] || 0, b[k] || 0); mx += Math.max(a[k] || 0, b[k] || 0); } return mx ? mn / mx : 1; }
 function snapPlaybooks() { for (const t of state.teams) t.pkSnap = { O: pkVector(t, 'O'), D: pkVector(t, 'D') }; }

@@ -333,6 +333,8 @@ svg.field .tq { fill: #ffd98a; font-size: 12px; font-weight: 700; text-anchor: m
 .ls-2 { background: var(--panel2); }
 .ls-1 { background: color-mix(in srgb, var(--warn) 14%, transparent); }
 .ls-0 { background: color-mix(in srgb, var(--bad) 14%, transparent); }
+/* the play caller's plan: one line per part of the book */
+.pk-plan .pkl { margin-bottom: 6px; line-height: 1.45; }
 /* a seat's card: the coach's looks across, his men down */
 .stc { display: grid; gap: 3px; margin: 4px 0 2px; font-size: 11.5px; }
 .stc-r { display: grid; gap: 3px; align-items: center; } .stc-r .ls-c { height: 16px; padding: 0; }

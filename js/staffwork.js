@@ -34,7 +34,8 @@ function repShare(p) { const t = p.prac ? p.prac.t || 0 : 2, f = p.prac && p.pra
 const OFF_SIZE_REF = 0.8;
 function offSize(t) {
   const tn = offTend(t), ft = formTraits(t);
-  return round2(offInstalled(tn).length * 0.035 + (tn.motion || 0) * 0.25 + ((ft.doubles || 0) + (ft.wing || 0) + (ft.offI || 0)) * 0.12 + Math.max(0, (tn.rpo || 0) * 0.5 + (tn.trick || 0) * 1.5) + clamp((offCreativity(t) - 50) / 100, -0.2, 0.4) * 0.35);
+  return round2(offInstalled(tn).length * 0.025 + // (each package he calls at least 5% of the time; 0.025 keeps the average book the size it was when fewer were counted)
+     (tn.motion || 0) * 0.25 + ((ft.doubles || 0) + (ft.wing || 0) + (ft.offI || 0)) * 0.12 + Math.max(0, (tn.rpo || 0) * 0.5 + (tn.trick || 0) * 1.5) + clamp((offCreativity(t) - 50) / 100, -0.2, 0.4) * 0.35);
 }
 function defSize(t) { const pk = teamDefPk(t); return round2(libSize(pk && pk.lib) + clamp((defCreativity(t) - 50) / 100, -0.2, 0.4) * 0.35); }
 function sysSize(tid, side) { const t = T(tid); return t ? (side === 'O' ? offSize(t) : defSize(t)) : 0.4; }

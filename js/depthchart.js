@@ -389,7 +389,7 @@ function pbArrive(p, tid) {
   if (!side || !t) { p.pb = 100; return; }
   const inSeason = state.phase === 'REG' || state.phase === 'PLAYOFFS', was = from >= 0 && from !== tid ? T(from) : null;
   let v = (inSeason ? 26 : 36) + rand() * 8 + (p.exp >= 3 ? 6 : 0);
-  if (was) v += 28 * bookLike(pkOverlap(pkVector(was, side), pkVector(t, side))); // he ran a playbook like this one at his last club
+  if (was) v += 28 * bookLike(pkOverlap(pkVector(was, side), pkVector(t, side)), side); // he ran a playbook like this one at his last club
   p.pb = Math.round(clamp(v, 10, 100)); delete p.pbArch;
   delete p.xt; // a new club has its own plans for him
 }
@@ -420,8 +420,8 @@ function systemChangeKnowledge() {
       // players keep what carries over and relearn the rest; an adaptable man carries more of it over
       for (const p of [...rosterOf(t.id), ...psOf(t.id)]) if (PRAC_SIDE[p.pos] === side) { const o = 1 - (1 - ov) * clamp(1 + (55 - ((p.h && p.h.adapt) || 55)) / 100, 0.6, 1.4); p.pb = Math.round(clamp(pbOf(p) * (0.45 + 0.55 * o) + 10 * (1 - o), 10, 100)); }
       const added = Object.keys(cur).filter(k => !prev[k] && PK_NAME[k]).map(k => PK_NAME[k]);
-      if (ov < 0.6) t.sys[side].yrs = -1;
-      if (t.id === state.userTid) addNews(ov < 0.6 ? `A new ${side === 'O' ? 'offense' : 'defense'} in ${t.region}: only about ${Math.round(ov * 100)}% of the old playbook carries over.` : `${t.region}'s ${side === 'O' ? 'offensive' : 'defensive'} playbook changed (${Math.round(ov * 100)}% carries over)${added.length ? ': new this year: ' + added.slice(0, 4).join(', ') : ''}.`, [t.id]);
+      if (bookLike(ov, side) < 0.57) t.sys[side].yrs = -1; // a new system: less carries over than between two ordinary books (0.6 on a defense)
+      if (t.id === state.userTid) addNews(bookLike(ov, side) < 0.57 ? `A new ${side === 'O' ? 'offense' : 'defense'} in ${t.region}: only about ${Math.round(ov * 100)}% of the old playbook carries over.` : `${t.region}'s ${side === 'O' ? 'offensive' : 'defensive'} playbook changed (${Math.round(ov * 100)}% carries over)${added.length ? ': new this year: ' + added.slice(0, 4).join(', ') : ''}.`, [t.id]);
     }
   }
 }

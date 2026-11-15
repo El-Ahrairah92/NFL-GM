@@ -57,10 +57,12 @@ function seenCov(g, s) { const f = g.dSeen && g.dSeen[s], out = {}, W = 10 * (g.
 function conceptEdge(name, mix) { const c = CONCEPTS[name]; let e = 0; for (const k in mix) e += mix[k] * (c.vs[k] || 0); return e; }
 // The concept: from the coach's own book, leaning (as far as the play caller is sharp) toward what beats this defense's habits;
 // inside the 20 toward what works on a short field; in the two-minute drill toward routes that break to the sideline.
+// on third and fourth down he wants routes that get past the sticks
 function pickConcept(g, o, d, book, sit, rg) {
-  const mix = seenCov(g, d), cw = {}, vC = variety(g, o, 'O'), top = Object.keys(book).sort((a, b) => book[b] - book[a])[0];
+  const mix = seenCov(g, d), cw = {}, vC = variety(g, o, 'O'), top = Object.keys(book).sort((a, b) => book[b] - book[a])[0], sticks = g.down >= 3 && g.togo >= 3 && g.togo <= 25 ? g.togo : 0;
   for (const k in book) { const c = CONCEPTS[k]; if (!c) continue;
-    cw[k] = book[k] * (k === top ? 1 : vC) * Math.exp(conceptEdge(k, mix) * TUNE.conceptPlan * rg) * (sit.red ? c.rz || 1 : c.fld || 1) * (sit.needClock ? Math.exp((c.side - 0.3) * TUNE.clockSide) : 1); }
+    cw[k] = book[k] * (k === top ? 1 : vC) * Math.exp(conceptEdge(k, mix) * TUNE.conceptPlan * rg) * (sit.red ? c.rz || 1 : c.fld || 1) * (sit.needClock ? Math.exp((c.side - 0.3) * TUNE.clockSide) : 1)
+      * (sticks ? Math.exp((conceptReach(c, sticks) - 0.5) * TUNE.sticks) : 1); }
   return wpick(cw) || null;
 }
 function recordSeen(g, s, dc) {
@@ -113,7 +115,7 @@ function offenseCall(g) {
   if (wr3 && wr3.r < 64) { pw[10] = (pw[10] || 0) * (1 - adpF * 0.6); pw[11] = (pw[11] || 0) * (1 - adpF * 0.25); }
   if (!T_.depth.FB.length || T_.depth.FB[0].r < 55) { pw[21] = (pw[21] || 0) * 0.3; pw[22] = (pw[22] || 0) * 0.3; }
   if (sit.short || sit.gl) { pw[13] = (pw[13] || 0) + 8; pw[22] = (pw[22] || 0) + 6; if (isRun && g.togo <= 1) pw.JUMBO = 7; }
-  if (sit.hurry || sit.b === 'D3L') { for (const k of ['12', '13', '21', '22', 'JUMBO']) pw[k] = (pw[k] || 0) * 0.15; pw[10] = (pw[10] || 0) + 6; pw[11] = (pw[11] || 0) + 12; }
+  if (sit.hurry || sit.b === 'D3L') { for (const k of ['12', '13', '21', '22', 'JUMBO']) pw[k] = (pw[k] || 0) * 0.15; pw[10] = (pw[10] || 0) * 1.5 + 1; pw[11] = (pw[11] || 0) + 12; } // a four-wide team goes to it most when it has to throw
   { const nTE = T_.roster.filter(p => p.pos === 'TE' && !p.injury).length; // a grouping needs the men to fill it: no three-tight-end set with two tight ends dressed
     if (nTE < 3) { pw[13] = (pw[13] || 0) * 0.08; }
     if (nTE < 2) { for (const k of ['12', '22']) pw[k] = (pw[k] || 0) * 0.12; } }
@@ -124,8 +126,8 @@ function offenseCall(g) {
   if (sit.passDown) uc -= 0.3;
   if (sit.hurry) uc = 0;
   uc = clamp(uc, 0, 0.92);
-  call.form = rand() < uc ? 'UC' : ((ot.rpo + ot.qbRun > 0.25 && rand() < 0.35) || rand() < (ot.pistol || 0) * 0.5 ? 'PI' : 'SG');
-  if (!isRun && call.form === 'SG' && ['10', '11'].includes(call.pers) && ((sit.b === 'D3L' || sit.b === 'D3M') && rand() < 0.12 || rand() < (ot.empty || 0) * 0.5)) call.form = 'EMP';
+  call.form = rand() < uc ? 'UC' : rand() < (ot.pistol || 0) ? 'PI' : 'SG'; // the pistol is the coach's own habit
+  if (!isRun && call.form === 'SG' && ['10', '11', '12'].includes(call.pers) && ((sit.b === 'D3L' || sit.b === 'D3M') && rand() < 0.15 || rand() < (ot.empty || 0))) call.form = 'EMP';
   // --- play type
   const qb = starterQB(g, g.poss);
   const qbMob = qb && qb.a ? (qb.a.spd + qb.a.agi + qb.a.elu) / 3 : 40;
@@ -151,6 +153,7 @@ function offenseCall(g) {
     const plain = call.type === 'RUN' && call.carrier === 'RB';
     const wide = call.scheme === 'ZONE' && rand() < (ot.wz !== undefined ? ot.wz : 0.4);
     if (plain && call.scheme === 'GAP') { if (rand() < (ot.counter || 0)) call.counter = true; else if (rand() < (ot.duo || 0)) call.duo = true; }
+    else if (plain && rand() < (ot.duo || 0)) { call.scheme = 'GAP'; call.duo = true; } // zone teams run duo too: downhill, double teams, no puller
     if (plain && call.scheme === 'ZONE') call.wide = wide;
     call.dir = jetAction(call) ? 'OUT' : call.carrier === 'FB' || call.type === 'SNEAK' || call.duo ? 'IN' : rand() < (call.scheme === 'ZONE' ? (wide ? 0.72 : 0.32) : call.counter ? 0.5 : 0.36) ? 'OUT' : 'IN';
     call.side = rand() < 0.6 ? 1 : -1;
@@ -193,11 +196,14 @@ function offenseCall(g) {
   { const ft = cx.ft || {}, F = FORMS[call.pers] || {}, spread = ['10', '11'].includes(call.pers) && call.form !== 'UC'; let fm = null;
     if (call.form !== 'EMP') {
       const vF = variety(g, o, 'O');
-      if (spread && F.Trips && rand() < (ot.trips || 0) * vF) fm = 'Trips'; else if (spread && F.Bunch && rand() < (ot.bunch || 0) * vF * clamp(1 + (seenShare(g, d, 'man', 0.35) - 0.35) * 3 * rg, 0.5, 2.5)) fm = 'Bunch'; // more bunch against a defense that keeps playing man
+      if (call.pers === '12' && rand() < (ft.yoff || 0) * vF) fm = rand() < 0.4 ? 'Trey' : 'Doubles'; // a tight end split out of the formation
+      else if (call.pers === '11' && rand() < (ft.nub || 0) * vF) fm = 'Nub';
+      else if (spread && F.Trips && rand() < (ot.trips || 0) * vF) fm = 'Trips'; else if (spread && F.Bunch && rand() < (ot.bunch || 0) * vF * clamp(1 + (seenShare(g, d, 'man', 0.35) - 0.35) * 3 * rg, 0.5, 2.5)) fm = 'Bunch'; // more bunch against a defense that keeps playing man
       else if (F.Tight && rand() < (ot.tight || 0) * vF) fm = 'Tight';
-      else if (F.Doubles && FORM_HOME[call.pers] !== 'Doubles' && rand() < (ft.doubles || 0) * vF) fm = 'Doubles'; else if (F.Wing && rand() < (ft.wing || 0) * vF) fm = 'Wing';
+      else if (F.Doubles && FORM_HOME[call.pers] !== 'Doubles' && call.pers !== '12' && rand() < (ft.doubles || 0) * vF) fm = 'Doubles'; else if (F.Wing && rand() < (ft.wing || 0) * vF) fm = 'Wing';
       // two backs: in the gun they split either side of the quarterback; under center the fullback is in front of the tailback or offset to the strength
       if (!fm && F.Split) fm = call.form === 'SG' ? 'Split' : call.form === 'UC' && rand() < (ft.offI || 0) ? 'Offset' : null; }
+    else if (call.pers === '12') fm = 'Doubles'; // empty out of two tight ends: one of them splits out
     // from a hash the strength goes to the wide side or into the boundary, as the coach likes it
     call.fm = fm || FORM_HOME[call.pers]; call.str = g.hash ? (rand() < (ft.toField || 0.6) ? -g.hash : g.hash) : rand() < (ft.strR || 0.5) ? 1 : -1; if (call.side) call.side *= call.str; } // runs go to the strength a little more often than away from it
   if (!isRun) {
@@ -228,9 +234,10 @@ function defenseCall(g, oc) {
   let pkg;
   // no huddle: the defense cannot substitute, so it plays the snap with the package it already has out there
   if (oc.nohud && g.nh && g.nh.poss === o && g.nh.pkg !== 'GL') pkg = g.nh.pkg;
-  else if (p === '10') pkg = rand() < 0.7 ? 'DIME' : 'NICKEL';
-  else if (p === '11') pkg = rand() < dt.base * 0.35 * (1 + (runEst - 0.45) * pcF) ? 'BASE' : ((sit.b === 'D3L' || sit.hurry) && rand() < TUNE.dimeLong ? 'DIME' : sit.b === 'D3M' && rand() < TUNE.dimeMid ? 'DIME' : 'NICKEL');
-  else if (p === '12') pkg = rand() < 0.25 + dt.base * 0.8 ? 'BASE' : 'NICKEL';
+  // how readily this staff goes to six defensive backs: its own lean, 0 never to 1 at every chance (see teamDefPk)
+  else if (p === '10') pkg = rand() < 0.2 + (dt.dime !== undefined ? dt.dime : 0.45) * 0.75 ? 'DIME' : 'NICKEL';
+  else if (p === '11') { const dm = dt.dime !== undefined ? dt.dime : 0.45; pkg = rand() < clamp(TUNE.base11 + (dt.base - 0.33) * 0.6, 0, 0.5) * (1 + (runEst - 0.45) * pcF) ? 'BASE' : ((sit.b === 'D3L' || sit.hurry) && rand() < TUNE.dimeLong * dm ? 'DIME' : sit.b === 'D3M' && rand() < TUNE.dimeMid * dm ? 'DIME' : 'NICKEL'); }
+  else if (p === '12') pkg = rand() < clamp(TUNE.base12 + (dt.base - 0.33) * 2.2, 0.05, 0.95) ? 'BASE' : 'NICKEL'; // a base-minded staff stays big against two tight ends; a nickel staff matches them with a fifth back
   else if (p === 'JUMBO' || ((p === '22' || p === '13') && (sit.gl || sit.short))) pkg = sit.gl || g.togo <= 1 ? 'GL' : 'BASE';
   else pkg = 'BASE';
   call.pkg = pkg;

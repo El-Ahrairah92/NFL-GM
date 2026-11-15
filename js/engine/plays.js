@@ -276,7 +276,9 @@ const CONCEPTS = {
 // how much of a concept breaks toward the sideline: in the two-minute drill a play caller reaches for these, and the men who catch them get out of bounds;
 // and how deep its routes run on average, which a caller's taste for it follows (conceptBookOf)
 for (const k in CONCEPTS) { const c = CONCEPTS[k], main = c.r.filter(r => r[5] < 3); c.side = main.length ? main.filter(r => r[2] === 'OUT').length / main.length : 0;
-  c.dep = main.length ? main.reduce((s, r) => s + (r[3][0] + r[3][1]) / 2, 0) / main.length : 0; }
+  c.dep = main.length ? main.reduce((s, r) => s + (r[3][0] + r[3][1]) / 2, 0) / main.length : 0; c.mids = main.map(r => (r[3][0] + r[3][1]) / 2); }
+// how much of a concept gets past the line to gain: the share of its routes that break at or beyond it
+function conceptReach(c, togo) { return c.mids && c.mids.length ? c.mids.filter(m => m >= togo).length / c.mids.length : 0.5; }
 // centre every concept on what the league actually plays, so the average call into an unknown coverage is worth nothing
 const COV_MIX = { C3: 0.31, C1: 0.2, C4: 0.17, C2: 0.14, C2M: 0.06, C6: 0.05, T2: 0.04, C0: 0.03 };
 for (const k in CONCEPTS) { const c = CONCEPTS[k]; let m = 0; for (const v in COV_MIX) m += COV_MIX[v] * (c.vs[v] || 0); for (const v in COV_MIX) c.vs[v] = Math.round(((c.vs[v] || 0) - m) * 1000) / 1000; }

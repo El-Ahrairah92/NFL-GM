@@ -228,7 +228,7 @@ function runBlocking(g, off, def, oc, dc, target, carrierSlot) {
   const res = box.map(b => ({ ...b, blockers: [], state: 'free' }));
   const fronts = res.filter(r => r.lvl === 1), seconds = res.filter(r => r.lvl === 2).sort((a, b) => Math.abs(a.px - target) - Math.abs(b.px - target));
   // gap schemes pull the backside guard to the point of attack; the men next to him have to cover for it
-  const puller = zone ? null : ol.find(b => (b.e.slot === 'LG' || b.e.slot === 'RG') && Math.sign(b.e.x) !== side);
+  const puller = zone || oc.duo ? null : ol.find(b => (b.e.slot === 'LG' || b.e.slot === 'RG') && Math.sign(b.e.x) !== side);
   if (puller) { puller.used = true; puller.pulling = true; }
   // the line takes the front by alignment. If somebody has to be let go it is the man farthest from the play.
   const line = [...ol, ...tes].filter(b => !b.pulling).sort((a, b) => a.e.x - b.e.x);

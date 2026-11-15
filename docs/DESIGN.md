@@ -1517,3 +1517,36 @@ Scheme umbrellas are gone. The engine never read a coach's school: every call re
 - A save from the committed code loads, its manual chart converts, and it plays two seasons through the coaching carousel and free agency.
 
 Not decided: whether a coordinator should call a look less when his men grade poorly in it (he still calls his playbook as it is, and the seat card shows the cost).
+
+## 75. Playbook loose ends: the page shows what he calls, packages, formations, duo, third down
+
+**The Playbook page shows what the coach calls.** "Installed" used to be cutoffs on the sheet's numbers, not a list of what he runs: inside zone was missing for 22 of 32 clubs that call it on 10-45% of their runs, power for 16, wide zone and screens for 15, play-action and shot plays for 10.
+- `offPlan` reads a sheet the way `offenseCall` reads it over an ordinary spread of downs: runs (inside zone, wide zone, power, counter, duo, draws, QB runs, jet sweeps, reverses) as shares of runs; passes (quick, dropback, shots, screens) and what comes off them (play-action, bootlegs, option routes, max protect) as shares of passes, RPOs of runs; personnel, under center, pistol, empty, trips, bunch, tight splits, motion and no-huddle as shares of snaps. Checked against a season of calls, club by club: correlation 0.86-1.00 and 1-4 points apart on average, except quarterback runs, which also depend on how mobile the quarterback is.
+- A package is installed when he calls it on at least 5% of its runs, passes or snaps (`PK_MIN`). The page lists everything with its share, grey under 5%, and names the specialist who brought each package (credited now whether or not the caller already ran some of it).
+- The same list sets the size of the book (each package now weighs 0.025, so the average book is the size it was when fewer packages counted: 15.9 installed against 11.5) and how much of a playbook carries over. Offenses are compared by how much of each package they call plus their pass concepts; the likeness scale is measured per side: 0 at the median pair of clubs (0.47 on offense, 0.4 on defense), 1 at about the most alike pair (0.78, 0.75). A new system is anything under 0.57 on it (0.6 on a defense, as before). Snapshots saved before this compare only the packages they knew.
+
+**Packages, on a spectrum by staff.** Dime is a lean of the staff's own (`pk.dime`): the play caller's (most coaches go to it sometimes, a few nearly never, a few at every chance), raised by a pass defense coordinator who believes in shells or in matching up. It sets dime against four wide and on third and long and medium. Base follows the coach's base share more steeply: a base-minded staff stays big against two tight ends, a nickel staff matches them with a fifth back.
+
+| | Before | Now | NFL | Club range now |
+|---|---|---|---|---|
+| Base | 30% | 27% | about 23% | 16-44% |
+| Nickel (incl. big nickel) | 47% | 58% | about 65% | 42-75% |
+| Dime | 22% | 13% | about 10% | 5-26% |
+
+**Personnel and formations, on a spectrum by coach.**
+- New sets: a tight end split out of 12 personnel (Doubles, the move tight end in the weak slot; Trey, in the strong slot outside the Y), Nub (three receivers away from a lone tight end), empty out of 12 personnel. How often a coach splits a tight end out or goes nub is his own habit (`formTraits`: most a little, a few a lot).
+- Pistol is the coach's own habit, not automatic for an RPO coach; four-wide and empty come from his sheet, and four-wide grows on third and long only for a coach who uses it.
+
+| Share | Before | Now | Club range now |
+|---|---|---|---|
+| Four-wide, of snaps | 7.6% | 3.0% | 0-9% |
+| Pistol, of snaps | 14.7% | 6-8% | 0-29% |
+| Empty, of dropbacks | 3% | 9% | 2-29% |
+| Tight end split out, of 12 personnel | 0 | about 20% | 4-52% |
+| Nub, of 11 personnel | 0 | about 5% | 0-20% |
+
+**Duo** is called by zone teams too, at the coach's own rate, and is blocked as it is run: downhill, double teams at the point of attack, no puller (a gap team's duo used to pull a guard). 2.2% of runs became about 13% (clubs 0-38%).
+
+**Third down.** On third and fourth down the caller leans to concepts whose routes break at or past the line to gain (`conceptReach`, `TUNE.sticks`). On third and 7 or more the routes thrown run 12.0 yards deep against 11.6 before (11.3 on first down); what those passes gain did not change.
+
+**Checked, the same 8 leagues on the committed code and on this** (league generation draws the same numbers, so the pairs hold): 22.65 to 22.47 points a team-game (-0.18, standard error 0.21); 4.48 a carry both; passes 6.28 to 6.24 yards; sacks 6.5% to 6.7%. A save from the committed code loads and plays two seasons; three seasons with offseasons run clean.

@@ -168,7 +168,9 @@ FG make % = Kick Consistency inside Comfort Range; beyond it, decays at a rate s
 | **Under center** | Base runs (+), Play-Action (+), QB Sneak requires it; QB read slightly (−) (back to defense) |
 | **Shotgun** | Processing (+), sacks slightly (−); Draw/Option/RPO friendly; Base runs slightly (−) |
 | **Pistol** | Between the two: small Play-Action (+) and Option/RPO friendly |
-| **Empty** | 5 routes, no RB protection: vs. blitz the sack risk jumps; demands Processing. Runs limited to QB Base Run |
+| **Empty** | 5 routes, no RB protection: vs. blitz the sack risk jumps; demands Processing. Runs limited to QB Base Run. From 10, 11 or 12 personnel (a tight end splits out) |
+
+**Sets within a grouping** (what matters is where the men stand): 11 Trey, Doubles, Trips, Bunch, Tight, Nub (three receivers away from a lone tight end); 12 Ace, Wing, Tight, Doubles and Trey (a tight end split out to the weak or strong slot); 13 Heavy, Tight; 21/22 I, Offset, Split, Heavy. How often a coach uses four-wide, the pistol, empty, a split-out tight end or nub is his own habit, and clubs differ a lot (DESIGN section 75).
 
 ### Alignment tags
 | Tag | Effect |
@@ -342,7 +344,7 @@ Not tags:
 |---|---|---|
 | **Base** (4-3 or 3-4) | 4 DL/3 LB or 3 DL/4 LB | Run defense (+), coverage (−) (LBs covering) |
 | **Nickel** | 5 DB (Slot CB on) | Balanced; the modern default |
-| **Dime** | 6 DB | Coverage (+), run defense (−) (light box) |
+| **Dime** | 6 DB | Coverage (+), run defense (−) (light box). How readily a staff goes to it (against four wide, on third and long) is its own lean |
 | **Goal Line** | Heavy DL/LB | Short-yardage run D (+), very vulnerable to Play-Action/passes |
 
 ### 5b. Front (DC scheme — sets alignments → blocking matchups)

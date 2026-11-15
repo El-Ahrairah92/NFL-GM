@@ -33,7 +33,8 @@ const TUNE = {
   lbRest: 0.18,           // how often the second linebacker sits out a series for the next man (the Mike far less: real starters rarely come off)
   assistRate: 0.21,    // how often a second man is credited on a tackle that had no assist yet
   spill: 0.6,         // how often a run stopped by a lineman past the line is really finished by the second level
-  dimeLong: 0.8, dimeMid: 0.45, // how often a defense goes to six defensive backs on third and long, and third and medium
+  dimeLong: 0.65, dimeMid: 0.35, // six defensive backs on third and long and on third and medium, times the staff's dime lean
+  base11: 0.08, base12: 0.45,  // base personnel against three receivers and against two tight ends for a coach of average base share (0.33); each moves with his own share
   sackBase: 0.37,     // chance a pressured quarterback goes down, before the matchup
   raceCap: 5,         // a speed edge in the open field, in rating points, before it runs into diminishing returns
   runCap: 11,         // a run defender's edge over his blocker, before diminishing returns (keeps one line from making every back look elite)
@@ -82,6 +83,7 @@ const TUNE = {
   bunchMan: 0.18, bunchZone: -0.06,  // a bunch against man coverage, and against zone
   tightIn: 0.05, tightDeep: 0.22, tightOut: 0.14, // tight splits: crossers gain, deep balls and out-breakers lose
   concept: 1,           // how much a pass concept gains or loses against each coverage (0 switches concepts off)
+  sticks: 1.5,           // on third and fourth down: how strongly a caller leans to concepts whose routes reach the line to gain
   conceptPlan: 9,       // how hard a good play caller leans toward concepts that beat what this defense has been playing
   clockSide: 2,         // in the two-minute drill, how hard he leans toward concepts that break to the sideline
   slotMix: 0.2,         // how often the slot is in the mix when receivers trade routes (the outside two trade the rest of the time)
@@ -205,8 +207,10 @@ function isInline(e) { return INLINE.has(e.slot) && !e.flex; }
 // standing (three wide to one side, a bunch, tight splits, a tight end off the line), not from its name.
 const FORMS = {
   '10': { Doubles: {}, Trips: { SLOT2: 3.2 }, Bunch: { Z: 3.6, SLOT2: 3.1, SLOT: 2.6 }, Tight: { X: -3.1, Z: 3.5 } },
-  '11': { Trey: {}, Doubles: { SLOT: -2.4 }, Trips: { Y: 2.3, SLOT: 3.2, _flex: ['Y'] }, Bunch: { Z: 3.5, SLOT: 2.5 }, Tight: { X: -3.1, Z: 3.5 } },
-  '12': { Ace: {}, Wing: { H: 3.6 }, Tight: { X: -3.1, Z: 3.4 } },
+  // Nub: three receivers to one side, the tight end alone on the other
+  '11': { Trey: {}, Doubles: { SLOT: -2.4 }, Trips: { Y: 2.3, SLOT: 3.2, _flex: ['Y'] }, Bunch: { Z: 3.5, SLOT: 2.5 }, Tight: { X: -3.1, Z: 3.5 }, Nub: { X: 4.6, Z: 3.6, SLOT: 2.5, Y: -2.9 } },
+  // with two tight ends one can split out: Doubles puts the move tight end in the weak slot (2x2), Trey in the strong slot outside the Y (3x1)
+  '12': { Ace: {}, Wing: { H: 3.6 }, Tight: { X: -3.1, Z: 3.4 }, Doubles: { H: -2.4, _flex: ['H'] }, Trey: { H: 3.6, Z: 4.6, _flex: ['H'] } },
   '13': { Heavy: {}, Tight: { X: -3.1 } }, JUMBO: { Jumbo: { OL6: 3, Y: 3.9 } }, // the sixth lineman next to the tackle, the tight end outside him
   // two backs: I (fullback straight ahead of the tailback), Offset (fullback a step to the strength), Split (one back each side of the quarterback)
   '21': { I: {}, Offset: {}, Split: {}, Tight: { X: -3.1, Z: 3.4 } }, '22': { Heavy: {}, Offset: {}, Split: {}, Tight: { X: -3.1 } },
