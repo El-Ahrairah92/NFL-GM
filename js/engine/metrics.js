@@ -30,6 +30,17 @@ function avInc(g, p, k, v = 1) { const a = av(g, p); if (a) a[k] = (a[k] || 0) +
 function tav(g, s, k, v = 1) { g.tadv[s][k] = (g.tadv[s][k] || 0) + v; }
 const LBS = new Set(['MLB', 'WLB', 'SAM']);
 
+// which play it was, by the name the playbook gives it: the run scheme, the screen or gadget, or the pass concept thrown
+function playKey(oc, res) {
+  if (oc.tags && oc.tags.has('RPO')) return 'RPO';
+  switch (oc.type) {
+    case 'RUN': return oc.carrier === 'QB' ? 'OPTION' : oc.carrier === 'FB' ? 'FB' : oc.duo ? 'DUO' : oc.counter ? 'COUNTER' : oc.scheme === 'GAP' ? 'POWER' : oc.wide ? 'WZ' : 'IZ';
+    case 'DRAW': return 'DRAW'; case 'OPTION': return 'OPTION'; case 'JET': return 'JET'; case 'SNEAK': return 'SNEAK';
+    case 'GADGET': return oc.gadget === 'reverse' ? 'REV' : 'FLEA';
+    case 'RBSCR': return 'RBSCR'; case 'WRSCR': return 'WRSCR';
+  }
+  return (res && res.cpt) || oc.cpt || null;
+}
 function chartPlay(g, oc, dc, res, before, off, def) {
   const o = before.poss, d = 1 - o;
   g.gx = { man: ['C0', 'C1', 'C2M'].includes(dc.cov), blz: dc.pres === 'BLITZ' || dc.pres === 'SIM' || dc.pres === 'FZ', pa: oc.tags && oc.tags.has('PA'), zone: oc.scheme === 'ZONE', run: !!oc.isRun,
@@ -58,6 +69,7 @@ function chartPlay(g, oc, dc, res, before, off, def) {
   if (oc.form) ss(o, 'form' + oc.form);
   if (oc.tags) for (const t of oc.tags) ss(o, 'tag' + t);
   ss(o, 'sit' + sitK + (oc.isRun ? 'R' : 'P'));
+  { const k = playKey(oc, res); if (k && g.tplay) { const tp = g.tplay[o]; tp['u_play' + k] = (tp['u_play' + k] || 0) + 1; tp['e_play' + k] = (tp['e_play' + k] || 0) + epa; if (success) tp['s_play' + k] = (tp['s_play' + k] || 0) + 1; } } // the playbook's self-scout, play by play
   if (dc.pkg) ss(d, 'pkg' + dc.pkg);
   if (dc.cov && !oc.isRun) ss(d, 'cov' + dc.cov);
   if (dc.pres && !oc.isRun) ss(d, 'pres' + dc.pres);

@@ -291,6 +291,7 @@ function simPreseasonWeek() {
 }
 // exhibition snaps: film for the scouts, reps toward positional comfort, and a preseason line for every player
 function applyPreBox(box, keep) {
+  delete box.tplay;
   filmUpdate(box);
   for (const pid in box.stats) {
     const p = P(pid), l = box.stats[pid];

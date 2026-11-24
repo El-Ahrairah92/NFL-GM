@@ -299,10 +299,11 @@ function applyBox(box, playoff) {
   if (box.adv) {
     if (!playoff) {
       for (const pid in box.adv) { const p = P(pid); if (!p) continue; p.advS = p.advS || {}; addAdv(p.advS, box.adv[pid]); }
-      box.tids.forEach((tid, s) => { const t = T(tid); t.advS = t.advS || {}; addAdv(t.advS, box.tadv[s]); });
+      box.tids.forEach((tid, s) => { const t = T(tid); t.advS = t.advS || {}; addAdv(t.advS, box.tadv[s]); if (box.tplay) addAdv(t.advS, box.tplay[s]); });
     }
     if (!playoff && !box.tids.includes(state.userTid)) delete box.adv;
   }
+  delete box.tplay; // the plays by name live on the season's totals, not on every box
   for (const pid in box.stats) {
     const p = P(pid);
     if (!p) continue;

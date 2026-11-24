@@ -40,7 +40,7 @@ function simGame(hTid, aTid, opts = {}) {
     poss: 0, ydl: 25, down: 1, togo: 10, stats: {}, ts: [newTS(), newTS()], scoring: [], drives: [], injuries: [],
     playoff: !!opts.playoff, neutral: !!opts.neutral, pre: opts.pre || 0, scrim: opts.scrim || null, over: false, ot: false, otStarted: [0, 0], drive: null,
     side: [null, null], ps: {}, to: [3, 3], running: false, warned: {}, key: 0, liveFilm: [{}, {}], dSeen: [newSeen(), newSeen()], famStats: [{}, {}],
-    runY: [[0, 0], [0, 0]], runCred: [4.2, 4.2], pbp: opts.pbp ? [] : null, adv: {}, tadv: [{}, {}], first: [{}, {}], basePass: [0.57, 0.57], tilt: [0, 0], advEst: [{}, {}],
+    runY: [[0, 0], [0, 0]], runCred: [4.2, 4.2], pbp: opts.pbp ? [] : null, adv: {}, tadv: [{}, {}], tplay: [{}, {}], first: [{}, {}], basePass: [0.57, 0.57], tilt: [0, 0], advEst: [{}, {}],
   };
   g.cx = [coachCtx(hTid, aTid), coachCtx(aTid, hTid)];
   g.famPen = [0, 0]; // system familiarity now lives in each player's playbook knowledge
@@ -76,7 +76,7 @@ function simGame(hTid, aTid, opts = {}) {
     scoring: g.scoring, drives: g.drives, injuries: g.injuries,
   };
   if (g.pbp) box.pbp = g.pbp;
-  box.adv = g.adv; box.tadv = g.tadv;
+  box.adv = g.adv; box.tadv = g.tadv; box.tplay = g.tplay; // (the plays by name are added to the season and dropped from the box)
   return box;
 }
 // adaptability bends the coordinator's run/pass lean toward this roster

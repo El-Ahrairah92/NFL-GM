@@ -176,20 +176,34 @@ function table(id, cols, rows, opts = {}) {
     });
   }
   if (opts.limit) rows = rows.slice(0, opts.limit);
-  const head = cols.map(c => `<th class="${c.num ? 'num' : ''} ${c.v && !opts.nosort ? 'sortable' : ''} ${ss && ss.k === c.k ? 'sorted' : ''}" ${c.v && !opts.nosort ? `data-action="sort" data-table="${id}" data-k="${c.k}"` : ''} title="${c.title || ''}">${c.l}${ss && ss.k === c.k ? (ss.dir < 0 ? ' ▾' : ' ▴') : ''}</th>`).join('');
+  // opts.group {k, f: row => [key, label]}: while the table is sorted by column k, each group opens with a heading row and its count
+  const grp = opts.group && ss && ss.k === opts.group.k ? opts.group : null, gn = {};
+  if (grp) for (const r of rows) { const g = grp.f(r)[0]; gn[g] = (gn[g] || 0) + 1; }
+  let gk;
+  const head = cols.map(c => `<th class="${c.num ? 'num' : ''} ${c.v && !opts.nosort ? 'sortable' : ''} ${ss && ss.k === c.k ? 'sorted' : ''}${c.cls ? ' ' + c.cls : ''}" ${c.v && !opts.nosort ? `data-action="sort" data-table="${id}" data-k="${c.k}"` : ''} title="${c.title || ''}">${c.l}${ss && ss.k === c.k ? (ss.dir < 0 ? ' ▾' : ' ▴') : ''}</th>`).join('');
   const body = rows.map((r, i) => {
     const cls = opts.rowClass ? opts.rowClass(r, i) : '', attr = opts.rowAttr ? opts.rowAttr(r, i) : '', after = opts.rowAfter ? opts.rowAfter(r, i) : '';
-    return `<tr class="${cls}" ${attr}>` + cols.map(c => `<td class="${c.num ? 'num' : ''}${c.l ? '' : ' act'}" data-l="${esc(c.l)}">${c.f ? c.f(r, i) : (c.v ? c.v(r) : '')}</td>`).join('') + '</tr>' + (after ? `<tr class="xrow"><td colspan="${cols.length}">${after}</td></tr>` : '');
+    let gh = '';
+    if (grp) { const [g, l] = grp.f(r); if (g !== gk) { gk = g; gh = `<tr class="grp"><td colspan="${cols.length}"><span class="grp-l">${l}</span><span class="grp-n">${gn[g]}</span></td></tr>`; } }
+    return gh + `<tr class="${cls}" ${attr}>` + cols.map(c => `<td class="${c.num ? 'num' : ''}${c.l ? '' : ' act'}${c.cls ? ' ' + c.cls : ''}" data-l="${esc(c.l)}">${c.f ? c.f(r, i) : (c.v ? c.v(r) : '')}</td>`).join('') + '</tr>' + (after ? `<tr class="xrow"><td colspan="${cols.length}">${after}</td></tr>` : '');
   }).join('');
   const pn = cols.length > 2 && cols[0].k === 'pos' && ['n', 'name'].includes(cols[1].k); // position + name stay pinned on a phone
   const rk = !pn && cols.length > 2 && cols[0].k === 'rk'; // a rank column, then the name
   // phones: player lists read as cards (with their own sort control); a toggle brings the table back
   const sortable = opts.nosort ? [] : cols.filter(c => c.v && c.l);
   const mbar = pn && rows.length > 10 ? `<div class="mbar">${sortable.length ? `<label class="small muted">Sort</label><select data-change="msort" data-table="${id}">${sortable.map(c => `<option value="${c.k}" ${ss && ss.k === c.k ? 'selected' : ''}>${c.l}</option>`).join('')}</select><button class="sm" data-action="msortDir" data-table="${id}" data-k="${ss ? ss.k : sortable[0].k}" title="Reverse the order">${ss && ss.dir > 0 ? '▴' : '▾'}</button>` : ''}<span class="spacer"></span><span class="seg"><button class="sm ${ui.mcards ? 'on' : ''}" data-action="mview" data-v="">Cards</button><button class="sm ${ui.mcards ? '' : 'on'}" data-action="mview" data-v="1">Table</button></span></div>` : '';
-  return mbar + `<div class="tbl-wrap"><table class="${pn ? 'pn' + (ui.mcards ? ' cards' : '') : rk ? 'rk' : ''}"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length}" class="muted">Nothing here.</td></tr>`}</tbody></table></div>`;
+  return mbar + `<div class="tbl-wrap"><table class="${pn ? 'pn' + (ui.mcards ? ' cards' : '') : rk ? 'rk' : ''}${opts.cls ? ' ' + opts.cls : ''}"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length}" class="muted">Nothing here.</td></tr>`}</tbody></table></div>`;
 }
 
 // ---------- top level ----------
+// a club's colors for the frame: its own, a second one for the piping on its leather (the game keeps one color per club),
+// the color its lettering takes on that leather, and the shadow that lettering wants
+const CLUB_SECOND = { BUF: '#c9d3e0', MIA: '#f2794a', NE: '#c0282d', NYK: '#c4cbd0', BAL: '#d9a92e', CIN: '#f1ece2', CLE: '#f08a24', PIT: '#f1ece2',
+  HOU: '#c9d1dc', IND: '#eef1f6', JAX: '#d4ad35', NAS: '#e9eef5', DEN: '#e9eef5', KC: '#f2b632', LV: '#e8e8e8', LAS: '#f4c430',
+  DAL: '#c6ccd4', NYE: '#e04150', PHI: '#cdd6d9', WAS: '#e0b33c', CHI: '#e9eef5', DET: '#c7ced6', GB: '#f2b632', MIN: '#f1c232',
+  ATL: '#f1ece2', CAR: '#e9eef5', NO: '#f1ece2', TB: '#d9d9d9', ARI: '#f2f0e6', LAG: '#f2b632', SF: '#c9a24a', SEA: '#c7e6cf' };
+function colorLum(hex) { const n = parseInt(String(hex).slice(1), 16), c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+function clubVars(tid) { const t = T(tid), lt = colorLum(t.color) > 0.42; return { '--tc': t.color, '--tc2': CLUB_SECOND[t.abbr] || '#d8d8d8', '--tci': lt ? '#14171b' : '#fff', '--tsh': lt ? '0 1px 0 rgba(255,255,255,.35)' : '0 -1px 0 rgba(0,0,0,.32)' }; }
 function applyTheme() { document.documentElement.classList.toggle('dark', !!(state && state.settings && state.settings.theme === 'dark')); }
 function render() {
   const app = $('#app');
@@ -198,12 +212,14 @@ function render() {
   if (state.rv2 !== 3) { state.rv2 = 3; for (const c of Object.values(state.coaches)) { migrateCoach(c, state.teams, state.coaches); updateCoachOvr(c); } TEND_VER++; }
   if (state.phase === 'FA' && (!state.fa || state.fa.yr !== state.season)) { faOpen(); save(); } // a save that was already in free agency when the market was added
   document.documentElement.style.setProperty('--accent', T(state.userTid).color);
+  for (const [k, v] of Object.entries(clubVars(state.userTid))) document.documentElement.style.setProperty(k, v); // the frame's leather wears your club's colors
   if (state.phase === 'RECAP' && ui.wrapSeen !== state.season) { ui.wrapSeen = state.season; ui.seasonYr = null; view = 'season'; } // the season just ended: open its review once
-  if (state.phase === 'PRESEASON' && !state.pre && !state.settings.autoUser && ui.prepSeen !== state.season) { ui.prepSeen = state.season; ui.staffTid = null; ui.staffSel = T(state.userTid).hc; view = 'coaches'; } // rookie free agency is over: meet with the staff before camp
+  if (state.phase === 'PRESEASON' && !state.pre && !state.settings.autoUser && ui.prepSeen !== state.season) { ui.prepSeen = state.season; ui.staffTid = null; ui.staffSel = T(state.userTid).hc; view = 'coaches'; setTimeout(() => { if (view === 'coaches' && C(T(state.userTid).hc)) coachModal(T(state.userTid).hc); }, 0); } // rookie free agency is over: meet with the staff before camp
   let page;
   try { page = pageHTML(); } catch (e) { showError(e, `drawing the ${view} page`); page = `<div class="callout bad">This page hit an error (details at the bottom of the screen).</div>`; }
-  const SC = '.tbl-wrap, .scroll, .dc-cands, .dc-side, nav.tabs, .subnav, .subtabs, .msheet-card, .fa-list, .fa-left', keep = [...app.querySelectorAll(SC)].map(e => [e.scrollLeft, e.scrollTop]), wy = window.scrollY, same = app.dataset.view === view;
-  app.className = 'shell'; app.innerHTML = sideHTML() + `<div class="stage">${topbarHTML()}<main>${page}</main></div>` + mobileNavHTML(); { const cc = app.querySelector('.cal-st.cur'), ct = app.querySelector('.cal-track'); if (cc && ct) ct.scrollLeft = cc.offsetLeft - ct.offsetLeft - ct.clientWidth / 2 + cc.offsetWidth / 2; } // keep where we are in the year in view
+  const SC = '.rs-scroll, .cl-col, .tbl-wrap, .scroll, .dc-cands, .dc-side, nav.tabs, .subnav, .subtabs, .msheet-card, .fa-list, .fa-left', keep = [...app.querySelectorAll(SC)].map(e => [e.scrollLeft, e.scrollTop]), wy = window.scrollY, same = app.dataset.view === view;
+  const ctx = clubCtx();
+  app.className = 'shell'; app.innerHTML = sideHTML() + `<div class="stage">${topbarHTML()}<main${ctx !== null ? ` style="${clubVarsCSS(ctx)}"` : ''}>${page}</main></div>` + mobileNavHTML(); { const cc = app.querySelector('.cal-st.cur'), ct = app.querySelector('.cal-track'); if (cc && ct) ct.scrollLeft = cc.offsetLeft - ct.offsetLeft - ct.clientWidth / 2 + cc.offsetWidth / 2; } // keep where we are in the year in view
   app.dataset.view = view;
   phoneKit(app.querySelector('main'));
   if (same) { [...app.querySelectorAll(SC)].forEach((e, i) => { if (keep[i]) { e.scrollLeft = keep[i][0]; e.scrollTop = keep[i][1]; } }); if (Math.abs(window.scrollY - wy) > 2) window.scrollTo(0, wy); }
@@ -286,7 +302,16 @@ function goButtonsHTML() {
 }
 // the bar over the page: where you are, the pages beside it, and what moves the year on
 const VIEW_LABEL = { carwrap: 'Coaching search', watch: 'Game day', season: 'Season Review', camp: 'Preseason', cutdown: 'Preseason' };
+// another club, when the page on screen is one of its own (its page, its roster, its staff)
+function clubCtx() { const tid = view === 'club' ? ui.clubTid : view === 'roster' ? ui.rosterTid : view === 'coaches' ? ui.staffTid : view === 'playbook' ? ui.pbTid : null; return tid != null && tid !== state.userTid && T(tid) ? tid : null; }
+const clubVarsCSS = tid => Object.entries(clubVars(tid)).map(([k, v]) => `${k}:${v}`).join(';');
 function topbarHTML() {
+  const ct = clubCtx();
+  if (ct !== null) {
+    const c = T(ct), on = { club: 'club', roster: 'roster', coaches: 'staff', playbook: 'book' }[view], ph = CAL.find(x => x[0] === state.phase), sub = calSubHTML().match(/<span class="cal-n">(.*?)<\/span>/);
+    const tab = (k, l, act) => `<button class="${k === on ? 'on' : ''}" data-action="${act}" data-tid="${ct}">${l}</button>`;
+    return `<div class="topbar light" style="${clubVarsCSS(ct)}"><div class="tb1"><div class="tb-title"><span>${esc(c.conf + ' ' + c.div)}</span><b>${esc(c.region + ' ' + c.name)}</b></div><nav class="tb-tabs">${tab('club', 'Club', 'team')}${tab('roster', 'Roster', 'clubRoster')}${tab('staff', 'Staff', 'clubStaff')}${tab('book', 'Playbook', 'clubBook')}${tab('trade', 'Trade', 'clubTrade')}</nav><span class="spacer"></span><span class="tb-when">${ph ? ph[1] : ''}${sub && !watchOn() ? ' · ' + sub[1] : ''}</span><div class="tb-go">${goButtonsHTML()}</div></div></div>`;
+  }
   const tree = navTree(), cur = navHeadOf(view, tree), head = tree.find(x => x[0] === cur), v = view === 'cutdown' || view === 'camp' ? 'pre' : view, hot = navHot();
   const here = (head[2].find(x => x[0] === v) || [])[1] || VIEW_LABEL[view] || head[1];
   const tabs = head[2].length > 1 ? `<nav class="tb-tabs">${head[2].map(([k, l]) => `<button class="${k === v ? 'on' : ''}" data-action="nav" data-view="${k}">${l}${k === hot && k !== v ? '<i class="nav-dot"></i>' : ''}</button>`).join('')}</nav>` : '';
@@ -306,7 +331,7 @@ function navTree() {
   const hist = state.history && state.history.length;
   return [
     ['home', 'Home', [['home', 'Overview'], ['news', 'News']]],
-    ['team', 'Team', [['roster', 'Roster'], ...(preOpen() ? [['pre', preCampOn() ? 'Preseason' : 'Roster Planner']] : []), ['depth', 'Snap counts'], ['practice', 'Practice report']]],
+    ['team', 'Team', [['roster', 'Roster'], ...(preOpen() ? [['pre', preCampOn() ? 'Preseason' : 'Roster Planner']] : []), ['depth', 'Depth chart'], ['practice', 'Practice report']]],
     ['staff', 'Staff', [['coaches', 'Coaches'], ['playbook', 'Playbook'], ...(preCampOn() ? [['meeting', 'Staff meeting']] : [])]],
     ['league', 'League', [['schedule', 'Schedule'], ['standings', 'Standings'], ['stats', 'League Stats'], ['history', 'History'], ...(hist ? [['season', 'Season Review']] : [])]],
     ['players', 'Players', [['fa', 'Free Agents'], ['trade', 'Trade'], ['search', 'Player Search'], ['draft', 'Draft'], ...(['WAIVERS', 'REG', 'PLAYOFFS'].includes(state.phase) ? [['waivers', 'Waiver Wire']] : [])]],
@@ -315,7 +340,7 @@ function navTree() {
 }
 // the page where this phase's business is done
 function navHot() { if ((state.phase === 'REG' || state.phase === 'PLAYOFFS') && onWaivers().some(p => p.waiver.from !== state.userTid)) return 'waivers'; return { RECAP: 'season', COACHES: 'coaches', RESIGN: 'roster', FA: 'fa', DRAFT: 'draft', UDFA: 'fa', PRESEASON: state.pre ? 'pre' : 'coaches', CUTDOWN: 'pre', WAIVERS: 'waivers' }[state.phase] || null; }
-function navHeadOf(v, tree) { v = v === 'cutdown' || v === 'camp' ? 'pre' : v; const h = (tree || navTree()).find(x => x[2].some(y => y[0] === v)); return h ? h[0] : 'home'; }
+function navHeadOf(v, tree) { if (v === 'club') return 'league'; v = v === 'cutdown' || v === 'camp' ? 'pre' : v; const h = (tree || navTree()).find(x => x[2].some(y => y[0] === v)); return h ? h[0] : 'home'; }
 const NAV_ICON = { home: '⌂', team: '☰', staff: '♜', league: '≡', players: '✚', settings: '⚙' };
 // the sidebar's drawn icons
 const SB_ICON = { home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
@@ -348,7 +373,7 @@ function isPhone() { return typeof matchMedia === 'function' && matchMedia('(max
 // ---------- phones: room for the names ----------
 // After every draw on a phone: a row of picker buttons that won't fit on one line becomes a dropdown, and a row's own buttons
 // fold away into a menu that opens when you tap the row, so the name keeps the width.
-const MK_ROWS = 'tr, .ph-row, .mrow, .dec-r, .fut-row';
+const MK_ROWS = 'tr, .ph-row, .mrow, .dec-r, .fut-row, .dk-chip';
 let mkPass = false, mkDragEnd = 0; // a click the menu passes on to the row's own button; when a drag by the handle last let go
 function phoneKit(root) {
   if (!root || !isPhone()) return;
@@ -408,6 +433,7 @@ function mobileNavHTML() {
 function pageHTML() {
   switch (view) {
     case 'home': return homeHTML();
+    case 'club': return ui.clubTid == null || ui.clubTid === state.userTid || !T(ui.clubTid) ? homeHTML() : clubPageHTML(ui.clubTid);
     case 'roster': return rosterHTML();
     case 'depth': return withPendingElev(state.userTid, depthChartHTML); // squad men coming up for the game can be put on the chart
     case 'playbook': return playbookHTML();
@@ -468,56 +494,184 @@ function lastGame(tid) {
   for (const id of ids) { const g = state.games[id]; if (g.tids.includes(tid)) return g; }
   return null;
 }
+// ---------- the club page: one composed sheet, the way a club's front office would lay it out ----------
+//  A leather masthead in the club's colors (badge, name, the men in charge, the record and its form, the next game), an engraved strip
+//  of the figures that matter, the phase's business in a ribbon, then three ruled columns: the full schedule and the club's news;
+//  the division, the front office and staff, the injuries; the cap, the draft picks, the leaders. Every club, man and game is a link.
 function homeHTML() {
-  const u = state.userTid, t = T(u), recs = standings(), r = recs[u];
-  const divs = divisionStandings(), myDiv = divs[t.conf + ' ' + t.div];
-  const place = myDiv.findIndex(x => x.tid === u) + 1;
-  const ng = nextGame(u), lg = lastGame(u);
-  let html = `<div class="callout">${phaseCallout()}</div>${waiverAlertHTML()}`;
+  const u = state.userTid;
+  let html = clubPageHTML(u, { notice: phaseCallout(), alert: waiverAlertHTML() });
   if (state.phase === 'RECAP') html += recapHTML();
-  html += `<div class="grid g3">`;
-  // team card
-  html += `<div class="card"><h3>${esc(t.region + ' ' + t.name)}</h3>
-    <div class="row" style="align-items:baseline"><span class="big">${recStr(r)}</span><span class="muted">${ordinal(place)} in ${t.conf} ${t.div}</span></div>
-    <div class="stat-tiles" style="margin-top:10px">
-      <div class="tile"><div class="v">${r.pf}</div><div class="l">Points For</div></div>
-      <div class="tile"><div class="v">${r.pa}</div><div class="l">Points Against</div></div>
-      <div class="tile"><div class="v">${fmtMoney(capRoom(u))}</div><div class="l">Cap Space</div></div>
-      <div class="tile"><div class="v">${rosterCount(u)}/${rosterLimit()}</div><div class="l">Roster</div></div>
-    </div>
-    <div class="kv" style="margin-top:12px">
-      ${COACH_ROLES.map(r => `<div>${ROLE_SHORT[r] === 'HC' ? 'Head Coach' : ROLE_SHORT[r]}</div><div>${coachLink(C(t[r.toLowerCase()]))}</div>`).join('')}
-      <div>Schemes</div><div class="small">${esc(teamSchemeLabel(t, 'O') || '—')} · ${esc(teamSchemeLabel(t, 'D') ? teamSchemeLabel(t, 'D') : '—')}</div>
-      <div>Team Rating</div><div>Off ${rat(teamOvr(u, 'off'))} · Def ${rat(teamOvr(u, 'def'))}</div>
-    </div></div>`;
-  // games card
-  html += `<div class="card"><h3>Games</h3>`;
-  if (ng) {
-    const opp = ng.h === u ? ng.a : ng.h;
-    html += `<div class="muted small">NEXT — WEEK ${state.week}</div><div class="row" style="margin:4px 0 12px"><b>${ng.h === u ? 'vs' : '@'}</b> ${teamLink(opp, true)} <span class="muted">(${recOf(opp, recs)})</span></div>`;
-  }
-  if (lg) {
-    const [h, a] = lg.tids, us = lg.tids.indexOf(u), won = lg.score[us] > lg.score[1 - us], tie = lg.score[0] === lg.score[1];
-    html += `<div class="muted small">LAST GAME${lg.playoff ? ' — ' + lg.playoff.toUpperCase() : ' — WEEK ' + lg.week}</div>
-      <div class="game" data-action="box" data-gid="${lg.id}" style="margin-top:4px">
-        <div class="ln ${lg.score[1] > lg.score[0] ? 'w' : ''}"><span>${T(a).abbr}</span><span>${lg.score[1]}</span></div>
-        <div class="ln ${lg.score[0] > lg.score[1] ? 'w' : ''}"><span>${T(h).abbr}</span><span>${lg.score[0]}</span></div>
-        <div class="small ${tie ? 'muted' : won ? 'good' : 'bad'}">${tie ? 'Tie' : won ? 'Win' : 'Loss'}${lg.ot ? ' (OT)' : ''} · click for box score</div>
-      </div>`;
-  }
-  if (!ng && !lg) html += '<div class="muted">No games yet.</div>';
-  html += `<h3 style="margin-top:16px">${t.conf} ${t.div}</h3>` + miniStandings(myDiv) + `</div>`;
-  // leaders
-  html += `<div class="card"><h3>Team Leaders</h3>${teamLeaders(u)}</div>`;
-  html += `</div><div class="grid g2" style="margin-top:16px">`;
-  const inj = rosterOf(u).filter(p => p.injury).sort((a, b) => uOvr(b) - uOvr(a));
-  html += `<div class="card"><h3>Injury Report</h3>${inj.length ? table('inj', [
-    { k: 'pos', l: 'Pos', v: p => p.lbl }, { k: 'n', l: 'Player', f: p => playerLink(p) }, { k: 'o', l: 'Tier', f: p => tierPill(p) },
-    { k: 'i', l: 'Injury', f: p => esc(p.injury.name) }, { k: 'w', l: 'Out', f: p => p.injury.weeks + ' wk' + (onIR(p) ? ' (IR)' : ''), num: 1 },
-  ], inj, { nosort: 1 }) : '<div class="muted">Everyone is healthy.</div>'}</div>`;
-  html += `<div class="card"><h3>Latest News</h3>${newsList(state.news.slice(0, 14))}</div></div>`;
   html += campCardHTML();
   return html;
+}
+// a club as a link: its color, then its name
+function clubTag(tid, full) { const t = T(tid); return `<button class="link cl-team" data-action="team" data-tid="${tid}" title="${esc(t.region + ' ' + t.name)}"><i class="cl-chip" style="background:${t.color}"></i><span>${esc(full ? t.region + ' ' + t.name : t.name)}</span></button>`; }
+const clSec = (title, body, more, cls) => `<div class="cl-sec${cls ? ' ' + cls : ''}"><div class="cl-sh"><h3>${title}</h3>${more || ''}</div>${body}</div>`;
+const clMore = (label, v) => `<button class="link cl-more" data-action="nav" data-view="${v}">${label} ›</button>`;
+const clGo = (label, act, tid) => `<button class="link cl-more" data-action="${act}" data-tid="${tid}">${label} ›</button>`;
+const clTier = v => { const t = coachTier(v); return `<span class="cl-tier t-${t}">${t}</span>`; };
+// names in the news become links: players and coaches by name, clubs by name or abbreviation
+function clLinkNames(text) {
+  const full = new Map(), coach = new Map(), club = new Map();
+  for (const p of Object.values(state.players)) { if (!p.first) continue; const f = p.first + ' ' + p.last; if (!full.has(f) || p.tid >= 0) full.set(f, p); }
+  for (const c of Object.values(state.coaches)) coach.set(c.first + ' ' + c.last, c);
+  for (const t of state.teams) { club.set(t.region + ' ' + t.name, t.id); club.set(t.abbr, t.id); }
+  const abbrs = state.teams.map(t => t.abbr).sort((a, b) => b.length - a.length);
+  const re = new RegExp(`\\b(${abbrs.join('|')})\\b|([A-Z][\\w'’-]+ (?:[A-Z][\\w'’.-]+)(?: (?:Jr\\.|Sr\\.|II|III|IV|[A-Z][\\w'’-]+))?)`, 'g');
+  const look = s => { if (club.has(s)) return `<button class="link" data-action="team" data-tid="${club.get(s)}">${esc(s)}</button>`; const p = full.get(s); if (p) return `<button class="link" data-action="player" data-pid="${p.id}">${esc(s)}</button>`; const c = coach.get(s); if (c) return `<button class="link" data-action="coach" data-cid="${c.id}">${esc(s)}</button>`; return null; };
+  let html = '', i = 0, m;
+  while ((m = re.exec(text))) {
+    html += esc(text.slice(i, m.index)); i = re.lastIndex;
+    if (m[1]) { html += look(m[1]) || esc(m[1]); continue; }
+    const s = m[2], w = s.split(' '); let h = look(s);
+    if (!h && w.length === 3) { const t = look(w.slice(1).join(' ')); if (t) h = esc(w[0]) + ' ' + t; else { const a = look(w.slice(0, 2).join(' ')); if (a) h = a + ' ' + esc(w[2]); } }
+    html += h || esc(s);
+  }
+  return html + esc(text.slice(i));
+}
+// the club's games this season, one row each: the schedule's weeks, then any playoff games
+function clGames(tid) {
+  const out = [];
+  state.schedule.forEach((wk, i) => {
+    const m = wk.find(x => x.h === tid || x.a === tid);
+    if (!m) { out.push({ wk: i + 1, bye: true }); return; }
+    const home = m.h === tid, opp = home ? m.a : m.h, g = { wk: i + 1, label: String(i + 1), home, opp, gid: m.gid, div: T(opp).conf === T(tid).conf && T(opp).div === T(tid).div };
+    if (m.score) { g.us = home ? m.score[0] : m.score[1]; g.them = home ? m.score[1] : m.score[0]; }
+    out.push(g);
+  });
+  const po = Object.values(state.games).filter(b => b.season === state.season && b.playoff && !b.pre && b.tids.includes(tid)).sort((a, b) => a.id - b.id);
+  for (const b of po) { const s = b.tids.indexOf(tid), opp = b.tids[1 - s]; out.push({ label: String(b.playoff).split(' ').map(w => w[0]).join(''), title: b.playoff, home: s === 0, opp, gid: b.id, us: b.score[s], them: b.score[1 - s], po: true }); }
+  return out;
+}
+const clRes = g => g.us === undefined ? null : g.us > g.them ? 'W' : g.us < g.them ? 'L' : 'T';
+function clSchedule(tid, games) {
+  const recs = standings(); let w = 0, l = 0, t = 0; const split = { h: [0, 0, 0], a: [0, 0, 0], d: [0, 0, 0] };
+  const rows = games.map(g => {
+    if (g.bye) return `<tr class="bye"><td class="cl-wk">${g.wk}</td><td></td><td class="cl-opp" colspan="4">Bye week</td></tr>`;
+    const next = !g.po && state.phase === 'REG' && g.wk === state.week, r = clRes(g);
+    let res = next ? '<span class="cl-nexttag">Next game</span>' : '', cum = '';
+    if (r) { if (!g.po) { const k = r === 'W' ? 0 : r === 'L' ? 1 : 2; if (k === 0) w++; else if (k === 1) l++; else t++; split[g.home ? 'h' : 'a'][k]++; if (g.div) split.d[k]++; cum = `${w}-${l}${t ? '-' + t : ''}`; }
+      const sc = `<b>${r}</b>${g.us}–${g.them}`; res = g.gid !== undefined && state.games[g.gid] ? `<button class="link cl-res ${r}" data-action="box" data-gid="${g.gid}" title="Box score">${sc}</button>` : `<span class="cl-res ${r}">${sc}</span>`; }
+    return `<tr class="${next ? 'next' : ''}${g.po ? ' po' : ''}"><td class="cl-wk"${g.title ? ` title="${esc(g.title)}"` : ''}>${g.label}</td><td class="cl-ha">${g.home ? 'vs' : 'at'}</td><td class="cl-opp"><div class="cl-ow">${clubTag(g.opp, true)}${g.div ? '<i class="cl-div" title="Division game">DIV</i>' : ''}</div></td><td class="cl-orec">${recOf(g.opp, recs)}</td><td class="cl-r">${res}</td><td class="cl-cum">${cum}</td></tr>`;
+  }).join('');
+  const sp = a => `${a[0]}-${a[1]}${a[2] ? '-' + a[2] : ''}`;
+  const played = games.some(g => !g.po && clRes(g)), reg = games.filter(g => !g.po), n = reg.length || 1, bw = 100 / n;
+  const bars = reg.map((g, i) => { const x = (i * bw + bw * 0.14).toFixed(2), w = (bw * 0.72).toFixed(2), r = clRes(g);
+    if (g.bye) return `<rect x="${x}" y="11.2" width="${w}" height="1.6" class="sp-bye"><title>Week ${g.wk}: bye</title></rect>`;
+    if (!r) return state.phase === 'REG' && g.wk === state.week ? `<rect x="${x}" y="4" width="${w}" height="16" class="sp-next"><title>Week ${g.wk}: next</title></rect>` : '';
+    const m = g.us - g.them, h = Math.max(1.5, Math.min(11, Math.abs(m) / 2.4));
+    return `<rect x="${x}" y="${m >= 0 ? 12 - h : 12}" width="${w}" height="${h}" class="sp-${r}"><title>Week ${g.wk}: ${r} ${g.us}–${g.them} ${g.home ? 'vs' : 'at'} ${esc(T(g.opp).name)}</title></rect>`; }).join('');
+  const spark = played ? `<svg class="cl-spark" viewBox="0 0 100 24" preserveAspectRatio="none" role="img" aria-label="Margin of each game"><line x1="0" y1="12" x2="100" y2="12" class="sp-axis"/>${bars}</svg>` : '';
+  return `<table class="cl-tbl cl-sched"><thead><tr><th class="l">Wk</th><th></th><th class="l">Opponent</th><th></th><th class="l">Result</th><th>Rec</th></tr></thead><tbody>${rows}</tbody></table>
+    ${played ? `${spark ? `<div class="cl-sparkrow" title="The margin of each game: up for a win, down for a loss">${spark}</div>` : ''}<div class="cl-splits"><span>Home <b>${sp(split.h)}</b></span><span>Away <b>${sp(split.a)}</b></span><span>Division <b>${sp(split.d)}</b></span></div>` : ''}`;
+}
+function clDivision(tid) {
+  const t = T(tid), rows = divisionStandings()[t.conf + ' ' + t.div] || [];
+  return `<table class="cl-tbl"><thead><tr><th class="l">${esc(t.conf + ' ' + t.div)}</th><th>W-L</th><th>Div</th><th>Diff</th><th>Strk</th></tr></thead><tbody>
+    ${rows.map(r => { const d = r.pf - r.pa; return `<tr class="${r.tid === tid ? 'me' : ''}"><td class="cl-opp">${clubTag(r.tid)}</td><td>${recStr(r)}</td><td>${r.dw}-${r.dl}${r.dt ? '-' + r.dt : ''}</td><td class="${d > 0 ? 'good' : d < 0 ? 'bad' : ''}">${d > 0 ? '+' : ''}${d}</td><td>${esc(r.streak || '–')}</td></tr>`; }).join('')}</tbody></table>`;
+}
+function clStaff(tid) {
+  const t = T(tid), mine = tid === state.userTid, g = mine ? null : gmOf(tid), yrs = (state.history ? state.history.length : 0) + 1;
+  const gm = mine ? `<b>You</b><span class="muted"> · ${ordinal(yrs)} season</span>` : g ? `<span title="${esc(gmCareer(g))}"><b>${esc(gmName(g))}</b><span class="muted"> · ${g.age}, ${esc(gmCareer(g).replace(/^In his (\w+) season\..*/, '$1 season'))}</span></span>` : '<span class="bad">Vacant</span>';
+  const hc = C(t.hc), hcTen = hc && hc.hist ? hc.hist.filter(h => h.tid === tid && (h.role === 'HC' || !h.role)).length + 1 : 1;
+  const SHORT = { OC: 'Offense', DC: 'Defense', STC: 'Special teams', SC: 'Strength' };
+  const rows = [['GM', gm],
+    ['Head coach', hc ? `${coachNameLink(hc)}${hc.rec && hc.rec.w + hc.rec.l ? `<span class="muted"> · ${hc.rec.w}-${hc.rec.l}${hc.rec.t ? '-' + hc.rec.t : ''}${hc.rec.titles ? `, ${hc.rec.titles} title${hc.rec.titles > 1 ? 's' : ''}` : ''}</span>` : ''}` : '<span class="bad">Vacant</span>', hc ? clTier(hc.ovr) : ''],
+    ...COACH_ROLES.filter(r => r !== 'HC').map(r => { const c = C(t[r.toLowerCase()]); return [SHORT[r], c ? coachNameLink(c) : '<span class="bad">Vacant</span>', c ? clTier(c.ovr) : '']; })];
+  const off = teamOvr(tid, 'off'), def = teamOvr(tid, 'def');
+  return `<table class="cl-tbl cl-kv"><tbody>${rows.map(([k, v, x]) => `<tr><th class="l">${k}</th><td class="l cl-name"${x === undefined ? ' colspan="2"' : ''}>${v}</td>${x === undefined ? '' : `<td class="cl-tc">${x}</td>`}</tr>`).join('')}
+    <tr><th class="l">Schemes</th><td class="l cl-name" colspan="2" title="${esc((teamSchemeLabel(t, 'O') || '—') + ' · ' + (teamSchemeLabel(t, 'D') || '—'))}">${esc(teamSchemeLabel(t, 'O') || '—')} <span class="muted">·</span> ${esc(teamSchemeLabel(t, 'D') || '—')}</td></tr>
+    <tr><th class="l">Rating</th><td class="l" colspan="2">Offense ${rat(off)} <span class="muted">·</span> Defense ${rat(def)}</td></tr></tbody></table>${hc ? `<div class="cl-foot">${esc(hc.first + ' ' + hc.last)} is in his ${ordinal(hcTen)} season here.${g ? ` ${esc(gmName(g))}: ${esc(gmSummary(g).replace(/^Known/, 'known'))}` : ''}</div>` : ''}`;
+}
+function clInjuries(tid) {
+  const inj = rosterOf(tid).filter(p => p.injury).sort((a, b) => b.injury.weeks - a.injury.weeks || uOvr(b) - uOvr(a)), worn = rosterOf(tid).filter(p => !p.injury && (p.wear || 0) >= 8);
+  if (!inj.length && !worn.length) return '<div class="cl-empty">Everyone is healthy.</div>';
+  return `<table class="cl-tbl cl-injt"><tbody>${inj.map(p => `<tr><td class="l cl-pos" title="${esc(p.lbl)}">${esc(p.pos)}</td><td class="l cl-name" title="${esc(pname(p) + ' · ' + tierOf(p))}">${playerLink(p)}</td><td class="l muted cl-inj">${esc(p.injury.name)}</td><td class="cl-out"><b>${p.injury.weeks}</b> wk${onIR(p) ? '<i class="cl-ir">IR</i>' : ''}</td></tr>`).join('')}
+    ${worn.map(p => `<tr><td class="l cl-pos" title="${esc(p.lbl)}">${esc(p.pos)}</td><td class="l cl-name">${playerLink(p)}</td><td class="l muted cl-inj" colspan="2">Worn down</td></tr>`).join('')}</tbody></table>`;
+}
+function clCap(tid) {
+  const t = T(tid), cap = typeof capOf === 'function' ? capOf(tid) : CAP, pay = payroll(tid), room = capRoom(tid), dead = t.dead || 0, next = payrollNext(tid), act = Math.max(0, pay - dead);
+  const pct = v => Math.max(0, Math.min(100, 100 * v / Math.max(cap, pay))).toFixed(1);
+  const top = rosterOf(tid).filter(p => p.contract && p.contract.yrs > 0).sort((a, b) => b.contract.amt - a.contract.amt).slice(0, 5);
+  return `<div class="cl-capbar" title="Payroll ${fmtMoney(pay)} of a ${fmtMoney(cap)} cap"><i class="cb-pay" style="width:${pct(act)}%"></i><i class="cb-dead" style="width:${pct(dead)}%"></i></div>
+    <div class="cl-capfig"><div><span>Cap space</span><b class="${room < 0 ? 'bad' : ''}">${fmtMoney(room)}</b></div><div><span>Payroll</span><b>${fmtMoney(pay)}</b></div><div><span>Cap</span><b>${fmtMoney(cap)}</b></div>
+      <div><span>Dead money</span><b class="${dead > 0 ? 'bad' : ''}">${fmtMoney(dead)}</b></div><div><span>Next year</span><b>${fmtMoney(next)}</b></div><div><span>Signed for next year</span><b>${rosterOf(tid).filter(p => p.contract && (p.contract.yrs >= 2 || p.contract.next)).length}</b></div></div>
+    <table class="cl-tbl cl-hits"><thead><tr><th class="l">Biggest cap hits</th><th class="lo">Yrs</th><th>Cap hit</th></tr></thead><tbody>${top.map(p => `<tr><td class="l cl-name"><span class="cl-pos">${esc(p.lbl)}</span> ${playerLink(p)}</td><td class="lo">${p.contract.yrs}</td><td><b>${fmtMoney(p.contract.amt)}</b></td></tr>`).join('')}</tbody></table>`;
+}
+// where a club's first-round pick would fall if the season ended today: worst record first
+function clProjected(orig) {
+  const recs = standings(), pct = r => { const g = r.w + r.l + r.t; return g ? (r.w + r.t / 2) / g : 0.5; };
+  const order = state.teams.map(t => t.id).sort((a, b) => pct(recs[a]) - pct(recs[b]) || (recs[a].pf - recs[a].pa) - (recs[b].pf - recs[b].pa));
+  return order.indexOf(orig) + 1;
+}
+function clPicks(tid) {
+  const yrs = [...new Set(state.picks.filter(pk => pk.owner === tid || pk.orig === tid).map(pk => pk.season))].sort((a, b) => a - b).slice(0, 2);
+  if (!yrs.length) return '<div class="cl-empty">No picks on the books.</div>';
+  const live = state.phase === 'REG' || state.phase === 'PLAYOFFS' || state.phase === 'RECAP';
+  const slot = pk => { const o = state.draft && pk.season === state.draft.year ? state.draft.order.find(z => z.pickId === pk.id) : null; return o ? `#${o.pick}` : live && pk.season === state.season + 1 ? `~#${(pk.round - 1) * state.teams.length + clProjected(pk.orig)}` : ''; };
+  let held = 0;
+  const grid = yrs.map(yr => `<div class="cl-py">${yr}</div>${Array.from({ length: DRAFT_ROUNDS }, (_, i) => {
+    const r = i + 1, mine = state.picks.filter(pk => pk.season === yr && pk.round === r && pk.owner === tid), away = state.picks.find(pk => pk.season === yr && pk.round === r && pk.orig === tid && pk.owner !== tid);
+    held += mine.length;
+    const own = mine.find(pk => pk.orig === tid), extra = mine.filter(pk => pk.orig !== tid);
+    const title = [own ? `Your own round ${r} pick` : away ? `Round ${r} traded to the ${teamName(away.owner)}` : `No round ${r} pick`, ...extra.map(pk => `Round ${r} from the ${teamName(pk.orig)}`)].join(' · ');
+    return `<button class="cl-pk ${own ? 'own' : away ? 'gone' : 'none'}${extra.length ? ' plus' : ''}" data-action="nav" data-view="draft" title="${esc(title)}"><b>R${r}</b>${own ? `<span>${slot(own) || 'Own'}</span>` : away ? `<span>→ ${T(away.owner).abbr}</span>` : '<span>—</span>'}${extra.map(pk => `<span class="cl-px" style="--c:${T(pk.orig).color}">+${T(pk.orig).abbr}${slot(pk) ? ' ' + slot(pk) : ''}</span>`).join('')}</button>`;
+  }).join('')}`).join('');
+  return `<div class="cl-picks">${grid}</div><div class="cl-foot">${held} pick${held === 1 ? '' : 's'} in the next ${yrs.length === 1 ? 'draft' : 'two drafts'}${live ? ' · ~ projected on today’s standings' : ''}</div>`;
+}
+function clLeaders(tid) {
+  const ro = rosterOf(tid).filter(p => p.stats && p.stats.gp), cats = [['Passing', 'passY', ' yds'], ['Rushing', 'rushY', ' yds'], ['Receiving', 'recY', ' yds'], ['Tackles', 'tkl', ''], ['Sacks', 'sck', ''], ['Interceptions', 'dint', '']];
+  const rows = cats.map(([l, k, un]) => { const p = ro.slice().sort((a, b) => (b.stats[k] || 0) - (a.stats[k] || 0))[0]; return p && p.stats[k] ? `<tr><th class="l">${l}</th><td class="l cl-name">${playerLink(p)} <span class="cl-pos">${esc(p.lbl)}</span></td><td><b>${round1(p.stats[k])}</b>${un}</td></tr>` : ''; }).join('');
+  return rows ? `<table class="cl-tbl cl-kv"><tbody>${rows}</tbody></table>` : '<div class="cl-empty">No stats yet this season.</div>';
+}
+function clNews(tid) {
+  const items = state.news.filter(n => n.tids && n.tids.includes(tid)).slice(0, 3);
+  return items.length ? `<ul class="cl-news">${items.map(n => `<li><span>${n.s} ${esc(n.when)}</span><div>${clLinkNames(n.text)}</div></li>`).join('')}</ul>` : '<div class="cl-empty">No club news yet.</div>';
+}
+function clubPageHTML(tid, o = {}) {
+  const t = T(tid), recs = standings(), r = recs[tid], games = clGames(tid), mine = tid === state.userTid;
+  const div = divisionStandings()[t.conf + ' ' + t.div] || [], place = div.findIndex(x => x.tid === tid) + 1;
+  const pct = x => { const g = x.w + x.l + x.t; return g ? (x.w + x.t / 2) / g : 0; };
+  const conf = state.teams.filter(x => x.conf === t.conf).map(x => x.id).sort((a, b) => pct(recs[b]) - pct(recs[a]) || (recs[b].pf - recs[b].pa) - (recs[a].pf - recs[a].pa)), cplace = conf.indexOf(tid) + 1;
+  const done = games.filter(g => clRes(g)), form = done.slice(-5);
+  const formHTML = Array.from({ length: 5 }, (_, i) => { const g = form[i - (5 - form.length)]; if (!g) return '<i class="cl-f none"></i>'; const x = clRes(g); return g.gid !== undefined && state.games[g.gid] ? `<button class="cl-f ${x}" data-action="box" data-gid="${g.gid}" title="${g.po ? esc(g.title) : 'Week ' + g.wk}: ${x} ${g.us}–${g.them} ${g.home ? 'vs' : 'at'} ${esc(T(g.opp).name)}">${x}</button>` : `<i class="cl-f ${x}">${x}</i>`; }).join('');
+  const hc = C(t.hc), when = `${state.season} · ${state.phase === 'REG' ? 'Week ' + Math.min(state.week, SEASON_WEEKS) : esc(PHASE_LABEL[state.phase] || state.phase)}`;
+  // the next game, or what the club is doing instead
+  let next;
+  const ng = nextGame(tid);
+  if (ng) { const opp = ng.h === tid ? ng.a : ng.h, home = ng.h === tid;
+    next = `<div class="cl-nl">Next game · Week ${state.week}</div><div class="cl-nm"><span class="cl-mini" style="--c:${T(opp).color}">${esc(T(opp).abbr)}</span><div><b>${home ? 'vs' : 'at'} ${clubTag(opp, true)}</b><span>${recOf(opp, recs)} · ${home ? 'at home' : 'on the road'}${T(opp).conf === t.conf && T(opp).div === t.div ? ' · division' : ''}</span>${(recs[opp].last || []).length ? `<span class="cl-oform" title="Their last ${Math.min(5, recs[opp].last.length)}">${recs[opp].last.slice(-5).map(x => `<i class="${x}"></i>`).join('')}</span>` : ''}</div></div>`; }
+  else if (state.phase === 'PLAYOFFS' && state.playoffs) { const po = state.playoffs, out = po.elim && po.elim[tid] !== undefined, seed = po.seeds && po.seeds[t.conf] && po.seeds[t.conf].includes(tid) ? seedOf(tid) : null;
+    next = `<div class="cl-nl">Playoffs</div><div class="cl-nm"><div><b>${out ? `Out in the ${ROUND_NAMES[po.elim[tid]]}` : seed ? `#${seed} seed` : 'Missed the playoffs'}</b><span>${!out && seed ? ROUND_NAMES[po.round] || '' : `${state.season} season over`}</span></div></div>`; }
+  else { const pk = state.picks.filter(x => x.owner === tid && x.round === 1).sort((a, b) => a.season - b.season)[0];
+    next = `<div class="cl-nl">${esc(PHASE_LABEL[state.phase] || 'Offseason')}</div><div class="cl-nm"><div><b>${state.phase === 'REG' ? 'Season over' : 'The offseason'}</b><span>${pk ? `First-round pick ${pk.season}${pk.orig !== tid ? ' (from ' + T(pk.orig).abbr + ')' : ''}` : 'No first-round pick'}</span></div></div>`; }
+  const inj = rosterOf(tid).filter(p => p.injury).length, d = r.pf - r.pa;
+  const fig = (k, v, s) => `<div><div class="k">${k}</div><div class="v">${v}${s ? `<small>${s}</small>` : ''}</div></div>`;
+  return `<div class="club" style="${Object.entries(clubVars(tid)).map(([k, v]) => `${k}:${v}`).join(';')}">
+    <header class="cl-mast" data-abbr="${esc(t.abbr)}">
+      <div class="cl-badge" title="${esc(t.region + ' ' + t.name)}"><span>${esc(t.abbr)}</span></div>
+      <div class="cl-id"><div class="cl-over">${esc(t.conf + ' ' + t.div)} · ${when}${mine ? ' · your club' : T(state.userTid).conf === t.conf && T(state.userTid).div === t.div ? ' · division rival' : ''}</div>
+        <h1>${esc(t.region)} <b>${esc(t.name)}</b></h1>
+        <div class="cl-men"><span class="cl-ml">Head coach</span> ${hc ? coachNameLink(hc) : '<span>Vacant</span>'}<i>·</i><span class="cl-ml">GM</span> ${mine ? '<b>You</b>' : gmOf(tid) ? `<b>${esc(gmName(gmOf(tid)))}</b>` : 'Vacant'}</div></div>
+      <div class="cl-rec"><div class="cl-big">${recStr(r)}</div><div class="cl-place">${ordinal(place)} ${esc(t.conf)} ${esc(t.div)} · ${ordinal(cplace)} ${esc(t.conf)}</div><div class="cl-form">${formHTML}</div></div>
+      <div class="cl-next">${next}</div>
+    </header>
+    <div class="cl-ledger">${fig('Pts for', r.pf, done.length ? `${round1(r.pf / Math.max(1, r.w + r.l + r.t))}/g` : '')}${fig('Pts against', r.pa, done.length ? `${round1(r.pa / Math.max(1, r.w + r.l + r.t))}/g` : '')}
+      ${fig('Diff', `<span class="${d > 0 ? 'good' : d < 0 ? 'bad' : ''}">${d > 0 ? '+' : ''}${d}</span>`)}${fig('Streak', esc(r.streak || '–'))}
+      ${fig('Cap space', `<span class="${capRoom(tid) < 0 ? 'bad' : ''}">${fmtMoney(capRoom(tid))}</span>`)}${fig('Payroll', fmtMoney(payroll(tid)))}${fig('Next year', fmtMoney(payrollNext(tid)))}
+      ${fig('Roster', `${rosterCount(tid)}<small>/ ${rosterLimit()}</small>`)}${fig('Injured', inj, inj === 1 ? 'player' : 'players')}</div>
+    ${o.notice ? `<div class="cl-notice"><b>Now</b><span>${o.notice}</span></div>` : ''}${o.alert ? `<div class="cl-alert">${o.alert}</div>` : ''}
+    <div class="cl-body">
+      <div class="cl-col cl-a">${clSec(`${state.season} schedule`, games.length ? clSchedule(tid, games) : '<div class="cl-empty">The schedule comes out when the season starts.</div>', clMore('Full schedule', 'schedule'), 'cl-schedsec')}
+        ${clSec(`Injuries${inj ? ` <span class="cl-count">${inj}</span>` : ''}`, clInjuries(tid), clGo('Roster', 'clubRoster', tid))}</div>
+      <div class="cl-col cl-b">${clSec('Division', clDivision(tid), clMore('Standings', 'standings'))}
+        ${clSec('Front office and staff', clStaff(tid), clGo('Staff', 'clubStaff', tid))}
+        ${clSec('Club news', clNews(tid), clMore('All news', 'news'))}</div>
+      <div class="cl-col cl-c">${clSec('Salary cap', clCap(tid), clGo('Contracts', 'clubRoster', tid))}
+        ${clSec('Draft picks', clPicks(tid), clMore('Draft', 'draft'))}
+        ${clSec('Team leaders', clLeaders(tid), clMore('League stats', 'stats'))}</div>
+    </div></div>`;
 }
 function coachLink(c) { return c ? `${coachNameLink(c)} ${tierChip(c.ovr)}` : '<span class="bad">Vacant</span>'; }
 function teamOvr(tid, side) {
@@ -908,41 +1062,48 @@ const STAT_NUM = (k) => ({ k, v: r => r.stats[k] || 0, num: 1 });
 function rosterGamesHTML(p) {
   const games = Object.values(state.games).filter(b => b && b.season === state.season && !b.pre && b.stats && b.stats[p.id]).sort((a, b) => a.id - b.id);
   const lg = p.glog || [], line = s2 => s2 && (s2.gp || s2.snp) ? statSummary(s2, p.pos) : '';
-  const card = b => { const l = b.stats[p.id], me = b.tids.indexOf(l.tid !== undefined ? l.tid : p.tid), side = me < 0 ? 0 : me, opp = b.tids[1 - side], us = b.score[side], them = b.score[1 - side];
-    const wk = b.playoff || ('Week ' + b.week), g = lg.find(x => x.o === opp && (x.w === 'Wk ' + b.week || x.w === b.playoff)), res2 = us > them ? 'W' : us < them ? 'L' : 'T';
-    return `<div class="ph-wk game"><div class="ph-wh"><b>${esc(wk)}</b><span class="muted">${side === 0 ? 'vs' : '@'} ${esc(T(opp).abbr)}</span><span class="${res2 === 'W' ? 'good' : res2 === 'L' ? 'bad' : ''}">${res2} ${us}–${them}</span>${g ? gradeChip(Math.round(g.g)) : ''}</div>
-      ${l.snp ? `<div class="ph-kv"><span>Snaps</span><b>${l.snp}</b></div>` : ''}${line(l) ? `<div class="small">${esc(line(l))}</div>` : ''}${g && g.f && Object.keys(g.f).length ? `<div class="small muted">${Object.keys(g.f).map(k => `${FACETS[k]} ${Math.round(g.f[k])}`).join(' · ')}</div>` : ''}</div>`; };
+  // a game to a line: the week, the opponent (to his club), the result (to the box score), his grade, snaps, line and job grades
+  const row = b => { const l = b.stats[p.id], me = b.tids.indexOf(l.tid !== undefined ? l.tid : p.tid), side = me < 0 ? 0 : me, opp = b.tids[1 - side], us = b.score[side], them = b.score[1 - side];
+    const g = lg.find(x => x.o === opp && (x.w === 'Wk ' + b.week || x.w === b.playoff)), res2 = us > them ? 'W' : us < them ? 'L' : 'T';
+    const fc = g && g.f && Object.keys(g.f).length ? Object.keys(g.f).map(k => `${FACETS[k]} ${Math.round(g.f[k])}`).join(' · ') : '';
+    return `<tr><td class="rg-wk">${b.playoff ? esc(b.playoff) : b.week}</td><td class="rg-op">${side === 0 ? 'vs' : '@'} <button class="link" data-action="team" data-tid="${opp}" title="${esc(T(opp).region + ' ' + T(opp).name)}">${esc(T(opp).abbr)}</button></td>
+      <td><button class="link rg-res ${res2}" data-action="box" data-gid="${b.id}" title="Box score"><b>${res2}</b>${us}–${them}</button></td><td class="num" data-l="Grade">${g ? gradeChip(Math.round(g.g)) : ''}</td><td class="num" data-l="Snaps">${l.snp || ''}</td><td class="rg-ln">${esc(line(l))}</td><td class="rg-fc">${esc(fc)}</td></tr>`; };
   const st = p.stats || {}, gr = p.advS ? overallGrade(p.advS, p.spot) : null, prev = (p.career || []).filter(r => r.season === state.season - 1).pop();
   const head = `<div class="ros-sum"><span><b>${state.season}</b> · ${st.gp || 0} game${st.gp === 1 ? '' : 's'}${st.gs ? `, ${st.gs} start${st.gs === 1 ? '' : 's'}` : ''}${st.snp ? `, ${st.snp} snaps` : ''}</span>${gr !== null ? `<span>Season grade ${gradeChip(gr)}</span>` : ''}${line(st) ? `<span class="small">${esc(line(st))}</span>` : ''}<span class="spacer"></span><button class="sm" data-action="player" data-pid="${p.id}">Open his file</button></div>`;
-  const body = games.length ? `<div class="ph-detail ros-games">${games.slice(-8).reverse().map(card).join('')}</div>${games.length > 8 ? `<div class="small muted">The last eight of ${games.length} games; every game is on his card.</div>` : ''}`
+  const body = games.length ? `<table class="rsg"><thead><tr><th>Wk</th><th>Opp</th><th>Result</th><th class="num">Grade</th><th class="num">Snaps</th><th>Line</th><th>Job grades</th></tr></thead><tbody>${games.slice(-8).reverse().map(row).join('')}</tbody></table>${games.length > 8 ? `<div class="small muted">The last eight of ${games.length} games; every game is on his card.</div>` : ''}`
     : `<div class="small muted" style="padding:6px 2px">No games yet this season.${prev && prev.gp ? ` Last season: ${prev.gp} games, ${prev.gs || 0} starts${line(prev) ? ', ' + esc(line(prev)) : ''}.` : ''}</div>`;
-  return `<div class="ros-x">${head}${body}</div>`;
+  const tr = scoutTraits(p), sc = `<div class="ros-sc"><b>${esc(scoutProfile(p, true))}</b>${tr.str.map(x => ` <span class="good">+ ${esc(x)}</span>`).join('')}${tr.weak.map(x => ` <span class="bad">− ${esc(x)}</span>`).join('')}</div>`;
+  return `<div class="ros-x">${head}${sc}${body}</div>`;
 }
-// another club's GM, on its page: who he is, his career, what he is known for (your own club has none: you are it)
+// another club's GM, at the head of its roster: who he is, his career, what he is known for (your own club has none: you are it)
 function gmLineHTML(tid) {
   const g = typeof gmOf === 'function' && tid !== state.userTid ? gmOf(tid) : null; if (!g) return '';
-  return `<div class="small" style="margin-bottom:8px"><span class="muted">General manager</span> <b>${esc(gmName(g))}</b> <span class="muted">(${g.age})</span> · ${esc(gmCareer(g))} <span class="muted">${esc(gmSummary(g))}</span></div>`;
+  return `<div class="cl-notice rs-gm"><b>GM</b><span><b>${esc(gmName(g))}</b> (${g.age}) · ${esc(gmCareer(g))} <span class="muted">${esc(gmSummary(g))}</span></span></div>`;
 }
+// the position groups by name, for the heading rows of the roster
+const FAM_NAME = { QB: 'Quarterbacks', RB: 'Running backs', FB: 'Fullbacks', WR: 'Wide receivers', TE: 'Tight ends', OL: 'Offensive line', 'Interior DL': 'Interior line', EDGE: 'Edge rushers', LB: 'Linebackers', CB: 'Cornerbacks', S: 'Safeties', K: 'Kickers', P: 'Punters' };
+// his position in a tag the color of his unit (offense, defense, the kicking game): filled when he is in the current lineup,
+// outlined when he is depth, dashed on the practice squad
+function posTag(p, how) {
+  const s = SPOTS[p.spot] ? SPOTS[p.spot].side : '', u = s === 'off' ? 'o' : s === 'def' ? 'd' : 's';
+  return `<span class="rs-pc u-${u}${how ? ' ' + how : ''}" title="${esc(p.lbl)}: ${how === 'on' ? 'in the lineup' : how === 'ps' ? 'practice squad' : 'depth, not in the current lineup'}">${esc(p.lbl === 'Outside WR' ? 'X/Z' : p.lbl)}</span>`;
+}
+// his scouting line for a roster row, its whole text and his strengths and weaknesses on hover
+function scoutCell(p) { const t = scoutTraits(p), line = scoutProfile(p, true); return `<span class="small muted wrapcell" title="${esc([line, ...t.str.map(x => '+ ' + x), ...t.weak.map(x => '− ' + x)].join('\n'))}">${esc(line)}</span>`; }
+// the roster: the club's men on one ruled sheet under the club's masthead and figures, a heading row for each position group
 function rosterHTML() {
   const tid = ui.rosterTid == null ? state.userTid : ui.rosterTid;
-  const mine = tid === state.userTid;
+  const mine = tid === state.userTid, t = T(tid);
   const vw = ui.rosterView === 'true' && !trueOn() ? 'scout' : (ui.rosterView || 'scout');
-  const ro = rosterOf(tid).filter(p => inFamily(p, ui.rosterPos || 'ALL'));
-  const opts = state.teams.map(t => `<option value="${t.id}" ${t.id === tid ? 'selected' : ''}>${t.region} ${t.name}</option>`).join('');
+  const fam = ui.rosterPos || 'ALL', all = rosterOf(tid), ro = all.filter(p => inFamily(p, fam));
+  const opts = state.teams.map(x => `<option value="${x.id}" ${x.id === tid ? 'selected' : ''}>${esc(x.region + ' ' + x.name)}</option>`).join('');
   const vopts = ROSTER_VIEWS.filter(([k]) => k !== 'true' || trueOn()).map(([k, l]) => `<option value="${k}" ${k === vw ? 'selected' : ''}>${l}</option>`).join('');
-  let html = `<div class="ros-top"><div class="row" style="margin-bottom:8px"><select data-change="rosterTeam">${opts}</select> <label class="small muted">View</label> <select data-change="rosterView">${vopts}</select>
-    <span class="spacer"></span>${mine && state.phase === 'RESIGN' ? '<button data-action="resignAll">Re-sign all affordable starters</button>' : ''}
-    ${mine && rosterOf(tid).length > ROSTER_MAX && state.phase === 'PRESEASON' ? `<button data-action="autoCut">Auto-cut to ${ROSTER_MAX}</button>` : ''}</div>
-    <div class="muted small mclip" style="margin-bottom:8px">Cap ${fmtMoney(state.cap)}${T(tid).carry ? ` + ${fmtMoney(T(tid).carry)} carryover` : ''} · Payroll ${fmtMoney(payroll(tid))} · Cap space <b>${fmtMoney(capRoom(tid))}</b>${T(tid).dead ? ` · Dead money ${fmtMoney(T(tid).dead)}` : ''} · Next year committed ${fmtMoney(payrollNext(tid))} · ${rosterCount(tid)}/${rosterLimit()} players${state.phase === 'REG' ? ' (IR excluded)' : ''} · PS ${psOf(tid).length}/${PS_MAX}</div>
-    ${gmLineHTML(tid)}
-    <div class="subtabs">${famTabs(ui.rosterPos || 'ALL', 'rosterPos')}</div></div>`;
-  if (mine && state.phase === 'RESIGN') html += decisionsHTML(tid);
   const rOpen = ui.rosOpen || {};
   const dv = depthView(tid), starters = new Set();
   for (const e of [...dv.off, ...dv.nickel, ...dv.base, dv.k, dv.p]) starters.add(e.p.id);
   const base = [
-    { k: 'pos', l: 'Pos', v: p => FAM_INDEX[p.spot] * 1000 - uOvr(p), f: p => esc(p.lbl) + (starters.has(p.id) ? '' : '<span class="muted small">²</span>') },
-    { k: 'n', l: 'Name', v: p => p.last, f: p => playerLink(p) + ' ' + statusPills(p) },
+    { k: 'pos', l: 'Pos', v: p => FAM_INDEX[p.spot] * 1000 - uOvr(p), f: p => posTag(p, starters.has(p.id) ? 'on' : ''), cls: 'rs-p' },
+    { k: 'n', l: 'Name', v: p => p.last, f: p => playerLink(p) + ' ' + statusPills(p), cls: 'rs-n' },
     { k: 'age', l: 'Age', v: p => p.age, num: 1 },
   ];
   const stars = { k: 'star', l: '★', v: p => starsOf(p) || 0, f: p => starHTML(starsOf(p)), title: 'Ability at his position, weighted toward current form' };
@@ -955,34 +1116,34 @@ function rosterHTML() {
     { k: 'gtd', l: 'Gtd left', v: p => p.contract.gtd || 0, f: p => fmtMoney(p.contract.gtd || 0), num: 1 },
     { k: 'dead', l: 'Dead if cut', v: p => { const d = deadIfCut(p); return d.now + d.next; }, f: p => { const d = deadIfCut(p); return d.now + d.next ? fmtMoney(d.now) + (d.next ? ` <span class="muted small">+${fmtMoney(d.next)}</span>` : '') : '—'; }, num: 1 },
     { k: 'save', l: 'Cut saves', v: p => cutSavings(p), f: p => { const v = cutSavings(p); return `<span class="${v < 0 ? 'bad' : ''}">${fmtMoney(v)}</span>`; }, num: 1 },
-    { k: 'nx', l: 'Status', v: p => p.contract.next ? 2 : p.expiring ? 1 : 0, f: p => fmtContract(p).replace(/^.*?<\/span>/, '') + (p.expiring ? ' <span class="pill exp">Expiring</span>' : '') + (p.contract.rookie ? ' <span class="pill">Rookie deal</span>' : '') },
+    { k: 'nx', l: 'Status', v: p => p.contract.next ? 2 : p.expiring ? 1 : 0, f: p => fmtContract(p).replace(/^.*?<\/span>/, '') + (p.expiring ? ' <span class="pill exp">Expiring</span>' : '') + (p.contract.rookie ? ' <span class="pill">Rookie deal</span>' : ''), cls: 'rs-flex' },
   ];
   else if (vw === 'pre') { const pl = state.prePlan || { feat: {}, hold: {} }, canPlan = mine && state.phase === 'PRESEASON';
     cols = [...base, tier, { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p) },
       { k: 'cg', l: 'Camp', v: p => campGrade(p) || 0, f: p => gradeChip(campGrade(p)), num: 1, title: 'Practice grade so far in camp' },
-      { k: 'psn', l: 'Pre snaps', v: p => p.preS ? p.preS.snp : 0, num: 1 }, { k: 'pg', l: 'Pre grade', v: p => preGrade(p) || 0, f: p => gradeChip(preGrade(p)), num: 1 },
-      { k: 'pl', l: 'Line', f: p => p.preS && p.preS.gp ? `<span class="small">${statSummary(p.preS.st, p.pos)}</span>` : '' },
+      { k: 'psn', l: 'Pre snaps', v: p => p.preS ? p.preS.snp : 0, num: 1, cls: 'rs-w' }, { k: 'pg', l: 'Pre grade', v: p => preGrade(p) || 0, f: p => gradeChip(preGrade(p)), num: 1, cls: 'rs-w' },
+      { k: 'pl', l: 'Line', f: p => p.preS && p.preS.gp ? `<span class="small">${statSummary(p.preS.st, p.pos)}</span>` : '', cls: 'rs-flex' },
       { k: 'role', l: 'Role', f: p => starters.has(p.id) ? '<span class="pill">Starter</span>' : '<span class="muted small">Competing</span>' },
       { k: 'plan', l: 'Playing time', f: p => !canPlan ? (pl.feat[p.id] ? 'Featured' : pl.hold[p.id] ? 'Held out' : '') : `<span class="seg">${[['', 'Normal'], ['feat', 'Feature'], ['hold', 'Hold out']].map(([k, l]) => `<button class="sm ${(pl.feat[p.id] ? 'feat' : pl.hold[p.id] ? 'hold' : '') === k ? 'on' : ''}" data-action="preFeat" data-pid="${p.id}" data-v="${k}">${l}</button>`).join('')}</span>` }];
   }
   else if (vw === 'stats') cols = [...base, { k: 'gp', l: 'GP', v: p => p.stats.gp || 0, num: 1 }, { k: 'gs', l: 'GS', v: p => p.stats.gs || 0, num: 1 }, { k: 'snp', l: 'Snaps', v: p => p.stats.snp || 0, num: 1 },
-    { k: 'line', l: 'Season', v: p => hypeMetric(p, p.stats), f: p => `<span class="small">${p.stats.gp ? statSummary(p.stats, p.pos) : ''}</span>` },
+    { k: 'line', l: 'Season', v: p => hypeMetric(p, p.stats), f: p => `<span class="small">${p.stats.gp ? statSummary(p.stats, p.pos) : ''}</span>`, cls: 'rs-flex' },
     { ...STAT_NUM('tkl'), l: 'Tkl' }, { ...STAT_NUM('sck'), l: 'Sck' }, { ...STAT_NUM('dint'), l: 'INT' }, { ...STAT_NUM('pd'), l: 'PD' }, grade];
   else if (vw === 'adv') {
-    const fg = (k, l) => ({ k: 'f' + k, l, v: p => (p.advS && facetGrade(p.advS, k, 20, p.spot)) || 0, f: p => gradeChip(p.advS ? facetGrade(p.advS, k, 20, p.spot) : null), num: 1 });
+    const fg = (k, l) => ({ k: 'f' + k, l, v: p => (p.advS && facetGrade(p.advS, k, 20, p.spot)) || 0, f: p => gradeChip(p.advS ? facetGrade(p.advS, k, 20, p.spot) : null), num: 1, cls: 'rs-w' });
     cols = [...base, stars, grade, fg('pass', 'Pass'), fg('rush', 'Rush'), fg('rec', 'Recv'), fg('pb', 'Pass blk'), fg('rb', 'Run blk'), fg('rd', 'Run def'), fg('pr', 'Pass rush'), fg('man', 'Man cov'), fg('zone', 'Zone cov'),
       { k: 'snp', l: 'Snaps', v: p => p.stats.snp || 0, num: 1 }];
   } else if (vw === 'comfort') cols = [...base, tier,
-    { k: 'cf', l: 'Positional comfort', v: p => Object.keys(p.cf || {}).length, f: p => Object.entries(p.cf || {}).sort((a, b) => b[1] - a[1]).map(([s, c]) => `<span class="pill ${CF_CLS[comfortLabel(c)]}" title="${Math.round(c)}">${SPOTS[s].l} · ${comfortLabel(c)}</span>`).join(' ') },
+    { k: 'cf', l: 'Positional comfort', v: p => Object.keys(p.cf || {}).length, f: p => Object.entries(p.cf || {}).sort((a, b) => b[1] - a[1]).map(([s, c]) => `<span class="pill ${CF_CLS[comfortLabel(c)]}" title="${Math.round(c)}">${SPOTS[s].l} · ${comfortLabel(c)}</span>`).join(' '), cls: 'rs-wrap' },
     { k: 'ad', l: 'Learns', v: p => (p.h && p.h.adapt) || 0, f: p => { const r = learnRate(p); return `<span class="small ${r >= 1.15 ? 'good' : r <= 0.8 ? 'bad' : 'muted'}">${r >= 1.15 ? 'Quick' : r <= 0.8 ? 'Slow' : 'Average'}</span>`; }, title: 'How fast he picks up a new position' }];
   else if (vw === 'dev') { const gms = Math.max(1, state.phase === 'REG' ? state.week - 1 : SEASON_WEEKS), share = p => clamp((p.stats.snp || 0) / (gms * DEV.gameSnaps), 0, 1), TO = Object.keys(TRACK_LABEL);
-    cols = [...base, tier, { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p) },
-      { k: 'trk', l: 'Development', v: p => -TO.indexOf(trackOf(p)), f: p => trackPill(p), title: 'How his development is going against what the staff expected' },
-      { k: 'fin', l: 'Finished product', f: p => isDeveloping(p) ? `<span class="small muted wrapcell">${esc(scoutProfile(finishedPlayer(p), true))}</span>` : '<span class="small muted">Finished article</span>' },
-      { k: 'cmp', l: 'Plays like', f: p => { const c = isDeveloping(p) ? compFor(p) : null; return c ? `<span class="small">${compLink(c)}</span>` : ''; } },
+    cols = [...base, tier, { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p), cls: 'rs-w2' },
+      { k: 'trk', l: 'Development', v: p => -TO.indexOf(trackOf(p)), f: p => trackPill(p), title: 'How his development is going against what the staff expected', cls: 'rs-w2 rs-w' },
+      { k: 'fin', l: 'Finished product', f: p => { if (!isDeveloping(p)) return '<span class="small muted">Finished article</span>'; const line = scoutProfile(finishedPlayer(p), true), c = compFor(p);
+        return `<div class="rs-l1" title="${esc(line)}">${esc(line)}</div>${c ? `<div class="rs-l2">Plays like ${compLink(c)}</div>` : ''}`; }, cls: 'rs-flex rs-two rs-w' },
       { k: 'sn', l: 'Snaps', v: p => share(p), f: p => p.stats.snp ? Math.round(share(p) * 100) + '%' : '<span class="muted">—</span>', num: 1, title: 'Share of his unit’s snaps this season. 60% earns full credit for growth' },
-      { k: 'pr', l: 'Practice', v: p => pracAvg(p), f: p => PRAC_SIDE[p.pos] ? `<span class="small">${pracGradeLabel(pracAvg(p))}</span>` : '', title: 'His practice weeks since the last checkpoint' },
-      { k: 'pc', l: 'Position coach', f: p => { const c = posCoach(tid, p.pos); return c ? `<span class="small">${esc(c.last)} ${wordPill(asstWord(c, 'dev'))}</span>` : ''; } }];
+      { k: 'pr', l: 'Practice', v: p => pracAvg(p), f: p => PRAC_SIDE[p.pos] ? `<span class="small">${pracGradeLabel(pracAvg(p))}</span>` : '', title: 'His practice weeks since the last checkpoint', cls: 'rs-w2' },
+      { k: 'pc', l: 'Position coach', f: p => { const c = posCoach(tid, p.pos); return c ? `<span class="small">${esc(c.last)} ${wordPill(asstWord(c, 'dev'))}</span>` : ''; }, cls: 'rs-w2 rs-w' }];
   }
   else if (vw === 'true') cols = [...base, { k: 'ovr', l: 'OVR', v: p => p.ovr, f: p => rat(p.ovr), num: 1 }, { k: 'pot', l: 'POT', v: p => p.pot, f: p => rat(p.pot), num: 1 },
     { k: 'seen', l: 'Seen as', v: p => uOvr(p), f: p => `${uOvr(p).toFixed(0)} <span class="muted small">(${(uOvr(p) - p.ovr) > 0 ? '+' : ''}${(uOvr(p) - p.ovr).toFixed(1)})</span>`, num: 1 },
@@ -990,29 +1151,52 @@ function rosterHTML() {
     { k: 'adapt', l: 'Adapt', v: p => (p.h && p.h.adapt) || 0, num: 1 }];
   else cols = [...base, { k: 'ht', l: 'Ht', v: p => p.m.ht, f: p => `<span class="small muted">${fmtHeight(p.m.ht)}</span>`, num: 1 }, { k: 'wt', l: 'Wt', v: p => p.m.wt, f: p => `<span class="small muted">${p.m.wt}</span>`, num: 1 }, stars, tier,
     { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p) },
-    { k: 'sk', l: 'Scouting', f: p => `<span class="small muted wrapcell">${traitsTxt(p)}</span>` },
+    { k: 'sk', l: 'Scouting', f: p => scoutCell(p), cls: 'rs-flex' },
     { k: 'fit', l: 'Fit', v: p => schemeFit(p, tid), f: p => { const f = schemeFit(p, tid); return `<span class="small ${f >= 1 ? 'good' : f <= -1 ? 'bad' : 'muted'}" title="Scheme fit in ${esc(T(tid).abbr)}'s system">${fitLabel(f).replace(' fit', '')}${trueOn() ? ` (${f > 0 ? '+' : ''}${f})` : ''}</span>`; } },
     { k: 'c', l: 'Contract', v: p => p.contract.yrs > 0 ? p.contract.amt : 0, f: p => fmtContract(p), num: 1 }];
   if (mine) cols.push({ k: 'a', l: '', f: p => rosterActions(p) });
-  html += `<div class="card">` + table('roster_' + vw, cols, ro, { rowClass: p => 'ros-r' + (rOpen[p.id] ? ' open' : ''), rowAttr: p => `data-action="rosOpen" data-pid="${p.id}" data-mkl="Game by game"`, rowAfter: p => rOpen[p.id] ? rosterGamesHTML(p) : '',  sort: 'pos', dir: 1 }) +
-    `<div class="muted small" style="margin-top:6px">² = depth (not in the current lineup). Click any column header to sort. Set your lineup on the Depth Chart page; 48 of the 53 dress on game day.</div></div>`;
-  html += practiceSquadHTML(tid, mine);
-  return html;
+  const group = { k: 'pos', f: p => { const f = FAMILIES[FAM_INDEX[p.spot]][0]; return [f, FAM_NAME[f] || f]; } };
+  const list = table('roster_' + vw, cols, ro, { cls: 'rs-tbl', group, rowClass: p => 'ros-r' + (rOpen[p.id] ? ' open' : ''), rowAttr: p => `data-action="rosOpen" data-pid="${p.id}" data-mkl="Game by game"`, rowAfter: p => rOpen[p.id] ? rosterGamesHTML(p) : '', sort: 'pos', dir: 1 });
+  // the masthead: the club (its name switches to another club's roster), its coach and GM, and the head count
+  const hc = C(t.hc), g = !mine && typeof gmOf === 'function' ? gmOf(tid) : null, rival = !mine && T(state.userTid).conf === t.conf && T(state.userTid).div === t.div;
+  const when = `${state.season} · ${state.phase === 'REG' ? 'Week ' + Math.min(state.week, SEASON_WEEKS) : esc(PHASE_LABEL[state.phase] || state.phase)}`;
+  const cnt = rosterCount(tid), lim = rosterLimit(), inj = all.filter(p => p.injury).length, ir = all.filter(p => p.injury && onIR(p)).length;
+  const fig = (k, v, s) => `<div><div class="k">${k}</div><div class="v">${v}${s ? `<small>${s}</small>` : ''}</div></div>`;
+  const famN = f => f === 'ALL' ? all.length : all.filter(p => inFamily(p, f)).length;
+  const strip = ['ALL', ...FAMILIES.map(f => f[0])].map(f => `<button class="${fam === f ? 'on' : ''}" data-action="rosterPos" data-pos="${f}" title="${f === 'ALL' ? 'The whole roster' : FAM_NAME[f] || f}">${f === 'ALL' ? 'All' : f === 'Interior DL' ? 'IDL' : f}<i>${famN(f)}</i></button>`).join('');
+  const acts = (mine && state.phase === 'RESIGN' ? '<button class="primary" data-action="resignAll">Re-sign all affordable starters</button>' : '')
+    + (mine && all.length > ROSTER_MAX && state.phase === 'PRESEASON' ? `<button class="primary" data-action="autoCut">Auto-cut to ${ROSTER_MAX}</button>` : '');
+  return `<div class="club ros" style="${clubVarsCSS(tid)}">
+    <header class="cl-mast rs-mast" data-abbr="${esc(t.abbr)}">
+      <button class="cl-badge" data-action="team" data-tid="${tid}" title="${mine ? 'Home' : 'The club page'}">${esc(t.abbr)}</button>
+      <div class="cl-id"><div class="cl-over">${esc(t.conf + ' ' + t.div)} · Roster · ${when}${mine ? ' · your club' : rival ? ' · division rival' : ''}</div>
+        <div class="rs-name"><h1>${esc(t.region)} <b>${esc(t.name)}</b></h1><span class="rs-caret">▾</span><select data-change="rosterTeam" title="Show another club's roster" aria-label="Club">${opts}</select></div>
+        <div class="cl-men"><span class="cl-ml">Head coach</span> ${hc ? coachNameLink(hc) : '<span>Vacant</span>'}<i>·</i><span class="cl-ml">GM</span> ${mine ? '<b>You</b>' : g ? `<b>${esc(gmName(g))}</b>` : 'Vacant'}</div></div>
+      <div class="cl-rec rs-count"><div class="cl-big">${cnt}<small>/${lim}</small></div><div class="cl-place">${cnt > lim ? `${cnt - lim} over the limit` : 'On the roster'}${state.phase === 'REG' ? ' · IR excluded' : ''}</div><div class="cl-place">Practice squad ${psOf(tid).length}/${PS_MAX}</div></div>
+    </header>
+    <div class="cl-ledger" style="--n:${t.carry ? 10 : 9}">${fig('Cap', fmtMoney(state.cap))}${t.carry ? fig('Carryover', '+' + fmtMoney(t.carry)) : ''}${fig('Payroll', fmtMoney(payroll(tid)))}
+      ${fig('Cap space', `<span class="${capRoom(tid) < 0 ? 'bad' : ''}">${fmtMoney(capRoom(tid))}</span>`)}${fig('Dead money', t.dead ? fmtMoney(t.dead) : '—')}${fig('Next year', fmtMoney(payrollNext(tid)))}
+      ${fig('Average age', all.length ? round1(all.reduce((s, p) => s + p.age, 0) / all.length) : '—')}${fig('Rookies', all.filter(p => p.exp === 0).length)}${fig('Expiring', all.filter(p => p.expiring).length)}${fig('Injured', inj, ir ? ir + ' on IR' : '')}</div>
+    <div class="rs-bar"><nav class="rs-pos">${strip}</nav><span class="spacer"></span><label class="rs-vl"><span>View</span><select data-change="rosterView">${vopts}</select></label>${acts}</div>
+    <div class="rs-scroll">${gmLineHTML(tid)}${mine && state.phase === 'RESIGN' ? decisionsHTML(tid) : ''}${list}
+      <div class="rs-foot"><span>${posTag({ spot: 'QB', lbl: 'QB' }, 'on')} in the lineup</span><span>${posTag({ spot: 'QB', lbl: 'QB' })} depth</span><span>Click a column heading to sort it, a row for his season game by game.</span><span>${mine ? `Set the lineup in the <button class="link" data-action="nav" data-view="depth">depth chart</button>; ` : ''}${GAMEDAY_ACTIVE} of the ${ROSTER_MAX} dress on game day.</span></div>
+      ${practiceSquadHTML(tid, mine)}</div></div>`;
 }
 // re-signing season: what needs a decision
 function decisionsHTML(tid) {
   const ro = rosterOf(tid);
   const opts = ro.filter(optionDue), ext = ro.filter(extensionDue), exp = ro.filter(p => p.expiring);
   const tagUsed = T(tid).tagYr === state.season + 1;
-  const li = (p, extra) => `<div class="small dec-r" style="margin:3px 0">${esc(p.lbl)} ${playerLink(p)} ${tierPill(p)} ${extra}</div>`;
-  let h = `<div class="callout"><b>Re-signing period.</b> Expiring players ask for the amount in their row; anyone you don't re-sign (or tag) hits free agency. Undecided 5th-year options get your staff's recommendation when you continue.`;
-  if (opts.length) h += `<div class="section-title">5th-year options due</div>` + opts.map(p => li(p, `option year ${fmtMoney(optionAmount(p))} (fully guaranteed) <button class="sm primary" data-action="option" data-pid="${p.id}" data-v="1">Exercise</button> <button class="sm" data-action="option" data-pid="${p.id}" data-v="0">Decline</button>`)).join('');
-  if (!tagUsed && exp.length) { const top = exp.slice().sort((a, b) => uOvr(b) - uOvr(a)).slice(0, 3); h += `<div class="section-title">Franchise tag (1 per year)</div>` + top.map(p => li(p, `tag ${fmtMoney(tagAmount(p))} for one year <button class="sm" data-action="tag" data-pid="${p.id}">Tag</button>`)).join(''); }
-  else if (tagUsed) h += `<div class="small muted" style="margin-top:6px">Franchise tag used this year.</div>`;
+  const li = (p, extra, btns) => `<div class="rs-dr dec-r">${posTag(p)}<span class="rs-dn">${playerLink(p)} ${tierPill(p)}</span><span class="rs-dx">${extra}</span><span class="rs-db">${btns}</span></div>`;
+  const grp = (title, n, body, note) => `<section><div class="rs-sh"><h3>${title}</h3>${n ? `<span class="rs-shn">${n}</span>` : ''}</div>${note ? `<p class="rs-note">${note}</p>` : ''}${body}</section>`;
+  let g = '';
+  if (opts.length) g += grp('5th-year options due', opts.length, opts.map(p => li(p, `option year ${fmtMoney(optionAmount(p))} <span class="muted">(fully guaranteed)</span>`, `<button class="sm primary" data-action="option" data-pid="${p.id}" data-v="1">Exercise</button><button class="sm" data-action="option" data-pid="${p.id}" data-v="0">Decline</button>`)).join(''));
+  if (!tagUsed && exp.length) { const top = exp.slice().sort((a, b) => uOvr(b) - uOvr(a)).slice(0, 3); g += grp('Franchise tag', '1 per year', top.map(p => li(p, `tag ${fmtMoney(tagAmount(p))} for one year`, `<button class="sm" data-action="tag" data-pid="${p.id}">Tag</button>`)).join('')); }
+  else if (tagUsed) g += grp('Franchise tag', '', '<p class="rs-note">Franchise tag used this year.</p>');
   const fut = psOf(tid).sort((a, b) => uCeil(b) - uCeil(a));
-  if (fut.length) h += `<div class="section-title">Practice squad: reserve/future deals</div><div class="small muted" style="margin-bottom:4px">Two years at the minimum, nothing guaranteed. Anyone you do not sign is released when you continue.</div>` + `<div class="fut">${fut.map(p => `<div class="fut-row"><div class="fut-who"><span class="muted small">${esc(p.lbl)}</span> ${playerLink(p)} ${tierPill(p)} ${upsidePill(p)} <span class="muted small">age ${p.age}</span></div><button class="sm" data-action="futures" data-pid="${p.id}">Sign futures deal</button></div>`).join('')}</div>`;
-  if (ext.length) h += `<div class="section-title">Extension candidates (entering final year)</div>` + ext.sort((a, b) => uOvr(b) - uOvr(a)).slice(0, 6).map(p => { const a = extensionAsk(p); return li(p, `asks ${a.yrs} yr × ${fmtMoney(a.amt)} <span class="small muted">(leverage ${leverageLabel(leverageOf(p)).toLowerCase()})</span> <button class="sm" data-action="extend" data-pid="${p.id}">Extend</button> <button class="sm" data-action="player" data-pid="${p.id}">Terms…</button>`); }).join('');
-  return h + '</div>';
+  if (fut.length) g += grp('Practice squad: reserve/future deals', fut.length, `<div class="fut">${fut.map(p => `<div class="rs-dr fut-row">${posTag(p, 'ps')}<span class="rs-dn">${playerLink(p)} ${tierPill(p)} ${upsidePill(p)}</span><span class="rs-dx muted">age ${p.age}</span><span class="rs-db"><button class="sm" data-action="futures" data-pid="${p.id}">Sign futures deal</button></span></div>`).join('')}</div>`, 'Two years at the minimum, nothing guaranteed. Anyone you do not sign is released when you continue.');
+  if (ext.length) g += grp('Extension candidates', 'entering final year', ext.sort((a, b) => uOvr(b) - uOvr(a)).slice(0, 6).map(p => { const a = extensionAsk(p); return li(p, `asks ${a.yrs} yr × ${fmtMoney(a.amt)} <span class="muted">(leverage ${leverageLabel(leverageOf(p)).toLowerCase()})</span>`, `<button class="sm" data-action="extend" data-pid="${p.id}">Extend</button><button class="sm" data-action="player" data-pid="${p.id}">Terms…</button>`); }).join(''));
+  return `<div class="rs-dec"><div class="cl-notice"><b>Re-signing</b><span>Expiring players ask for the amount in their row; anyone you don't re-sign (or tag) hits free agency. Undecided 5th-year options get your staff's recommendation when you continue.</span></div>${g ? `<div class="rs-decg">${g}</div>` : ''}</div>`;
 }
 // elevate him for the next game: on or off, with what he has left this season
 function elevCell(p) {
@@ -1021,15 +1205,17 @@ function elevCell(p) {
   return `<button class="sm ${on ? 'on' : ''}" data-action="elevToggle" data-pid="${p.id}" ${why && !on ? `disabled title="${why}"` : 'title="Dress him for the next game; he returns to the squad afterwards"'}>${on ? 'Elevated' : 'Elevate'}</button> <span class="small muted">${po ? 'playoffs' : left + ' left'}</span>`;
 }
 function practiceSquadHTML(tid, mine) {
-  const ps = psOf(tid).sort(famOrder);
-  if (!ps.length) return mine && ['REG', 'PLAYOFFS'].includes(state.phase) ? `<div class="card" style="margin-top:16px"><h3>Practice Squad (0/${PS_MAX})</h3><p class="muted small">Empty. Sign free agents to it from the Free Agents tab or a player's card: up to ${PS_MAX} players, ${PS_VETS} of them with 3+ seasons.</p></div>` : '';
-  return `<div class="card" style="margin-top:16px"><h3>Practice Squad (${ps.length}/${PS_MAX})</h3><p class="muted small">Develops like everyone else and doesn't dress on game day unless you elevate him: up to ${ELEV_MAX} a game, each man ${ELEV_SEASON} times a regular season (playoff elevations don't count), and he goes back to the squad after the game. Can be promoted by you at any time, and other teams can sign them away to their 53. Nobody is promoted for you when injuries hit.</p>` + table('ps', [
-    { k: 'pos', l: 'Pos', f: p => esc(p.lbl) }, { k: 'n', l: 'Name', f: p => playerLink(p) + ' ' + statusPills(p) }, { k: 'age', l: 'Age', f: p => p.age, num: 1 },
+  const ps = psOf(tid).sort(famOrder), live = mine && ['REG', 'PLAYOFFS'].includes(state.phase);
+  if (!ps.length && !live) return '';
+  const head = `<div class="rs-sh"><h3>Practice squad</h3><span class="rs-shn">${ps.length}/${PS_MAX}</span></div>`;
+  if (!ps.length) return `<section class="rs-ps">${head}<p class="rs-note">Empty. Sign free agents to it from the Free Agents tab or a player's card: up to ${PS_MAX} players, ${PS_VETS} of them with 3+ seasons.</p></section>`;
+  return `<section class="rs-ps">${head}<p class="rs-note">Develops like everyone else and doesn't dress on game day unless you elevate him: up to ${ELEV_MAX} a game, each man ${ELEV_SEASON} times a regular season (playoff elevations don't count), and he goes back to the squad after the game. Can be promoted by you at any time, and other teams can sign them away to their 53. Nobody is promoted for you when injuries hit.</p>` + table('ps', [
+    { k: 'pos', l: 'Pos', f: p => posTag(p, 'ps'), cls: 'rs-p' }, { k: 'n', l: 'Name', f: p => playerLink(p) + ' ' + statusPills(p), cls: 'rs-n' }, { k: 'age', l: 'Age', f: p => p.age, num: 1 },
     { k: 'tier', l: 'Tier', v: tierSort, f: p => tierPill(p) + trueNums(p) }, { k: 'up', l: 'Upside', v: upSort, f: p => upsidePill(p) },
-    { k: 'sk', l: 'Scouting', f: p => `<span class="small muted">${traitsTxt(p)}</span>` },
-    { k: 'el', l: 'Game day', f: p => mine && ['REG', 'PLAYOFFS'].includes(state.phase) ? elevCell(p) : '' },
-    { k: 'a', l: '', f: p => mine ? `<button class="sm primary" data-action="promote" data-pid="${p.id}">Promote</button> <button class="sm danger" data-action="psRelease" data-pid="${p.id}">Release</button>` : '' },
-  ], ps, { nosort: 1 }) + '</div>';
+    { k: 'sk', l: 'Scouting', f: p => scoutCell(p), cls: 'rs-flex' },
+    ...(live ? [{ k: 'el', l: 'Game day', f: p => elevCell(p) }] : []),
+    ...(mine ? [{ k: 'a', l: '', f: p => `<button class="sm primary" data-action="promote" data-pid="${p.id}">Promote</button> <button class="sm danger" data-action="psRelease" data-pid="${p.id}">Release</button>` }] : []),
+  ], ps, { nosort: 1, cls: 'rs-tbl' }) + '</section>';
 }
 // the contract block on a player card
 function contractHTML(p) {
@@ -1112,20 +1298,6 @@ function dcDurSel(p, k, i) {
   return `<select class="dcc-dur ${set ? 'set' : ''} d-${cur}" data-change="dcDur" data-key="${k}" data-pid="${p.id}" title="How long he plays in the next exhibition, in his turn down this list">${RELAY_OPTS.map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
 }
 function dcSat(p) { const u = state.userTid, c = T(u).dch; return state.phase === 'PRESEASON' && state.prePlan ? !!state.prePlan.hold[p.id] : !!(c && c.sit && c.sit[p.id]); }
-function dcChip(p, k, i, starts) {
-  const tr = jobTier(p, k), sat = !scPrac() && dcSat(p);
-  return `<div class="dcc ${tr ? TIER_CLS[tr] : ''} ${i < starts ? 'st' : ''} ${ui.dchPid === p.id ? 'pk' : ''} ${sat ? 'sat' : ''}" draggable="true" data-dcp="${p.id}" data-dci="${i}" data-dcjob="${k}" data-action="dchMan" data-pid="${p.id}" title="${esc(pname(p))}${tr ? ' · ' + tr + ' at this job' : ''}">
-    <span class="dcc-n">${i + 1}</span><button class="link dcc-nm" data-action="player" data-pid="${p.id}" title="${esc(pname(p))} · ${esc(p.lbl)}${tr ? ' · ' + tr + ' at this job' : ''} — open his card">${esc(p.last)}</button>${p.elev && p.elev.preview ? '<i class="dcc-ps" title="Practice squad: comes up for this game">PS</i>' : ''}${dcDot(p, k)}<span class="dcc-sp"></span>${dcDurSel(p, k, i)}${scPrac() ? '' : `<button class="dcc-sit ${sat ? 'on' : ''}" data-action="dcSit" data-pid="${p.id}" title="${sat ? 'Sitting: he does not dress and takes no snaps anywhere. Click to play him.' : 'Sit him: he does not dress and takes no snaps anywhere, not even on special teams'}">Sit</button>`}<button class="dcc-x" data-action="dcRemove" data-key="${k}" data-i="${i}" title="Take him off this job" aria-label="Remove ${esc(p.last)}">×</button></div>`;
-}
-function dcJobCard(t, c, k, need, where, prob) {
-  const prac = !!c.prac, u = t.id, list = (c.lists[k] || []).map(id => P(id)).filter(p => p && p.tid === u), n = prac ? 99 : chartMax(k, u), on = ui.dcJob === k;
-  const rotNow = rotOf(c, k), rotList = rotOpts(k), rotPick = rotList.length ? rotList.reduce((a, o) => Math.abs(o[0] - rotNow) < Math.abs(a[0] - rotNow) ? o : a)[0] : 0;
-  const rot = !prac && ROT_KEYS.has(k) && rotList.length > 1 ? `<div class="dcj-rot"><span>Next man's snaps</span><select data-change="dchRot" data-key="${k}">${rotList.map(([v, l]) => `<option value="${v}" ${v === rotPick ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : '';
-  return `<div class="dcj ${on ? 'on' : ''} ${prob ? 'bad' : ''}" data-action="dcJob" data-key="${k}">
-    <div class="dcj-h"><b>${esc(jobLabel(k))}</b>${need > 1 && !ST_UNIT[k] ? `<span class="dcj-tag two" title="This job has ${need} spots on the field at once: the first ${need} listed both start">top ${need} ${prac ? 'a string' : 'start'}</span>` : ''}${prac && c.own && c.own[k] ? `<span class="dcj-tag pr-own" title="You have set this job's practice order; it no longer follows the game order">yours</span>` : ''}${prob ? '<span class="dcj-tag bad">needs a man</span>' : ''}</div>
-    <div class="dcj-list ${preTimeOn() && !prac && !ST_UNIT[k] ? 'has-dur' : ''}">${list.map((p, i) => (i === need && !ST_UNIT[k] ? `<div class="dcj-div"><span>${prac ? 'the twos' : 'next in line · 2nd unit'}</span></div>` : i === 2 * need && !ST_UNIT[k] ? `<div class="dcj-div"><span>${prac ? 'the threes' : '3rd unit'}</span></div>` : '') + dcChip(p, k, i, need)).join('')}${list.length < n ? `<div class="dcj-drop ${list.length ? 'more' : ''}" data-dcjob="${k}" data-dci="${list.length}">${list.length ? 'drop here' : 'drag a player here'}</div>` : ''}</div>
-    ${seatCardHTML(t, k, list)}<details class="dcj-more" ${foldAttr('dcj' + k)}><summary>about this job</summary><div class="small muted">${esc(JOB_HELP[k] || '')}${where && where.length ? `<br><b>Plays in:</b> ${esc([...new Set(where)].join(', '))}` : ''}</div>${rot}</details></div>`;
-}
 // A seat's card: where the coach lines the seat up in each of his looks and how often, and how each man listed there grades in
 // each (the colour; his grade for the seat is these weighted by how often each look is called)
 function seatCardHTML(t, k, list) {
@@ -1140,28 +1312,6 @@ function seatCardHTML(t, k, list) {
   const rows = looks.map(e => `<div class="stc-r" style="${cols}"><span class="stc-n" title="${esc(e.lab)}: the ${esc(tech(e))} technique, about ${Math.round(e.w / tot * 100)}% of this seat's snaps">${esc(e.lab)} <b>${esc(tech(e))}</b> <i>${Math.round(e.w / tot * 100)}%</i></span>${men.map(p => {
     const r = uOvr(p) + e.qs.reduce((a, q) => a + rowFit(p, q.slot, q.x, q.depth, q.seat, high), 0) / e.qs.length - p.ovr; return `<span class="ls-c ls-${lv(r)}" title="${esc(p.last)} at the ${esc(tech(e))} in ${esc(e.lab)}"></span>`; }).join('')}</div>`).join('');
   return `<details class="dcj-more" ${foldAttr('dcs' + k)}><summary>where he lines up</summary><div class="stc">${head}${rows}</div></details>`;
-}
-// the green dot: the defender who gets the call and makes the checks
-function greenDotHTML(t) {
-  const pool = dotPool(t.id).sort((a, b) => dotScore(b) - dotScore(a)).slice(0, 12), cur = greenDot(t.id);
-  return `<div class="dc2-lk" title="The linebacker who gets the call from the sideline and makes the checks at the line. What he sees, how well he knows the system and whether the others listen all count."><span>Green dot</span><select data-change="dotSet">${pool.map(p => `<option value="${p.id}" ${cur && cur.id === p.id ? 'selected' : ''}>${esc(pshort(p))} · ${esc(p.lbl)}</option>`).join('')}</select>${t.dot === undefined ? '<i class="small muted" style="margin-left:6px">staff pick</i>' : ''}</div>`;
-}
-// how well each unit knows itself: one bar a room
-function chemStripHTML(tid, tab) {
-  ensureChem();
-  const units = tab === 'def' ? ['DL', 'LB', 'DB'] : tab === 'off' ? ['OL', 'QB'] : ['KB'];
-  const cap = u => u === 'QB' ? (chemCap(tid, 'WR') + chemCap(tid, 'TE') + chemCap(tid, 'RB')) / 3 : chemCap(tid, { OL: 'OL', DL: 'DL', LB: 'LB', DB: 'CB', KB: 'K' }[u]);
-  const bar = (label, v, c, hint) => `<div class="chm" title="${esc(hint)}"><span class="chm-l">${label}</span><span class="chm-t"><i style="width:${Math.round(v)}%;background:${gradeColor(v)}"></i></span><span class="chm-w">${chemWord(v)}</span></div>`;
-  let h = units.map(u => bar(CH_NAME[u], unitChem(tid, u), cap(u), `Chemistry of the first team`)).join('');
-  if (tab === 'def') h += bar('The defense', defChem(tid), 0, 'The three rooms together: what it takes to all be in the same call');
-  return `<div class="chm-strip"><span class="chm-h" title="How well the men in each unit know each other. It builds with weeks together and falls when the unit changes.">Chemistry</span>${h}</div>`;
-}
-// the emergency quarterback: who takes the snaps if every quarterback is hurt
-function emergencyQBHTML(t) {
-  const sq = psOf(t.id).filter(p => p.pos === 'QB' && p.a).sort((a, b) => b.ovr - a.ovr); // practice squad quarterbacks first
-  const pool = [...sq, ...rosterOf(t.id).filter(p => p.pos !== 'QB' && !['OL', 'DL', 'K', 'P'].includes(p.pos) && p.a).sort((a, b) => emergencyScore(b) - emergencyScore(a)).slice(0, 12)];
-  const cur = t.eqb !== undefined ? pool.find(p => p.id === t.eqb) : emergencySquadQB(t.id) || emergencyPasser(t.id);
-  return `<div class="dc2-lk" title="If every quarterback on the 53 is hurt during a game, he takes the snaps. A practice squad quarterback is brought up for the rest of that game (it does not use one of his elevations)."><span>Emergency QB</span><select data-change="eqbSet">${pool.map(p => `<option value="${p.id}" ${cur && cur.id === p.id ? 'selected' : ''}>${esc(pshort(p))} · ${p.tid === -3 ? 'QB (practice squad)' : esc(p.lbl)}</option>`).join('')}</select>${t.eqb === undefined ? '<i class="small muted" style="margin-left:6px">staff pick</i>' : ''}</div>`;
 }
 function scPrac() { return view === 'depth' && ui.scMode === 'prac'; }
 // the practice order, shaped like a depth chart so the same page can show it
@@ -1182,167 +1332,6 @@ function pracLineup(t, tab, vid, pass, str) {
   }
   Object.defineProperty(m, '_why', { value: {} }); return { lay, m };
 }
-function depthChartHTML() {
-  const u = state.userTid, t = T(u), cg = ensureChart(u);
-  refreshChart(u);
-  const mode = ui.scMode === 'prac' ? 'prac' : 'game', tab0 = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def', prac = mode === 'prac', c = prac ? pracChart(u) : cg;
-  const modeBar = `<div class="sc-mode"><span class="seg sc-seg"><button class="${mode === 'game' ? 'on' : ''}" data-action="scMode" data-v="game">Game snaps</button><button class="${mode === 'prac' ? 'on' : ''}" data-action="scMode" data-v="prac">Practice reps</button></span>
-    <span class="small muted">${mode === 'game' ? 'Who plays, in what order' + (preTimeOn() ? ', and for how long in the exhibition' : '') : 'Who takes the first, second and third string reps in practice' + (state.phase === 'PRESEASON' || state.phase === 'CUTDOWN' ? ' (the camp strings)' : ' (the first-team reps each week)')}</span><span class="spacer"></span>
-    ${tab0 === 'st' ? '' : mode === 'game' ? `<button class="sm" data-action="scCopy" data-v="p2g" title="Make the ${tab0 === 'off' ? 'offense' : 'defense'}'s game order the same as its practice order">Copy from practice reps</button>` : `<button class="sm" data-action="scCopy" data-v="g2p" title="Make the ${tab0 === 'off' ? 'offense' : 'defense'}'s practice order the same as its game order">Copy from game snaps</button>`}</div>`;
-  const ro = rosterOf(u).filter(p => p.a);
-  const tab = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def';
-  const probs = prac ? [] : chartProblems(u), auto = c.auto[tab], side = { def: 'defense', off: 'offense', st: 'special teams' }[tab], nOwnP = prac ? REP_JOBS.filter(j => j[4] === tab && c.own[j[0]]).length : 0;
-  const tabs = `<div class="dc2-tabs">${[['def', 'Defense'], ['off', 'Offense'], ['st', 'Special teams']].map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="dchTab" data-tab="${k}">${l}${probs.some(p => p.tab === k) ? ' <i class="dcd bad"></i>' : ''}</button>`).join('')}</div>`;
-  const ctl = prac ? `<div class="dc2-ctl"><span class="small muted">${nOwnP ? `You have set ${nOwnP} practice job${nOwnP === 1 ? '' : 's'} here; the rest follow your game order.` : 'Every practice job here follows your game order.'}</span>${nOwnP ? `<button class="sm" data-action="pracReset" data-unit="${tab}" title="Every practice job on this side back to your game order">Back to the game order</button>` : ''}</div>`
-    : `<div class="dc2-ctl"><span class="small muted">${auto ? `The staff is setting the ${side}.` : `You are setting the ${side}.`}</span><button class="sm ${auto ? 'primary' : ''}" data-action="dchAuto" data-unit="${tab}" data-on="${auto ? 0 : 1}">${auto ? 'Take control' : 'Hand to the staff'}</button></div>`;
-  let html = `${modeBar}<div class="dc2 ${prac ? 'prac' : ''}"><div class="dc2-top">${tabs}${ctl}</div>${state.settings.autoUser ? '<div class="callout"><b>Auto-manage is on</b>: the staff sets the depth chart until you turn it off in Settings.</div>' : ''}${preTimeOn() && tab !== 'st' && !prac ? prePlanHTML() : ''}`;
-  const mine = probs.filter(p => p.tab === tab);
-  if (mine.length) html += `<div class="callout small"><b class="bad">This chart is not complete.</b> ${mine.map(p => esc(p.text)).join(' · ')}. If you play a game like this, the staff fills the gap for that game only.</div>`;
-  // ---- the jobs on this tab ----
-  const J = tab === 'def' ? defJobs(t) : null;
-  const groups = DC_GROUPS[tab].map(([title, keys]) => [title, keys.filter(k => (tab !== 'def' || J.n[k] || ['RUSHE', 'RUSHI', 'WLBP', 'NCBP'].includes(k)) && (!prac || REP_JOB[k]))]).filter(g => g[1].length);
-  const jobs = groups.flatMap(g => g[1]);
-  ui.dcGrp = ui.dcGrp || {};
-  // the group on show: the one you picked, unless the job you just clicked on the field lives in another
-  let grp = groups.find(g => g[0] === ui.dcGrp[tab]) || groups[0];
-  if (jobs.includes(ui.dcJob) && !grp[1].includes(ui.dcJob)) grp = groups.find(g => g[1].includes(ui.dcJob));
-  ui.dcGrp[tab] = grp[0];
-  const job = grp[1].includes(ui.dcJob) ? ui.dcJob : grp[1][0]; ui.dcJob = job;
-  const need = k => prac && REP_JOB[k] ? REP_JOB[k][3] : tab === 'def' ? (J.n[k] || (k === 'RUSHE' || k === 'RUSHI' ? 2 : 1)) : ST_UNIT[k] ? 10 : 1;
-  // who starts where, for the bench
-  const startsAt = {}; for (const k of jobs) (c.lists[k] || []).slice(0, need(k)).forEach(id => { if (!startsAt[id]) startsAt[id] = k; });
-  // ---- the field ----
-  let field = '', fp = null;
-  if (tab !== 'st') {
-    const views = dcViews(t, tab); ui.dchView = ui.dchView || {};
-    const vid = views.some(v => v.id === ui.dchView[tab]) ? ui.dchView[tab] : views[0].id, view = views.find(v => v.id === vid);
-    const sub = tab === 'def' && (view.pkg === 'NICKEL' || view.pkg === 'DIME'), pass = tab === 'off' ? (ui.dcSit === 'pass' || ui.dcSit === 'short' ? ui.dcSit : false) : sub && ui.dcPass === '1';
-    const outP = ui.dcOut && ro.some(p => p.id === ui.dcOut) ? P(ui.dcOut) : null;
-    const pstr = [0, 1, 2].includes(ui.pracStr) ? ui.pracStr : 0, pl0 = prac ? pracLineup(t, tab, vid, pass, pstr) : null;
-    const lay = prac ? pl0.lay : dcLayout(t, tab, vid, pass), normal = prac ? pl0.m : dcLineup(u, tab, vid, pass), lineup = outP && !prac ? dcLineup(u, tab, vid, pass, outP.id) : normal, ok = ovKeyFor(t, tab, vid, pass);
-    // why a spot is not being played by the first man on its list
-    const whyText = (b, p) => { const w = lineup._why[b.name]; if (prac || !w || w === 'ov' || auto) return null;
-      if (w === 'rot' || w === 'tired') return ['rest', 'In while the man ahead of him takes a breather'];
-      const list = c.lists[b.key] || [], at = q => lay.find(x => lineup[x.name] === q);
-      const above = (w === 'staff' ? list : list.slice(0, Math.max(0, list.indexOf(p.id)))).map(id => P(id)).filter(q => q && q.tid === u);
-      const why = above.map(q => (outP && q.id === outP.id) || q.injury ? `${q.last} is out` : at(q) ? `${q.last} is at ${at(q).label.toLowerCase()} in this look` : dcSat(q) ? `${q.last} is sitting` : onIR(q) ? `${q.last} is on injured reserve` : `${q.last} is inactive: the staff left him out of the 48`);
-      if (w === 'staff') return ['staff', "Nobody left on this job's list, so the staff put him here" + (why.length ? ': ' + why.join(' · ') : '')];
-      return ['next up', why.length ? why.join(' · ') : 'Next man up']; };
-    const pills = tab === 'def'
-      ? [...new Set(views.map(v => v.group))].map(gr => `<div class="dc2-lk"><span>${esc(gr)}</span>${views.filter(v => v.group === gr).map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.label)}${v.share && v.group !== 'Other' ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div>`).join('') + (prac ? '' : greenDotHTML(t))
-      : `<div class="dc2-lk"><span>Personnel</span>${views.map(v => `<button class="${v.id === vid ? 'on' : ''}" data-action="dcLook" data-v="${esc(v.id)}">${esc(v.id === 'JUMBO' ? 'Jumbo' : v.id)}${v.share ? ` <i>${Math.round(v.share * 100)}%</i>` : ''}</button>`).join('')}</div><div class="dc2-lk"><span>Formation</span>${formShares(t, vid).map(([k, s2]) => `<button class="${k === (FORMS[vid][ui.dcFm] ? ui.dcFm : FORM_HOME[vid]) ? 'on' : ''}" data-action="dcFm" data-k="${esc(k)}">${esc(k)} <i>${Math.round(s2 * 100)}%</i></button>`).join('')}</div>${prac ? '' : emergencyQBHTML(t)}`;
-    const strSel = prac ? `<div class="dc2-scen pr-str" title="Which string's team period to show">${['Ones', 'Twos', 'Threes'].map((l, i) => `<button class="${pstr === i ? 'on' : ''}" data-action="pracStr" data-v="${i}">${l}</button>`).join('')}</div>` : '';
-    const scen = tab === 'off' ? `<div class="dc2-scen" title="Who is on the field changes with the down: your passing-down back and tight end, your short-yardage back">${[['', 'Early downs'], ['pass', 'Passing downs'], ['short', 'Short yardage']].map(([k, l]) => `<button class="${(pass || '') === k ? 'on' : ''}" data-action="dcSit" data-v="${k}">${l}</button>`).join('')}</div>`
-      : sub ? `<div class="dc2-scen"><button class="${pass ? '' : 'on'}" data-action="dcPass" data-v="0">Run downs</button><button class="${pass ? 'on' : ''}" data-action="dcPass" data-v="1">Passing downs</button></div>` : '';
-    // where each man really stands: across the formation by his alignment, up the field by his depth. Nobody is snapped to a grid;
-    // two men who would sit on top of each other are eased apart just enough to read both.
-    const fmD = tab === 'off' ? (FORMS[vid] && FORMS[vid][ui.dcFm] ? ui.dcFm : FORM_HOME[vid]) : null, flexD = fmD && FORMS[vid][fmD]._flex || [];
-    const snapD = fmD ? formSnap(vid, fmD) : 'SG', BK = d => 0.9 + d * 0.62; // backs are drawn at their real depth, squeezed to fit the card
-    const OFFD = b => OL_SLOTS.includes(b.name) ? [OL_X[b.name], 0] : ['QB', 'RB', 'FB'].includes(b.name) ? [backSpot(snapD, fmD, b.name)[0], BK(backSpot(snapD, fmD, b.name)[1])] : [formX(vid, fmD, b.name), (INLINE.has(b.name) && !flexD.includes(b.name)) || b.name === 'X' ? 0.4 : 1.4];
-    const pos = lay.map(b => { const [x, d] = tab === 'def' ? [b.x, b.depth] : OFFD(b); return { b, left: 50 + x * 10.2, top: tab === 'def' ? 86 - d * 5.5 : 13 + d * 14 }; });
-    { const W = 9.9; pos.sort((a, q) => a.top - q.top || a.left - q.left);
-      for (let pass = 0; pass < 8; pass++) for (const a of pos) for (const q of pos) { if (a === q || Math.abs(a.top - q.top) >= 11) continue; const gap = Math.abs(a.left - q.left); if (gap < W) { const push = (W - gap) / 2, dir = a.left <= q.left ? -1 : 1; a.left += dir * push; q.left -= dir * push; } }
-      for (const a of pos) a.left = clamp(a.left, 5.2, 94.8); }
-    const yard = tab === 'def' ? [5, 10].map(y => `<div class="dcf-yl" style="top:${86 - y * 5.5 + 6}%"><span>${y}</span></div>`).join('') : '';
-    const spots = pos.map(({ b, left, top }) => { const p = lineup[b.name] && lineup[b.name].a ? lineup[b.name] : null, ov = !prac && !auto && c.ov[ok + ':' + b.name] !== undefined, tr = p ? jobTier(p, b.key) : null;
-      const cls = !p ? 'empty' : THIN_TIERS.has(tr) ? 'thin' : OK_TIERS.has(tr) ? 'soft' : '';
-      const wy = p ? whyText(b, p) : null, chg = outP && normal[b.name] !== lineup[b.name];
-      return `<div class="dcs ${cls} ${b.key === job ? 'on' : ''} ${ov ? 'ov' : ''} ${chg ? 'chg' : ''}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%" data-action="dcJob" data-key="${b.key}" ${prac ? '' : `data-dcov="${b.name}"`} ${p ? `draggable="true" data-dcp="${p.id}"` : ''} title="${p ? esc(pname(p)) + ' · ' + esc(p.lbl) + ' · ' + tr + ' at this job' : 'Nobody'}${ov ? ' · set for this look only' : ''}">
-        <div class="dcs-r">${esc(b.label)}${b.tech ? `<i>${b.tech}</i>` : ''}</div><div class="dcs-n">${p ? esc(p.last) : '—'}${p ? dcDot(p, b.key) : ''}</div>${ov ? `<button class="dcs-pin" data-action="dcOvClear" data-name="${b.name}" title="Remove the override: go back to the job order">this look ×</button>` : wy ? `<span class="dcs-why ${wy[0] === 'staff' ? 'bad' : ''}" title="${esc(wy[1])}">${wy[0]}</span>` : ''}</div>`; }).join('');
-    const nOv = Object.keys(c.ov).filter(k => k.startsWith(ok + ':')).length;
-    if (isPhone()) { // the same field, and its pickers as dropdowns
-      const grp2 = [...new Set(views.map(v => v.group))];
-      const looks = tab === 'def' ? `<select data-change="mkAct" data-act="dcLook">${grp2.map(gr => `<optgroup label="${esc(gr)}">${views.filter(v => v.group === gr).map(v => `<option value="${esc(v.id)}" ${v.id === vid ? 'selected' : ''}>${esc(v.label)}${v.share && v.group !== 'Other' ? ` ${Math.round(v.share * 100)}%` : ''}</option>`).join('')}</optgroup>`).join('')}</select>`
-        : mkSel('dcLook', 'v', views.map(v => [v.id, (v.id === 'JUMBO' ? 'Jumbo' : v.id + ' personnel') + (v.share ? ` ${Math.round(v.share * 100)}%` : '')]), vid) + mkSel('dcFm', 'k', formShares(t, vid).map(([k, s2]) => [k, `${k} ${Math.round(s2 * 100)}%`]), fmD);
-      const sc = tab === 'off' ? mkSel('dcSit', 'v', [['', 'Early downs'], ['pass', 'Passing downs'], ['short', 'Short yardage']], pass || '') : sub ? mkSel('dcPass', 'v', [['0', 'Run downs'], ['1', 'Passing downs']], pass ? '1' : '0') : '';
-      fp = { title: tab === 'def' ? (view.group === 'Other' ? view.label : view.label + (view.pkg === 'BASE' ? ' · ' + view.group : ' · nickel')) : (PERS_LABEL[vid] || vid) + ' · ' + fmD,
-        ctl: `<div class="mdc-sels">${looks}${sc}${prac ? mkSel('pracStr', 'v', [['0', 'Ones'], ['1', 'Twos'], ['2', 'Threes']], String(pstr)) : ''}</div>${prac ? '' : tab === 'def' ? greenDotHTML(t) : emergencyQBHTML(t)}`,
-        board: `${outP && !prac ? `<div class="dc2-out">Without <b>${esc(pname(outP))}</b>: outlined spots change hands. <button class="sm" data-action="dcOut" data-pid="0">Back</button></div>` : ''}<div class="dcf ${tab}"><div class="dcf-los"></div>${yard}${spots}</div>`,
-        note: prac ? `The ${['ones', 'twos', 'threes'][pstr]} as they line up in team periods.` : 'Top edge: green is starter level, amber below it, red well below.' };
-    }
-    field = `<div class="card dc2-field"><div class="dc2-looks">${pills}</div>${prac ? '' : chemStripHTML(t.id, tab)}
-      <div class="row" style="margin:6px 0 8px"><h3 style="margin:0">${tab === 'def' ? esc(view.group === 'Other' ? view.label : view.label + (view.pkg === 'BASE' ? ' · ' + view.group : ' · nickel')) : esc(PERS_LABEL[vid] || vid) + ' · ' + esc(fmD) + ' · ' + (snapD === 'UC' ? 'under center' : 'shotgun')}</h3><span class="spacer"></span>${strSel}${scen}</div>
-      ${outP ? `<div class="dc2-out">Showing this ${tab === 'def' ? 'look' : 'grouping'} <b>without ${esc(pname(outP))}</b>. Outlined spots change hands. <button class="sm" data-action="dcOut" data-pid="0">Back to the real lineup</button></div>` : ''}
-      <div class="dcf ${tab}"><div class="dcf-los"></div>${yard}${spots}</div>
-      <div class="small muted" style="margin-top:6px">${prac ? `The ${['ones', 'twos', 'threes'][pstr]} as they line up in team periods: each job's men for that string, with the package men on the downs they are for.` : auto ? "The staff's lineup. Drag anything and the unit is yours." : `<b>Drag a player onto a spot</b> to use him there in this ${tab === 'def' ? 'look' : 'grouping'} only${nOv ? ` (${nOv} set here)` : ''}.`} Top edge: green is starter level, amber below it, red well below. <i class="dcd warn"></i> learning the job · <i class="dcd bad"></i> raw.</div></div>`;
-  }
-  // ---- the bench: everyone who could do the selected job, best first ----
-  const sideOf = tab === 'st' ? null : tab, list = c.lists[job] || [];
-  const all = ro.filter(p => ST_UNIT[job] ? ST_OK.has(p.spot) || ui.dchAll : job === 'KR' || job === 'PRET' ? returnScore(p) > -1e8 : ['K', 'P'].includes(job) ? comfortOf(p, job) > 0 || ui.dchAll : SPOTS[p.spot].side === SPOTS[CHART_SPOT[job]].side);
-  const fam = LINE_SEATS.has(job) ? ['NT', 'DT', 'DE', 'EDGE', ...(STAND_SEATS.has(job) ? ['MLB', 'WLB'] : [])] : (FAMILIES.find(f => f[1].includes(CHART_SPOT[job])) || [null, []])[1];
-  const near = all.filter(p => jobSide(job) === 'st' || jobComfort(p, job) >= 25 || fam.includes(p.spot));
-  const bench = (ui.dchAll ? all : near).sort((a, b) => jobValue(b, job) - jobValue(a, job));
-  const pickP = ui.dchPid && ro.some(p => p.id === ui.dchPid) ? P(ui.dchPid) : list.length && P(list[0]) ? P(list[0]) : bench[0] || null;
-  const benchRow = p => { const tr = jobTier(p, job), at = startsAt[p.id], on = list.includes(p.id);
-    return `<div class="dcb ${pickP && pickP.id === p.id ? 'pk' : ''} ${on ? 'in' : ''}" draggable="true" data-dcp="${p.id}" data-action="dchMan" data-pid="${p.id}"><span class="dcb-nm"><button class="link" data-action="player" data-pid="${p.id}" title="Open his full card">${esc(pname(p))}</button>${dcDot(p, job)}</span><span class="dcb-pos">${esc(p.lbl)} · ${p.age}</span>
-      ${tr ? `<span class="pill ${TIER_CLS[tr]}">${tr}</span>` : stWord(p, ST_UNIT[job] ? job : null) ? `<span class="pill ${stWord(p, ST_UNIT[job] ? job : null)[1]}">${stWord(p, ST_UNIT[job] ? job : null)[0]}</span>` : ''}${at && at !== job ? `<span class="pill muted" title="He starts there">${esc(jobLabel(at))}</span>` : ''}
-      ${on ? '<span class="dcb-in">on the card</span>' : `<button class="sm" data-action="dcAdd" data-key="${job}" data-pid="${p.id}" title="Add him to this job">+</button>`}</div>`; };
-  const benchCard = `<div class="dc2-side"><div class="card dc2-bench"><div class="dc2-bh"><div><div class="dc2-bk">Best fits for</div><h3 style="margin:0">${esc(jobLabel(job))}</h3></div><label class="small muted"><input type="checkbox" data-change="dchAll" ${ui.dchAll ? 'checked' : ''}> everyone</label></div>
-    <div class="dc2-bl">${bench.map(benchRow).join('') || '<div class="muted small">Nobody on the roster can play here.</div>'}</div></div>
-    ${pickP ? dcBigCard(pickP, job, jobs, c) : ''}</div>`;
-  // ---- the job cards ----
-  const grpSel = `<div class="dc2-gsel">${groups.map(([title, keys]) => `<button class="${title === grp[0] ? 'on' : ''}" data-action="dcGrp" data-v="${esc(title)}">${esc(title)}${keys.some(k => mine.some(p => p.key === k)) ? ' <i class="dcd bad"></i>' : ''}</button>`).join('')}</div>`;
-  const cards = `<div class="dc2-cards one" style="--n:${grp[1].length}">${grp[1].map(k => dcJobCard(t, c, k, need(k), J ? J.where[k] : null, mine.some(p => p.key === k))).join('')}</div>`;
-  if (isPhone()) return dcPhoneHTML({ t, u, mode, tab, prac, auto, side, nOwnP, probs, mine, fp, groups, grp, job, c, need, bench, startsAt, list, J });
-  html += `<div class="dc2-main"><div class="dc2-left">${field}
-    <div class="dc2-jobs">${grpSel}${cards}</div></div>${benchCard}</div></div>`;
-  return html;
-}
-// phones: one screen. What you are setting on top, the field folded away, then the job you are on, its order and the best fits for it.
-// A man's moves (up, down, sit, off) wait in the menu his row opens; the handle drags him up or down the order.
-function dcPhoneHTML(o) {
-  const { t, u, mode, tab, prac, auto, side, nOwnP, probs, mine, fp, groups, grp, job, c, need, bench, startsAt, list, J } = o;
-  const warn = keys => keys.some(k => mine.some(p => p.key === k)) ? ' ⚠' : '';
-  let h = `<div class="mdc"><div class="mdc-bar">${mkSel('scMode', 'v', [['game', 'Game snaps'], ['prac', 'Practice reps']], mode)}${mkSel('dchTab', 'tab', [['def', 'Defense'], ['off', 'Offense'], ['st', 'Special teams']].map(([k, l]) => [k, l + (probs.some(p => p.tab === k) ? ' ⚠' : '')]), tab)}
-    ${prac ? (nOwnP ? `<button class="sm" data-action="pracReset" data-unit="${tab}" title="Every practice job on this side back to your game order">Game order</button>` : '') : `<button class="sm ${auto ? 'primary' : ''}" data-action="dchAuto" data-unit="${tab}" data-on="${auto ? 0 : 1}">${auto ? 'Take control' : 'Hand to staff'}</button>`}</div>
-    <div class="mdc-note small muted">${prac ? (nOwnP ? `You set ${nOwnP} practice job${nOwnP === 1 ? '' : 's'} here; the rest follow the game order.` : 'Practice follows your game order here.') : auto ? `The staff is setting the ${side}.` : `You are setting the ${side}.`}${tab === 'st' ? '' : ` <button class="link small" data-action="scCopy" data-v="${prac ? 'g2p' : 'p2g'}">Copy from ${prac ? 'game snaps' : 'practice reps'}</button>`}</div>`;
-  if (state.settings.autoUser) h += '<div class="callout"><b>Auto-manage is on</b>: the staff sets the depth chart until you turn it off in Settings.</div>';
-  if (preTimeOn() && tab !== 'st' && !prac) h += `<details class="mfold card" ${foldAttr('mdcPre')}><summary><span class="muted">Exhibition</span> playing time</summary>${prePlanHTML()}</details>`;
-  if (mine.length) h += `<div class="callout small"><b class="bad">Not complete.</b> ${mine.map(p => esc(p.text)).join(' · ')}. The staff fills the gap for a game played like this.</div>`;
-  if (fp) h += `<details class="mfold card" ${ui.dcOut ? 'open' : foldAttr('mdcField')}><summary><span class="muted">Field</span> ${esc(fp.title)}</summary>${fp.ctl}${prac ? '' : chemStripHTML(t.id, tab)}${fp.board}<div class="small muted">${fp.note}</div></details>`;
-  // the job
-  const L = (c.lists[job] || []).map(id => P(id)).filter(p => p && p.tid === u), n = need(job), max = prac ? 99 : chartMax(job, u), prob = mine.some(p => p.key === job), help = JOB_HELP[job] || '', where = J ? J.where[job] : null;
-  const rotNow = rotOf(c, job), rotList = rotOpts(job), rotPick = rotList.length ? rotList.reduce((a, x) => Math.abs(x[0] - rotNow) < Math.abs(a[0] - rotNow) ? x : a)[0] : 0;
-  h += `<div class="mdc-bar">${groups.length > 1 ? mkSel('dcGrp', 'v', groups.map(g => [g[0], g[0] + warn(g[1])]), grp[0]) : ''}${mkSel('dcJob', 'key', grp[1].map(k => [k, jobLabel(k) + warn([k])]), job)}</div>`;
-  const mv = (p, to, l) => `<button data-action="dcMove" data-key="${job}" data-pid="${p.id}" data-to="${to}">${l}</button>`;
-  const row = (p, i) => { const tr = jobTier(p, job), sat = !prac && dcSat(p);
-    return (i === n && !ST_UNIT[job] ? `<div class="mdiv">${prac ? 'the twos' : 'next in line · 2nd unit'}</div>` : i === 2 * n && !ST_UNIT[job] ? `<div class="mdiv">${prac ? 'the threes' : '3rd unit'}</div>` : '') +
-      `<div class="mrow mjr ${i < n ? 'st' : ''} ${sat ? 'sat' : ''}" data-i="${i}" data-pid="${p.id}" data-key="${job}"><span class="mh" data-reo="1" title="Drag up or down">≡</span><span class="mn">${i + 1}</span><span class="mnm"><button class="link" data-action="player" data-pid="${p.id}">${esc(pname(p))}</button>${p.elev && p.elev.preview ? '<i class="dcc-ps" title="Practice squad: comes up for this game">PS</i>' : ''}${dcDot(p, job)}</span>${sat ? '<span class="pill warn">Sitting</span>' : ''}${tr ? `<span class="pill ${TIER_CLS[tr]}">${tr}</span>` : ''}${dcDurSel(p, job, i)}
-      ${i > 1 ? mv(p, 0, 'Move to the top') : ''}${i > 0 ? mv(p, i - 1, 'Move up') : ''}${i < L.length - 1 ? mv(p, i + 1, 'Move down') : ''}${prac ? '' : `<button data-action="dcSit" data-pid="${p.id}">${sat ? 'Play him: stop sitting him' : 'Sit him: no snaps anywhere'}</button>`}<button class="danger" data-action="dcRemove" data-key="${job}" data-i="${i}">Take him off ${esc(jobLabel(job).toLowerCase())}</button>${prac ? '' : `<button data-action="dcOut" data-pid="${ui.dcOut === p.id ? 0 : p.id}">${ui.dcOut === p.id ? 'Back to the real lineup' : 'Show the field without him'}</button>`}</div>`; };
-  h += `<div class="card mdc-card"><div class="mdc-h"><b>${esc(jobLabel(job))}</b>${n > 1 && !ST_UNIT[job] ? `<span class="dcj-tag two">top ${n} ${prac ? 'a string' : 'start'}</span>` : ''}${prac && c.own && c.own[job] ? '<span class="dcj-tag pr-own">yours</span>' : ''}${prob ? '<span class="dcj-tag bad">needs a man</span>' : ''}<span class="spacer"></span><span class="small muted">${L.length}${max < 99 ? ' of ' + max : ''}</span></div>
-    <div class="mdc-list">${L.map(row).join('') || '<div class="small muted mdc-empty">Nobody yet: add him from the list below.</div>'}</div>
-    ${tab === 'def' && !prac ? seatCardHTML(t, job, L) : ''}${help || rotList.length > 1 ? `<details class="dcj-more" ${foldAttr('dcj' + job)}><summary>about this job</summary><div class="small muted">${esc(help)}${where && where.length ? `<br><b>Plays in:</b> ${esc([...new Set(where)].join(', '))}` : ''}</div>${!prac && ROT_KEYS.has(job) && rotList.length > 1 ? `<div class="dcj-rot"><span>Next man's snaps</span><select data-change="dchRot" data-key="${job}">${rotList.map(([v, l]) => `<option value="${v}" ${v === rotPick ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : ''}</details>` : ''}</div>`;
-  // who could do it
-  const fit = p => { const tr = jobTier(p, job), sw = !tr && stWord(p, ST_UNIT[job] ? job : null); return tr ? `<span class="pill ${TIER_CLS[tr]}">${tr}</span>` : sw ? `<span class="pill ${sw[1]}">${sw[0]}</span>` : ''; };
-  h += `<div class="card mdc-card"><div class="mdc-h"><b>Best fits</b><span class="spacer"></span><label class="small muted"><input type="checkbox" data-change="dchAll" ${ui.dchAll ? 'checked' : ''}> everyone</label></div>
-    <div class="mdc-list">${bench.map(p => { const at = startsAt[p.id], on = list.includes(p.id);
-      return `<div class="mrow mbr ${on ? 'in' : ''}"><span class="mnm"><button class="link" data-action="player" data-pid="${p.id}">${esc(pname(p))}</button>${dcDot(p, job)}</span><span class="mpos">${esc(p.lbl)} ${p.age}</span>${fit(p)}${at && at !== job ? `<span class="mat" title="He starts there">${esc(jobLabel(at))}</span>` : ''}${on ? '<span class="mon" title="On this job">✓</span>' : `<button class="sm" data-action="dcAdd" data-key="${job}" data-pid="${p.id}" title="Add him to this job">+</button>`}</div>`; }).join('') || '<div class="muted small">Nobody on the roster can play here.</div>'}</div></div>`;
-  return h + '</div>';
-}
-// the man you are looking at, in full: who he is, how he fits the job on show, where else he is listed
-function dcBigCard(p, job, jobs, c) {
-  const tr = jobTier(p, job), cf = comfortLabel(jobComfort(p, job)), ax = jobAx(job), m = ax !== null && p.m ? lineMass(p, ax) : 0;
-  const listed = jobs.map(k => [k, (c.lists[k] || []).indexOf(p.id)]).filter(x => x[1] >= 0);
-  const ord = i => ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'][i] || (i + 1) + 'th';
-  const pb = PRAC_SIDE[p.pos] ? pbOf(p) : null;
-  return `<div class="card dc2-card paper"><div class="ds-lb">${esc(JOB_NAME[p.spot] || p.lbl)}</div><div class="row"><b class="pp-name">${playerLink(p)}</b>${statusPills(p)}${tierPill(p)}${upsidePill(p)}${starHTML(starsOf(p))}<span class="spacer"></span>${scPrac() ? '' : `<button class="sm ${ui.dcOut === p.id ? 'primary' : ''}" data-action="dcOut" data-pid="${ui.dcOut === p.id ? 0 : p.id}" title="Show the field as it would line up without him">${ui.dcOut === p.id ? 'Showing without him' : 'If he goes down'}</button>`}<button class="sm" data-action="player" data-pid="${p.id}">His file</button></div>
-    <div class="pp-bio">Age ${p.age} · ${fmtHeight(p.m.ht)}, ${p.m.wt} lb · ${p.exp} yr${p.exp === 1 ? '' : 's'} · ${fmtContract(p)}${p.injury ? ` · <span class="bad">out ${p.injury.weeks} wk</span>` : ''}</div>
-    <div class="dc2-fit"><div class="dc2-bk">At ${esc(jobLabel(job).toLowerCase())}</div><div class="row small" style="margin-top:4px">${tr ? `<span class="pill ${TIER_CLS[tr]}">${tr} here</span>` : ''}${jobSide(job) === 'st' ? '' : `<span class="pill ${CF_CLS[cf]}">${cf}</span>`}${m <= -1.5 ? '<span class="pill warn">light for the spot</span>' : m >= 1.5 ? '<span class="pill warn">heavy for the spot</span>' : ''}${listed.some(x => x[0] === job) ? `<span class="pill">${ord(listed.find(x => x[0] === job)[1])} on the card</span>` : `<button class="sm primary" data-action="dcAdd" data-key="${job}" data-pid="${p.id}">Add to this job</button>`}</div></div>
-    <div class="ds-read pp-read" style="margin:10px 0">${esc(scoutProfile(p))}.</div>
-    <div class="row small" style="margin-bottom:10px">${rowGrades(p)}${stWord(p) ? `<span class="pill ${stWord(p)[1]}">${stWord(p)[0]}</span>` : ''}${pb !== null ? `<span class="pill" title="How much of the playbook he knows">${pbLabel(pb)}</span>` : ''}</div>
-    ${strengthsHTML(p)}
-    <div class="section-title" style="margin-top:12px">Where he can play</div>${comfortHTML(p)}
-    ${listed.length ? `<div class="section-title" style="margin-top:12px">Listed at</div><div class="row small">${listed.map(([k, i]) => `<button class="pill dc2-at" data-action="dcJob" data-key="${k}">${esc(jobLabel(k))} · ${ord(i)}</button>`).join('')}</div>` : ''}
-    <div class="section-title" style="margin-top:12px">Physical <span class="sc-lbr">${rasOf(p) === null ? '' : 'athletic score ' + rasOf(p).toFixed(2)}</span></div>${combineHTML(p)}</div>`;
-}
-// a small card for the man you have selected on the depth chart, so you can judge him without leaving the page
-function dcMiniCard(p, key, spot) {
-  const stw = typeof stWord === 'function' ? stWord(p, ST_UNIT[key] ? key : null) : null, cf = Object.keys(p.cf || {}).filter(sp => sp !== p.spot && comfortOf(p, sp) >= 30).sort((a, b) => comfortOf(p, b) - comfortOf(p, a)).slice(0, 4);
-  return `<div class="dc-mini paper"><div class="row"><b class="pp-name sm">${playerLink(p)}</b><span class="pill">${esc(p.lbl)}</span>${statusPills(p)}${tierPill(p)}${upsidePill(p)}${starHTML(starsOf(p))}<span class="spacer"></span><button class="sm" data-action="player" data-pid="${p.id}">Full card</button></div>
-    <div class="small muted" style="margin:4px 0">Age ${p.age} · ${fmtHeight(p.m.ht)}, ${p.m.wt} lb · ${p.exp} yr${p.exp === 1 ? '' : 's'} · ${fmtContract(p)}${p.injury ? ` · <span class="bad">out ${p.injury.weeks} wk</span>` : ''}</div>
-    <div class="small">${esc(scoutProfile(p, true))}</div>
-    <div class="row small" style="margin-top:6px">${rowGrades(p)}${stw ? `<span class="pill ${stw[1]}">${stw[0]}</span>` : ''}${cf.map(sp => `<span class="pill muted" title="${comfortLabel(comfortOf(p, sp))}">${SPOTS[sp].l}</span>`).join('')}</div></div>`;
-}
 // ---------- playbook (view only) ----------
 const PERS_LABEL = { '10': '10 (1 RB, 0 TE, 4 WR)', '11': '11 (1 RB, 1 TE, 3 WR)', '12': '12 (1 RB, 2 TE, 2 WR)', '13': '13 (1 RB, 3 TE, 1 WR)', '21': '21 (2 RB, 1 TE, 2 WR)', '22': '22 (2 RB, 2 TE, 1 WR)', JUMBO: 'Jumbo (6 OL)' };
 const TYPE_LABEL = { RUN: 'Designed runs', DRAW: 'Draws', OPTION: 'Option', SNEAK: 'QB sneak', JET: 'Jet sweep', QUICK: 'Quick game', DROP: 'Dropback', DEEP: 'Deep shots', RBSCR: 'RB screen', WRSCR: 'WR screen', GADGET: 'Gadgets (reverse, flea flicker)' };
@@ -1352,7 +1341,6 @@ const SIT_LABEL = { '1st': '1st down', '2L': '2nd & long (7+)', '2S': '2nd & sho
 const COV_LABEL = { C0: 'Cover 0', C1: 'Cover 1 (man-free)', C2: 'Cover 2', C2M: '2-Man', C3: 'Cover 3', C4: 'Quarters', T2: 'Tampa 2', C6: 'Cover 6' };
 const PRES_LABEL = { FOUR: '4-man rush', BLITZ: 'Man blitz', FZ: 'Fire zone', SIM: 'Simulated pressure', THREE: '3-man rush' };
 const PKG_LABEL = { BASE: 'Base', NICKEL: 'Nickel', DIME: 'Dime', GL: 'Goal line' };
-function tendBar(label, v, hint) { return `<div class="glance knob" title="${esc(hint || '')}"><span class="gl-l">${label}</span><span class="gl-bar"><i style="width:${Math.round(v * 100)}%;background:var(--accent)"></i></span><span class="gl-v small">${Math.round(v * 100)}%</span></div>`; }
 // usage & results for keys with a prefix (self-scout)
 function scoutTable(id, a, prefix, labels, opts = {}) {
   const keys = Object.keys(a).filter(k => k.startsWith('u_' + prefix)).map(k => k.slice(2 + prefix.length)).filter(k => labels[k]); // a call that no longer exists (an old save's tags) is not listed
@@ -1383,38 +1371,6 @@ function lineupHTML(units) {
 }
 // ---------- formation viewer: where everyone lines up ----------
 const FORM_NAMES = [['SG', 'Shotgun'], ['UC', 'Under center'], ['PI', 'Pistol'], ['EMP', 'Empty']];
-function alignOffense(units, form, pers, fm) {
-  const flex = pers && fm && FORMS[pers] && FORMS[pers][fm] && FORMS[pers][fm]._flex || [];
-  return units.map(e => {
-    let x = pers && fm && !OL_SLOTS.includes(e.slot) && e.slot !== 'QB' && e.slot !== 'RB' && e.slot !== 'FB' ? formX(pers, fm, e.slot) : e.x || 0, d = e.depth || 0;
-    if (['QB', 'RB', 'FB'].includes(e.slot) && form !== 'EMP') { const b = backSpot(form, fm || (pers ? FORM_HOME[pers] : null), e.slot); return { e, x: b[0], d: e.slot === 'QB' && form === 'UC' ? 2 : b[1] }; }
-    if (OL_SLOTS.includes(e.slot)) d = 0;
-    else if (e.slot === 'QB') d = form === 'UC' ? 2 : form === 'PI' ? 4 : 5;
-    else if (e.slot === 'RB') { if (form === 'EMP') { x = emptySpot(pers || '11', fm || FORM_HOME[pers || '11']); d = 1; } else d = 7; }
-    else if (e.slot === 'FB') d = 4;
-    else if (INLINE.has(e.slot) && !flex.includes(e.slot)) d = 0.35;
-    else d = e.slot === 'X' ? 0.35 : 1.3; // X on the line, Z and slots off it
-    return { e, x, d };
-  });
-}
-function formationSVG(pts, side) {
-  const W = 760, H = 320, cx = W / 2, sx = 64;
-  const off = side === 'off', los = off ? 46 : 270, sy = off ? 32 : 16;
-  let g = `<svg viewBox="0 0 ${W} ${H}" class="field" role="img" aria-label="${off ? 'Offensive' : 'Defensive'} alignment">`;
-  // field: yard lines every 5 yards from the line of scrimmage, hashes, LOS
-  g += `<rect x="0" y="0" width="${W}" height="${H}" rx="10" class="fld"/>`;
-  for (let yd = 5; yd <= 15; yd += 5) { const y = off ? los + yd * sy : los - yd * sy; if (y > 4 && y < H - 4) g += `<line x1="10" x2="${W - 10}" y1="${y}" y2="${y}" class="yl"/><text x="16" y="${y - 4}" class="yt">${yd}</text>`; }
-  for (const hx of [cx - 70, cx + 70]) g += `<line x1="${hx}" x2="${hx}" y1="8" y2="${H - 8}" class="hash"/>`;
-  g += `<line x1="10" x2="${W - 10}" y1="${los}" y2="${los}" class="los"/><text x="${W - 16}" y="${los - 6}" class="yt" text-anchor="end">line of scrimmage</text>`;
-  if (!off) g += `<circle cx="${cx}" cy="${los + 14}" r="5" class="ball"/>`;
-  for (const { e, x, d } of pts) {
-    const px = clamp(cx + x * sx, 26, W - 26), py = off ? los + d * sy + 2 : los - Math.max(0.4, d) * sy - 2;
-    const warn = e.p.a && e.pen >= 3;
-    g += `<g ${e.p.a ? `data-action="player" data-pid="${e.p.id}"` : ''} class="dot ${off ? 'o' : 'd'} ${warn ? 'warn' : ''}"><title>${esc(e.p.a ? pname(e.p) + ' — ' + e.p.lbl + (warn ? ' (' + comfortLabel(comfortOf(e.p, e.spot)) + ' at ' + SPOTS[e.spot].l + ')' : '') : 'Emergency')}</title>
-      <circle cx="${px}" cy="${py}" r="19"/><text x="${px}" y="${py + 5}" class="sl">${e.name.replace(/[0-9]$/, '')}</text><text x="${px}" y="${py + (off ? 37 : -26)}" class="nm">${esc(e.p.a ? e.p.last : 'Sub')}</text>${!off && d === 0 ? `<text x="${px}" y="${py + 33}" class="tq">${techOf(x)}</text>` : ''}</g>`;
-  }
-  return g + '</svg>';
-}
 // ---------- the play caller's fronts: one small diagram for every look he carries ----------
 const LOOK_NOTE = {
   'Over': 'Tackle outside the strong guard, nose shaded weak. Balanced.',
@@ -1442,33 +1398,6 @@ function looksFor(tid, pkg) {
   if (pkg === 'BASE') { const fr = (dt.pk && dt.pk.fr) || {}, keep = clamp(1 - (fr.BEAR || 0) - (fr.UNDER || 0), 0.2, 1); out = out.map(([k, v]) => [k, v * keep]); for (const k of ['Under', 'Bear']) if (fr[k.toUpperCase()]) out.push([k, fr[k.toUpperCase()]]); } // Under and Bear: his base men, moved
   return { fam, list: out };
 }
-function lookSVG(front, pkg, fam, name) {
-  const W = 232, H = 92, cx = W / 2, sx = 26, yo = 62, yd = 34;
-  const rows = lookRows(packageLayout0(front, pkg), { t: LOOKS[fam][name].t }).filter(r => r[3] === 0 || (r[3] < 2 && Math.abs(r[2]) >= 2.4)); // the line, and a linebacker walked up on it
-  let g = `<svg viewBox="0 0 ${W} ${H}" class="look" role="img" aria-label="${esc(name)} alignment">`;
-  for (const [gx, l] of [[0.5, 'A'], [1.5, 'B'], [2.5, 'C']]) for (const s of [-1, 1]) g += `<text x="${cx + s * gx * sx}" y="${H - 4}" class="gap">${l}</text>`;
-  for (let i = -2; i <= 2; i++) g += `<rect x="${cx + i * sx - 8}" y="${yo - 8}" width="16" height="16" rx="3" class="ol${i === 0 ? ' c' : ''}"/>`;
-  g += `<circle cx="${cx + 2.9 * sx}" cy="${yo}" r="8" class="te"/><text x="${cx + 2.9 * sx}" y="${yo + 3.5}" class="tel">TE</text>`;
-  for (const r of rows) { const x = cx + r[2] * sx;
-    g += `<circle cx="${x}" cy="${yd}" r="11" class="dl"/><text x="${x}" y="${yd + 3.5}" class="tech">${techOf(r[2])}</text><text x="${x}" y="${yd - 15}" class="slot">${esc(r[0].replace(/[0-9]$/, ''))}</text>`; }
-  return g + '</svg>';
-}
-function frontsHTML(tid, pkg, cur) {
-  const t = T(tid), dt = defTend(t), lib = dt.pk && dt.pk.lib, dc = defCaller(t);
-  const group = (title, p) => { const { fam, list } = looksFor(tid, p); if (!list.length) return '';
-    return `<div class="section-title">${title}</div><div class="look-row">${list.map(([k, v], i) => { const L = LOOKS[fam][k], on = cur && cur.fam === fam && cur.k === k;
-      return `<button class="look-tile ${on ? 'sel' : ''}" data-action="pbLook" data-pkg="${p}" data-k="${esc(k)}" title="Show it on the field above with your players"><div class="look-h"><b>${esc(k)}</b><span>${Math.round(v * 100)}%</span></div>${lookSVG(dt.front, p, fam, k)}<div class="look-n">${i === 0 ? '<span class="pill">home look</span> ' : L.k === 'run' ? '<span class="pill">run look</span> ' : L.k === 'rush' ? '<span class="pill">rush look</span> ' : ''}${esc(LOOK_NOTE[k] || '')}</div></button>`; }).join('')}</div>`; };
-  let games = '';
-  if (lib) {
-    const sd = lib.sd || {}, way = [['S', 'to the strength'], ['W', 'away from it'], ['P', 'both tackles pinching']].sort((a, b) => (sd[b[0]] || 0) - (sd[a[0]] || 0));
-    games = `<div class="section-title">Line games</div><div class="small"><b>Slants</b> on about ${Math.round(lib.sl * 100)}% of snaps${lib.sl >= 0.02 ? `, most often ${way[0][1]} (${way.map(w => `${w[1]} ${Math.round((sd[w[0]] || 0) * 100)}%`).join(' · ')})` : ''}.<br>
-      <b>Twists</b> on about ${Math.round((dt.stunt || 0) * 100)}% of rushes: ${lib.tt >= 0.6 ? 'usually the two tackles trading lanes' : lib.tt <= 0.4 ? 'usually a tackle and the end next to him' : 'tackle with tackle and tackle with end about equally'}.<br>
-      <b>Walked-up linebackers</b>: ${lib.mug >= 0.02 ? `about ${Math.round(lib.mug * 100)}% of nickel and dime snaps, more on passing downs. They may come or drop.` : 'almost never.'}</div>`;
-  }
-  return `<div class="card" style="margin-top:16px"><h3>Fronts · ${dc ? esc(cname(dc)) + "'s looks" : 'the looks'}</h3>
-    <div class="small muted" style="margin-bottom:6px">Where each lineman puts his hand down. The number is his technique: 0 on the center, 1 a shade of him; 2i, 2, 3 inside, on and outside the guard; 4i, 4, 5 the same on the tackle; 7, 6, 9 on the tight end's spot; W9 wide of everyone. Letters are the gaps. Run looks come out when a run is expected, rush looks on passing downs. Click one to see it with ${tid === state.userTid ? 'your' : 'their'} players.</div>
-    ${group(esc(dt.front || '') + ' base', 'BASE')}${group('Nickel and dime', 'NICKEL')}${games}</div>`;
-}
 // ---------- the play caller's formations and pass concepts ----------
 const FORM_NOTE = {
   Trey: 'Tight end and two receivers to the strength, one receiver alone away from it. The everyday look.', Doubles: 'Two receivers each side. Balanced: the defense cannot roll its coverage one way.',
@@ -1487,113 +1416,6 @@ function formShares(t, pers) {
   if (F.Split) { const uc = clamp((ot.uc || 0) + 0.3, 0, 0.92), gun = (1 - uc) * 0.85; out.Split = home * gun; out.Offset = home * uc * ft.offI; home -= out.Split + out.Offset; }
   out[FORM_HOME[pers]] = Math.max(0, home);
   return Object.entries(out).sort((a, b) => (b[0] === FORM_HOME[pers]) - (a[0] === FORM_HOME[pers]) || b[1] - a[1]);
-}
-function formSVG(pers, fm) {
-  const W = 232, H = 84, cx = W / 2, sx = 24, yl = 20, F = FORMS[pers][fm] || {}, flex = F._flex || [];
-  let g = `<svg viewBox="0 0 ${W} ${H}" class="look" role="img" aria-label="${esc(fm)} formation">`;
-  for (let i = -2; i <= 2; i++) g += `<rect x="${cx + i * sx - 7}" y="${yl - 7}" width="14" height="14" rx="3" class="ol${i === 0 ? ' c' : ''}"/>`;
-  const snap = formSnap(pers, fm), by = d => 9 + d * 5.6, q = backSpot(snap, fm, 'QB');
-  g += `<circle cx="${cx}" cy="${yl + by(q[1])}" r="7" class="sk q"/><text x="${cx}" y="${yl + by(q[1]) + 3}" class="tech">Q</text>`;
-  for (const k of PERSONNEL[pers]) { const inl = INLINE.has(k) && !flex.includes(k), bk = k === 'RB' || k === 'FB' ? backSpot(snap, fm, k) : null, x = bk ? bk[0] : formX(pers, fm, k), d = bk ? by(bk[1]) : inl || k === 'X' ? 0 : 9;
-    const px = clamp(cx + x * sx, 10, W - 10), py = yl + d + (k === 'FB' ? 0 : 0);
-    g += inl ? `<rect x="${px - 7}" y="${py - 7}" width="14" height="14" rx="3" class="ol te2"/>` : `<circle cx="${px}" cy="${py}" r="7.5" class="sk"/>`;
-    g += `<text x="${px}" y="${py + (d >= 40 ? 3 : inl ? 3 : 3)}" class="tech" style="font-size:7.5px">${esc({ SLOT: 'S', SLOT2: 'S', OL6: 'T', Y2: 'Y' }[k] || k[0])}</text>`; }
-  return g + '</svg>';
-}
-function offBookHTML(tid, pers, fmCur) {
-  const t = T(tid), oc = offCaller(t), ft = formTraits(t), book = conceptBook(t), shares = formShares(t, pers);
-  const tiles = shares.map(([k, v]) => `<button class="look-tile ${k === fmCur ? 'sel' : ''}" data-action="pbFm" data-k="${esc(k)}" title="Show it on the field above with ${tid === state.userTid ? 'your' : 'their'} players"><div class="look-h"><b>${esc(k)}</b><span>${Math.round(v * 100)}%</span></div>${formSVG(pers, k)}<div class="look-n">${k === FORM_HOME[pers] ? '<span class="pill">home</span> ' : ''}${esc(FORM_NOTE[k] || '')}</div></button>`).join('');
-  const COVN = { C0: 'Cover 0', C1: 'Cover 1', C2: 'Cover 2', C2M: '2-Man', C3: 'Cover 3', C4: 'Quarters', T2: 'Tampa 2', C6: 'Cover 6' };
-  const beats = k => { const e = Object.entries(CONCEPTS[k].vs).sort((a, b) => b[1] - a[1]); return [e.filter(x => x[1] >= 0.07).slice(0, 3).map(x => COVN[x[0]]), e.filter(x => x[1] <= -0.07).slice(-3).reverse().map(x => COVN[x[0]])]; };
-  const fam = (f, title) => `<div class="section-title">${title}</div><div class="cpt-row">${Object.entries(book[f] || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => { const [good, poor] = beats(k);
-    return `<div class="cpt"><div class="look-h"><b>${esc(k)}</b><span>${Math.round(v * 100)}%</span></div><div class="look-n">${esc(CONCEPTS[k].d)}</div>${good.length ? `<div class="small"><span class="good">Beats</span> ${good.join(', ')}</div>` : ''}${poor.length ? `<div class="small"><span class="bad">Struggles against</span> ${poor.join(', ')}</div>` : ''}</div>`; }).join('')}</div>`;
-  return `<div class="card" style="margin-top:16px"><h3>Formations and pass concepts · ${oc ? esc(cname(oc)) + "'s book" : 'the book'}</h3>
-    <div class="small muted" style="margin-bottom:6px">How he lines up ${esc(PERS_LABEL[pers] || pers)}, and how often. Pick another grouping on the field above. What a formation does comes from where it puts people: the defense lines up to it, and the strong side is the ${ft.strR >= 0.55 ? 'right more often than the left' : ft.strR <= 0.47 ? 'left more often than the right' : 'right and the left about equally'}.${ft.move ? ' He moves his best receiver around the formation to find a matchup.' : ''}</div>
-    <div class="look-row">${tiles}</div>
-    ${fam('QUICK', 'Quick game')}${fam('DROP', 'Dropback')}${fam('DEEP', 'Deep shots')}${fam('PA', 'Play-action')}${fam('BOOT', 'Bootleg')}
-    <div class="small muted" style="margin-top:6px">He carries these and no others. A sharp play caller leans on the ones that beat what a defense keeps playing, and a quarterback who reads the coverage can get to a better one at the line.</div></div>`;
-}
-function formationViewerHTML(tid) {
-  const ot = offTend(T(tid)), dt = defTend(T(tid));
-  const persUsed = Object.entries(ot.pers || {}).sort((x, y) => y[1] - x[1]).map(x => x[0]).filter(k => PERSONNEL[k]);
-  const allPers = [...persUsed, ...Object.keys(PERSONNEL).filter(k => !persUsed.includes(k))];
-  const pers = ui.pbPers && PERSONNEL[ui.pbPers] ? ui.pbPers : persUsed[0] || '11';
-  const form = ui.pbForm || 'SG', pkg = ui.pbPkg || 'NICKEL';
-  const btn = (act, v, cur, l, dim) => `<button class="sm ${v === cur ? 'primary' : ''}" data-action="${act}" data-v="${v}" ${dim ? 'style="opacity:.6"' : ''}>${l}</button>`;
-  const fmCur = FORMS[pers] && FORMS[pers][ui.pbFm] ? ui.pbFm : FORM_HOME[pers];
-  const offPts = alignOffense(lineupFor(tid, pers), form, pers, fmCur);
-  // the look on the field: the one clicked below if this package has it, otherwise the caller's home look
-  const lk = looksFor(tid, pkg), lookName = lk.list.some(x => x[0] === ui.pbLook) ? ui.pbLook : lk.list.length ? lk.list[0][0] : null, cur = lookName ? { fam: lk.fam, k: lookName } : null;
-  const defPts = defLineup(tid, pkg, lookName ? { t: LOOKS[lk.fam][lookName].t } : null).map(e => ({ e, x: e.x || 0, d: e.depth || 0 }));
-  return `<div class="grid fv-grid" style="margin-top:16px">
-    <div class="card"><h3>Offense · ${esc(PERS_LABEL[pers] || pers)} · ${esc(fmCur)} · ${FORM_NAMES.find(f => f[0] === form)[1]}</h3>
-      <div class="row" style="gap:4px;margin-bottom:6px">${allPers.map(k => btn('pbPers', k, pers, k, !persUsed.includes(k))).join('')}</div>
-      <div class="row" style="gap:4px;margin-bottom:8px">${FORM_NAMES.map(([k, l]) => btn('pbForm', k, form, l)).join('')}</div>
-      ${formationSVG(offPts, 'off')}
-      <div class="small muted">Dimmed groupings aren't part of this play caller's usual mix. Orange rings: lined up away from a spot he's comfortable at. Click a player for his card.</div></div>
-    <div class="card"><h3>Defense · ${PKG_LABEL[pkg]} · ${lookName ? esc(lookName) + ' look' : esc(dt.front || '') + ' front'}</h3>
-      <div class="row" style="gap:4px;margin-bottom:8px">${['BASE', 'NICKEL', 'DIME', 'GL'].map(k => btn('pbPkg', k, pkg, PKG_LABEL[k])).join('')}</div>
-      ${formationSVG(defPts, 'def')}
-      <div class="small muted">Shown from the defense's side: the ball is at the bottom. Edges, tackles and nose line up by the front; corners, nickel and safeties by the package. The small number under a lineman is his technique.</div></div></div>${offBookHTML(tid, pers, fmCur)}${frontsHTML(tid, pkg, cur)}`;
-}
-function playbookHTML() {
-  const u = state.userTid, nx = userMatchup();
-  const tid = ui.pbTid == null ? u : ui.pbTid, t = T(tid);
-  const opts = state.teams.map(x => `<option value="${x.id}" ${x.id === tid ? 'selected' : ''}>${x.region} ${x.name}</option>`).join('');
-  const oppId = nx ? (nx.h === u ? nx.a : nx.h) : null;
-  let html = `<div class="row" style="margin-bottom:10px"><select data-change="pbTeam">${opts}</select>
-    ${oppId !== null ? `<button class="sm" data-action="pbTeamSet" data-tid="${oppId}">Scout next opponent (${T(oppId).abbr})</button>` : ''}${tid !== u ? `<button class="sm" data-action="pbTeamSet" data-tid="${u}">My team</button>` : ''}
-    <span class="spacer"></span><span class="small muted">View only: the play callers run their systems. What they call is shown below.</span></div>`;
-  const oc = offCaller(t), dc = defCaller(t), ot = offTend(t), dt = defTend(t);
-  const src = t.advS && t.advS.plays ? { a: t.advS, lbl: `${state.season} season to date` } : t.advPrev && t.advPrev.plays ? { a: t.advPrev, lbl: `${t.advPrev.season} season` } : null;
-  // ---- identity ----
-  ensureChem();
-  const tab = ['over', 'off', 'def', 'field', 'scout', 'who'].includes(ui.pbTab) ? ui.pbTab : 'over';
-  const tabs = [['over', 'Overview'], ['off', 'Offense'], ['def', 'Defense'], ['field', 'On the field'], ['scout', 'Self-scout'], ['who', 'Who plays']];
-  html += `<div class="subtabs">${tabs.map(([k2, l]) => `<button class="${tab === k2 ? 'on' : ''}" data-action="pbTab" data-v="${k2}">${l}</button>`).join('')}</div>`;
-  const insBar = side => { const v = installedPct(tid, side), pl = installPlan(tid, side), sz = sysSize(tid, side), big = sz >= (side === 'O' ? 0.95 : 0.5), small = sz <= (side === 'O' ? 0.65 : 0.22);
-    return `<div class="pb-ins"><div class="row"><b>${side === 'O' ? 'Offense' : 'Defense'}</b><span class="muted small">${esc(teamSchemeLabel(t, side) || '')}</span><span class="spacer"></span><b>${Math.round(v)}%</b> <span class="muted small">installed</span></div>
-      <div class="chm-t" style="height:8px;margin:6px 0"><i style="width:${Math.round(v)}%;background:${gradeColor(v)}"></i>${pl.cap < 99 ? `<b style="left:${Math.round(pl.cap)}%"></b>` : ''}</div>
-      <div class="small muted">${big ? 'A big system: more answers, more to learn.' : small ? 'A compact system: quick to learn, less in it.' : 'An ordinary-sized system.'} ${pl.cap < 99 ? `Under this coordinator the unit tops out near ${Math.round(pl.cap)}%.` : ''} ${v < 88 ? 'Until it is in, the caller keeps to what the players know: fewer formations, concepts and looks.' : ''}</div></div>`; };
-  const chemRow = us => us.map(u => { const v = u === 'D' ? defChem(tid) : unitChem(tid, u); return `<div class="chm"><span class="chm-l">${u === 'D' ? 'The defense' : CH_NAME[u]}</span><span class="chm-t"><i style="width:${Math.round(v)}%;background:${gradeColor(v)}"></i></span><span class="chm-w">${chemWord(v)}</span></div>`; }).join('');
-  if (tab === 'over') {
-    const dot = greenDot(tid), hc = C(t.hc);
-    html += `<div class="grid g2"><div class="card"><h3>What is installed</h3>${insBar('O')}<div style="height:12px"></div>${insBar('D')}</div>
-      <div class="card"><h3>Chemistry</h3><div class="chm-col">${chemRow(['OL', 'QB', 'DL', 'LB', 'DB', 'D', 'KB'])}</div>
-        <div class="small muted" style="margin-top:8px">How well the men in each unit know each other. It builds with weeks together, faster under a head coach who builds a team, and only as far as each room's coach can take it.</div></div></div>
-      <div class="grid g3" style="margin-top:14px">
-        <div class="card"><h3>Calls the offense</h3><div>${coachNameLink(oc)} <span class="muted small">${oc ? ROLE_SHORT[oc.role] : ''}</span></div><div class="small muted" style="margin-top:4px">${esc(teamSchemeLabel(t, 'O') || '')}</div></div>
-        <div class="card"><h3>Calls the defense</h3><div>${coachNameLink(dc)} <span class="muted small">${dc ? ROLE_SHORT[dc.role] : ''}</span></div><div class="small muted" style="margin-top:4px">${esc(teamSchemeLabel(t, 'D') || '')}${dot ? ` · green dot ${playerLink(dot, true)}` : ''}</div></div>
-        <div class="card"><h3>Practice</h3><div><b>${Math.round(repAllowance(tid))}</b> <span class="muted small">reps in a week (100 is ordinary)</span></div><div class="small muted" style="margin-top:4px">${hc ? esc(cname(hc)) + ' runs it.' : ''} The extra, or the shortfall, lands on the second and third team.</div></div>
-      </div>`;
-  }
-  if (tab === 'off') html += `<div class="grid g2">` + `<div class="card"><h3>Offense · ${esc(teamSchemeLabel(t, 'O') || '—')}</h3><div class="small pk-plan" style="margin-bottom:8px">${offPkHTML(offTend(t))}<div class="muted" style="margin-top:6px">What he calls in an ordinary game. A name in brackets is the specialist who brought it. Grey is under 5%: he has it, but it is not part of the book his players learn. The name of the offense is read off all this.</div></div><div class="small muted" style="margin-bottom:8px">Play caller: ${coachNameLink(oc)} ${oc ? `(${ROLE_SHORT[oc.role]})` : ''}</div>
-    ${tendBar('Pass rate', ot.pass, 'Share of dropbacks on neutral downs')}${tendBar('Lead back share', ot.rb1, 'How much the No. 1 back carries it')}</div>` + `<div>${insBar('O')}<div class="card" style="margin-top:14px"><h3>Chemistry</h3><div class="chm-col">${chemRow(['OL', 'QB'])}</div></div></div></div>`;
-  if (tab === 'def') html += `<div class="grid g2"><div>${insBar('D')}<div class="card" style="margin-top:14px"><h3>Chemistry</h3><div class="chm-col">${chemRow(['DL', 'LB', 'DB', 'D'])}</div></div></div>` + `<div class="card"><h3>Defense · ${esc(teamSchemeLabel(t, 'D') || '—')}</h3><div class="small muted" style="margin-bottom:8px">Play caller: ${coachNameLink(dc)} ${dc ? `(${ROLE_SHORT[dc.role]})` : ''} · ${esc(dt.front || '')} front</div>
-    ${dt.pk ? `<div class="small" style="margin-bottom:8px"><b>Coverage packages:</b> ${Object.entries(dt.pk.sh).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${SHELLS[k]} ${Math.round(v * 100)}%${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join(' · ')}<br><b>Pressure packages:</b> ${Object.entries(dt.pk.pr).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${PRESSURES[k]} ${Math.round(v * 100)}%${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join(' · ')}${dt.pk.fr && (dt.pk.fr.UNDER || dt.pk.fr.BEAR || dt.pk.fr.BIGN) ? `<br><b>Front, looks and sub packages:</b> ${dt.front} base${['UNDER', 'BEAR', 'BIGN'].filter(k => dt.pk.fr[k]).map(k => ` · ${PK_NAME[k]}${dt.pk.by[k] && C(dt.pk.by[k]) ? ` <span class="muted">(${esc(C(dt.pk.by[k]).last)})</span>` : ''}`).join('')}` : ''}${dt.pk.disg ? `<br>Disguises the coverage on ${Math.round(dt.pk.disg * 100)}% of snaps${dt.pk.by.DISG && C(dt.pk.by.DISG) ? ` <span class="muted">(${esc(C(dt.pk.by.DISG).last)})</span>` : ''}` : ''}<br><span class="muted">Names in brackets are packages your specialists installed. The bars below are read off this sheet.</span></div>` : ''}
-    ${tendBar('Man coverage', dt.man)}${tendBar('Two-high shells', dt.high)}${tendBar('Blitz', dt.blitz)}${tendBar('Simulated pressure', dt.sim)}${tendBar('Stunts', dt.stunt)}${tendBar('Base personnel', dt.base, 'vs. nickel/dime')}${tendBar('Dime', dt.dime, 'How readily the staff goes to six defensive backs: against four wide, and on third and long')}</div></div>`;
-  if (tab === 'field') html += formationViewerHTML(tid);
-  // ---- self-scout ----
-  if (tab !== 'scout') { /* another tab */ } else if (src) {
-    const a = src.a;
-    html += `<div class="section-title">Self-scout · ${src.lbl} <span class="small muted">· EPA/play and success rate by call</span></div>
-      <div class="grid g2"><div class="card"><h3>By personnel</h3>${scoutTable('pbp', a, 'pers', PERS_LABEL, { head: 'Personnel' })}<h3 style="margin-top:14px">By play type</h3>${scoutTable('pbt', a, 'type', TYPE_LABEL, { head: 'Play type' })}</div>
-      <div class="card"><h3>Situational run/pass</h3>${(() => {
-        const rows = Object.keys(SIT_LABEL).map(k => { const r = a['u_sit' + k + 'R'] || 0, p = a['u_sit' + k + 'P'] || 0; return { k, r, p, n: r + p, eR: r ? a['e_sit' + k + 'R'] / r : null, eP: p ? a['e_sit' + k + 'P'] / p : null }; }).filter(x => x.n);
-        return table('pbs', [{ k: 'k', l: 'Situation', f: x => SIT_LABEL[x.k] }, { k: 'n', l: 'Plays', f: x => x.n, num: 1 }, { k: 'r', l: 'Run%', f: x => Math.round(100 * x.r / x.n) + '%', num: 1 },
-          { k: 'er', l: 'Run EPA', f: x => x.eR === null ? '—' : x.eR.toFixed(2), num: 1 }, { k: 'ep', l: 'Pass EPA', f: x => x.eP === null ? '—' : x.eP.toFixed(2), num: 1 }], rows, { nosort: 1 });
-      })()}<h3 style="margin-top:14px">Formations & tags</h3>${scoutTable('pbf', a, 'form', FORM_LABEL, { head: 'Formation' })}${scoutTable('pbg', a, 'tag', TAG_LABEL, { head: 'Tag', total: a.plays })}</div></div>
-      <div class="grid g2" style="margin-top:16px"><div class="card"><h3>Defense by coverage</h3>${scoutTable('pdc', a, 'cov', COV_LABEL, { head: 'Coverage', def: 1 })}<h3 style="margin-top:14px">By pressure</h3>${scoutTable('pdp', a, 'pres', PRES_LABEL, { head: 'Rush', def: 1 })}</div>
-      <div class="card"><h3>Defense by package</h3>${scoutTable('pdk', a, 'pkg', PKG_LABEL, { head: 'Package', def: 1 })}<h3 style="margin-top:14px">vs. Run / Pass</h3>${scoutTable('pdr', a, 'vs', { Run: 'vs. Run', Pass: 'vs. Pass' }, { head: 'Facing', def: 1 })}</div></div>`;
-  } else html += `<div class="callout">Self-scout numbers appear once ${T(tid).abbr} has played a game.</div>`;
-  // ---- packages: who's on the field ----
-  if (tab !== 'who') return html;
-  const persUsed = Object.entries(ot.pers || {}).sort((x, y) => y[1] - x[1]).map(x => x[0]).filter(k => PERSONNEL[k]);
-  html += `<div class="section-title">Packages · who's on the field <span class="small muted">· from ${tid === u ? 'your depth chart' : 'their depth chart'}${tid === u ? ' (edit on the Depth Chart page)' : ''}</span></div><div class="card">
-    ${persUsed.map(k => `<div style="margin:6px 0"><div class="small" style="font-weight:700">${PERS_LABEL[k] || k}</div><div class="row small" style="gap:4px">${lineupHTML(lineupFor(tid, k).filter(e => e.slot !== 'QB' && !OL_SLOTS.includes(e.slot)))}</div></div>`).join('')}
-    <div style="margin:6px 0"><div class="small" style="font-weight:700">Offensive line & QB</div><div class="row small" style="gap:4px">${lineupHTML(lineupFor(tid, '11').filter(e => e.slot === 'QB' || OL_SLOTS.includes(e.slot)))}</div></div>
-    ${['BASE', 'NICKEL', 'DIME'].map(k => `<div style="margin:6px 0"><div class="small" style="font-weight:700">${PKG_LABEL[k]} defense</div><div class="row small" style="gap:4px">${lineupHTML(defLineup(tid, k))}</div></div>`).join('')}</div>`;
-  return html;
 }
 
 // ---------- schedule ----------
@@ -1925,67 +1747,6 @@ function pracRoomInfo(u, pos) {
   return { pos, rs, order, squad, graded, avg, pb, tone, best, coach: posCoach(u, pos) };
 }
 function pracRating(avg) { return avg === null ? '<span class="pill">No report yet</span>' : `<span class="pill ${avg >= 59 ? 'good' : avg < 42 ? 'bad' : ''}">${pracGradeLabel(avg)}</span>`; }
-function pracMeter(avg) { if (avg === null) return ''; const w = clamp(Math.round(avg), 4, 100), c = avg >= 59 ? 'var(--good)' : avg < 42 ? 'var(--bad)' : 'var(--mid)'; return `<div class="pmeter"><i style="width:${w}%;background:${c}"></i></div>`; }
-function practiceHTML() {
-  const u = state.userTid, t = T(u);
-  const when = state.phase === 'REG' ? `Week ${state.week}` : state.phase === 'PRESEASON' ? 'Preseason' : state.phase === 'PLAYOFFS' ? 'Playoffs' : PHASE_LABEL[state.phase];
-  const rooms = PRAC_ORDER.map(pos => pracRoomInfo(u, pos)).filter(r => r.order.length || r.squad.length);
-  const all = rooms.flatMap(r => r.graded);
-  let html = `<div class="row" style="margin-bottom:10px"><h2 style="margin:0">Practice report <span class="small muted" style="font-weight:400">· ${when}</span></h2><span class="spacer"></span></div>
-    <details class="fold" ${foldAttr(`prachelp`)} style="margin-bottom:14px"><summary>How practice works</summary><div class="small muted" style="margin-top:6px">A strong week is a small edge on game day and a poor one a small drag. Passion drives it, Discipline a little, a respected veteran who works lifts his whole room, and Consistency keeps a player from having bad weeks. A room's leaders also drive its offseason program and keep its tempers in check.
-    Players learn the playbook through reps: inside a room, use the arrows to set who gets the first-team reps. A player who does not know a call loses that snap to someone who does when possible, and can blow the assignment when he has to play it.
-    <b>Working at</b> sets the spot a player practices at. A second spot takes a share of his reps and is where his comfort grows (weeks to months, quicker for nearby jobs and quick learners).</div></details>`;
-  // the week's standouts
-  const line = p => `<div class="row" style="gap:8px;padding:3px 0"><span class="small muted" style="width:34px">${esc(p.lbl)}</span>${playerLink(p, true)}<span class="spacer"></span>${pracChip(p)}</div>`;
-  const top = all.slice().sort((a, b) => b.prac.g - a.prac.g).slice(0, 5), low = all.slice().sort((a, b) => a.prac.g - b.prac.g).filter(p => p.prac.g < 42).slice(0, 5);
-  const xt = rosterOf(u).filter(p => p.xt), dnp = rooms.flatMap(r => r.order).filter(p => p.prac && p.prac.dnp);
-  html += `<div class="grid g2" style="margin-bottom:16px"><div class="card"><h3>Top performers this week</h3>${top.length ? top.map(line).join('') : '<div class="muted small">No practice report yet. One arrives with each week of the season and preseason.</div>'}</div>
-    <div class="card"><h3>Rough weeks</h3>${low.length ? low.map(line).join('') : '<div class="muted small">Nobody had a poor week.</div>'}
-    ${dnp.length ? `<div class="small muted" style="margin-top:8px">Did not practice: ${dnp.map(p => playerLink(p, true)).join(', ')}</div>` : ''}${xt.length ? `<div class="small muted" style="margin-top:8px">Cross-training: ${xt.map(p => `${playerLink(p, true)} → ${SPOTS[p.xt].l}`).join(', ')}</div>` : ''}</div></div>`;
-  // one card per room, as its coach reports it
-  const sel = rooms.find(r => r.pos === ui.pracRoom) || null;
-  for (const [side, name, groups] of PRAC_ROOMS) {
-    const coach = side === 'O' ? offCaller(t) : defCaller(t), sys = t.sys && t.sys[side];
-    const sidePs = rosterOf(u).filter(p => PRAC_SIDE[p.pos] === side), install = sidePs.length ? sidePs.reduce((a, p) => a + pbOf(p), 0) / sidePs.length : 100;
-    html += `<h3 class="sech">${name} <span class="small muted" style="font-weight:400;text-transform:none;letter-spacing:0">· ${coach ? esc(cname(coach)) : 'no play-caller'}${sys && sys.yrs <= 0 ? ' · <b>new system this year</b>' : sys ? ` · year ${sys.yrs + 1} in the system` : ''} · playbook installed ${Math.round(install)}%</span></h3><div class="roomgrid">`;
-    for (const r of rooms.filter(x => groups.includes(x.pos))) {
-      html += `<button class="roomcard ${sel && sel.pos === r.pos ? 'on' : ''}" data-action="pracRoom" data-pos="${r.pos}" data-toggle="1">
-        <div class="row" style="gap:6px"><b>${ROOM_NAME[r.pos]}</b><span class="spacer"></span><span class="small muted">${r.order.length}</span></div>
-        <div class="small muted">${r.coach ? esc(cname(r.coach)) : 'No position coach'}</div>
-        <div style="margin:8px 0 4px">${pracRating(r.avg)}</div>${pracMeter(r.avg)}
-        <div class="small ${r.tone[1]}" style="margin-top:6px">${r.tone[0]}</div>
-        <div class="small muted">${r.best ? `Best: ${esc(r.best.last)}` : '&nbsp;'}${r.pb !== null ? ` · playbook ${Math.round(r.pb)}%` : ''}</div></button>`;
-    }
-    html += '</div>';
-  }
-  if (!sel) return html + '<div class="muted small" style="margin-top:14px">Click a room for its full report: reps order, playbook knowledge, cross-training and character reads.</div>';
-  // the open room
-  const i = rooms.indexOf(sel), prev = rooms[(i + rooms.length - 1) % rooms.length], next = rooms[(i + 1) % rooms.length], pos = sel.pos, order = sel.order;
-  const known = v => (v.p.seenW || 0) >= 2, lead = sel.rs.work.find(v => v.w >= 0.2), calm = sel.rs.calm.find(v => v.w >= 0.2);
-  html += `<div class="card" id="pracDetail" style="margin-top:16px"><div class="row" style="margin-bottom:8px">
-      <button class="sm" data-action="pracRoom" data-pos="${prev.pos}" title="${ROOM_NAME[prev.pos]}">◀ ${ROOM_NAME[prev.pos]}</button>
-      <span class="spacer"></span><h2 style="margin:0">${ROOM_NAME[pos]}</h2>${pracRating(sel.avg)}<span class="pill ${sel.tone[1]}">${sel.tone[0]}</span><span class="spacer"></span>
-      <button class="sm" data-action="pracRoom" data-pos="${next.pos}" title="${ROOM_NAME[next.pos]}">${ROOM_NAME[next.pos]} ▶</button></div>
-    <div class="small muted" style="margin-bottom:10px">${sel.coach ? `Coach: ${coachNameLink(sel.coach)} · ${esc(sel.coach.style)} · develops ${wordPill(asstWord(sel.coach, 'dev'))} discipline ${wordPill(asstWord(sel.coach, 'disc'))}` : 'No position coach'}
-      · ${lead || calm ? [lead && known(lead) ? `Sets the work: ${playerLink(lead.p, true)}` : '', calm && known(calm) ? `Keeps it in line: ${playerLink(calm.p, true)}` : ''].filter(Boolean).join(' · ') || 'Your staff is still learning who runs this room' : 'No veteran voice in this room'}</div>` +
-    table('prac' + pos, [
-      { k: 'ord', l: 'Reps', f: p => p.tid === -3 ? '<span class="muted small">Practice squad</span>' : `<span class="small">#${repsOrder(state.userTid, p.pos).indexOf(p) + 1}</span> <button class="link small" data-action="repsGo" data-k="${(typeof repsJobsOf === 'function' && repsJobsOf(p.id)[0] || {}).k || ''}" data-pid="${p.id}" title="Practice order is set on Snap counts">set</button>` },
-      { k: 'n', l: 'Name', f: p => playerLink(p) + ' ' + statusPills(p) },
-      { k: 'pos', l: 'Pos', f: p => esc(p.lbl) },
-      { k: 'exp', l: 'Yrs', f: p => p.exp === 0 ? 'R' : p.exp, num: 1 },
-      { k: 'tier', l: 'Tier', f: p => tierPill(p) },
-      { k: 'pr', l: 'This week', f: p => pracChip(p) },
-      { k: 'tr', l: 'Recent', f: p => pracTrend(p) },
-      { k: 'pb', l: 'Playbook', f: p => `${pbBar(pbOf(p))} <span class="small muted">${pbLabel(pbOf(p))}</span>` },
-      { k: 'xt', l: 'Working at', f: p => crossTrainSelect(p), title: 'The spot he practices at. A second spot takes a share of his reps, and a spot that is new to him is where his comfort grows.' },
-      { k: 'rg', l: 'Grades', f: p => rowGrades(p) },
-      { k: 'we', l: 'Passion', f: p => charPill(p, 'pas') },
-      { k: 'di', l: 'Discipline', f: p => charPill(p, 'disc') },
-      { k: 'le', l: 'Leadership', f: p => charPill(p, 'lead') },
-    ], [...order, ...sel.squad], { nosort: 1 }) + '</div>';
-  return html;
-}
-
 // ---------- waiver wire (after league-wide cuts) ----------
 function waiversHTML() {
   const u = state.userTid, wv = state.wv, fam = ui.wvFam || 'ALL';
@@ -2799,11 +2560,11 @@ function asstPoolModal(role) {
   ], pool, { nosort: 1 }) : '<p class="muted">Nobody is available for this job right now.</p>';
   openModal(h);
 }
-function asstModal(c) {
+function asstModal(c, replace) {
   const spec = SPEC_ROLES.includes(c.role), t = c.tid >= 0 ? T(c.tid) : null;
   let h = `<div class="row"><h2 style="margin:0">${esc(cname(c))}</h2><span class="pill">${ASST_LABEL[c.role]}</span></div>
     <div class="muted" style="margin:4px 0 12px">${t ? teamLink(c.tid, true) : 'Available'} · Age ${c.age} · ${asstTrack(c)}</div>
-    <div class="row" style="gap:6px;margin-bottom:12px">${kwPills(c)}</div>`;
+    <div class="row" style="gap:6px;margin-bottom:12px">${kwPills(c)}</div>` + staffFileHTML(c);
   h += `<div class="cc-grid"><div><div class="section-title" style="margin-top:0">Ratings</div>${ratingBarsHTML(c)}<p class="small muted" style="margin-top:8px">${coachRoleBlurb(c)}</p></div><div>`;
   if (spec) {
     const L = LEANS[c.role][c.lean];
@@ -2818,7 +2579,7 @@ function asstModal(c) {
   if (c.hist.length) h += `<div class="section-title">Career</div>` + table('ahist', [
     { k: 's', l: 'Season', f: x => x.s }, { k: 't', l: 'Team', f: x => T(x.tid).abbr }, { k: 'r', l: 'Role', f: x => ROLE_SHORT[x.role] || x.role }, { k: 'w', l: 'Record', f: x => `${x.w}-${x.l}` },
   ], c.hist.slice().reverse(), { nosort: 1 });
-  openModal(h);
+  openModal(h, replace);
 }
 // ---------- the coaching search ----------
 function promiseChips(t, role, c) {
@@ -2919,104 +2680,87 @@ const SPEC_SHORT = { PGC: 'Pass game', RGC: 'Run game', DPC: 'Pass defense', DRC
 function instWord(v) { return v >= 0.95 ? 'Full' : v >= 0.85 ? 'Strong' : v >= 0.6 ? 'Learning' : 'Thin'; }
 function roleName(role) { return COACH_ROLES.includes(role) ? ROLE_LABEL[role] : ASST_LABEL[role]; }
 function roleCode(role) { return COACH_ROLES.includes(role) ? ROLE_SHORT[role] : role; }
-function monogram(c, cls) { return `<span class="mono ${cls || ''}">${c ? esc((c.first[0] || '') + (c.last[0] || '')) : '—'}</span>`; }
 function staffSeason(c) { const n = (c.yrs || 0) + 1; return `${n}${n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'} season`; }
 function staffBoss(t, role) { return role === 'HC' ? null : ROLE_TIER[role] === 2 ? 'HC' : ROLE_TIER[role] === 3 ? (ASST_SIDE[role] === 'O' ? 'OC' : 'DC') : SPEC_OVER[role]; }
-// one card in the hierarchy: kind is 'hc', 'co' (coordinator) or 'sp' (specialist)
-function orgCard(t, role, c, canHire, kind, sel) {
-  const top = COACH_ROLES.includes(role), on = c && sel && sel.id === c.id;
-  const calls = c && offCaller(t) === c ? 'Calls the offense' : c && defCaller(t) === c ? 'Calls the defense' : '';
-  if (!c) return `<div class="oc ${kind === 'pc' ? 'sp pc' : kind} vacant"><div class="oc-body"><div class="oc-role">${kind === 'sp' ? SPEC_SHORT[role] : kind === 'pc' ? ASST_LABEL[role].replace(' Coach', '') : roleName(role)}</div><div class="oc-name bad">Vacant</div>
-    ${canHire ? `<button class="sm primary" data-action="searchRole" data-role="${role}" style="margin-top:6px">Find someone</button>` : '<div class="oc-sub">The job is open</div>'}</div><span class="oc-code">${roleCode(role)}</span></div>`;
-  if (kind === 'sp') { ensureDefPk(c); ensureOffPk(c); return `<button class="oc sp ${on ? 'sel' : ''}" data-action="coachSel" data-cid="${c.id}"><div class="oc-body"><div class="oc-role"><span class="oc-code static">${role}</span> ${SPEC_SHORT[role]}</div><div class="oc-name">${esc(cname(c))}</div><div class="oc-sub">${wordPill(asstWord(c, 'cre'))}<span>${esc(leanLabel(c))}</span></div></div></button>`; }
-  if (kind === 'pc') return `<button class="oc sp pc ${on ? 'sel' : ''}" data-action="coachSel" data-cid="${c.id}"><div class="oc-body"><div class="oc-role"><span class="oc-code static">${role}</span> ${ASST_LABEL[role].replace(' Coach', '')}</div><div class="oc-name">${esc(cname(c))}</div><div class="pc-r" title="Technique: how fast his room improves"><span>Tech.</span>${wordPill(asstWord(c, 'dev'))}</div><div class="pc-r" title="Cohesion: how far his room can get on the same page"><span>Coh.</span>${wordPill(asstWord(c, 'coh'))}</div></div></button>`;
-  let sub;
-  if (top) sub = `${tierChip(c.ovr)}<span>${staffSeason(c)}</span>`;
-  else { ensureDefPk(c); ensureOffPk(c); sub = `${wordPill(asstWord(c, 'cre'))}<span>${esc(leanLabel(c))}</span>`; }
-  const line2 = top ? (schemeLabel(c) ? esc(schemeLabel(c)) : coachStrengths(c)) : '';
-  return `<button class="oc ${kind} ${on ? 'sel' : ''}" data-action="coachSel" data-cid="${c.id}">${monogram(c)}
-    <div class="oc-body"><div class="oc-name">${esc(cname(c))}</div><div class="oc-role">${roleName(role)}</div>
-    <div class="oc-sub">${sub}</div>${line2 ? `<div class="oc-line">${line2}</div>` : ''}${calls ? `<div class="oc-flag">${calls}</div>` : ''}</div><span class="oc-code">${roleCode(role)}</span></button>`;
+// ---- the staff pyramid: a medallion for every job, the head coach at the apex, each man joined to the man he answers to ----
+// rows: y (px from the top) and the medallion's size; x is a share of the width, so the pyramid widens and narrows with the window
+const PYR_ROWS = [{ y: 0, d: 84 }, { y: 196, d: 62 }, { y: 358, d: 50 }, { y: 490, d: 44 }], PYR_H = 600, PYR_H2 = 340;
+const PYR_POS = { HC: [50, 0], OC: [27.5, 1], STC: [44, 1], SC: [58, 1], DC: [79.17, 1], PGC: [15, 2], RGC: [40, 2], DRC: [66.67, 2], DPC: [91.67, 2],
+  QB: [5, 3], WR: [15, 3], TE: [25, 3], RB: [35, 3], OL: [45, 3], DL: [58.33, 3], LB: [75, 3], DB: [91.67, 3] };
+const PYR_LABEL = { HC: 'Head coach', OC: 'Offensive coordinator', DC: 'Defensive coordinator', STC: 'Special teams', SC: 'Strength', PGC: 'Pass game', RGC: 'Run game', DPC: 'Pass defense', DRC: 'Run defense' };
+const TIER_METAL = { Elite: 'gold', Strong: 'silver', Average: 'bronze', Weak: 'iron' };
+const WORD_METAL = { Excellent: 'gold', Good: 'silver', Average: 'bronze', 'Below average': 'iron', Poor: 'iron' };
+const shortName = c => `${esc((c.first || '')[0] || '')}. ${esc(c.last)}`;
+const wordSpan = w => `<span class="${asstWordCls(w)}" title="${esc(w)}">${esc(w === 'Below average' ? 'Below avg' : w === 'Not interviewed' ? 'Unknown' : w)}</span>`;
+// one medallion and the plate under it; a click opens his card
+function medalHTML(t, role, canHire) {
+  const [x, ri] = PYR_POS[role], row = PYR_ROWS[ri], c = staffCoach(t, role), r = 'r' + (ri + 1), nar = role === 'STC' || role === 'SC' ? ' nar' : '';
+  const pos = `left:${x}%;top:${row.y}px`, label = PYR_LABEL[role] || ASST_LABEL[role].replace(' Coach', '');
+  if (!c) return `<div class="pm vac ${r}${nar}" style="${pos}"><span class="pm-disc"><b>${roleCode(role)}</b></span><span class="pm-plate"><i>${esc(label)}</i><b class="bad">Vacant</b>${canHire ? `<button class="sm primary" data-action="searchRole" data-role="${role}">Find someone</button>` : ''}</span></div>`;
+  const top = COACH_ROLES.includes(role), spec = SPEC_ROLES.includes(role);
+  const calls = offCaller(t) === c ? 'Calls the offense' : defCaller(t) === c ? 'Calls the defense' : '';
+  let metal, body;
+  if (top) {
+    const tr = coachTier(c.ovr), tier = `<span class="cl-tier t-${tr}">${tr}</span>`; metal = TIER_METAL[tr];
+    if (role === 'HC') body = `<b>${esc(cname(c))}</b><i>Head coach · ${staffSeason(c)}</i><em>${tier}${c.rec && c.rec.w + c.rec.l ? ` · Career ${c.rec.w}-${c.rec.l}${c.rec.t ? '-' + c.rec.t : ''}${c.rec.titles ? `, ${c.rec.titles} title${c.rec.titles > 1 ? 's' : ''}` : ''}` : ''}</em><em class="pm-sub">${schemeLabel(c) ? esc(schemeLabel(c)) : coachStrengths(c)}</em>`;
+    else body = role === 'OC' || role === 'DC' ? `<b>${esc(cname(c))}</b><i>${label}</i><em>${tier} · ${schemeLabel(c) ? esc(schemeLabel(c)) : staffSeason(c)}</em>` : `<b>${esc(cname(c))}</b><i>${label}</i><em>${tier}</em><em class="pm-sub">${staffSeason(c)}</em>`;
+  } else if (spec) {
+    ensureDefPk(c); ensureOffPk(c); const w = asstWord(c, 'cre'); metal = WORD_METAL[w] || 'steel';
+    body = `<b>${esc(cname(c))}</b><i>${label}</i><em title="Creativity: ${esc(w)}">${wordSpan(w)}${leanLabel(c) ? ' · ' + esc(leanLabel(c)) : ''}</em>`;
+  } else {
+    const dv = asstWord(c, 'dev'), co = asstWord(c, 'coh'); metal = WORD_METAL[dv] || 'steel';
+    body = `<b title="${esc(cname(c))}">${shortName(c)}</b><em title="Technique: how fast his room improves"><u>Tech</u>${wordSpan(dv)}</em><em title="Cohesion: how far his room can get on the same page"><u>Coh</u>${wordSpan(co)}</em>`;
+  }
+  return `<button class="pm ${r}${nar} m-${metal}" style="${pos}" data-action="coach" data-cid="${c.id}" title="${esc(cname(c))}, ${esc(roleName(role).toLowerCase())}: open his card"><span class="pm-disc"><b>${roleCode(role)}</b></span><span class="pm-plate">${body}${calls ? `<span class="pm-calls">${calls}</span>` : ''}</span></button>`;
+}
+function staffPyramidHTML(t, canHire) {
+  const has = !!t.asst, roles = has ? STAFF_ORDER : COACH_ROLES, H = has ? PYR_H : PYR_H2;
+  const X = r => PYR_POS[r][0], ROW = r => PYR_ROWS[PYR_POS[r][1]];
+  const paths = roles.filter(r => r !== 'HC').map(r => { const b = staffBoss(t, r); if (!b || !roles.includes(b)) return ''; const br = ROW(b), cr = ROW(r);
+    return `<path class="${b === 'HC' ? 'top' : ''}" d="M${X(b)} ${br.y + br.d / 2}V${cr.y - 14}H${X(r)}V${cr.y}"/>`; }).join('');
+  const split = has ? `<path class="split" d="M50 ${PYR_ROWS[2].y - 28}V${H}"/>` : '';
+  const medal = r => medalHTML(t, r, canHire);
+  const key = `<div class="pyr-key" title="The rim is his rating: head coach and coordinators by their tier; the game coordinators by their creativity, the position coaches by their technique">${[['gold', 'Elite'], ['silver', 'Strong'], ['bronze', 'Average'], ['iron', 'Weak']].map(([m, l]) => `<span><i class="m-${m}"></i>${l}</span>`).join('')}</div>`;
+  return `<section class="pyr-wrap"><div class="pyr-head">${key}<span class="spacer"></span><span class="pyr-hint">Click a coach for his card · ← → walks the staff</span>${state.carWrap ? `<button class="link cl-more" data-action="nav" data-view="carwrap">League coaching moves ›</button>` : ''}</div>
+    <div class="pyr" style="height:${H}px"><svg class="pyr-lines" viewBox="0 0 100 ${H}" preserveAspectRatio="none" aria-hidden="true"><g class="hi">${paths}</g><g class="ln">${split}${paths}</g></svg>
+      ${has ? '<span class="pyr-wm o">Offense</span><span class="pyr-wm d">Defense</span>' : ''}
+      <div class="pyr-row" data-l="Head coach">${medal('HC')}</div>
+      <div class="pyr-row" data-l="Coordinators">${['OC', 'STC', 'SC', 'DC'].map(medal).join('')}</div>
+      ${has ? `<div class="pyr-row" data-l="Game coordinators">${['PGC', 'RGC', 'DRC', 'DPC'].map(medal).join('')}</div>
+      <div class="pyr-row" data-l="Position coaches">${['QB', 'WR', 'TE', 'RB', 'OL', 'DL', 'LB', 'DB'].map(medal).join('')}</div>` : ''}</div></section>`;
 }
 function tendWord(v) { return v >= 0.6 ? 'Heavy' : v >= 0.42 ? 'Often' : v >= 0.25 ? 'Some' : v >= 0.1 ? 'Light' : 'Rare'; }
 function railBar(label, v, hint) { v = clamp(v || 0, 0, 1); return `<div class="rb" title="${esc(hint || '')}"><span class="rb-l">${label}</span><span class="rb-t"><i style="width:${Math.round(v * 100)}%"></i></span><span class="rb-v">${tendWord(v)}</span></div>`; }
-function staffRailHTML(t, mine) {
-  const ot = offTend(t), dt = defTend(t), oc = offCaller(t), dc = defCaller(t);
-  const yrs = side => { const s = t.sys && t.sys[side]; return !s ? '—' : s.yrs <= 0 ? 'New this year' : `Year ${s.yrs + 1}`; };
-  const inst = side => { const ps = rosterOf(t.id).filter(p => PRAC_SIDE[p.pos] === side); return ps.length ? ps.reduce((a, p) => a + pbOf(p), 0) / ps.length / 100 : 1; };
-  let h = `<div class="card rail"><h3>Playbook &amp; system</h3>
-    <div class="rail-h">Offense</div>
-    <div class="kv2"><span>System</span><b>${esc(teamSchemeLabel(t, 'O') || '—')}</b><span>Play caller</span><b>${oc ? esc(cname(oc)) : '—'}</b><span>In the system</span><b>${yrs('O')}</b></div>
-    ${railBar('Pass rate', ot.pass, 'On neutral downs')}${railBar('Play-action', ot.pa)}${railBar('Deep shots', ot.deep)}${railBar('Quick game', ot.quick)}${railBar('Motion', ot.motion)}${railBar('RPO', ot.rpo)}${railBar('Screens', ot.screen)}${railBar('Zone runs', ot.zone, 'Zone against gap and power runs')}
-    <div class="rail-h" style="margin-top:14px">Defense</div>
-    <div class="kv2"><span>System</span><b>${esc(teamSchemeLabel(t, 'D') || '—')}</b><span>Play caller</span><b>${dc ? esc(cname(dc)) : '—'}</b><span>Front</span><b>${esc(dt.front || '—')}</b><span>In the system</span><b>${yrs('D')}</b></div>
-    ${railBar('Man coverage', dt.man)}${railBar('Two-high shells', dt.high)}${railBar('Blitz', dt.blitz)}${railBar('Sim pressure', dt.sim)}${railBar('Stunts', dt.stunt)}${railBar('Base personnel', dt.base, 'Against nickel and dime')}
-    <div class="rail-h" style="margin-top:14px">Installed</div>
-    <div class="rb"><span class="rb-l">Offense</span><span class="rb-t"><i style="width:${Math.round(inst('O') * 100)}%"></i></span><span class="rb-v">${instWord(inst('O'))}</span></div>
-    <div class="rb"><span class="rb-l">Defense</span><span class="rb-t"><i style="width:${Math.round(inst('D') * 100)}%"></i></span><span class="rb-v">${instWord(inst('D'))}</span></div>
-    <button class="sm wide" data-action="nav" data-view="playbook" style="margin-top:12px">Open the playbook →</button></div>`;
-  if (mine && t.staffBud) {
-    const pay = staffPayroll(t.id), room = staffRoom(t.id);
-    h += `<div class="card rail" style="margin-top:12px"><h3>Staff budget</h3><div class="rb"><span class="rb-l">Committed</span><span class="rb-t"><i style="width:${clamp(Math.round(100 * pay / t.staffBud), 0, 100)}%${room < 0 ? ';background:var(--bad)' : ''}"></i></span><span class="rb-v">${fmtMoney(pay)}</span></div>
-      <div class="kv2" style="margin-top:6px"><span>Budget</span><b>${fmtMoney(t.staffBud)}</b><span>Free</span><b class="${room < 0 ? 'bad' : 'good'}">${fmtMoney(room)}</b>${t.staffDead ? `<span>Owed to coaches let go</span><b>${fmtMoney(t.staffDead)}</b>` : ''}</div></div>`;
-  }
-  return h;
-}
-// the strip under the tree: everything about the coach you clicked, without leaving the page
-function staffSelHTML(t, c, role, mine, canHire) {
-  const top = COACH_ROLES.includes(role), spec = SPEC_ROLES.includes(role), bossRole = staffBoss(t, role), boss = bossRole ? staffCoach(t, bossRole) : null;
-  const sec = (l, body) => `<div class="ss-l">${l}</div><div class="ss-b">${body}</div>`;
-  // identity
-  let a = `<div class="ss-id">${monogram(c, 'lg')}<div><div class="row" style="gap:6px"><span class="oc-code static">${roleCode(role)}</span><span class="ss-tag">Selected coach</span></div>
-    <div class="ss-name">${esc(cname(c))}</div><div class="muted">${roleName(role)}</div>
-    <div class="small muted" style="margin-top:4px">Age ${c.age} · ${staffSeason(c)} here${bossRole ? `<br>Under ${boss ? esc(cname(boss)) : 'a vacant job'} (${roleCode(bossRole)})` : ''}</div>
-    ${role === 'HC' && c.rec ? `<div class="small muted">Career ${c.rec.w}-${c.rec.l}${c.rec.titles ? ` · ${c.rec.titles} title${c.rec.titles > 1 ? 's' : ''}` : ''}</div>` : ''}</div></div>`;
-  // what he does
-  let b = '';
-  if (top) {
-    b += sec('Overall', `${tierChip(c.ovr)} <span class="small muted">${esc(repLabel(c))}</span>`);
-    if (schemeLabel(c)) b += sec('System', esc(schemeLabel(c)));
-    b += `<div class="ss-l">Ratings</div>` + ratingBarsHTML(c);
-    if (role === 'HC') b += `<div class="small muted" style="margin-top:6px">${tendencySummary(c)}</div>`;
-  } else if (spec) {
-    const L = LEANS[role][c.lean];
-    b += `<div class="ss-l">Ratings</div>` + ratingBarsHTML(c);
-    b += sec('Leans', esc(L ? L[0] : '—') + ` <span class="small muted">· ${esc([bgLabel(c) && bgLabel(c) + ' background', c.style].filter(Boolean).join(' · '))}</span>`);
-    if (c.pks && c.pks.length) b += sec('Brings', c.pks.map(id => `<span class="pill on">${PK_NAME[id]}</span>`).join(' '));
-    if (L) b += `<div class="ss-l">Effect on the call sheet</div>` + Object.entries(L[1]).map(([k, v]) => `<div class="ss-row"><span>${LEAN_WORD[k] || k}</span><span class="${v > 0 ? 'good' : 'bad'}">${v > 0 ? (v >= 1.5 ? 'Much more' : 'More') : (v <= -1.5 ? 'Much less' : 'Less')} ${v > 0 ? '▲' : '▼'}</span></div>`).join('');
-  } else {
-    b += `<div class="ss-l">Ratings</div>` + ratingBarsHTML(c);
-    b += sec('Keywords', kwPills(c));
-    b += `<div class="small muted" style="margin-top:6px">Cohesion is the ceiling on his room's chemistry. Technique is how fast his players improve. If he moves up, his keywords become his system.</div>`;
-  }
-  // where he has been and where he can go
+// a coach on a club's staff, in his card: his place in the building, his deal, what he was promised, his room this week,
+// his word before camp (yours), and, in the coaching search, the moves you can make with him
+function staffFileHTML(c) {
+  if (!c || !(c.tid >= 0) || !T(c.tid)) return '';
+  const t = T(c.tid), role = STAFF_ORDER.find(r => staffCoach(t, r) === c); if (!role) return '';
+  const mine = t.id === state.userTid, canHire = state.phase === 'COACHES' && mine, top = COACH_ROLES.includes(role), spec = SPEC_ROLES.includes(role);
+  const bossRole = staffBoss(t, role), boss = bossRole ? staffCoach(t, bossRole) : null;
   const ladder = top ? (role === 'HC' ? ['HC'] : role === 'OC' || role === 'DC' ? [role, 'HC'] : [role]) : spec ? [role, ASST_SIDE[role] === 'O' ? 'OC' : 'DC'] : [role, SPEC_OVER[role], ASST_SIDE[role] === 'O' ? 'OC' : 'DC'];
-  let p = `<div class="ss-l">Career path</div><div class="ladder">${ladder.map((r, i) => `<div class="lad ${i === 0 ? 'cur' : ''}"><span class="oc-code static">${roleCode(r)}</span><span>${roleName(r)}</span>${i === 0 ? '<span class="ss-tag">Current</span>' : ''}</div>`).join('<div class="lad-a">↓</div>')}</div>`;
-  const hist = (c.hist || []).slice(-3).reverse();
-  if (hist.length) p += `<div class="ss-l" style="margin-top:10px">Recent seasons</div>` + hist.map(x => `<div class="ss-row"><span>${x.s} · ${T(x.tid).abbr} ${ROLE_SHORT[x.role] || x.role}</span><span>${x.w}-${x.l}${x.role === 'OC' && x.off ? ` · #${x.off} off` : x.role === 'DC' && x.def ? ` · #${x.def} def` : ''}</span></div>`).join('');
-  else p += `<div class="small muted" style="margin-top:8px">${top ? '' : asstTrack(c)}</div>`;
-  const mentors = (c.mentors || []).map(id => C(id)).filter(Boolean);
-  if (mentors.length) p += `<div class="small muted" style="margin-top:6px">Worked under ${mentors.slice(0, 3).map(m => esc(m.last)).join(', ')}</div>`;
-  // money and moves
-  let m = `<div class="ss-l">Contract</div><div class="ss-big">${c.sal !== undefined ? `${fmtMoney(c.sal)} <span class="muted">/ ${c.cyrs} yr${c.cyrs === 1 ? '' : 's'}</span>` : '—'}</div>`;
-  if (c.sal !== undefined) m += `<div class="small muted">${c.cgtd ? `${c.cgtd} guaranteed${mine ? ` · owed ${fmtMoney(owedIfFired(c))} if let go` : ''}` : 'Nothing guaranteed'}</div>`;
-  const prom = promiseChips(t, role, c);
-  if (prom) m += `<div class="ss-l" style="margin-top:8px">Promised</div><div>${prom}</div>`;
-  if (!top && mine) { const pos = spec ? null : POS_ROLES.includes(role) ? role : null; if (pos) { const rooms = pos === 'DB' ? ['CB', 'S'] : [pos]; const rs = rooms.map(r => pracRoomInfo(t.id, r)).filter(r => r.avg !== null); if (rs.length) m += `<div class="ss-l" style="margin-top:8px">His room this week</div><div>${rs.map(r => `<span class="small muted">${rooms.length > 1 ? ROOM_NAME[r.pos] + ' ' : ''}</span>${pracRating(r.avg)}`).join(' ')}</div>`; } }
-  let act = `<button class="sm" data-action="coach" data-cid="${c.id}">View full card</button>`;
+  const kv = [['On the staff', `<span class="oc-code static">${roleCode(role)}</span> ${esc(roleName(role))} · ${staffSeason(c)} here${bossRole ? ` · answers to ${boss ? coachNameLink(boss) : 'a vacant job'} <span class="muted">(${roleCode(bossRole)})</span>` : ''}`]];
+  if (top) kv.push(['Standing', esc(repLabel(c))]);
+  kv.push(['Contract', c.sal !== undefined ? `<b>${fmtMoney(c.sal)}</b> / ${c.cyrs} yr${c.cyrs === 1 ? '' : 's'} · ${c.cgtd ? `${c.cgtd} guaranteed${mine ? ` · owed ${fmtMoney(owedIfFired(c))} if let go` : ''}` : 'nothing guaranteed'}` : '—']);
+  const prom = promiseChips(t, role, c); if (prom) kv.push(['Promised', prom]);
+  if (ladder.length > 1) kv.push(['Career path', ladder.map((r, i) => i ? esc(roleName(r)) : `<b>${esc(roleName(r))}</b>`).join(' <span class="muted">→</span> ')]);
+  if (mine && POS_ROLES.includes(role)) { const rooms = role === 'DB' ? ['CB', 'S'] : [role], rs = rooms.map(r => pracRoomInfo(t.id, r)).filter(r => r.avg !== null);
+    if (rs.length) kv.push(['His room this week', rs.map(r => `<span class="small muted">${rooms.length > 1 ? ROOM_NAME[r.pos] + ' ' : ''}</span>${pracRating(r.avg)}`).join(' ')]); }
+  let fx = '';
+  if (spec) { const L = LEANS[role][c.lean]; if (L) fx = `<div class="cf-fx"><span class="cf-k">Effect on the call sheet</span>${Object.entries(L[1]).map(([k, v]) => `<span>${LEAN_WORD[k] || k} <b class="${v > 0 ? 'good' : 'bad'}">${v > 0 ? (v >= 1.5 ? 'Much more' : 'More') : (v <= -1.5 ? 'Much less' : 'Less')} ${v > 0 ? '▲' : '▼'}</b></span>`).join('')}</div>`; }
+  let act = '';
   if (canHire) {
     const lock = t.locks && t.locks[role] && C(t.locks[role]) && C(t.locks[role]).tid === t.id ? C(t.locks[role]) : null;
-    if (lock) act += `<span class="small muted" title="You promised this job to ${esc(cname(lock))} for his man">🔒 ${esc(lock.last)}'s man</span>`;
+    if (lock) act = `<span class="small muted" title="You promised this job to ${esc(cname(lock))} for his man">🔒 ${esc(lock.last)}'s man</span>`;
     else {
-      const toHead = ['OC', 'DC', 'STC'].includes(role) && !C(t.hc);
-      const up = top ? false : spec ? !C(t[ASST_SIDE[role] === 'O' ? 'oc' : 'dc']) : !asst(t, SPEC_OVER[role]);
+      const toHead = ['OC', 'DC', 'STC'].includes(role) && !C(t.hc), up = top ? false : spec ? !C(t[ASST_SIDE[role] === 'O' ? 'oc' : 'dc']) : !asst(t, SPEC_OVER[role]);
       if (toHead) act += `<button class="sm primary" data-action="asstPromote" data-cid="${c.id}" title="Your head coaching job is open: give it to him">Promote to head coach</button>`;
       if (up) act += `<button class="sm primary" data-action="asstPromote" data-cid="${c.id}" title="Move him up into the open job above him">Promote</button>`;
       act += `<button class="sm danger" data-action="fireCoach" data-role="${role}">Let go</button>`;
     }
   }
-  m += `<div class="ss-act">${act}</div>`;
-  return `<div class="card ss"><div class="ss-c">${a}</div><div class="ss-c">${b}</div><div class="ss-c">${p}</div><div class="ss-c">${m}</div></div>`;
+  const walk = view === 'coaches' && (ui.staffTid == null ? state.userTid : ui.staffTid) === t.id ? '<span class="cf-walk">← → the next man on the staff</span>' : '';
+  return `${mine ? briefHTML(t, role) : ''}<div class="cf-here"><div class="cf-kv">${kv.map(([k, v]) => `<span class="cf-k">${k}</span><span>${v}</span>`).join('')}</div>${fx}${act || walk ? `<div class="cf-act">${act}${walk}</div>` : ''}</div>`;
 }
 function staffList(t) { return STAFF_ORDER.map(r => staffCoach(t, r)).filter(Boolean); }
 // ---- the coaching carousel, after it stops ----
@@ -3035,56 +2779,86 @@ function carWrapHTML() {
     ${sec('Head coaches', hc)}${sec('Coordinators', co)}${sec('Pass and run game coordinators', sp)}
     ${pos.length ? `<details class="card" style="margin-bottom:14px"${pos.some(m => m.tid === u) ? ' open' : ''}><summary><b>Position coaches</b> <span class="muted small">${pos.length}</span></summary><table class="tbl cw-tbl" style="margin-top:8px"><thead><tr><th>Club</th><th>Job</th><th>In</th><th>Out</th></tr></thead><tbody>${pos.sort((a, b) => (b.tid === u) - (a.tid === u) || a.tid - b.tid).map(line).join('')}</tbody></table></details>` : ''}`;
 }
+// the staff: the club's masthead and figures, the pyramid of medallions, then the systems the staff runs, and the ledgers
 function coachesHTML() {
   const tid = ui.staffTid == null ? state.userTid : ui.staffTid, t = T(tid), mine = tid === state.userTid, canHire = state.phase === 'COACHES' && mine;
-  const opts = state.teams.map(x => `<option value="${x.id}" ${x.id === tid ? 'selected' : ''}>${x.region} ${x.name}</option>`).join('');
-  const list = staffList(t), sel = list.find(c => c.id === ui.staffSel) || list[0] || null, selRole = sel ? STAFF_ORDER.find(r => staffCoach(t, r) === sel) : null;
-  const has = !!t.asst, card = (role, kind) => orgCard(t, role, staffCoach(t, role), canHire, kind, sel);
-  let html = `<div class="pagehead"><div><h1>Coaching staff</h1><div class="sub">${state.phase === 'COACHES' ? (mine ? 'The coaching search is open: let a coach go to open his job, then interview and negotiate below.' : 'The coaching search is open.') : 'Hierarchy, responsibilities and what each man brings. Changes happen in the coaching search, right after the season.'}</div></div>
-    <span class="spacer"></span>${state.carWrap ? `<button class="sm" data-action="nav" data-view="carwrap">League coaching moves</button>` : ''}<select data-change="staffTeam">${opts}</select></div>`;
-  const branch = (coordRole, specs) => `<div class="br">${card(coordRole, 'co')}${has ? `<div class="fork">${specs.map(r => `<div class="leaf">${card(r, 'sp')}</div>`).join('')}</div>` : ''}</div>`;
-  const tree = `<div class="card tree"><h3>Staff hierarchy</h3>
-    <div class="tree-top">${card('HC', 'hc')}</div>
-    <div class="tree-row"><div class="tbr">${branch('OC', ['PGC', 'RGC'])}</div><div class="tbr">${branch('DC', ['DPC', 'DRC'])}</div>
-      <div class="tbr"><div class="br stack">${card('STC', 'co')}${card('SC', 'co')}</div></div></div>
-    ${has ? `<div class="tree-pos"><i class="stem o"></i><i class="stem d"></i>${STAFF_POS_ROW.map(r => `<div class="leaf">${card(r, 'pc')}</div>`).join('')}</div>` : ''}
-    <div class="tree-foot">Click anyone to bring up his file below. ← → moves through the staff.</div></div>`;
-  let main = tree;
-  if (sel && mine) main += briefHTML(t, selRole); // during camp his word comes first, right under the chart
-  if (sel) main += staffSelHTML(t, sel, selRole, mine, canHire);
-  html += `<div class="staff-wrap"><div class="staff-main">${main}</div><div class="staff-rail">${staffRailHTML(t, mine)}</div></div>`;
-  if (state.phase === 'COACHES' && mine && state.car) html += searchHTML2(t);
-  const sides = [['O', 'offense'], ['D', 'defense']].map(([side, name]) => { const infl = tendInfluences(t, side); return `<div><div class="ss-l">Who shapes the ${name}</div>${infl.length ? '<ul class="tight">' + infl.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>' : '<div class="small muted">Nobody below the play caller is bending the call sheet.</div>'}</div>`; }).join('');
-  html += `<details class="fold card" ${foldAttr('shape')} style="margin-top:12px"><summary>How the call sheets are shaped</summary><div class="grid g2 small" style="margin-top:10px">${sides}</div></details>`;
+  const opts = state.teams.map(x => `<option value="${x.id}" ${x.id === tid ? 'selected' : ''}>${esc(x.region + ' ' + x.name)}</option>`).join('');
+  const hc = C(t.hc), g = !mine && typeof gmOf === 'function' ? gmOf(tid) : null, rival = !mine && T(state.userTid).conf === t.conf && T(state.userTid).div === t.div;
+  const when = `${state.season} · ${state.phase === 'REG' ? 'Week ' + Math.min(state.week, SEASON_WEEKS) : esc(PHASE_LABEL[state.phase] || state.phase)}`;
+  const jobs = t.asst ? STAFF_ORDER : COACH_ROLES, filled = jobs.filter(r => staffCoach(t, r)).length;
+  const ot = offTend(t), dt = defTend(t), oc = offCaller(t), dc = defCaller(t);
+  const yrs = side => { const s = t.sys && t.sys[side]; return !s ? '—' : s.yrs <= 0 ? 'New this year' : `Year ${s.yrs + 1}`; };
+  const inst = side => { const ps = rosterOf(t.id).filter(p => PRAC_SIDE[p.pos] === side); return ps.length ? ps.reduce((a, p) => a + pbOf(p), 0) / ps.length / 100 : 1; };
+  const fig = (k, v, s, tt) => `<div${tt ? ` title="${esc(tt)}"` : ''}><div class="k">${k}</div><div class="v">${v}${s ? `<small>${s}</small>` : ''}</div></div>`;
+  const yr = side => yrs(side).replace('New this year', 'year 1').replace('Year', 'year'), bud = mine && t.staffBud;
+  const figs = [fig('Calls offense', oc ? esc(oc.last) : '—', '', oc ? cname(oc) : ''), fig('Calls defense', dc ? esc(dc.last) : '—', '', dc ? cname(dc) : ''),
+    fig('Offense installed', instWord(inst('O')), yr('O'), `How much of the playbook the offense knows · ${yrs('O')} in the system`), fig('Defense installed', instWord(inst('D')), yr('D'), `How much of the playbook the defense knows · ${yrs('D')} in the system`)];
+  if (bud) figs.push(fig('Staff budget', fmtMoney(t.staffBud)), fig('Committed', fmtMoney(staffPayroll(tid))), fig('Free', `<span class="${staffRoom(tid) < 0 ? 'bad' : ''}">${fmtMoney(staffRoom(tid))}</span>`));
+  if (bud && t.staffDead) figs.push(fig('Owed, let go', fmtMoney(t.staffDead), '', 'Owed to coaches let go'));
+  const notice = state.phase === 'COACHES' ? (mine ? 'The coaching search is open: let a coach go to open his job (in his card), then interview and negotiate below.' : 'The coaching search is open.')
+    : mine && briefOn() ? `${campOn() ? 'Camp reports' : 'Before camp'}: click any coach to hear him out, and ← → walks the staff.${campOn() ? '' : ' When you have heard enough, open training camp.'}` : '';
+  // the systems the staff runs, and the money
+  const kvt = rows => `<table class="cl-tbl cl-kv"><tbody>${rows.map(([k, v]) => `<tr><th class="l">${k}</th><td class="l cl-name">${v}</td></tr>`).join('')}</tbody></table>`;
+  const offense = kvt([['System', esc(teamSchemeLabel(t, 'O') || '—')], ['Play caller', oc ? coachNameLink(oc) : '—'], ['In the system', yrs('O')]])
+    + `<div class="stf-bars">${railBar('Pass rate', ot.pass, 'On neutral downs')}${railBar('Play-action', ot.pa)}${railBar('Deep shots', ot.deep)}${railBar('Quick game', ot.quick)}${railBar('Motion', ot.motion)}${railBar('RPO', ot.rpo)}${railBar('Screens', ot.screen)}${railBar('Zone runs', ot.zone, 'Zone against gap and power runs')}</div>`;
+  const defense = kvt([['System', esc(teamSchemeLabel(t, 'D') || '—')], ['Play caller', dc ? coachNameLink(dc) : '—'], ['Front', esc(dt.front || '—')], ['In the system', yrs('D')]])
+    + `<div class="stf-bars">${railBar('Man coverage', dt.man)}${railBar('Two-high shells', dt.high)}${railBar('Blitz', dt.blitz)}${railBar('Sim pressure', dt.sim)}${railBar('Stunts', dt.stunt)}${railBar('Base personnel', dt.base, 'Against nickel and dime')}</div>`;
+  const installed = `<div class="stf-bars"><div class="rb"><span class="rb-l">Offense</span><span class="rb-t"><i style="width:${Math.round(inst('O') * 100)}%"></i></span><span class="rb-v">${instWord(inst('O'))}</span></div>
+    <div class="rb"><span class="rb-l">Defense</span><span class="rb-t"><i style="width:${Math.round(inst('D') * 100)}%"></i></span><span class="rb-v">${instWord(inst('D'))}</span></div></div>`;
+  let money = '';
+  if (bud) { const pay = staffPayroll(tid), room = staffRoom(tid);
+    money = `<div class="stf-bars"><div class="rb"><span class="rb-l">Committed</span><span class="rb-t"><i style="width:${clamp(Math.round(100 * pay / t.staffBud), 0, 100)}%${room < 0 ? ';background:var(--bad)' : ''}"></i></span><span class="rb-v">${fmtMoney(pay)}</span></div></div>`
+      + kvt([['Budget', fmtMoney(t.staffBud)], ['Free', `<span class="${room < 0 ? 'bad' : 'good'}">${fmtMoney(room)}</span>`], ...(t.staffDead ? [['Owed to coaches let go', fmtMoney(t.staffDead)]] : [])]); }
+  const sides = [['O', 'offense'], ['D', 'defense']].map(([side, name]) => { const infl = tendInfluences(t, side); return `<div><div class="stf-k">Who shapes the ${name}</div>${infl.length ? '<ul class="tight">' + infl.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>' : '<div class="small muted">Nobody below the play caller is bending the call sheet.</div>'}</div>`; }).join('');
   const rows = ALL_ROLES.map(role => ({ role, c: staffCoach(t, role) })).filter(r => r.c);
-  html += `<details class="fold card" ${foldAttr('staffpay')} style="margin-top:12px"><summary>Contracts, track records and promises</summary><div style="margin-top:10px">` + table('staffpay', [
+  const pay = table('staffpay', [
     { k: 'r', l: 'Role', v: r => ALL_ROLES.indexOf(r.role), f: r => `<span class="oc-code static">${roleCode(r.role)}</span>` },
     { k: 'n', l: 'Coach', v: r => r.c.last, f: r => coachNameLink(r.c) },
     { k: 'a', l: 'Age', v: r => r.c.age, num: 1 },
-    { k: 'b', l: 'Best at / leans', f: r => `<span class="small muted">${COACH_ROLES.includes(r.role) ? coachStrengths(r.c) : esc([bgLabel(r.c), leanLabel(r.c), r.c.style].filter(Boolean).join(' · '))}</span>` },
+    { k: 'b', l: 'Best at / leans', f: r => `<span class="small muted">${COACH_ROLES.includes(r.role) ? coachStrengths(r.c) : esc([bgLabel(r.c), leanLabel(r.c), r.c.style].filter(Boolean).join(' · '))}</span>`, cls: 'rs-flex' },
     { k: 'l', l: 'Track record', f: r => `<span class="small">${COACH_ROLES.includes(r.role) ? (lastUnitLine(r.c) || '—') : asstTrack(r.c)}</span>` },
     { k: 's', l: 'Salary', v: r => r.c.sal || 0, f: r => r.c.sal !== undefined ? fmtMoney(r.c.sal) : '—', num: 1 },
     { k: 'y', l: 'Yrs', v: r => r.c.cyrs || 0, f: r => r.c.cyrs || '—', num: 1 },
     { k: 'g', l: 'Gtd', v: r => r.c.cgtd || 0, f: r => r.c.cgtd || '—', num: 1, title: 'Guaranteed years: what he is owed if you let him go' },
     { k: 'pr', l: 'Promised', f: r => promiseChips(t, r.role, r.c) },
-  ], rows, { sort: 'r', dir: 1 }) + '</div></details>';
+  ], rows, { sort: 'r', dir: 1, cls: 'rs-tbl' });
   const all = state.teams.map(tm => ({ tm, s: COACH_ROLES.map(r => C(tm[r.toLowerCase()])) }));
   const cell = c => c ? `${coachNameLink(c)} ${tierChip(c.ovr)}` : '<span class="bad">Vacant</span>';
-  html += `<details class="fold card" ${foldAttr('allstaff')} style="margin-top:12px"><summary>League staffs</summary><div style="margin-top:10px">` + table('allcoach', [
+  const league = table('allcoach', [
     { k: 't', l: 'Team', v: r => r.tm.abbr, f: r => teamLink(r.tm.id) },
     ...COACH_ROLES.map((role, i) => ({ k: role, l: ROLE_SHORT[role], v: r => r.s[i] ? r.s[i].ovr : 0, f: r => cell(r.s[i]) })),
-  ], all, { rowClass: r => r.tm.id === state.userTid ? 'me' : '' }) + '</div></details>';
-  return html;
+  ], all, { rowClass: r => r.tm.id === tid ? 'me' : '', cls: 'rs-tbl' });
+  const fold = (k, title, body) => `<details class="stf-fold" ${foldAttr(k)}><summary><span>${title}</span></summary><div class="stf-fb">${body}</div></details>`;
+  return `<div class="club ros stf" style="${clubVarsCSS(tid)}">
+    <header class="cl-mast rs-mast" data-abbr="${esc(t.abbr)}">
+      <button class="cl-badge" data-action="team" data-tid="${tid}" title="${mine ? 'Home' : 'The club page'}">${esc(t.abbr)}</button>
+      <div class="cl-id"><div class="cl-over">${esc(t.conf + ' ' + t.div)} · Coaching staff · ${when}${mine ? ' · your club' : rival ? ' · division rival' : ''}</div>
+        <div class="rs-name"><h1>${esc(t.region)} <b>${esc(t.name)}</b></h1><span class="rs-caret">▾</span><select data-change="staffTeam" title="Show another club's staff" aria-label="Club">${opts}</select></div>
+        <div class="cl-men"><span class="cl-ml">Head coach</span> ${hc ? coachNameLink(hc) : '<span>Vacant</span>'}<i>·</i><span class="cl-ml">GM</span> ${mine ? '<b>You</b>' : g ? `<b>${esc(gmName(g))}</b>` : 'Vacant'}</div></div>
+      <div class="cl-rec rs-count"><div class="cl-big">${filled}<small>/${jobs.length}</small></div><div class="cl-place">Coaches on staff</div><div class="cl-place">${filled < jobs.length ? `${jobs.length - filled} job${jobs.length - filled === 1 ? '' : 's'} open` : 'Every job filled'}</div></div>
+    </header>
+    <div class="cl-ledger" style="--n:${figs.length}">${figs.join('')}</div>
+    <div class="rs-scroll">${notice ? `<div class="cl-notice"><b>Now</b><span>${notice}</span></div>` : ''}
+      ${staffPyramidHTML(t, canHire)}
+      ${state.phase === 'COACHES' && mine && state.car ? `<div class="stf-search">${searchHTML2(t)}</div>` : ''}
+      <div class="cl-body stf-sys"><div class="cl-col">${clSec('Offense', offense)}</div><div class="cl-col">${clSec('Defense', defense)}</div>
+        <div class="cl-col">${clSec('Installed', installed, `<button class="link cl-more" data-action="clubBook" data-tid="${tid}">Playbook ›</button>`)}${money ? clSec('Staff budget', money) : ''}</div></div>
+      ${fold('shape', 'How the call sheets are shaped', `<div class="stf-two small">${sides}</div>`)}
+      ${fold('staffpay', 'Contracts, track records and promises', pay)}
+      ${fold('allstaff', 'League staffs', league)}
+      <div class="rs-foot"><span>Changes happen in the coaching search, right after the season.</span></div></div></div>`;
 }
-function coachModal(cid) {
+function coachModal(cid, replace) {
   const c = C(cid);
   if (!c) return;
-  if (isAsst(c)) return asstModal(c);
+  ui.cardCid = c.id;
+  if (isAsst(c)) return asstModal(c, replace);
   const t = c.tid >= 0 ? T(c.tid) : null;
   const callsFor = (c.role === 'OC' || c.role === 'DC') && t && C(t.hc) && C(t.hc).t.caller === (c.role === 'OC' ? 'O' : 'D');
   let html = `<div class="row"><h2 style="margin:0">${esc(cname(c))}</h2><span class="pill">${ROLE_LABEL[c.role]}</span> ${tierChip(c.ovr)}</div>
     <div class="muted" style="margin:4px 0 12px">${c.tid >= 0 ? teamLink(c.tid, true) : 'Available'} · Age ${c.age}${schemeLabel(c) ? ' · ' + esc(schemeLabel(c)) : ''}${c.role === 'HC' ? ` · Career ${c.rec.w}-${c.rec.l}${c.rec.titles ? `, ${c.rec.titles} title${c.rec.titles > 1 ? 's' : ''}` : ''}` : ''}</div>`;
   if (callsFor) html += `<div class="callout small">The head coach calls the ${c.role === 'OC' ? 'offense' : 'defense'}: this coordinator contributes design and development.</div>`;
+  html += staffFileHTML(c);
   let left = `<div class="section-title" style="margin-top:0">Ratings</div>${ratingBarsHTML(c)}<p class="small muted" style="margin-top:8px">${coachRoleBlurb(c)}</p>`;
   const tend = tendencySummary(c);
   if (tend) left += `<div class="section-title">Tendencies</div><div class="small">${tend}</div>`;
@@ -3108,7 +2882,7 @@ function coachModal(cid) {
     { k: 's', l: 'Season', f: h => h.s }, { k: 't', l: 'Team', f: h => T(h.tid).abbr }, { k: 'r', l: 'Role', f: h => ROLE_SHORT[h.role] },
     { k: 'w', l: 'Record', f: h => `${h.w}-${h.l}` }, { k: 'o', l: 'Offense', f: h => '#' + h.off, num: 1 }, { k: 'd', l: 'Defense', f: h => '#' + h.def, num: 1 },
   ], c.hist.slice().reverse(), { nosort: 1 });
-  openModal(html);
+  openModal(html, replace);
 }
 
 // ---------- news / history / settings ----------
@@ -3345,7 +3119,6 @@ function comfortHTML(p) {
     <div class="sc-fine">Learns new spots ${learnRate(p) >= 1.15 ? 'quickly' : learnRate(p) <= 0.8 ? 'slowly' : 'at an ordinary pace'}.</div></div>`;
 }
 // ---------- the player file: a bio header that never moves, and tabs under it ----------
-const CARD_TABS = [['over', 'Overview'], ['scout', 'Scouting'], ['stats', 'Stats'], ['adv', 'Advanced'], ['contract', 'Contract']];
 const JOB_NAME = { QB: 'Quarterback', RB: 'Running back', FB: 'Fullback', WRX: 'Split end (X)', WRZ: 'Flanker (Z)', SLOT: 'Slot receiver', TEY: 'In-line tight end', TEH: 'Move tight end', LT: 'Left tackle', LG: 'Left guard', C: 'Center', RG: 'Right guard', RT: 'Right tackle',
   NT: 'Nose tackle', DT: 'Defensive tackle', DE: 'Defensive end', EDGE: 'Edge rusher', MLB: 'Middle linebacker', WLB: 'Coverage linebacker', CB: 'Outside corner', NCB: 'Slot corner', FS: 'Deep safety', SS: 'Box safety', K: 'Kicker', P: 'Punter' };
 // what the overview can show: [label, (advanced, box score) => value or null, decimals, direction (0: no judgment), unit]
@@ -3404,34 +3177,6 @@ function advPreK() { const gms = state.phase === 'PRESEASON' && state.pre ? Math
 function cardAdvSrc(p) { if (ui.advScope === 'pre' && p.preS && p.preS.adv && p.preS.snp) return { a: p.preS.adv, season: p.preS.season || state.season, cur: false, pre: true }; return cardAdv(p); }
 function advTag(m) { const q = Math.round(100 * m.pct); return m.dir === 0 ? (q >= 85 ? 'Among the highest' : q <= 15 ? 'Among the lowest' : ordinal(q) + ' percentile') : q >= 90 ? `Top ${Math.max(1, 100 - q)}%` : q <= 10 ? `Bottom ${Math.max(1, q)}%` : ordinal(q) + ' percentile'; }
 function advTone(m) { return m.dir === 0 || m.z === null ? '' : m.z >= 0.8 ? 'good' : m.z <= -0.8 ? 'bad' : ''; }
-function cardOutliersHTML(p, src) {
-  const S = advSheetOf(p, src); if (!S) return null;
-  const out = advOutliers(S.sheet, 4, S.grp);
-  if (!out.length) return `<div class="muted small">${S.qual ? 'Nothing stands out.' : 'Not enough snaps on tape yet.'}</div>`;
-  return `<div class="figs">${out.map((m, n) => { const tone = advTone(m);
-    return `<div class="fig" title="${esc(m.label)} · ${esc(ADV_SEC[m.sec])}${m.rank ? ` · ${m.rank}${m.dir === 0 ? '' : ordinal(m.rank).replace(/\d+/, '')} of ${m.n} qualified` : ''}${m.dir < 0 ? ' · lower is better' : m.dir === 0 ? ' · a description, not a grade' : ''}"><div class="fig-v ${tone}">${advFmt(m.id, m.v)}</div><div class="fig-l">${esc(m.label.replace(/ \(.*/, ''))}</div><span class="stamp ${tone || (m.dir === 0 ? 'note' : '')} s${n % 4}">${advTag(m)}</span></div>`; }).join('')}</div>${S.qual ? '' : '<div class="small muted" style="margin-top:4px">Short of the snaps to qualify: read these loosely.</div>'}`;
-}
-function cardFourHTML(p, src) {
-  { const o = src ? cardOutliersHTML(p, src) : null; if (o !== null) return o; }
-  const ids = JOB_MET[p.spot];
-  if (!ids || !src) return `<div class="muted small">Nothing on tape yet.</div>`;
-  const gk = Object.keys(ADV_GROUPS).find(k => ADV_GROUPS[k].spots.includes(p.spot)), G = gk ? ADV_GROUPS[gk] : null;
-  const qualK = src.cur ? clamp((state.week - 1) / 17, 1 / 17, 1) : 1, mineS = cardBox(p, src.season, src.cur), qual = G ? G.min(src.a, qualK) : true;
-  const pool = [];
-  for (const id in state.players) { const q = state.players[id]; if (q.pos !== p.pos || q.id === p.id) continue; const a = p.pos === 'K' || p.pos === 'P' ? {} : src.cur ? q.advS : q.advPrev && q.advPrev.season === src.season ? q.advPrev : null; if (!a) continue;
-    const s = cardBox(q, src.season, src.cur); if (G ? G.min(a, qualK) : s && s.gp) pool.push([a, s]); }
-  const tiles = [];
-  for (const id of ids) {
-    if (tiles.length === 4) break;
-    const [label, fn, dec, dir, unit, isGrade] = CARD_MET[id], v = fn(src.a, mineS);
-    if (v === null || v === undefined || isNaN(v)) continue;
-    const vals = pool.map(([a, s]) => fn(a, s)).filter(x => x !== null && x !== undefined && !isNaN(x)), below = vals.filter(x => x < v).length;
-    const raw = vals.length ? below / vals.length : 0.5, pct = dir < 0 ? 1 - raw : raw, col = !dir ? 'var(--accent)' : pct >= 0.7 ? 'var(--good)' : pct >= 0.35 ? 'var(--mid)' : pct >= 0.15 ? 'var(--warn)' : 'var(--bad)';
-    const txt = (dec === 2 && v < 0 ? '−' + Math.abs(v).toFixed(2) : v.toFixed(dec).replace('-', '−')) + (unit || '');
-    tiles.push(`<div class="ds-m" title="${qual ? `${ordinal(Math.round(100 * raw))} percentile among qualified ${p.pos}s${dir < 0 ? ' (lower is better)' : !dir ? ' (a style, not a grade)' : ''}` : 'Too few snaps to rank'}"><div class="ds-ml">${label}${isGrade ? ' <span class="muted">grade</span>' : ''}</div><div class="ds-mv">${txt}</div><div class="ds-bar"><i style="width:${qual ? Math.round(clamp(pct, 0.03, 1) * 100) : 0}%;background:${col}"></i></div></div>`);
-  }
-  return tiles.length ? `<div class="ds-four">${tiles.join('')}</div>` : `<div class="muted small">Not enough snaps on tape yet.</div>`;
-}
 // the five drills as a web, each spoke his percentile against his own position
 const SPIDER = [['forty', '40 yard', -1], ['bench', 'Bench', 1], ['shut', 'Shuttle', -1], ['cone', '3-cone', -1], ['vert', 'Vertical', 1]];
 function spiderHTML(p, peers) {
@@ -3488,60 +3233,9 @@ function cardContractLine(p) {
   const d = deadIfCut(p), inc = c.inc && c.inc.length ? ` <span class="pill rook">${c.inc.length} incentive${c.inc.length > 1 ? 's' : ''}</span>` : '';
   return `${p.expiring ? '<b class="warn">Final year</b>' : `<b>${c.yrs} year${c.yrs > 1 ? 's' : ''} left</b>`} · ${fmtMoney(c.amt)} against this year’s cap · ${fmtMoney(d.now)} to cut him${c.next ? ` · then ${c.next.yrs} × ${fmtMoney(c.next.amt)}` : ''}${c.tagged ? ' <span class="pill exp">Tag</span>' : ''}${inc}`;
 }
-function cardHeadHTML(p) {
-  const prospect = p.tid === -2, stars = starsOf(p);
-  const team = p.tid >= 0 ? teamLink(p.tid, true) : p.tid === -3 ? `Practice squad · ${teamLink(p.psTid, true)}` : p.tid === -1 ? 'Free agent' : 'Draft prospect';
-  const yr = prospect ? `${p.draftYear} draft class` : p.exp === 0 ? 'Rookie' : `Year ${p.exp + 1}`;
-  const drafted = p.draft ? `Drafted ${p.draft.year}, round ${p.draft.round} (no. ${p.draft.pick}) by ${T(p.draft.tid).abbr}` : prospect ? '' : 'Undrafted';
-  return `<div class="ds-head"><div>
-      <div class="ds-lb">Player file · no. ${String(p.id).padStart(4, '0')}${p.tid >= 0 ? ' · ' + T(p.tid).abbr : ''}</div>
-      <h2 class="ds-name">${esc(pname(p))}</h2>
-      <div class="ds-bio"><b>${JOB_NAME[p.spot] || esc(p.lbl)}</b> · Age <b>${p.age}</b> · <b>${p.m ? fmtHeight(p.m.ht) : '—'}</b> · <b>${p.m ? p.m.wt : '—'} lb</b> · ${yr} · ${esc(p.college)}</div>
-      <div class="ds-sub">${team}${drafted ? ' · ' + drafted : ''}</div>
-    </div>
-    <div class="ds-pills"><div><span class="pill">${esc(p.lbl)}</span> ${statusPills(p)} ${medPill(p)} ${stars !== null && !prospect ? starHTML(stars) : ''}</div>
-      <div><span title="${prospect ? 'Ready now as' : 'Tier'}">${tierPill(p)}</span> <span title="Upside">${upsidePill(p)}</span>${trueNums(p)} ${rasHTML(p)}</div></div></div>`;
-}
-function cardOverHTML(p) {
-  const prospect = p.tid === -2, src = cardSrc(p), dv = devStatement(p), form = (p.form || []).slice(-5);
-  const sg = src && p.pos !== 'K' && p.pos !== 'P' && src.a && Object.keys(src.a).length ? overallGrade(src.a, p.spot) : null;
-  const rk = src && sg !== null ? (src.cur ? gradeRanks()[p.id] : seasonRank(p, (p.career || []).find(r => r.season === src.season) || {})) : null;
-  const more = (k, l) => `<button class="link ds-more" data-action="cardTab" data-v="${k}" data-pid="${p.id}">${l} →</button>`;
-  let left = `<div class="ds-lb">Scout’s read</div><div class="ds-read">${esc(scoutProfile(p))}.</div>`;
-  if (dv) left += `<div class="ds-dev"><span class="ds-lb">Development</span> <span class="pill ${dv.cls}">${dv.k}</span>${prospect ? '' : ' ' + trackPill(p)}</div><div class="ds-devl">${esc(dv.line)}</div>`;
-  if (p.injury) left += `<div class="ds-note bad">Injured: ${esc(p.injury.name)}, out ${p.injury.weeks} more week${p.injury.weeks > 1 ? 's' : ''}${onIR(p) ? ' (injured reserve)' : ''}.</div>`;
-  if (p.rust) left += `<div class="ds-note warn">Rusty: short of preseason work, a step slow until he has played a game or two.</div>`;
-  if (!prospect) {
-    const box = cardBoxLine(p);
-    left += `<div class="ds-rule"></div><div class="ds-grade"><span class="ds-lb">${src && !src.cur ? src.season + ' grade' : 'Season grade'}</span> <b class="ds-g" style="color:${sg === null ? 'var(--muted)' : gradeColor(sg)}">${sg === null ? '—' : sg}</b>${form.length ? ` <span class="ds-form" title="His last ${form.length} game${form.length > 1 ? 's' : ''}, oldest first">(${form.map(g => Math.round(g)).join(', ')})</span>` : ''}${rk ? ` <span class="pill">${rk[0]}${ordinal(rk[0]).replace(/\d+/, '')} of ${rk[1]}${rk[2] ? ' ' + rk[2] : ''}</span>` : sg !== null ? ' <span class="small muted">below the snap minimum</span>' : ''}</div>
-      ${box ? `<div class="ds-boxl">${box}</div>` : ''}`;
-  }
-  let h = `<div class="ds-top"><div>${left}</div><div class="ds-spider">${spiderHTML(p)}</div></div>`;
-  if (!prospect) h += `<div class="ds-rule"></div><div class="ds-sec"><span class="ds-lb">What stands out${src ? ` · ${src.season}${src.cur ? '' : ' (last season)'}` : ''}</span>${more('adv', 'All of them')}</div>${cardFourHTML(p, src)}`;
-  h += `<div class="ds-rule"></div><div class="ds-sec"><span><span class="ds-lb">Contract</span> <span class="ds-con">${cardContractLine(p)}</span></span>${prospect ? '' : more('contract', 'The deal')}</div>`;
-  return h;
-}
 // ---- the scouting page of the file: the report, what he does and where, and the physical sheet, on one screen ----
 const CF_PIPS = { Natural: 4, Comfortable: 3, Decent: 2, Raw: 1, Unfamiliar: 0 };
 function pipsHTML(n, cls) { return `<span class="pips ${cls || ''}">${[0, 1, 2, 3].map(i => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`; }
-function scReportHTML(p) {
-  const prospect = p.tid === -2, own = clubOf(p) === state.userTid, buzz = buzzLabel(p), know = own ? knowWord(p) : null;
-  const tierT = tierOf(p), upT = upsideOf(p), young = p.age <= 25 && upT !== tierT;
-  const DAY1 = { Elite: 'a franchise-changing talent', 'All-Pro': 'an instant-impact player', Starter: 'a day-one starter', Rotation: 'a rotational contributor', Backup: 'a backup early on', Depth: 'a depth player early on', Project: 'a developmental prospect', Fringe: 'a developmental prospect', Washed: 'a developmental prospect' };
-  const line = prospect ? `Scouts see ${DAY1[tierT]} with ${upT.toLowerCase()} upside.` : `Viewed as ${/^[AEIOU]/.test(tierT) ? 'an' : 'a'} ${tierT.toLowerCase()} today${young ? ` with ${upT.toLowerCase()} upside` : ''}.`;
-  let h = `<div class="ds-lb">The report</div><div class="ds-read sc-read">${esc(scoutProfile(p))}.</div><div class="sc-note">${esc(line)}</div>
-    <div class="sc-meta"><span class="stamp ${own ? (know === 'Known well' ? 'good' : know === 'Still learning him' ? 'bad' : '') : confLabel(p) === 'High' ? 'good' : confLabel(p) === 'Low' ? 'bad' : ''}" title="${own ? 'How well your staff knows him: it learns its own men with every practice and every snap' : 'How sure your scouts are of this read'}">${own ? know : confLabel(p) + ' confidence'}</span>${buzz ? ` <span class="stamp note">${esc(buzz)}</span>` : ''}</div>${prospect ? '' : readRangeHTML(p)}`;
-  // the finished product
-  if (p.a && p.per && p.grow) {
-    const dev = isDeveloping(p), m = p.upM, moved = m && !prospect ? `<div class="sc-note ${m.d > 0 ? 'good' : 'bad'}">${m.d > 0 ? '▲' : '▼'} Upside ${m.d > 0 ? 'raised' : 'lowered'} from ${m.from} after ${esc(m.why)} (${m.s}).</div>` : '';
-    if (dev) { const r = finishedRemark(p), c = compFor(p), b = compFor(p, true), same = b && c && ((b.id !== undefined && b.id === c.id) || (b.rid !== undefined && b.rid === c.rid));
-      h += `<div class="ds-rule"></div><div class="ds-lb">The finished product ${prospect ? '' : trackPill(p)}</div><div class="sc-fin">${esc(r.line || 'Too little to go on yet.')}.</div>
-        ${c ? `<div class="sc-note">Plays like ${compLink(c)}${compBuild(p, c)}${b && !same ? `<br>Best case ${compLink(b)}${compBuild(p, b)}` : ''}</div>` : ''}<div class="sc-fine">A projection from ${filmBasis(p)}; rewritten as the film comes in.</div>${moved}`; }
-    else if (!prospect) { const t = trackOf(p);
-      h += `<div class="ds-rule"></div><div class="ds-lb">The finished product ${trackPill(p)}</div><div class="sc-fin">${t === 'fall' ? 'The decline is real and it is moving fast.' : t === 'slip' ? 'He has lost a step from his best.' : 'He is what he is: this report is the finished article.'}</div>${moved}`; }
-  }
-  return h;
-}
 function scTraitsHTML(p) {
   const { str, weak, best } = scoutTraits(p), li = (t, c) => `<div class="sw-t ${c}">${esc(t)}</div>`;
   return `<div class="ds-lb">Strengths</div>${str.map(t => li(t, 'good')).join('') || (best.length ? '' : '<div class="sc-note">Nothing that stands out.</div>')}${str.length < 2 ? best.map(t => `<div class="sw-t rel" title="Relative to the rest of his game, not to a starter">${esc(t)}</div>`).join('') : ''}
@@ -3571,51 +3265,6 @@ function scPhysicalHTML(p) {
   return `<div class="ds-lb">Physical <span class="sc-lbr">${p.tid === -2 ? (p.m.pd ? 'pro day' : 'this year’s combine') : 'measured ' + yr}</span></div>
     <div class="sc-ras">${r === null ? '<span class="sc-note">Too little of a workout for an athletic score.</span>' : `<span class="fig-v ph-r hi hi1" style="${hiStyle(r * 10)}" data-tip="Relative athletic score: his drills as percentiles against every ${esc(p.pos)}, averaged">${r.toFixed(2)}</span><span class="sc-note">athletic score out of 10</span>`}</div>
     <div class="ph-rows">${rows}</div>${workoutNoteHTML(p)}${p.tid === -2 && p.m.med && p.m.med !== 'clean' ? `<div class="sc-note ${p.m.med === 'flag' ? 'bad' : 'warn'}" style="margin-top:6px">${p.m.med === 'flag' ? 'The doctors flagged him.' : 'The doctors noted a minor concern.'} They are not always right.</div>` : ''}`;
-}
-function cardScoutHTML(p) {
-  const manage = cardManageHTML(p);
-  return `<div class="sc-grid"><div class="sc-col">${scReportHTML(p)}${manage ? `<div class="ds-rule"></div><div class="sc-manage">${manage}</div>` : ''}</div>
-    <div class="sc-col">${scTraitsHTML(p)}${scWhereHTML(p)}</div><div class="sc-col">${scPhysicalHTML(p)}</div></div>${trueOn() ? attributesHTML(p) : ''}`;
-}
-function cardStatsHTML(p) {
-  let html = gameLogHTML(p);
-  // career
-  const cc = careerCols(p.pos);
-  const scope = ['po', 'pre'].includes(ui.cardScope) ? ui.cardScope : 'reg';
-  const rows = scope === 'po' ? [...(p.pcareer || [])] : scope === 'pre' ? [...(p.preCar || [])] : [...p.career];
-  if (scope === 'reg' && p.stats.gp) rows.push(Object.assign({ season: state.season, tid: p.tid, cur: true }, p.stats));
-  if (scope === 'po' && p.pstats && p.pstats.gp) rows.push(Object.assign({ season: state.season, tid: p.tid, cur: true }, p.pstats));
-  if (scope === 'pre' && p.preS && p.preS.gp) rows.push(Object.assign({ season: p.preS.season || state.season, tid: p.tid, cur: true, snp: p.preS.snp }, p.preS.st));
-  const scopeTabs = `<div class="subtabs" style="margin:0">${[['reg', 'Regular season'], ['po', 'Playoffs'], ['pre', 'Preseason']].map(([k, l]) => `<button class="${k === scope ? 'on' : ''}" data-action="cardScope" data-v="${k}" data-pid="${p.id}">${l}</button>`).join('')}</div>`;
-  if (!rows.length && (scope !== 'reg' || (p.preS && p.preS.gp) || (p.preCar && p.preCar.length) || (p.pcareer && p.pcareer.length))) html += `<div class="row" style="margin:18px 0 8px"><span class="section-title" style="margin:0">Career</span>${scopeTabs}</div><div class="small muted">Nothing on record.</div>`;
-  if (rows.length) {
-    const tot = {}; rows.forEach(r => { const c = Object.assign({}, r, { season: 0 }); delete c.adv; delete c.sp; addStats(tot, c); });
-    const cols = [{ k: 's', l: 'Season', f: r => r.tot ? '<b>Career</b>' : r.season + (r.cur ? '*' : '') }, { k: 't', l: 'Tm', f: r => r.tot ? '' : (r.tid >= 0 ? T(r.tid).abbr : 'FA') }, { k: 'gp', l: 'GP', f: r => r.gp || 0, num: 1 }, { k: 'gs', l: 'GS', f: r => r.gs || 0, num: 1 },
-    { k: 'gr', l: 'Grade', f: r => r.tot ? '' : scope === 'pre' ? gradeChip(r.cur ? preGrade(p) : null) : scope === 'po' ? '' : gradeChip(r.cur ? (p.advS ? overallGrade(p.advS, p.spot) : null) : r.adv ? r.adv.g : null) + (seasonRank(p, r) ? '<br>' + gradeRankTxt(seasonRank(p, r)) : ''), num: 1 },
-    ...cc.map(([k, l, fn]) => ({ k, l, num: 1, f: r => fn ? fn(r) : (r[k] || 0) }))];
-    const cv = ui.cardView === 'ratings' ? 'ratings' : 'stats';
-    html += `<div class="row" style="margin:18px 0 8px"><span class="section-title" style="margin:0">Career</span>${scopeTabs}<div class="subtabs" style="margin:0">${[['stats', 'Stats'], ['ratings', 'Ratings']].map(([k, l]) => `<button class="${k === cv ? 'on' : ''}" data-action="cardView" data-v="${k}" data-pid="${p.id}">${l}</button>`).join('')}</div></div>`;
-    if (cv === 'stats' || scope !== 'reg') {
-      html += table('career', cols, [...rows, Object.assign(tot, { tot: true })], { nosort: 1 });
-      if (rows.some(stAny)) html += `<div class="section-title" style="margin-top:14px">Special teams</div>` + table('careerST', [{ k: 's', l: 'Season', f: r => r.tot ? '<b>Career</b>' : r.season + (r.cur ? '*' : '') }, { k: 't', l: 'Tm', f: r => r.tot ? '' : (r.tid >= 0 ? T(r.tid).abbr : 'FA') },
-        { k: 'gr', l: 'Grade', num: 1, f: r => r.tot ? '' : gradeChip(stGrade(r)) }, ...ST_COLS.map(([k, l, fn]) => ({ k, l, num: 1, f: r => fn ? fn(r) : (r[k] || 0) }))], [...rows.filter(stAny), tot], { nosort: 1 });
-    }
-    else {
-      // grades every season, plus how your staff rated him at the end of each year
-      const ga = r => r.cur ? (p.advS ? careerAdv(p.advS, p.spot) : {}) : (r.adv || {});
-      const OLDF = { pass: 'q', rush: 'run', zone: 'cov' }, gf = (r, f) => ga(r)['g' + f] || (OLDF[f] ? ga(r)['g' + OLDF[f]] : null) || null;
-      const fcols = Object.keys(FACETS).filter(f => rows.some(r => gf(r, f))).map(f => ({ k: f, l: FACETS[f], num: 1, f: r => gradeChip(gf(r, f)) }));
-      html += table('careerR', [{ k: 's', l: 'Season', f: r => r.season + (r.cur ? '*' : '') }, { k: 't', l: 'Tm', f: r => r.tid >= 0 ? T(r.tid).abbr : 'FA' }, { k: 'snp', l: 'Snaps', f: r => r.snp || 0, num: 1 },
-        { k: 'g', l: 'Overall', num: 1, f: r => gradeChip(ga(r).g || null) + (seasonRank(p, r) ? '<br>' + gradeRankTxt(seasonRank(p, r)) : '') }, ...fcols,
-        { k: 'ti', l: 'Tier', f: r => r.cur ? tierPill(p) : r.ti ? `<span class="pill ${TIER_CLS[r.ti] || ''}">${r.ti}</span>` : '<span class="muted">—</span>' },
-        { k: 'up', l: 'Upside', f: r => r.cur ? upsidePill(p) : r.up ? `<span class="pill up ${UP_CLS[r.up] || ''}">${r.up}</span>` : '<span class="muted">—</span>' }], rows, { nosort: 1 });
-    }
-  }
-  if (p.pcareer && p.pcareer.length) {
-    const cols = [{ k: 's', l: 'Season', f: r => r.season }, { k: 't', l: 'Tm', f: r => T(r.tid).abbr }, { k: 'gp', l: 'GP', f: r => r.gp || 0, num: 1 }, ...cc.map(([k, l, fn]) => ({ k, l, num: 1, f: r => fn ? fn(r) : (r[k] || 0) }))];
-    html += `<div class="section-title">Playoffs</div>` + table('pcareer', cols, p.pcareer, { nosort: 1 });
-  }
-  return html || '<div class="muted small">Nothing on record yet.</div>';
 }
 function cardAdvHTML(p) {
   const hasPre = !!(p.preS && p.preS.adv && p.preS.snp), src = cardAdvSrc(p), S = src ? advSheetOf(p, src) : null, reg = cardAdv(p);
@@ -3650,19 +3299,6 @@ function cardDealDocHTML(p) {
   d += `<div class="fd-sig"><div><span><i class="fd-ink">${esc(pname(p))}</i></span>Player</div><div><span><i class="fd-ink">${esc(t.abbr)} Football Club</i></span>For the Club</div></div>`;
   return d;
 }
-function cardContractHTML(p) {
-  const c = p.contract || {};
-  let h = contractHTML(p).replace('<div class="section-title">', '<div class="section-title" style="margin-top:0">');
-  if (p.tid >= 0 && c.yrs > 0) {
-    const rows = []; for (let i = 0; i < c.yrs; i++) rows.push([state.season + i, i === 0 ? c.amt : c.sched && c.sched[i] !== undefined ? c.sched[i] : c.sal !== undefined && !c.sched ? c.amt : c.amt]);
-    if (c.next) for (let i = 0; i < c.next.yrs; i++) rows.push([state.season + c.yrs + i, c.next.sched && c.next.sched[i] !== undefined ? c.next.sched[i] : c.next.amt, 1]);
-    h += `<div class="section-title">Against the cap, by season</div><table class="tbl fa-cap" style="max-width:420px"><thead><tr><th>Season</th><th class="num">Cap hit</th><th></th></tr></thead><tbody>${rows.map(([y, v, nx]) => `<tr><td>${y}</td><td class="num"><b>${fmtMoney(v)}</b></td><td class="small muted">${nx ? (c.opt5 === 'exercised' && c.next.yrs === 1 ? 'option year' : 'extension') : y === state.season ? 'this year' : ''}</td></tr>`).join('')}</tbody></table>`;
-    if (c.inc && c.inc.length) h += `<div class="section-title">Incentives</div>${c.inc.map(x => `<div class="small" style="margin:3px 0"><span class="pill rook">${fmtMoney(x.amt)}</span> if he ${esc(incLabel(x))} <span class="muted">· ${x.likely ? 'likely to be earned: counted against this year’s cap' : 'not likely to be earned: charged next year only if he gets there'}</span></div>`).join('')}`;
-  }
-  const doc = cardDealDocHTML(p), btn = cardButtonsHTML(p);
-  if (btn) h += `<div class="ds-acts">${btn}</div>`;
-  return doc ? `<div class="ds-deal"><div>${h}</div><div class="fa-doc ds-doc">${doc}</div></div>` : h;
-}
 function cardManageHTML(p) {
   const u = state.userTid; let left = '';
   if ((p.tid === u || (p.tid === -3 && p.psTid === u)) && p.a && workSpots(p).length > 1) left += `<div class="terms"><div class="small muted" style="margin-bottom:4px">Where he is working <span title="Sets the room he sits in during camp, the drills he takes, what the reports say about him, and where his comfort at a new spot grows.">ⓘ</span></div>${crossTrainSelect(p, true)}</div>`;
@@ -3690,15 +3326,142 @@ function cardButtonsHTML(p) {
   if (p.tid === -2) { const n = pwState().left; left += p.pw ? '<span class="small muted">You have worked him out privately: your numbers are on the Scouting tab.</span>' : `<button ${n ? '' : 'disabled'} data-action="privateWorkout" data-pid="${p.id}" title="He runs every drill again for you alone, including any he skipped. The numbers are yours: the rest of the league does not see them.">Private workout</button><span class="small muted">${n} of ${PW_PER_CLASS} left for this class</span>`; }
   return left;
 }
+// ---------- the player file: one window. A leather title band in his club's colors, a row of facts, then panes:
+//  the read (today and the future) beside a pane that switches between strengths and weaknesses, advanced stats, where he plays,
+//  his physical sheet and, for your own men, how he is being worked; the contract year by year beside his honours; and every season
+//  of his stats by split, category or grade, or his grades game by game. Each page of the old card is one of these views. ----------
+const FILE_LO = 1;
+const fileYpc = s => s.rushA ? round1(s.rushY / s.rushA) : 0, fileYpr = s => s.rec ? round1(s.recY / s.rec) : 0;
+// the box score in categories, each a short table so nothing runs off the side; a column marked lo folds away in a narrow window
+const FILE_GROUPS = {
+  QB: [['Passing', [['passC', 'Cmp', null, 2], ['passA', 'Att'], ['pct', 'Pct', s => s.passA ? round1(100 * s.passC / s.passA) : 0], ['passY', 'Yds'], ['ypa', 'Y/A', s => s.passA ? round1(s.passY / s.passA) : 0, FILE_LO], ['passTD', 'TD'], ['passInt', 'Int'],
+    ['rtg', 'Rtg', s => round1(passerRating(s.passC || 0, s.passA || 0, s.passY || 0, s.passTD || 0, s.passInt || 0))], ['sacked', 'Sck', null, FILE_LO], ['passLng', 'Lng', null, FILE_LO]]],
+    ['Rushing', [['rushA', 'Car'], ['rushY', 'Yds'], ['ypc', 'Avg', fileYpc], ['rushTD', 'TD'], ['fum', 'Fum']]]],
+  RB: [['Rushing', [['snp', 'Snaps', null, FILE_LO], ['rushA', 'Car'], ['rushY', 'Yds'], ['ypc', 'Avg', fileYpc], ['rushTD', 'TD'], ['rushLng', 'Lng', null, FILE_LO], ['fum', 'Fum']]],
+    ['Receiving', [['tgt', 'Tgt'], ['rec', 'Rec'], ['recY', 'Yds'], ['ypr', 'Avg', fileYpr, FILE_LO], ['recTD', 'TD']]]],
+  WR: [['Receiving', [['snp', 'Snaps', null, FILE_LO], ['tgt', 'Tgt'], ['rec', 'Rec'], ['cpct', 'Catch%', s => s.tgt ? round1(100 * s.rec / s.tgt) : 0, FILE_LO], ['recY', 'Yds'], ['ypr', 'Avg', fileYpr], ['recTD', 'TD'], ['recLng', 'Lng', null, FILE_LO]]],
+    ['Rushing', [['rushA', 'Car'], ['rushY', 'Yds'], ['rushTD', 'TD'], ['fum', 'Fum']]]],
+  OL: [['Blocking', [['snp', 'Snaps'], ['pen', 'Penalties']]]],
+  DEF: [['Tackling', [['snp', 'Snaps', null, FILE_LO], ['tkl', 'Tkl'], ['tfl', 'TFL'], ['sck', 'Sck'], ['prs', 'Pres'], ['pen', 'Pen', null, FILE_LO]]],
+    ['Takeaways', [['dint', 'Int'], ['pd', 'PD'], ['ff', 'FF'], ['fr', 'FR'], ['dtd', 'TD']]]],
+  K: [['Kicking', [['fgm', 'FGM'], ['fga', 'FGA'], ['fgp', 'FG%', s => s.fga ? round1(100 * s.fgm / s.fga) : 0], ['fgLng', 'Lng'], ['xpm', 'XPM'], ['xpa', 'XPA', null, FILE_LO], ['xpp', 'XP%', s => s.xpa ? round1(100 * s.xpm / s.xpa) : 0, FILE_LO]]]],
+  P: [['Punting', [['pnt', 'Punts'], ['pntY', 'Yds', null, FILE_LO], ['pavg', 'Avg', s => s.pnt ? round1(s.pntY / s.pnt) : 0], ['pi20', 'In 20'], ['ptb', 'TB']]]] };
+const FILE_ST = ['Special teams', [['sts', 'Snaps'], ['stk', 'Tkl'], ['krA', 'KR'], ['krY', 'KR yds', null, FILE_LO], ['kravg', 'KR avg', s => s.krA ? round1(s.krY / s.krA) : 0], ['prA', 'PR'], ['prY', 'PR yds', null, FILE_LO], ['pravg', 'PR avg', s => s.prA ? round1(s.prY / s.prA) : 0], ['rtd', 'TD', s => (s.krTD || 0) + (s.prTD || 0)]]];
+const fileGroupsOf = pos => FILE_GROUPS[pos === 'TE' ? 'WR' : DEF_POS.includes(pos) ? 'DEF' : pos] || FILE_GROUPS.DEF;
+const fileVal = (r, [k, , fn]) => fn ? fn(r) : r[k] || 0;
+const fileLo = c => c[3] === 2 ? ' class="num lo2"' : c[3] ? ' class="num lo"' : ' class="num"';
+// the colors his file wears: his club's, or plain leather for a man without one
+function fileStyle(p) { const tid = clubOf(p); return tid === null || tid === undefined || tid < 0 ? '--tc:#6c5b4d;--tc2:#b8a48e;--tci:#fff;--tsh:0 -1px 0 rgba(0,0,0,.32)' : Object.entries(clubVars(tid)).map(([k, v]) => `${k}:${v}`).join(';'); }
+// a dropdown in a pane's header: its choice lives in ui under its key, and changing it redraws the file
+function fileSelect(k, opts, cur, pid) { return `<select class="fsel" data-change="fileOpt" data-k="${k}" data-pid="${pid}">${opts.map(([v, l]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`; }
+const filePane = (area, title, html, ctl, cls) => `<section class="fp${cls ? ' ' + cls : ''}" style="grid-area:${area}"><div class="fp-h"><h3>${title}</h3>${ctl || ''}</div><div class="fp-b"><div class="fp-in">${html}</div></div></section>`;
+const fileKV = rows => `<div class="fkv">${rows.filter(Boolean).map(([k, v]) => `<div class="fkv-k">${k}</div><div class="fkv-v">${v}</div>`).join('')}</div>`;
+function fileHeadHTML(p) {
+  const prospect = p.tid === -2, stars = starsOf(p), c = p.contract || {}, ras = p.m && typeof rasOf === 'function' ? rasOf(p) : null;
+  const team = p.tid >= 0 ? teamLink(p.tid, true) : p.tid === -3 ? `Practice squad · ${teamLink(p.psTid, true)}` : p.tid === -1 ? 'Free agent' : `${p.draftYear} draft prospect`;
+  const drafted = p.draft ? `Round ${p.draft.round} (no. ${p.draft.pick}), ${p.draft.year}${p.draft.tid >= 0 ? ' by ' + T(p.draft.tid).abbr : ''}` : prospect ? `${p.draftYear} class` : 'Undrafted';
+  const facts = [[prospect ? 'Ready now' : 'Level', tierPill(p), prospect ? '' : stars !== null ? starHTML(stars) : ''], ['Upside', upsidePill(p), ''],
+    prospect ? ['Draft', `${p.draftYear} class`, esc(p.college || '')] : p.tid === -1 ? ['Asking', fmtMoney(p.ask), 'a year'] : ['Contract', c.amt ? fmtMoney(c.amt) : '—', c.yrs ? `${c.yrs} yr${c.yrs === 1 ? '' : 's'} left` : ''],
+    ['Age', String(p.age), ''], ['Size', p.m ? fmtHeight(p.m.ht) : '—', p.m ? `${p.m.wt} lb` : ''],
+    [prospect ? 'Athletic score' : 'Experience', prospect ? (ras === null ? '—' : ras.toFixed(2)) : p.exp === 0 ? 'Rookie' : `Year ${p.exp + 1}`, prospect ? 'out of 10' : drafted]];
+  return `<div class="pf-top"><div class="pf-id"><div class="pf-over">${esc(p.lbl)} · ${team} · file no. ${String(p.id).padStart(4, '0')}</div><h2>${esc(pname(p))}<span>${JOB_NAME[p.spot] || esc(p.lbl)}${p.college ? ' · ' + esc(p.college) : ''}</span></h2></div>
+      <div class="pf-pills">${statusPills(p)}${medPill(p)}${trueNums(p)}${rasHTML(p)}</div></div>
+    <div class="pf-facts">${facts.map(([k, v, s]) => `<div><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s || '&nbsp;'}</div></div>`).join('')}</div>`;
+}
+// the read: what he is today, and what he becomes
+function fileReadHTML(p) {
+  const prospect = p.tid === -2, own = clubOf(p) === state.userTid, src = cardSrc(p), dv = devStatement(p), form = (p.form || []).slice(-5), buzz = buzzLabel(p);
+  const sg = src && p.pos !== 'K' && p.pos !== 'P' && src.a && Object.keys(src.a).length ? overallGrade(src.a, p.spot) : null;
+  const rk = src && sg !== null ? (src.cur ? gradeRanks()[p.id] : seasonRank(p, (p.career || []).find(r => r.season === src.season) || {})) : null;
+  const tierT = tierOf(p), upT = upsideOf(p), young = p.age <= 25 && upT !== tierT;
+  const DAY1 = { Elite: 'a franchise-changing talent', 'All-Pro': 'an instant-impact player', Starter: 'a day-one starter', Rotation: 'a rotational contributor', Backup: 'a backup early on', Depth: 'a depth player early on', Project: 'a developmental prospect', Fringe: 'a developmental prospect', Washed: 'a developmental prospect' };
+  const viewed = prospect ? `Scouts see ${DAY1[tierT] || 'a developmental prospect'} with ${upT.toLowerCase()} upside.` : `Viewed as ${/^[AEIOU]/.test(tierT) ? 'an' : 'a'} ${tierT.toLowerCase()} today${young ? ` with ${upT.toLowerCase()} upside` : ''}.`;
+  const know = own ? knowWord(p) : null, conf = confLabel(p), box = prospect ? '' : cardBoxLine(p);
+  const stamp = `<span class="stamp ${own ? (know === 'Known well' ? 'good' : know === 'Still learning him' ? 'bad' : '') : conf === 'High' ? 'good' : conf === 'Low' ? 'bad' : ''}">${own ? know : conf + ' confidence'}</span>${buzz ? ` <span class="stamp note">${esc(buzz)}</span>` : ''}`;
+  const today = [!prospect && [src && !src.cur ? `${src.season} grade` : 'Season grade', sg === null ? '<span class="muted">No grade yet</span>' : `${gradeChip(sg)} ${rk ? `<span class="small muted">${rk[0]}${ordinal(rk[0]).replace(/\d+/, '')} of ${rk[1]}${rk[2] ? ' ' + rk[2] : ''}</span>` : '<span class="small muted">below the snap minimum</span>'}`],
+    !prospect && form.length && [`Last ${form.length} games`, form.map(g => gradeChip(Math.round(g))).join(' ')],
+    box && ['This season', box],
+    p.injury && ['Status', `<span class="bad">Injured: ${esc(p.injury.name)}, out ${p.injury.weeks} more week${p.injury.weeks > 1 ? 's' : ''}${onIR(p) ? ' (injured reserve)' : ''}</span>`],
+    p.rust && ['Status', '<span class="warn">Rusty: short of preseason work, a step slow until he has played a game or two</span>'],
+    [own ? 'Your staff' : 'Your scouts', stamp], p.awards && p.awards.length && ['Honours', p.awards.slice(-4).map(esc).join(' · ') + (p.awards.length > 4 ? ` · and ${p.awards.length - 4} more` : '')]];
+  const m = p.upM, future = [['Upside', `${upsidePill(p)}${dv ? ` <span class="pill ${dv.cls}">${dv.k}</span>` : ''}${prospect ? '' : ' ' + trackPill(p)}`]];
+  let note = '';
+  if (p.a && p.per && p.grow && isDeveloping(p)) {
+    const r = finishedRemark(p), c = compFor(p), b = compFor(p, true), same = b && c && ((b.id !== undefined && b.id === c.id) || (b.rid !== undefined && b.rid === c.rid));
+    future.push(['Finished product', esc(r.line || 'Too little to go on yet') + '.']);
+    if (c) future.push(['Plays like', compLink(c) + compBuild(p, c)]);
+    if (b && !same) future.push(['Best case', compLink(b) + compBuild(p, b)]);
+    note = `A projection from ${filmBasis(p)}; rewritten as the film comes in.`;
+  } else if (dv) future.push(['Outlook', esc(dv.line)]);
+  if (m && !prospect) note += `${note ? ' ' : ''}<span class="${m.d > 0 ? 'good' : 'bad'}">${m.d > 0 ? '▲' : '▼'} Upside ${m.d > 0 ? 'raised' : 'lowered'} from ${esc(m.from)} after ${esc(m.why)} (${esc(String(m.s))}).</span>`;
+  return `<div class="pf-lead">${esc(scoutProfile(p))}.</div><div class="pf-viewed">${esc(viewed)}</div><div class="pf-sub">Today</div>${fileKV(today)}${prospect ? '' : readRangeHTML(p)}<div class="pf-sub">The future</div>${fileKV(future)}${note ? `<div class="sc-fine">${note}</div>` : ''}`;
+}
+// the pane beside the read: whichever of his pages you choose
+function fileSideViews(p) {
+  const prospect = p.tid === -2, manage = cardManageHTML(p);
+  return [['sw', 'Strengths and weaknesses'], !prospect && ['adv', 'Advanced stats'], !prospect && scWhereHTML(p) && ['where', 'Where he plays'], p.m && ['phys', 'Physical'], manage && ['manage', 'In the building'],
+    prospect && typeof protoReportHTML === 'function' && ['proto', 'New report (prototype)'], trueOn() && ['attrs', 'Ratings (debug)']].filter(Boolean);
+}
+function fileSideHTML(p) {
+  const views = fileSideViews(p), v = views.some(x => x[0] === ui.fileSide) ? ui.fileSide : 'sw', title = views.find(x => x[0] === v)[1];
+  const html = v === 'adv' ? cardAdvHTML(p) : v === 'where' ? scWhereHTML(p).replace(/^\s*<div class="ds-rule"><\/div>/, '') : v === 'phys' ? `${spiderHTML(p)}<div class="ds-rule"></div>${scPhysicalHTML(p)}`
+    : v === 'manage' ? cardManageHTML(p) : v === 'proto' ? protoReportHTML(p) : v === 'attrs' ? attributesHTML(p) : scTraitsHTML(p);
+  return filePane('side', title, html, views.length > 1 ? fileSelect('fileSide', views, v, p.id) : '', 'fill');
+}
+// the contract: every year of it with the pay and the guarantee (the game wears a guarantee off evenly over the years left), then the moves on it
+function fileContractHTML(p) {
+  const c = p.contract || {}, btn = cardButtonsHTML(p), acts = btn ? `<div class="ds-acts pf-acts">${btn}</div>` : '';
+  const info = contractHTML(p).replace(/<div class="section-title">Contract<\/div>/, '');
+  if (p.tid === -2) return filePane('con', 'Draft', `<div class="small">${p.draftYear} draft class${p.college ? ' · ' + esc(p.college) : ''}</div>${acts}`);
+  if (!(p.tid >= 0 && c.yrs > 0)) return filePane('con', 'Contract', `${info}${acts}`);
+  const rows = [], g1 = (c.gtd || 0) / c.yrs;
+  for (let i = 0; i < c.yrs; i++) rows.push([state.season + i, i === 0 ? c.amt : c.sched && c.sched[i] !== undefined ? c.sched[i] : c.amt, g1, i === 0 ? 'this year' : '']);
+  if (c.next) for (let i = 0; i < c.next.yrs; i++) rows.push([state.season + c.yrs + i, c.next.sched && c.next.sched[i] !== undefined ? c.next.sched[i] : c.next.amt, (c.next.gtd || 0) / c.next.yrs, c.opt5 === 'exercised' && c.next.yrs === 1 ? 'option year' : 'extension']);
+  const sum = i => round2(rows.reduce((s, x) => s + x[i], 0));
+  const inc = c.inc && c.inc.length ? `<div class="pf-sub">Incentives</div>${c.inc.map(x => `<div class="small" style="margin:3px 0"><span class="pill rook">${fmtMoney(x.amt)}</span> if he ${esc(incLabel(x))} <span class="muted">· ${x.likely ? 'likely: counts this year' : 'not likely: charged next year if earned'}</span></div>`).join('')}` : '';
+  const table = `<table class="pf-tbl"><thead><tr><th>Season</th><th class="num">Pay</th><th class="num">Guaranteed</th><th></th></tr></thead><tbody>${rows.map(([y, v, g, n]) => `<tr class="${n === 'this year' ? 'me' : ''}"><td>${y}</td><td class="num">${fmtMoney(v)}</td><td class="num">${g > 0 ? fmtMoney(round2(g)) : '<span class="muted">—</span>'}</td><td class="small muted">${n}</td></tr>`).join('')}
+    <tr class="pf-tot"><td>Total</td><td class="num">${fmtMoney(sum(1))}</td><td class="num">${fmtMoney(sum(2))}</td><td></td></tr></tbody></table>`;
+  return filePane('con', 'Contract', `${table}<div class="pf-cinfo">${info}</div>${inc}${acts}`, cardDealDocHTML(p) ? `<button class="sm link pf-paper" data-action="filePaper" data-pid="${p.id}">The paper</button>` : '');
+}
+// his seasons: a split, then a category of the box score, his grades, or his grades game by game
+function fileStatsHTML(p) {
+  const SPL = [['reg', 'Regular season'], ['po', 'Playoffs'], ['pre', 'Preseason']], sp = SPL.some(x => x[0] === ui.cardScope) ? ui.cardScope : 'reg';
+  const rows = sp === 'po' ? [...(p.pcareer || [])] : sp === 'pre' ? [...(p.preCar || [])] : [...(p.career || [])];
+  if (sp === 'reg' && p.stats.gp) rows.push(Object.assign({ season: state.season, tid: p.tid, cur: true }, p.stats));
+  if (sp === 'po' && p.pstats && p.pstats.gp) rows.push(Object.assign({ season: state.season, tid: p.tid, cur: true }, p.pstats));
+  if (sp === 'pre' && p.preS && p.preS.gp) rows.push(Object.assign({ season: p.preS.season || state.season, tid: p.tid, cur: true, snp: p.preS.snp }, p.preS.st));
+  const cats = fileGroupsOf(p.pos).filter(([, cols], i) => i === 0 || rows.some(r => cols.some(c => +fileVal(r, c))));
+  if (rows.some(stAny)) cats.push(FILE_ST);
+  const SHOW = [...cats.map(([n]) => [n, n]), sp === 'reg' ? ['grades', 'Grades by season'] : null, ['games', 'Grades game by game']].filter(Boolean), sh = SHOW.some(x => x[0] === ui.fileShow) ? ui.fileShow : SHOW[0][0];
+  const ctl = fileSelect('cardScope', SPL, sp, p.id) + fileSelect('fileShow', SHOW, sh, p.id);
+  const club = r => r.tot ? '' : r.tid >= 0 ? T(r.tid).abbr : 'FA', season = r => r.tot ? '<b>Career</b>' : r.season + (r.cur ? '*' : '');
+  let html;
+  if (sh === 'games') html = gameLogHTML(p) || '<div class="small muted">No graded games yet.</div>';
+  else if (!rows.length) html = `<div class="small muted">Nothing on record in the ${SPL.find(x => x[0] === sp)[1].toLowerCase()}.</div>`;
+  else if (sh === 'grades') {
+    // grades every season, plus how your staff rated him at the end of each year
+    const ga = r => r.cur ? (p.advS ? careerAdv(p.advS, p.spot) : {}) : (r.adv || {});
+    const OLDF = { pass: 'q', rush: 'run', zone: 'cov' }, gf = (r, f) => ga(r)['g' + f] || (OLDF[f] ? ga(r)['g' + OLDF[f]] : null) || null;
+    const fs = Object.keys(FACETS).filter(f => rows.some(r => gf(r, f)));
+    html = `<table class="pf-tbl"><thead><tr><th>Season</th><th class="lo">Tm</th><th class="num lo">Snaps</th><th class="num">Overall</th>${fs.map(f => `<th class="num">${FACETS[f]}</th>`).join('')}<th class="lo">Tier</th><th class="lo">Upside</th></tr></thead><tbody>
+      ${rows.map(r => `<tr class="${r.cur ? 'me' : ''}"><td>${season(r)}</td><td class="lo">${club(r)}</td><td class="num lo">${r.snp || 0}</td><td class="num">${gradeChip(ga(r).g || null)}${seasonRank(p, r) ? ` <span class="lo">${gradeRankTxt(seasonRank(p, r))}</span>` : ''}</td>${fs.map(f => `<td class="num">${gradeChip(gf(r, f))}</td>`).join('')}
+        <td class="lo">${r.cur ? tierPill(p) : r.ti ? `<span class="pill ${TIER_CLS[r.ti] || ''}">${r.ti}</span>` : '<span class="muted">—</span>'}</td><td class="lo">${r.cur ? upsidePill(p) : r.up ? `<span class="pill up ${UP_CLS[r.up] || ''}">${r.up}</span>` : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table>`;
+  } else {
+    const [name, cols] = cats.find(x => x[0] === sh) || cats[0], st = name === 'Special teams';
+    const use = st ? rows.filter(stAny) : rows, tot = {}; use.forEach(r => { const c = Object.assign({}, r, { season: 0 }); delete c.adv; delete c.sp; addStats(tot, c); }); tot.tot = true;
+    const grade = r => r.tot ? '' : st ? gradeChip(stGrade(r)) : sp === 'pre' ? gradeChip(r.cur ? preGrade(p) : null) : sp === 'po' ? '' : gradeChip(r.cur ? (p.advS ? overallGrade(p.advS, p.spot) : null) : r.adv ? r.adv.g : null) + (seasonRank(p, r) ? ` <span class="lo">${gradeRankTxt(seasonRank(p, r))}</span>` : '');
+    html = `<table class="pf-tbl"><thead><tr><th>Season</th><th class="lo">Tm</th><th class="num">GP</th><th class="num lo">GS</th><th class="num">Grade</th>${cols.map(c => `<th${fileLo(c)}>${c[1]}</th>`).join('')}</tr></thead><tbody>
+      ${[...use, ...(use.length > 1 ? [tot] : [])].map(r => `<tr class="${r.tot ? 'pf-tot' : r.cur ? 'me' : ''}"><td>${season(r)}</td><td class="lo">${club(r)}</td><td class="num">${r.gp || 0}</td><td class="num lo">${r.gs || 0}</td><td class="num">${grade(r)}</td>${cols.map(c => `<td${fileLo(c)}>${round1(fileVal(r, c))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  }
+  return filePane('sts', 'Stats', html, ctl);
+}
 function playerModal(pid, replace) {
   const p = P(pid);
   if (!p) return;
-  const prospect = p.tid === -2, tabs = [...CARD_TABS.filter(([k]) => !prospect || k === 'over' || k === 'scout'), ...(prospect && typeof protoReportHTML === 'function' ? [['proto', 'New report (prototype)']] : [])];
-  const tab = tabs.some(([k]) => k === ui.cardTab) ? ui.cardTab : 'over';
-  const body = tab === 'proto' ? protoReportHTML(p) : tab === 'scout' ? cardScoutHTML(p) : tab === 'stats' ? cardStatsHTML(p) : tab === 'adv' ? cardAdvHTML(p) : tab === 'contract' ? cardContractHTML(p) : cardOverHTML(p);
-  const btn = prospect ? cardButtonsHTML(p) : '';
-  openModal(`<div class="dossier">${cardHeadHTML(p)}<div class="ds-tabs">${tabs.map(([k, l]) => `<button class="${k === tab ? 'on' : ''}" data-action="cardTab" data-v="${k}" data-pid="${p.id}">${l}</button>`).join('')}</div>
-    <div class="ds-body">${body}</div>${btn ? `<div class="ds-foot row">${btn}</div>` : ''}</div>`, replace);
+  const prospect = p.tid === -2;
+  const body = prospect ? `<div class="pf-panes pro">${filePane('read', 'The read', fileReadHTML(p))}${fileSideHTML(p)}${fileContractHTML(p)}</div>`
+    : `<div class="pf-panes">${filePane('read', 'The read', fileReadHTML(p))}${fileSideHTML(p)}${fileContractHTML(p)}${fileStatsHTML(p)}</div>`;
+  openModal(`<div class="pfile" style="${fileStyle(p)}">${fileHeadHTML(p)}${body}</div>`, replace);
 }
 
 // what your scouts say: phrases, confidence, buzz — never numbers
@@ -4175,9 +3938,9 @@ const actions = {
   faPullA: faAct(pid => faWithdraw(pid)),
   faOrderA: faAct(pid => { const i = faIn(P(pid)); return faOrder(pid, +i.max || 0, i.jobs); }),
   faOrderX: faAct(pid => faOrder(pid, 0)),
-  nav: d => { view = d.view; ui.more = false; ui.mPop = null; render(); window.scrollTo(0, 0); },
+  nav: d => { view = d.view; ui.more = false; ui.mPop = null; ui.rosterTid = null; ui.staffTid = null; ui.pbTid = null; render(); window.scrollTo(0, 0); },
   mPop: d => { ui.mPop = d.h || null; render(); },
-  navHead: d => { const h = navTree().find(x => x[0] === d.h); if (!h) return; if (isPhone() && (h[2].length > 1 || h[0] === 'settings')) { ui.mPop = ui.mPop === d.h ? null : d.h; render(); return; } ui.mPop = null; const last = (ui.navLast || {})[d.h], hot = navHot(), ok = v => h[2].some(y => y[0] === v); view = navHeadOf(view) === d.h ? view : ok(hot) ? hot : ok(last) ? last : h[2][0][0]; ui.more = false; render(); window.scrollTo(0, 0); },
+  navHead: d => { const h = navTree().find(x => x[0] === d.h); if (!h) return; if (isPhone() && (h[2].length > 1 || h[0] === 'settings')) { ui.mPop = ui.mPop === d.h ? null : d.h; render(); return; } ui.mPop = null; ui.rosterTid = null; ui.staffTid = null; ui.pbTid = null; const last = (ui.navLast || {})[d.h], hot = navHot(), ok = v => h[2].some(y => y[0] === v); view = navHeadOf(view) === d.h && view !== 'club' ? view : ok(hot) ? hot : ok(last) ? last : h[2][0][0]; ui.more = false; render(); window.scrollTo(0, 0); },
   more: () => { ui.more = !ui.more; render(); },
   dchUp: d => { const k = d.key, i = +d.i, list = (ensureChart(state.userTid).lists[k] || []); if (i > 0 && list[i]) { setChart(state.userTid, k, i - 1, list[i]); save(); render(); } },
   newLeague: d => { busy('Building league…'); setTimeout(() => { newLeague(+d.tid); save(); view = 'home'; busy(null); render(); }, 10); },
@@ -4257,7 +4020,10 @@ const actions = {
   msortDir: d => { const cur = sortState[d.table]; sortState[d.table] = { k: cur ? cur.k : d.k, dir: cur ? -cur.dir : 1 }; render(); },
   mview: d => { ui.mcards = !d.v; render(); },
   player: d => playerModal(+d.pid),
-  team: d => { ui.rosterTid = +d.tid; view = 'roster'; closeModal(); render(); window.scrollTo(0, 0); },
+  team: d => { const tid = +d.tid; modalStack = []; closeModal(); if (tid === state.userTid) view = 'home'; else { ui.clubTid = tid; view = 'club'; } render(); window.scrollTo(0, 0); },
+  clubRoster: d => { ui.rosterTid = +d.tid; view = 'roster'; modalStack = []; closeModal(); $('#app').dataset.view = ''; render(); window.scrollTo(0, 0); }, // another club's roster opens at its top
+  clubStaff: d => { const tid = +d.tid; ui.staffTid = tid === state.userTid ? null : tid; view = 'coaches'; modalStack = []; closeModal(); render(); window.scrollTo(0, 0); },
+  clubTrade: d => { ui.tradeTid = +d.tid; ui.get = { players: [], picks: [] }; view = 'trade'; modalStack = []; closeModal(); render(); window.scrollTo(0, 0); },
   box: d => boxModal(+d.gid),
   boxSide: d => { ui.boxSide = +d.tid; boxModal(+d.gid, true); },
   seasonOpen: d => { ui.seasonYr = d && d.s ? +d.s : null; view = 'season'; closeModal(true); render(); window.scrollTo(0, 0); },
@@ -4276,6 +4042,7 @@ const actions = {
   planOtherClose: () => { ui.planOther = null; render(); },
   schedPart: d => { ui.schedPart = d.part; ui.schedWeekA = 1; render(); },
   cardScope: d => { ui.cardScope = d.v; playerModal(+d.pid, true); },
+  filePaper: d => { const p = P(+d.pid), doc = p ? cardDealDocHTML(p) : ''; if (doc) openModal(`<div class="fa-doc ds-doc pf-doc">${doc}</div>`); },
   cardTab: d => { ui.cardTab = d.v; playerModal(+d.pid, true); },
   protoDepth: d => { ui.protoDepth = +d.v; playerModal(+d.pid, true); },
   preTab: d => { ui.preTab = d.v; render(); },
@@ -4293,7 +4060,7 @@ const actions = {
   repsDo: d => { repsToString(d.k, +d.pid, +d.s); save(); render(); },
   repsRm: d => { const e = repsRemove(d.k, +d.pid); if (e) toast(e); else ui.repsSel = null; save(); render(); },
   repsRs: d => { repsReset(d.k || null); ui.repsSel = null; save(); render(); },
-  repsGo: d => { ensureReps(); const j = REP_JOB[d.k]; view = 'depth'; ui.scMode = 'prac'; ui.dchTab = j ? j[4] : 'off'; ui.repsJob = d.k; ui.repsPid = +d.pid; render(); window.scrollTo(0, 0); },
+  repsGo: d => { ensureReps(); const j = REP_JOB[d.k]; view = 'depth'; ui.scMode = 'prac'; ui.dchTab = j ? j[4] : 'off'; ui.repsJob = d.k; ui.repsPid = +d.pid; ui.dcJob = d.k; ui.dchPid = +d.pid; $('#app').dataset.view = ''; render(); window.scrollTo(0, 0); }, // the practice chart, open at his job with him picked
   scMode: d => { ui.scMode = d.v; render(); },
   scCopy: async d => { const unit = ['off', 'def'].includes(ui.dchTab) ? ui.dchTab : 'def', side = unit === 'off' ? 'offense' : 'defense';
     if (!await ask(d.v === 'g2p' ? `Replace the ${side}'s practice order with its game order?` : `Replace the ${side}'s game order with its practice order? You will be setting the ${side} yourself.`)) return;
@@ -4342,19 +4109,11 @@ const actions = {
   },
   psRelease: d => { releaseFromPS(+d.pid); toast('Released from the practice squad.'); closeModal(); save(); render(); },
   signPS: d => { const err = signToPS(+d.pid, state.userTid); toast(err || 'Signed to the practice squad.'); closeModal(); save(); render(); },
-  pbTeamSet: d => { ui.pbTid = +d.tid; render(); },
-  pbTab: d => { ui.pbTab = d.v; render(); },
-  pbPers: d => { ui.pbPers = d.v; ui.pbPkg = { '10': 'DIME', '11': 'NICKEL', '12': 'BASE', '13': 'BASE', '21': 'BASE', '22': 'BASE', JUMBO: 'GL' }[d.v] || ui.pbPkg; render(); },
-  pbForm: d => { ui.pbForm = d.v; render(); },
-  pbPkg: d => { ui.pbPkg = d.v; render(); },
-  pbFm: d => { ui.pbFm = d.k; render(); },
-  pbLook: d => { ui.pbLook = d.k; if (d.pkg === 'BASE') ui.pbPkg = 'BASE'; else if (ui.pbPkg !== 'NICKEL' && ui.pbPkg !== 'DIME') ui.pbPkg = 'NICKEL'; render(); },
   dcJob: d => { ui.dcJob = d.key; ui.dchPid = null; render(); },
   trTab: d => { ui.trTab = d.v; render(); window.scrollTo(0, 0); },
   newsMore: () => { ui.newsN = (ui.newsN || 60) + 60; render(); },
   trPos: d => { ui.trPos = d.pos; render(); },
   dcMove: d => { const k = d.key, pid = +d.pid, to = Math.max(0, +d.to); if (scPrac()) { const l = ensureReps().jobs[k] || [], j = l.indexOf(pid); pracSet(k, j >= 0 && j < to ? to + 1 : to, pid); } else setChart(state.userTid, k, to, pid); save(); render(); }, // a man to a place in a job's order
-  dcGrp: d => { const tab = ['def', 'off', 'st'].includes(ui.dchTab) ? ui.dchTab : 'def'; (ui.dcGrp = ui.dcGrp || {})[tab] = d.v; ui.dcJob = null; ui.dchPid = null; render(); },
   dcLook: d => { (ui.dchView = ui.dchView || {})[['def', 'off'].includes(ui.dchTab) ? ui.dchTab : 'def'] = d.v; render(); },
   dcPass: d => { ui.dcPass = d.v; render(); },
   advScope: d => { ui.advScope = d.v; playerModal(+d.pid, true); },
@@ -4381,7 +4140,6 @@ const actions = {
   statCat: d => { ui.statCat = d.cat; render(); },
   statSide: d => { ui.statSide = d.v; render(); },
   statPer: d => { ui.statPer = d.v; render(); },
-  pracRoom: d => { ui.pracRoom = d.pos === ui.pracRoom && d.toggle ? null : d.pos; render(); const el = document.getElementById('pracDetail'); if (el && d.toggle) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
   faReset: () => { ui.faF = null; render(); },
   faPos: d => { ui.faPos = d.pos; render(); },
   udfaMine: d => { ui.udfaMine = !!d.v; render(); },
@@ -4435,7 +4193,7 @@ const actions = {
     simDraftToUser();
     save(); render();
   },
-  fireCoach: async d => { const c = staffCoach(T(state.userTid), d.role); if (!c) return; const owed = owedIfFired(c); if (!await ask({ title: `Let ${cname(c)} go?`, body: owed ? `He is owed <b>${fmtMoney(owed)}</b>, which stays on this year's staff budget.` : 'Nothing is owed on his deal.', yes: 'Let him go', no: 'Keep him', danger: true })) return; const err = userFire(d.role); if (err) toast(err); save(); render(); },
+  fireCoach: async d => { const c = staffCoach(T(state.userTid), d.role); if (!c) return; const owed = owedIfFired(c); if (!await ask({ title: `Let ${cname(c)} go?`, body: owed ? `He is owed <b>${fmtMoney(owed)}</b>, which stays on this year's staff budget.` : 'Nothing is owed on his deal.', yes: 'Let him go', no: 'Keep him', danger: true })) return; const err = userFire(d.role); if (err) toast(err); closeModal(true); save(); render(); },
   searchTab: d => { ui.searchTab = d.tab; render(); },
   searchRole: d => { ui.searchRole = d.role; ui.searchTab = SPEC_ROLES.includes(d.role) ? 'SPEC' : POS_ROLES.includes(d.role) ? 'POS' : d.role; render(); const cs = isPhone() && document.querySelector('.csearch'); if (cs) cs.scrollIntoView({ block: 'start' }); },
   interview: d => { const err = interview(+d.cid, d.role); if (err) toast(err); else { save(); render(); actions.negOpen({ cid: d.cid, role: d.role || C(+d.cid).role }); } },
@@ -4447,7 +4205,6 @@ const actions = {
   reqYes: d => { const err = answerRequest(+d.i, true); if (err) toast(err); save(); render(); },
   reqNo: d => { answerRequest(+d.i, false); save(); render(); },
   coach: d => coachModal(+d.cid),
-  coachSel: d => { ui.staffSel = +d.cid; render(); const ss = isPhone() && document.querySelector('.ss'); if (ss) ss.scrollIntoView({ block: 'start' }); }, // a phone jumps to his file
   film: d => filmModal(+d.gid, +d.pid),
   advGrp: d => { ui.advGrp = d.g; render(); },
   coachRole: d => { ui.coachRole = d.role; render(); },
@@ -4456,7 +4213,7 @@ const actions = {
   asstHire: d => { const c = C(+d.cid); if (c && c.tid < 0 && isAsst(c)) setAsst(T(state.userTid), c.role, c); closeModal(true); save(); render(); },
   asstPromote: async d => { const c = C(+d.cid);
     if (c && ['OC', 'DC', 'STC'].includes(c.role) && !(await ask({ title: `Make ${cname(c)} your head coach?`, body: `He would want <b>${fmtMoney(promoteHeadCost(c))}</b> a year. His old job opens up.${c.role === 'STC' ? ' He has never called plays: your coordinators keep the call sheets and he runs the game and the building.' : ' He keeps his side of the ball and may keep the play sheet.'} What kind of head coach he turns out to be is not known until he does the job.`, yes: 'Promote him', no: 'Not now' }))) return;
-    const err = userPromote(+d.cid); if (err) toast(err); save(); render(); },
+    const err = userPromote(+d.cid); if (err) toast(err); closeModal(true); save(); render(); },
   tradeToggle: (d) => {
     const assets = d.side === 'give' ? ui.give : ui.get;
     const arr = assets[d.type], id = +d.id, i = arr.indexOf(id);
@@ -4477,11 +4234,11 @@ const actions = {
   },
 };
 const changes = {
+  fileOpt: (v, el) => { ui[el.dataset.k] = v; playerModal(+el.dataset.pid, true); },
   dotSet: v => { T(state.userTid).dot = +v; save(); },
-  pbTabSet: v => { ui.pbTab = v; },
   eqbSet: v => { T(state.userTid).eqb = +v; save(); },
   faIncM: (v, el) => { const p = P(+el.dataset.pid); faIn(p).inc[+el.dataset.i].m = v; setTimeout(() => { if (ui.faNeg === p.id) faNegotiate(p.id, true); }, 0); },
-  rosterTeam: v => { ui.rosterTid = +v; },
+  rosterTeam: v => { ui.rosterTid = +v; $('#app').dataset.view = ''; }, // and opens at its top
   rosterView: v => { ui.rosterView = v; },
   msort: (v, el) => { sortState[el.dataset.table] = { k: v, dir: -1 }; },
   negCall: (v, el) => { ui.neg.call = el.checked; negModal(); },
@@ -4502,8 +4259,7 @@ const changes = {
   faChk: (v, el) => { (ui.faF || (ui.faF = Object.assign({}, FA_DEF)))[el.dataset.f] = el.checked; },
   srch: (v, el) => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF)))[el.dataset.f] = v; },
   srchChk: (v, el) => { (ui.search || (ui.search = Object.assign({}, SEARCH_DEF)))[el.dataset.f] = el.checked; },
-  staffTeam: v => { ui.staffTid = +v; },
-  pbTeam: v => { ui.pbTid = +v; },
+  staffTeam: v => { ui.staffTid = +v; $('#app').dataset.view = ''; }, // and opens at its top
   schedWeek: v => { ui.schedWeek = +v; },
   statSeason: v => { ui.statSeason = +v; },
   statTeam: v => { ui.statTeam = v === '' ? null : +v; },
@@ -4537,7 +4293,7 @@ document.addEventListener('dragstart', e => {
   el.classList.add('drag'); document.body.classList.add('dc-dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dcDrag.pid));
 });
 document.addEventListener('dragend', () => { document.querySelectorAll('.drag').forEach(x => x.classList.remove('drag')); document.querySelectorAll('.dc-over').forEach(x => x.classList.remove('dc-over')); document.body.classList.remove('dc-dragging'); dcDrag = null; });
-const dcTarget = e => e.target.closest && (e.target.closest('[data-dcov]') || e.target.closest('[data-dci]') || e.target.closest('.dcj'));
+const dcTarget = e => e.target.closest && (e.target.closest('[data-dcov]') || e.target.closest('[data-dci]') || e.target.closest('[data-dcjob]'));
 document.addEventListener('dragover', e => {
   const t = dcDrag && dcTarget(e); if (!t) return;
   e.preventDefault();
@@ -4610,11 +4366,10 @@ document.addEventListener('keydown', e => { // ← → walks the rooms of the sq
   if (!$('#modal').classList.contains('hidden') || askResolve) return;
   actions.campRoomStep({ dir: e.key === 'ArrowLeft' ? -1 : 1 }); e.preventDefault();
 });
-document.addEventListener('keydown', e => { // ← → walks the staff chart
-  if (!state || view !== 'coaches' || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || (e.target.closest && e.target.closest('input, select, textarea')) || !$('#modal').classList.contains('hidden')) return;
-  const list = staffList(T(ui.staffTid == null ? state.userTid : ui.staffTid)); if (!list.length) return;
-  const i = Math.max(0, list.findIndex(c => c.id === ui.staffSel));
-  ui.staffSel = list[(i + (e.key === 'ArrowRight' ? 1 : list.length - 1)) % list.length].id; e.preventDefault(); render();
+document.addEventListener('keydown', e => { // ← → walks the staff, card to card, while one of its men's cards is open
+  if (!state || view !== 'coaches' || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || (e.target.closest && e.target.closest('input, select, textarea')) || $('#modal').classList.contains('hidden') || modalStack.length) return;
+  const list = staffList(T(ui.staffTid == null ? state.userTid : ui.staffTid)), i = list.findIndex(c => c.id === ui.cardCid); if (i < 0) return;
+  e.preventDefault(); coachModal(list[(i + (e.key === 'ArrowRight' ? 1 : list.length - 1)) % list.length].id, true);
 });
 $('#importFile').addEventListener('change', e => { if (e.target.files[0]) importSave(e.target.files[0]); e.target.value = ''; });
 
